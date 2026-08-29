@@ -1,0 +1,158 @@
+.tx-modal {
+  width: min(520px, 92vw);
+  max-height: 88vh;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 25%);
+  color: var(--text);
+  box-shadow: 0 30px 60px -20px oklch(5% 0 0 / 0.8);
+}
+.tx-modal::backdrop {
+  background: oklch(10% 0.02 255 / 0.75);
+}
+.tx-modal form {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+}
+
+.tx-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 14px;
+}
+.tx-modal-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+}
+.tx-modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tx-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 22px 16px;
+}
+.tx-tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px 0;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: oklch(24% 0.03 255 / 0.5);
+  border: 1px solid var(--card-border);
+}
+.tx-tab--active {
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  border-color: var(--cyan);
+}
+
+.tx-body {
+  padding: 0 22px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tx-amount {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  border: 1px solid var(--card-border);
+  background: oklch(18% 0.028 255 / 0.6);
+  border-radius: 10px;
+  padding: 14px;
+}
+.tx-amount-ph {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.tx-row.two {
+  display: flex;
+  gap: 12px;
+}
+.tx-row.two .tx-field {
+  flex: 1;
+}
+
+.tx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tx-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.tx-req {
+  color: var(--red);
+  margin-left: 2px;
+}
+.tx-input {
+  border: 1px solid var(--card-border);
+  background: oklch(18% 0.028 255 / 0.6);
+  border-radius: 9px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  width: 100%;
+}
+.tx-input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+.tx-textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.tx-receipt {
+  border: 1px dashed var(--card-border);
+  border-radius: 9px;
+  padding: 16px;
+  color: var(--text-faint);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tx-error {
+  color: var(--red);
+  font-size: 11.5px;
+  margin: -6px 0 0;
+}
+
+.tx-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--line);
+}
+.tx-foot .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

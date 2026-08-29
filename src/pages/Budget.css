@@ -1,0 +1,127 @@
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.kpi-val {
+  font-size: 19px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.budget-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .budget-split {
+    grid-template-columns: 1.7fr 1fr;
+  }
+}
+.accounts-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.card-title-text {
+  font-size: 13px;
+  font-weight: 600;
+}
+.add-link {
+  background: none;
+  border: none;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.budget-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.budget-row:first-of-type {
+  border-top: none;
+}
+.budget-row-mid {
+  min-width: 0;
+}
+.budget-row-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.budget-amt {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+}
+.budget-amt--over {
+  color: var(--red);
+}
+
+.mini-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11.5px;
+}
+.mini-list li {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-dim);
+}
+
+.bva-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 140px;
+  gap: 8px;
+  margin-top: 8px;
+}
+.bva-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.bva-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 1;
+}
+.bva-bar {
+  width: 12px;
+  border-radius: 4px 4px 2px 2px;
+}
+.bva-bar--budget {
+  background: var(--slate-lt);
+}
+.bva-bar--actual {
+  background: linear-gradient(180deg, var(--cyan), var(--cyan-dim));
+}
+.bva-bar--over {
+  background: linear-gradient(180deg, var(--red), oklch(45% 0.12 25));
+}
+.bva-label {
+  font-size: 9.5px;
+}

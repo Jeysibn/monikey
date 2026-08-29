@@ -1,0 +1,47 @@
+.status-badge,
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  display: inline-block;
+  white-space: nowrap;
+}
+.status-badge--safe,
+.status-badge--on_track {
+  background: oklch(74% 0.13 175 / 0.16);
+  color: var(--teal);
+}
+.status-badge--near_limit {
+  background: oklch(78% 0.13 75 / 0.16);
+  color: var(--amber);
+}
+.status-badge--over_budget {
+  background: oklch(68% 0.16 25 / 0.16);
+  color: var(--red);
+}
+
+.tag--income {
+  background: oklch(80% 0.13 210 / 0.16);
+  color: var(--cyan);
+}
+.tag--expense {
+  background: oklch(60% 0.02 255 / 0.35);
+  color: var(--text-dim);
+}
+.tag--transfer {
+  background: oklch(72% 0.13 295 / 0.16);
+  color: var(--purple);
+}
+.tag--cleared {
+  background: oklch(74% 0.13 175 / 0.16);
+  color: var(--teal);
+}
+.tag--pending {
+  background: oklch(78% 0.13 75 / 0.16);
+  color: var(--amber);
+}
+.tag--neutral {
+  background: oklch(60% 0.02 255 / 0.3);
+  color: var(--text-dim);
+}

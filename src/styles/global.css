@@ -16,6 +16,18 @@ body {
   font-size: 13px;
 }
 
+/* Hide scrollbar chrome everywhere (page and any scrollable container)
+   while keeping actual scrolling — via wheel, trackpad, touch, and
+   keyboard — fully functional. Applies globally rather than per-element
+   so no future scrollable container needs to remember to opt in. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and other WebKit/Blink browsers */
+}
+
 a {
   color: var(--cyan);
   text-decoration: none;

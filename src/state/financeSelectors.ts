@@ -84,7 +84,7 @@ export function accountDotColor(accountId?: string): string {
 }
 
 export function expensesToday(state: FinanceState): number {
-  const days = state.expensesByDay
+  const days = state.expensesTrend.daily
   return days.length ? days[days.length - 1].amount : 0
 }
 

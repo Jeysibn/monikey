@@ -6,7 +6,7 @@
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
-  margin-bottom: 16px;
+  margin-top: 16px;
 }
 .money-position-title {
   margin: 0 0 12px;

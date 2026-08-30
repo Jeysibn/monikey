@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
@@ -8,19 +9,23 @@ import { formatMoney } from '../utils/currency'
 import { formatDateLabel } from '../utils/date'
 import './Dashboard.css'
 
+type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
+const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
+const PERIOD_TITLE: Record<ExpensesPeriod, string> = { daily: 'this week', weekly: 'this month', monthly: 'this year' }
+
 export function Dashboard() {
   const finance = useFinance()
-  const { accounts, creditCards, portfolio, expensesByDay } = finance.state
+  const { accounts, creditCards, portfolio, expensesTrend } = finance.state
   const previewAccounts = accounts.slice(0, 4)
   const activeGoalsPreview = finance.activeGoals
   const completedCount = finance.completedGoals.length
   const recent = finance.state.transactions.slice(0, 5)
+  const [period, setPeriod] = useState<ExpensesPeriod>('daily')
+  const expensesByDay = expensesTrend[period]
   const maxDay = Math.max(1, ...expensesByDay.map((d) => d.amount))
 
   return (
     <div className="dashboard">
-      <MoneyPosition />
-
       <div className="dash-grid">
         <Card className="area-balance balance-card">
           <div className="eyebrow">Available Cash</div>
@@ -74,15 +79,34 @@ export function Dashboard() {
         <Card className="area-expenses">
           <CardTitle
             action={
-              <span className="num" style={{ fontSize: 14 }}>
-                {formatMoney(finance.expensesToday, { withCents: false })} today
-              </span>
+              <div className="expenses-head-right">
+                <div className="seg" role="tablist" aria-label="Expenses period">
+                  {(['daily', 'weekly', 'monthly'] as ExpensesPeriod[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      role="tab"
+                      aria-selected={period === p}
+                      className={`pill seg-pill${period === p ? ' pill--active' : ''}`}
+                      onClick={() => setPeriod(p)}
+                    >
+                      {PERIOD_LABEL[p]}
+                    </button>
+                  ))}
+                </div>
+                {period === 'daily' && (
+                  <span className="num" style={{ fontSize: 14 }}>
+                    {formatMoney(finance.expensesToday, { withCents: false })} today
+                  </span>
+                )}
+              </div>
             }
           >
-            Expenses · this week
+            Expenses · {PERIOD_TITLE[period]}
           </CardTitle>
           <div className="expenses-line">
             <Sparkline
+              key={period}
               values={expensesByDay.map((d) => d.amount)}
               width={700}
               height={130}
@@ -99,7 +123,7 @@ export function Dashboard() {
             <ul className="visually-hidden">
               {expensesByDay.map((d) => (
                 <li key={d.day}>
-                  {d.day}: {formatMoney(d.amount, { withCents: false })}, {Math.round((d.amount / maxDay) * 100)}% of the week's highest day
+                  {d.day}: {formatMoney(d.amount, { withCents: false })}, {Math.round((d.amount / maxDay) * 100)}% of the highest point shown
                 </li>
               ))}
             </ul>
@@ -286,6 +310,8 @@ export function Dashboard() {
           </table>
         </Card>
       </div>
+
+      <MoneyPosition />
     </div>
   )
 }

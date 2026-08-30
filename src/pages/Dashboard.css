@@ -328,3 +328,17 @@
   font-weight: 700;
   text-align: right;
 }
+
+.expenses-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.seg {
+  display: flex;
+  gap: 5px;
+}
+.seg-pill {
+  padding: 4px 10px;
+  font-size: 10.5px;
+}

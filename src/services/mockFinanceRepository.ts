@@ -86,15 +86,31 @@ function initialState(): FinanceState {
     { ticker: 'NVDA', name: 'Nvidia', price: 3402.15, changePct: 2.6, units: 16, history: [3020, 3105, 3180, 3160, 3255, 3298, 3350, 3402.15] },
   ]
 
-  const expensesByDay = [
-    { day: 'MON', amount: 180 },
-    { day: 'TUE', amount: 240 },
-    { day: 'WED', amount: 95 },
-    { day: 'THU', amount: 410 },
-    { day: 'FRI', amount: 150 },
-    { day: 'SAT', amount: 205 },
-    { day: 'SUN', amount: 312 },
-  ]
+  const expensesTrend = {
+    daily: [
+      { day: 'MON', amount: 180 },
+      { day: 'TUE', amount: 240 },
+      { day: 'WED', amount: 95 },
+      { day: 'THU', amount: 410 },
+      { day: 'FRI', amount: 150 },
+      { day: 'SAT', amount: 205 },
+      { day: 'SUN', amount: 312 },
+    ],
+    weekly: [
+      { day: 'W1', amount: 1180 },
+      { day: 'W2', amount: 1420 },
+      { day: 'W3', amount: 980 },
+      { day: 'W4', amount: 1592 },
+    ],
+    monthly: [
+      { day: 'MAR', amount: 8620 },
+      { day: 'APR', amount: 9340 },
+      { day: 'MAY', amount: 7980 },
+      { day: 'JUN', amount: 9870 },
+      { day: 'JUL', amount: 8410 },
+      { day: 'AUG', amount: 9498 },
+    ],
+  }
 
   const budgetVsActual = [
     { month: 'MAR', budget: 70, actual: 62 },
@@ -115,7 +131,7 @@ function initialState(): FinanceState {
     goals,
     attentionItems,
     portfolio,
-    expensesByDay,
+    expensesTrend,
     budgetVsActual,
   }
 }

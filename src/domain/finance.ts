@@ -110,6 +110,12 @@ export interface ExpenseDayPoint {
   amount: number
 }
 
+export interface ExpensesTrend {
+  daily: ExpenseDayPoint[]
+  weekly: ExpenseDayPoint[]
+  monthly: ExpenseDayPoint[]
+}
+
 export interface BudgetVsActualPoint {
   month: string
   budget: number
@@ -127,7 +133,7 @@ export interface FinanceState {
   goals: Goal[]
   attentionItems: AttentionItem[]
   portfolio: Holding[]
-  expensesByDay: ExpenseDayPoint[]
+  expensesTrend: ExpensesTrend
   budgetVsActual: BudgetVsActualPoint[]
 }
 

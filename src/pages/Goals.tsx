@@ -122,10 +122,10 @@ export function Goals() {
               {formatMoney(g.currentAmount, { withCents: false })}
             </div>
             <div className="completed-actions">
-              <button type="button" className="pill">
+              <button type="button" className="btn btn--outline">
                 {g.id === 'home' ? 'Continue saving' : 'Increase target'}
               </button>
-              <button type="button" className="pill">
+              <button type="button" className="btn btn--muted">
                 Archive
               </button>
             </div>

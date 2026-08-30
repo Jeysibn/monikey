@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import {
+  accountColor,
+  categoryColor,
   formatMoney,
   netCashFlow,
   totalExpenses,
@@ -109,45 +111,63 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
             </button>
           </div>
         ) : (
-          <table className="full-tx-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Transaction</th>
-                <th>Category</th>
-                <th>Account</th>
-                <th>Type</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => (
-                <tr key={t.id}>
-                  <td className="faint">{t.date}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{t.title}</div>
-                    <div className="faint" style={{ fontSize: 10.5 }}>
-                      {t.source === 'ocr' ? 'OCR receipt' : t.source === 'recurring' ? 'Recurring' : 'Manual'}
-                      {t.time ? ` · ${t.time}` : ''}
-                      {t.note ? ` · ${t.note}` : ''}
-                    </div>
-                  </td>
-                  <td>{t.category ? <Tag tone="neutral">{t.category}</Tag> : <span className="faint">—</span>}</td>
-                  <td className="faint">{t.accountLabel}</td>
-                  <td>
-                    <Tag tone={t.type}>{TYPE_LABEL[t.type]}</Tag>
-                  </td>
-                  <td className={`num ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
-                    {formatMoney(t.amount)}
-                  </td>
-                  <td>
-                    <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="full-tx-table" role="table" aria-label="Transactions">
+            <div className="tx-grid-row tx-grid-head" role="row">
+              <span role="columnheader">Date</span>
+              <span role="columnheader">Transaction</span>
+              <span role="columnheader" className="tx-col-center">
+                Category
+              </span>
+              <span role="columnheader">Account</span>
+              <span role="columnheader">Type</span>
+              <span role="columnheader" className="tx-col-right">
+                Amount
+              </span>
+              <span role="columnheader">Status</span>
+            </div>
+            {filtered.map((t) => (
+              <div className="tx-grid-row" role="row" key={t.id}>
+                <span role="cell" className="faint">
+                  {t.date}
+                </span>
+                <span role="cell">
+                  <div style={{ fontWeight: 600 }}>{t.title}</div>
+                  <div className="faint" style={{ fontSize: 10.5 }}>
+                    {t.source === 'ocr' ? 'OCR receipt' : t.source === 'recurring' ? 'Recurring' : 'Manual'}
+                    {t.time ? ` · ${t.time}` : ''}
+                    {t.note ? ` · ${t.note}` : ''}
+                  </div>
+                </span>
+                <span role="cell" className="tx-col-center">
+                  {t.category ? (
+                    <span
+                      className="tx-tag"
+                      style={{ color: categoryColor(t.category), background: `color-mix(in oklch, ${categoryColor(t.category)} 16%, transparent)` }}
+                    >
+                      {t.category}
+                    </span>
+                  ) : (
+                    <span className="faint">—</span>
+                  )}
+                </span>
+                <span role="cell">
+                  <span className="tx-acct">
+                    <span className="tx-acct-dot" style={{ background: accountColor(t.accountId) }} />
+                    <span className="faint">{t.accountLabel}</span>
+                  </span>
+                </span>
+                <span role="cell">
+                  <Tag tone={t.type}>{TYPE_LABEL[t.type]}</Tag>
+                </span>
+                <span role="cell" className={`num tx-col-right ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
+                  {formatMoney(t.amount)}
+                </span>
+                <span role="cell">
+                  <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
     </div>

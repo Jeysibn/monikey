@@ -31,6 +31,7 @@
   display: flex;
   gap: 7px;
   flex-wrap: wrap;
+  justify-content: center;
   flex: 1;
   position: relative;
 }
@@ -130,6 +131,96 @@
   height: 1px;
   background: var(--line);
   margin: 6px 4px;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--card-border);
+  background: oklch(24% 0.03 255 / 0.5);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-menu {
+  position: relative;
+  display: inline-flex;
+}
+.notif-bell {
+  position: relative;
+}
+.notif-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: oklch(18% 0.03 210);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  z-index: 30;
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 30%);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow:
+    0 20px 40px -12px oklch(5% 0 0 / 0.7),
+    0 1px 0 0 oklch(100% 0 0 / 0.04) inset;
+}
+.notif-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+  padding: 8px 11px 6px;
+}
+.notif-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.notif-item:hover {
+  background: oklch(100% 0 0 / 0.05);
+}
+.notif-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--amber);
+}
+.notif-dot--info {
+  background: var(--cyan);
+}
+.notif-see-all {
+  display: block;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cyan);
+  padding: 8px 11px 4px;
 }
 
 .page-main {

@@ -198,13 +198,14 @@ export interface Holding {
   price: number
   changePct: number
   units: number
+  history: number[]
 }
 
 export const portfolio: Holding[] = [
-  { ticker: 'AAPL', price: 1721.3, changePct: 0.7, units: 104 },
-  { ticker: 'AMZN', price: 1721.3, changePct: 0.7, units: 12 },
-  { ticker: 'MSFT', price: 1721.3, changePct: 0.7, units: 41 },
-  { ticker: 'NVDA', price: 1721.3, changePct: 0.7, units: 16 },
+  { ticker: 'AAPL', price: 1721.3, changePct: 0.7, units: 104, history: [1602, 1618, 1596, 1640, 1671, 1655, 1698, 1721.3] },
+  { ticker: 'AMZN', price: 1721.3, changePct: 0.7, units: 12, history: [1580, 1611, 1634, 1622, 1660, 1648, 1690, 1721.3] },
+  { ticker: 'MSFT', price: 1721.3, changePct: 0.7, units: 41, history: [1560, 1572, 1601, 1589, 1620, 1652, 1670, 1721.3] },
+  { ticker: 'NVDA', price: 1721.3, changePct: 0.7, units: 16, history: [1540, 1585, 1573, 1618, 1602, 1655, 1680, 1721.3] },
 ]
 
 export const expensesByDay = [
@@ -217,6 +218,36 @@ export const expensesByDay = [
   { day: 'SUN', amount: 312 },
 ]
 export const expensesToday = expensesByDay[expensesByDay.length - 1].amount
+
+// Color coding for transaction categories and accounts, shown as tags/dots in transaction lists.
+export const CATEGORY_COLORS: Record<string, string> = {
+  Food: 'var(--teal)',
+  'Food & Groceries': 'var(--teal)',
+  Shopping: 'var(--amber)',
+  Transport: 'var(--purple)',
+  Salary: 'var(--cyan)',
+  Utilities: 'var(--slate-lt)',
+  Subscriptions: 'var(--purple)',
+  Housing: 'var(--cyan)',
+}
+
+export function categoryColor(category?: string): string {
+  return (category && CATEGORY_COLORS[category]) || 'var(--text-dim)'
+}
+
+export const ACCOUNT_COLORS: Record<string, string> = {
+  checking: 'var(--cyan)',
+  savings: 'var(--teal)',
+  gcash: 'var(--purple)',
+  maya: 'var(--purple)',
+  cash: 'var(--slate-lt)',
+  visa: 'var(--amber)',
+  mastercard: 'var(--amber)',
+}
+
+export function accountColor(accountId?: string): string {
+  return (accountId && ACCOUNT_COLORS[accountId]) || 'var(--text-faint)'
+}
 
 export function formatMoney(value: number, opts: { withCents?: boolean } = {}): string {
   const withCents = opts.withCents ?? true

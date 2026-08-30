@@ -306,17 +306,23 @@
   border-top: none;
 }
 .tx-table td:nth-child(1) {
-  width: 40%;
+  width: 32%;
 }
 .tx-table td:nth-child(2) {
-  width: 16%;
+  width: 24%;
   text-align: center;
+  overflow: hidden;
 }
 .tx-table td:nth-child(3) {
   width: 24%;
 }
 .tx-table td:nth-child(4) {
   width: 20%;
+}
+.tx-table .tx-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tx-table td.tx-amt--out {
   color: var(--text);

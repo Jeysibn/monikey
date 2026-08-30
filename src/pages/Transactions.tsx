@@ -1,17 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
-import {
-  accountColor,
-  categoryColor,
-  formatMoney,
-  netCashFlow,
-  totalExpenses,
-  totalIncome,
-  transactions,
-  transferCount,
-  type TransactionType,
-} from '../data/mockData'
+import { useFinance } from '../hooks/useFinance'
+import { formatMoney } from '../utils/currency'
+import { formatDateLabel } from '../utils/date'
+import type { TransactionType } from '../domain/finance'
 import './Transactions.css'
 
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -21,6 +14,8 @@ const TYPE_LABEL: Record<TransactionType, string> = {
 }
 
 export function Transactions({ onAddTransaction }: { onAddTransaction: () => void }) {
+  const finance = useFinance()
+  const { transactions } = finance.state
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>('all')
 
@@ -30,7 +25,7 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [search, typeFilter])
+  }, [transactions, search, typeFilter])
 
   return (
     <div className="transactions-page">
@@ -73,24 +68,24 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
 
       <div className="kpi-row">
         <Card>
-          <div className="eyebrow">Income</div>
-          <div className="num kpi-val">{formatMoney(totalIncome)}</div>
+          <div className="eyebrow">Income · this month</div>
+          <div className="num kpi-val">{formatMoney(finance.totalIncome)}</div>
           <div className="faint">this month</div>
         </Card>
         <Card>
-          <div className="eyebrow">Expenses</div>
-          <div className="num kpi-val">{formatMoney(totalExpenses)}</div>
+          <div className="eyebrow">Expenses · this month</div>
+          <div className="num kpi-val">{formatMoney(finance.totalExpenses)}</div>
           <div className="faint">this month</div>
         </Card>
         <Card>
-          <div className="eyebrow">Net Cash Flow</div>
-          <div className="num kpi-val">{formatMoney(netCashFlow)}</div>
+          <div className="eyebrow">Net Cash Flow · this month</div>
+          <div className="num kpi-val">{formatMoney(finance.netCashFlow)}</div>
           <div className="faint">income − expenses</div>
         </Card>
         <Card>
           <div className="eyebrow">Transactions</div>
           <div className="num kpi-val">{transactions.length} total</div>
-          <div className="faint">{transferCount} transfer excluded from cash flow</div>
+          <div className="faint">{finance.transferCount} transfer excluded from cash flow</div>
         </Card>
       </div>
 
@@ -128,7 +123,7 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
             {filtered.map((t) => (
               <div className="tx-grid-row" role="row" key={t.id}>
                 <span role="cell" className="faint">
-                  {t.date}
+                  {formatDateLabel(t.date)}
                 </span>
                 <span role="cell">
                   <div style={{ fontWeight: 600 }}>{t.title}</div>
@@ -139,12 +134,12 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                   </div>
                 </span>
                 <span role="cell" className="tx-col-center">
-                  {t.category ? (
+                  {t.categoryId ? (
                     <span
                       className="tx-tag"
-                      style={{ color: categoryColor(t.category), background: `color-mix(in oklch, ${categoryColor(t.category)} 16%, transparent)` }}
+                      style={{ color: finance.categoryColor(t.categoryId), background: `color-mix(in oklch, ${finance.categoryColor(t.categoryId)} 16%, transparent)` }}
                     >
-                      {t.category}
+                      {finance.categoryName(t.categoryId)}
                     </span>
                   ) : (
                     <span className="faint">—</span>
@@ -152,8 +147,8 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                 </span>
                 <span role="cell">
                   <span className="tx-acct">
-                    <span className="tx-acct-dot" style={{ background: accountColor(t.accountId) }} />
-                    <span className="faint">{t.accountLabel}</span>
+                    <span className="tx-acct-dot" style={{ background: finance.transactionAccountDotColor(t) }} />
+                    <span className="faint">{finance.transactionAccountLabel(t)}</span>
                   </span>
                 </span>
                 <span role="cell">
@@ -170,6 +165,47 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
           </div>
         )}
       </Card>
+
+      {/* Below the tablet breakpoint the grid/table above is hidden by CSS
+          and this stacked card list is shown instead — FR-007 explicitly
+          rules out a horizontally-scrolling table as the only mobile
+          experience. */}
+      {filtered.length > 0 && (
+        <ul className="tx-mobile-list">
+          {filtered.map((t) => (
+            <li className="tx-mobile-card" key={t.id}>
+              <div className="tx-mobile-top">
+                <div>
+                  <div style={{ fontWeight: 600 }}>{t.title}</div>
+                  <div className="faint" style={{ fontSize: 11 }}>
+                    {formatDateLabel(t.date)}
+                    {t.time ? ` · ${t.time}` : ''}
+                  </div>
+                </div>
+                <span className={`num tx-mobile-amt ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
+                  {formatMoney(t.amount)}
+                </span>
+              </div>
+              <div className="tx-mobile-meta">
+                {t.categoryId && (
+                  <span
+                    className="tx-tag"
+                    style={{ color: finance.categoryColor(t.categoryId), background: `color-mix(in oklch, ${finance.categoryColor(t.categoryId)} 16%, transparent)` }}
+                  >
+                    {finance.categoryName(t.categoryId)}
+                  </span>
+                )}
+                <Tag tone={t.type}>{TYPE_LABEL[t.type]}</Tag>
+                <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
+              </div>
+              <div className="tx-acct">
+                <span className="tx-acct-dot" style={{ background: finance.transactionAccountDotColor(t) }} />
+                <span className="faint">{finance.transactionAccountLabel(t)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

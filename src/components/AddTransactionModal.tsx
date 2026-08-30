@@ -1,45 +1,153 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useFinance } from '../hooks/useFinance'
+import { showToast } from '../hooks/toastBus'
+import type { TransactionType } from '../domain/finance'
 import './AddTransactionModal.css'
 
-type TxTab = 'expense' | 'income' | 'transfer'
+type TxTab = TransactionType
+
+function todayIso(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function emptyFormState() {
+  return {
+    tab: 'expense' as TxTab,
+    amount: '',
+    title: '',
+    categoryId: '',
+    accountId: '',
+    fromAccountId: '',
+    toAccountId: '',
+    fee: '',
+    date: todayIso(),
+    time: '',
+    note: '',
+    receiptName: '',
+    errors: {} as Record<string, string>,
+  }
+}
 
 export function AddTransactionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const finance = useFinance()
   const dialogRef = useRef<HTMLDialogElement>(null)
-  const [tab, setTab] = useState<TxTab>('expense')
-  const [fromAccount, setFromAccount] = useState('')
-  const [toAccount, setToAccount] = useState('')
-  const sameAccount = tab === 'transfer' && fromAccount !== '' && fromAccount === toAccount
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const triggerFocusRef = useRef<Element | null>(null)
+  const [form, setForm] = useState(emptyFormState())
+  const amountId = useId()
 
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
+    if (open && !dialog.open) {
+      triggerFocusRef.current = document.activeElement
+      setForm(emptyFormState())
+      dialog.showModal()
+    }
+    if (!open && dialog.open) {
+      dialog.close()
+    }
   }, [open])
+
+  function handleClose() {
+    onClose()
+    // Return focus to whatever opened the dialog (the "+ Add Transaction" button).
+    if (triggerFocusRef.current instanceof HTMLElement) triggerFocusRef.current.focus()
+  }
+
+  function update<K extends keyof ReturnType<typeof emptyFormState>>(key: K, value: ReturnType<typeof emptyFormState>[K]) {
+    setForm((f) => ({ ...f, [key]: value, errors: { ...f.errors, [key]: '' } }))
+  }
+
+  function setTab(tab: TxTab) {
+    setForm((f) => ({ ...emptyFormState(), tab, date: f.date }))
+  }
+
+  const sameAccount = form.tab === 'transfer' && form.fromAccountId !== '' && form.fromAccountId === form.toAccountId
+
+  function validate(): Record<string, string> {
+    const errors: Record<string, string> = {}
+    const amountValue = Number(form.amount)
+    if (!form.amount || Number.isNaN(amountValue) || amountValue <= 0) {
+      errors.amount = 'Enter an amount greater than zero.'
+    }
+    if (form.tab !== 'transfer') {
+      if (!form.title.trim()) errors.title = 'Description is required.'
+      if (form.tab === 'income' || form.tab === 'expense') {
+        if (!form.categoryId) errors.categoryId = 'Category is required.'
+      }
+      if (!form.accountId) errors.accountId = 'Account is required.'
+    } else {
+      if (!form.fromAccountId) errors.fromAccountId = 'From Account is required.'
+      if (!form.toAccountId) errors.toAccountId = 'To Account is required.'
+      if (form.fromAccountId && form.fromAccountId === form.toAccountId) {
+        errors.toAccountId = "From Account and To Account can't be the same."
+      }
+      if (form.fee) {
+        const feeValue = Number(form.fee)
+        if (Number.isNaN(feeValue) || feeValue < 0) errors.fee = 'Transfer fee cannot be negative.'
+      }
+    }
+    if (!form.date) errors.date = 'Date is required.'
+    return errors
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const errors = validate()
+    if (Object.keys(errors).length > 0) {
+      setForm((f) => ({ ...f, errors }))
+      return
+    }
+
+    const amountValue = Number(form.amount)
+    const title = form.tab === 'transfer' ? `${finance.accountLabel(form.fromAccountId)} → ${finance.accountLabel(form.toAccountId)}` : form.title.trim()
+
+    finance.addTransaction({
+      type: form.tab,
+      title,
+      categoryId: form.tab !== 'transfer' ? form.categoryId : undefined,
+      accountId: form.tab !== 'transfer' ? form.accountId : undefined,
+      fromAccountId: form.tab === 'transfer' ? form.fromAccountId : undefined,
+      toAccountId: form.tab === 'transfer' ? form.toAccountId : undefined,
+      date: form.date,
+      time: form.time || undefined,
+      amount: amountValue,
+      fee: form.fee ? Number(form.fee) : undefined,
+      note: form.note.trim() || undefined,
+    })
+
+    showToast(`${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
+    handleClose()
+  }
+
+  const categories = finance.state.categories
+  const accountOptions = finance.state.accounts
+  // Expenses can be paid from an asset account or charged to a credit card;
+  // income and transfers only move between asset accounts.
+  const payableOptions = [...accountOptions.map((a) => ({ id: a.id, label: finance.accountLabel(a.id) })), ...finance.state.creditCards.map((c) => ({ id: c.id, label: finance.accountLabel(c.id) }))]
 
   return (
     <dialog
       ref={dialogRef}
       className="tx-modal"
-      onClose={onClose}
+      onClose={handleClose}
       onCancel={(e) => {
         e.preventDefault()
-        onClose()
+        handleClose()
       }}
       aria-labelledby="add-tx-title"
     >
-      <form
-        method="dialog"
-        onSubmit={(e) => {
-          e.preventDefault()
-          onClose()
-        }}
-      >
+      <form method="dialog" onSubmit={handleSubmit} noValidate>
         <div className="tx-modal-head">
           <h2 id="add-tx-title" className="tx-modal-title">
             Add Transaction
           </h2>
-          <button type="button" className="tx-modal-close" aria-label="Close" onClick={onClose}>
+          <button type="button" className="tx-modal-close" aria-label="Close" onClick={handleClose}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
@@ -52,8 +160,8 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
               key={t}
               type="button"
               role="tab"
-              aria-selected={tab === t}
-              className={`tx-tab${tab === t ? ' tx-tab--active' : ''}`}
+              aria-selected={form.tab === t}
+              className={`tx-tab${form.tab === t ? ' tx-tab--active' : ''}`}
               onClick={() => setTab(t)}
             >
               {t[0].toUpperCase() + t.slice(1)}
@@ -62,55 +170,105 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
         </div>
 
         <div className="tx-body">
-          <div className="tx-amount">
-            <span className="tx-amount-ph">$</span>0.00
-          </div>
+          <label className="tx-field">
+            <span className="visually-hidden" id={amountId}>
+              Amount
+            </span>
+            <div className="tx-amount-row">
+              <span className="tx-amount-ph" aria-hidden="true">
+                ₱
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="tx-amount-input"
+                placeholder="0.00"
+                value={form.amount}
+                onChange={(e) => update('amount', e.target.value.replace(/[^0-9.]/g, ''))}
+                aria-labelledby={amountId}
+                aria-invalid={!!form.errors.amount}
+                aria-describedby={form.errors.amount ? `${amountId}-error` : undefined}
+              />
+            </div>
+            {form.errors.amount && (
+              <p className="tx-error" role="alert" id={`${amountId}-error`}>
+                {form.errors.amount}
+              </p>
+            )}
+          </label>
 
-          {tab !== 'transfer' ? (
+          {form.tab !== 'transfer' ? (
             <>
               <label className="tx-field">
                 <span className="tx-label">
-                  {tab === 'income' ? 'Source / Description' : 'Merchant / Description'}
+                  {form.tab === 'income' ? 'Source / Description' : 'Merchant / Description'}
                   <span className="tx-req">*</span>
                 </span>
                 <input
                   type="text"
                   className="tx-input"
-                  placeholder={tab === 'income' ? 'e.g. Freelance Payment' : 'e.g. Grab Grocery'}
-                  required
+                  placeholder={form.tab === 'income' ? 'e.g. Freelance Payment' : 'e.g. Grab Grocery'}
+                  value={form.title}
+                  onChange={(e) => update('title', e.target.value)}
+                  aria-invalid={!!form.errors.title}
                 />
+                {form.errors.title && (
+                  <p className="tx-error" role="alert">
+                    {form.errors.title}
+                  </p>
+                )}
               </label>
               <div className="tx-row two">
                 <label className="tx-field">
                   <span className="tx-label">
                     Category<span className="tx-req">*</span>
                   </span>
-                  <select className="tx-input" defaultValue="" required>
+                  <select
+                    className="tx-input"
+                    value={form.categoryId}
+                    onChange={(e) => update('categoryId', e.target.value)}
+                    aria-invalid={!!form.errors.categoryId}
+                  >
                     <option value="" disabled>
                       Select category
                     </option>
-                    <option>Food &amp; Groceries</option>
-                    <option>Transport</option>
-                    <option>Shopping</option>
-                    <option>Utilities</option>
-                    <option>Salary</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                   </select>
+                  {form.errors.categoryId && (
+                    <p className="tx-error" role="alert">
+                      {form.errors.categoryId}
+                    </p>
+                  )}
                 </label>
                 <label className="tx-field">
                   <span className="tx-label">
-                    {tab === 'income' ? 'Deposit to' : 'Account'}
+                    {form.tab === 'income' ? 'Deposit to' : 'Account'}
                     <span className="tx-req">*</span>
                   </span>
-                  <select className="tx-input" defaultValue="" required>
+                  <select
+                    className="tx-input"
+                    value={form.accountId}
+                    onChange={(e) => update('accountId', e.target.value)}
+                    aria-invalid={!!form.errors.accountId}
+                  >
                     <option value="" disabled>
                       Select account
                     </option>
-                    <option>Checking ••4471</option>
-                    <option>Savings ••8830</option>
-                    <option>GCash</option>
-                    <option>Maya</option>
-                    <option>Cash Wallet</option>
+                    {(form.tab === 'income' ? accountOptions.map((a) => ({ id: a.id, label: finance.accountLabel(a.id) })) : payableOptions).map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
                   </select>
+                  {form.errors.accountId && (
+                    <p className="tx-error" role="alert">
+                      {form.errors.accountId}
+                    </p>
+                  )}
                 </label>
               </div>
             </>
@@ -123,44 +281,66 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
                   </span>
                   <select
                     className="tx-input"
-                    value={fromAccount}
-                    onChange={(e) => setFromAccount(e.target.value)}
-                    required
+                    value={form.fromAccountId}
+                    onChange={(e) => update('fromAccountId', e.target.value)}
+                    aria-invalid={!!form.errors.fromAccountId}
                   >
                     <option value="" disabled>
                       Select account
                     </option>
-                    <option>Checking ••4471</option>
-                    <option>Savings ••8830</option>
-                    <option>GCash</option>
-                    <option>Maya</option>
-                    <option>Cash Wallet</option>
+                    {accountOptions.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {finance.accountLabel(a.id)}
+                      </option>
+                    ))}
                   </select>
+                  {form.errors.fromAccountId && (
+                    <p className="tx-error" role="alert">
+                      {form.errors.fromAccountId}
+                    </p>
+                  )}
                 </label>
                 <label className="tx-field">
                   <span className="tx-label">
                     To Account<span className="tx-req">*</span>
                   </span>
-                  <select className="tx-input" value={toAccount} onChange={(e) => setToAccount(e.target.value)} required>
+                  <select
+                    className="tx-input"
+                    value={form.toAccountId}
+                    onChange={(e) => update('toAccountId', e.target.value)}
+                    aria-invalid={sameAccount || !!form.errors.toAccountId}
+                  >
                     <option value="" disabled>
                       Select account
                     </option>
-                    <option>Checking ••4471</option>
-                    <option>Savings ••8830</option>
-                    <option>GCash</option>
-                    <option>Maya</option>
-                    <option>Cash Wallet</option>
+                    {accountOptions.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {finance.accountLabel(a.id)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
-              {sameAccount && (
+              {(sameAccount || form.errors.toAccountId) && (
                 <p className="tx-error" role="alert">
                   From Account and To Account can&apos;t be the same.
                 </p>
               )}
               <label className="tx-field">
                 <span className="tx-label">Transfer Fee</span>
-                <input type="text" className="tx-input" placeholder="Optional" />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="tx-input"
+                  placeholder="Optional"
+                  value={form.fee}
+                  onChange={(e) => update('fee', e.target.value.replace(/[^0-9.]/g, ''))}
+                />
+                {form.errors.fee && (
+                  <p className="tx-error" role="alert">
+                    {form.errors.fee}
+                  </p>
+                )}
               </label>
             </>
           )}
@@ -170,23 +350,35 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
               <span className="tx-label">
                 Date<span className="tx-req">*</span>
               </span>
-              <input type="date" className="tx-input" defaultValue="2026-08-29" required />
+              <input type="date" className="tx-input" value={form.date} onChange={(e) => update('date', e.target.value)} aria-invalid={!!form.errors.date} />
+              {form.errors.date && (
+                <p className="tx-error" role="alert">
+                  {form.errors.date}
+                </p>
+              )}
             </label>
             <label className="tx-field">
               <span className="tx-label">Time</span>
-              <input type="time" className="tx-input" />
+              <input type="time" className="tx-input" value={form.time} onChange={(e) => update('time', e.target.value)} />
             </label>
           </div>
 
           <label className="tx-field">
             <span className="tx-label">Notes</span>
-            <textarea className="tx-input tx-textarea" placeholder="Optional" />
+            <textarea className="tx-input tx-textarea" placeholder="Optional" value={form.note} onChange={(e) => update('note', e.target.value)} />
           </label>
 
-          {tab === 'expense' && (
-            <label className="tx-field">
+          {form.tab === 'expense' && (
+            <div className="tx-field">
               <span className="tx-label">Receipt</span>
-              <div className="tx-receipt">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="visually-hidden"
+                onChange={(e) => update('receiptName', e.target.files?.[0]?.name ?? '')}
+              />
+              <button type="button" className="tx-receipt" onClick={() => fileInputRef.current?.click()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path
                     d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3"
@@ -196,18 +388,21 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
                   />
                   <rect x="7" y="10" width="10" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
                 </svg>
-                Scan or attach a receipt (optional)
-              </div>
-            </label>
+                {form.receiptName ? `Attached: ${form.receiptName}` : 'Attach a receipt photo (optional)'}
+              </button>
+              <p className="faint" style={{ fontSize: 10.5, margin: '4px 0 0' }}>
+                Receipt scan (OCR) is planned for a future release — attaching here only keeps a local filename preview.
+              </p>
+            </div>
           )}
         </div>
 
         <div className="tx-foot">
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
+          <button type="button" className="btn btn--ghost" onClick={handleClose}>
             Cancel
           </button>
           <button type="submit" className="btn btn--primary" disabled={sameAccount}>
-            Save {tab[0].toUpperCase() + tab.slice(1)}
+            Save {form.tab[0].toUpperCase() + form.tab.slice(1)}
           </button>
         </div>
       </form>

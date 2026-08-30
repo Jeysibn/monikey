@@ -7,7 +7,10 @@
   --line: oklch(30% 0.03 255 / 0.5);
   --text: oklch(96% 0.008 255);
   --text-dim: oklch(70% 0.02 255);
-  --text-faint: oklch(52% 0.02 255);
+  /* Lightened from 52% — at 52% this only reached ~3.2:1 against card
+     surfaces, below the 4.5:1 WCAG AA threshold for normal text (FR-008).
+     63% clears 4.5:1 against --bg, --card, and --card-hi. */
+  --text-faint: oklch(63% 0.02 255);
   --cyan: oklch(80% 0.13 210);
   --cyan-dim: oklch(45% 0.06 210);
   --cyan-ink: oklch(18% 0.03 210);

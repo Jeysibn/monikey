@@ -1,15 +1,167 @@
+import { useId, useState } from 'react'
 import { Card } from '../components/Card'
-import {
-  accounts,
-  creditCards,
-  formatMoney,
-  totalAvailableCash,
-  totalCreditLimit,
-  totalCreditOwed,
-} from '../data/mockData'
+import { useFinance } from '../hooks/useFinance'
+import { formatMoney } from '../utils/currency'
+import type { AccountType } from '../domain/finance'
 import './Accounts.css'
 
+function AddAccountForm({ onClose }: { onClose: () => void }) {
+  const finance = useFinance()
+  const [name, setName] = useState('')
+  const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>('ewallet')
+  const [balance, setBalance] = useState('')
+  const [error, setError] = useState('')
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const amount = Number(balance)
+    if (!name.trim()) {
+      setError('Account name is required.')
+      return
+    }
+    if (balance === '' || Number.isNaN(amount) || amount < 0) {
+      setError('Enter a starting balance of zero or more.')
+      return
+    }
+    finance.addManualAccount({ name: name.trim(), type, balance: amount })
+    onClose()
+  }
+
+  return (
+    <form className="new-category-form" onSubmit={handleSubmit}>
+      <label className="new-category-field">
+        <span className="tx-label">Account name</span>
+        <input type="text" className="tx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. PayMaya" autoFocus />
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Type</span>
+        <select className="tx-input" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+          <option value="checking">Bank — Checking</option>
+          <option value="savings">Bank — Savings</option>
+          <option value="ewallet">E-Wallet</option>
+          <option value="cash">Cash</option>
+        </select>
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Starting balance</span>
+        <input type="text" inputMode="decimal" className="tx-input" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" />
+      </label>
+      {error && (
+        <p className="tx-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="new-category-actions">
+        <button type="button" className="btn btn--ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn--primary">
+          Add account
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function AddCardForm({ onClose }: { onClose: () => void }) {
+  const finance = useFinance()
+  const [name, setName] = useState('')
+  const [lastFour, setLastFour] = useState('')
+  const [network, setNetwork] = useState<'visa' | 'mastercard'>('visa')
+  const [limit, setLimit] = useState('')
+  const [balance, setBalance] = useState('')
+  const [error, setError] = useState('')
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const limitAmount = Number(limit)
+    const balanceAmount = balance === '' ? 0 : Number(balance)
+    if (!name.trim()) {
+      setError('Card name is required.')
+      return
+    }
+    if (!/^\d{4}$/.test(lastFour)) {
+      setError('Enter the last 4 digits of the card.')
+      return
+    }
+    if (!limit || Number.isNaN(limitAmount) || limitAmount <= 0) {
+      setError('Enter a credit limit greater than zero.')
+      return
+    }
+    if (Number.isNaN(balanceAmount) || balanceAmount < 0) {
+      setError('Current balance cannot be negative.')
+      return
+    }
+    finance.addManualCreditCard({
+      name: name.trim(),
+      lastFour,
+      network,
+      limit: limitAmount,
+      balance: balanceAmount,
+      dueDate: 'Not set',
+      minPayment: 0,
+    })
+    onClose()
+  }
+
+  return (
+    <form className="new-category-form" onSubmit={handleSubmit}>
+      <label className="new-category-field">
+        <span className="tx-label">Card name</span>
+        <input type="text" className="tx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BPI Rewards" autoFocus />
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Last 4 digits</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={4}
+          className="tx-input"
+          value={lastFour}
+          onChange={(e) => setLastFour(e.target.value.replace(/\D/g, ''))}
+          placeholder="1234"
+        />
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Network</span>
+        <select className="tx-input" value={network} onChange={(e) => setNetwork(e.target.value as typeof network)}>
+          <option value="visa">Visa</option>
+          <option value="mastercard">Mastercard</option>
+        </select>
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Credit limit</span>
+        <input type="text" inputMode="decimal" className="tx-input" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="0.00" />
+      </label>
+      <label className="new-category-field">
+        <span className="tx-label">Current balance (optional)</span>
+        <input type="text" inputMode="decimal" className="tx-input" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" />
+      </label>
+      {error && (
+        <p className="tx-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="new-category-actions">
+        <button type="button" className="btn btn--ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn--primary">
+          Add card
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function Accounts() {
+  const finance = useFinance()
+  const { accounts, creditCards } = finance.state
+  const [addingAccount, setAddingAccount] = useState<'bank' | 'wallet' | null>(null)
+  const [addingCard, setAddingCard] = useState(false)
+  const bankFormId = useId()
+  const walletFormId = useId()
+
   const banks = accounts.filter((a) => a.type === 'checking' || a.type === 'savings')
   const wallets = accounts.filter((a) => a.type === 'ewallet' || a.type === 'cash')
   const bankTotal = banks.reduce((s, a) => s + a.balance, 0)
@@ -24,26 +176,28 @@ export function Accounts() {
       <div className="kpi-row">
         <Card>
           <div className="eyebrow">Available Cash</div>
-          <div className="num kpi-val">{formatMoney(totalAvailableCash)}</div>
-          <div className="kpi-delta--up">+3.2% this month</div>
+          <div className="num kpi-val">{formatMoney(finance.totalAvailableCash)}</div>
+          {typeof finance.availableCashMonthlyChangePct === 'number' && (
+            <div className={finance.availableCashMonthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+              {finance.availableCashMonthlyChangePct >= 0 ? '+' : ''}
+              {finance.availableCashMonthlyChangePct}% this month
+            </div>
+          )}
         </Card>
         <Card>
           <div className="eyebrow">Banks · {banks.length} accounts</div>
           <div className="num kpi-val">{formatMoney(bankTotal)}</div>
-          <div className="kpi-delta--up">+1.4% this month</div>
         </Card>
         <Card>
-          <div className="eyebrow">
-            E-Wallets &amp; Cash · {wallets.length} sources
-          </div>
+          <div className="eyebrow">E-Wallets &amp; Cash · {wallets.length} sources</div>
           <div className="num kpi-val">{formatMoney(walletTotal)}</div>
-          <div className="kpi-delta--up">+4.2% this month</div>
         </Card>
         <Card>
           <div className="eyebrow">Credit Owed · {creditCards.length} cards</div>
-          <div className="num kpi-val">{formatMoney(totalCreditOwed)}</div>
+          <div className="num kpi-val">{formatMoney(finance.totalCreditOwed)}</div>
           <div className="kpi-delta--down">
-            {Math.round((totalCreditOwed / totalCreditLimit) * 100)}% of {formatMoney(totalCreditLimit, { withCents: false })} limit
+            {finance.totalCreditLimit > 0 ? Math.round((finance.totalCreditOwed / finance.totalCreditLimit) * 100) : 0}% of{' '}
+            {formatMoney(finance.totalCreditLimit, { withCents: false })} limit
           </div>
         </Card>
       </div>
@@ -53,18 +207,31 @@ export function Accounts() {
           <Card>
             <div className="section-head">
               <span className="card-title-text">Bank Accounts</span>
-              <button type="button" className="add-link">
+              <button
+                type="button"
+                className="add-link"
+                aria-expanded={addingAccount === 'bank'}
+                aria-controls={bankFormId}
+                onClick={() => setAddingAccount(addingAccount === 'bank' ? null : 'bank')}
+              >
                 + Add account
               </button>
             </div>
+            {addingAccount === 'bank' && (
+              <div id={bankFormId}>
+                <AddAccountForm onClose={() => setAddingAccount(null)} />
+              </div>
+            )}
             {banks.map((a) => (
               <div className="account-row" key={a.id}>
                 <div>
                   <div className="acct-name">
-                    {a.name} ••{a.lastFour}
+                    {a.name}
+                    {a.lastFour ? ` ••${a.lastFour}` : ''}
                   </div>
                   <div className="faint">
-                    {a.institution} · {a.syncStatus}
+                    {a.institution ? `${a.institution} · ` : ''}
+                    {a.syncStatus}
                   </div>
                 </div>
                 <div className="acct-amt">
@@ -83,10 +250,21 @@ export function Accounts() {
           <Card>
             <div className="section-head">
               <span className="card-title-text">E-Wallets &amp; Cash</span>
-              <button type="button" className="add-link">
+              <button
+                type="button"
+                className="add-link"
+                aria-expanded={addingAccount === 'wallet'}
+                aria-controls={walletFormId}
+                onClick={() => setAddingAccount(addingAccount === 'wallet' ? null : 'wallet')}
+              >
                 + Add account
               </button>
             </div>
+            {addingAccount === 'wallet' && (
+              <div id={walletFormId}>
+                <AddAccountForm onClose={() => setAddingAccount(null)} />
+              </div>
+            )}
             {wallets.map((a) => (
               <div className="account-row" key={a.id}>
                 <div>
@@ -109,10 +287,11 @@ export function Accounts() {
           <Card>
             <div className="section-head">
               <span className="card-title-text">Credit Cards</span>
-              <button type="button" className="add-link">
+              <button type="button" className="add-link" aria-expanded={addingCard} onClick={() => setAddingCard((v) => !v)}>
                 + Add card
               </button>
             </div>
+            {addingCard && <AddCardForm onClose={() => setAddingCard(false)} />}
             {creditCards.map((c) => (
               <div className="account-row" key={c.id}>
                 <div>
@@ -120,7 +299,7 @@ export function Accounts() {
                     {c.name} ••{c.lastFour}
                   </div>
                   <div className="faint">
-                    Due {c.dueDate} · min {formatMoney(c.minPayment, { withCents: false })}
+                    {c.dueDate === 'Not set' ? 'Due date not set' : `Due ${c.dueDate} · min ${formatMoney(c.minPayment, { withCents: false })}`}
                   </div>
                 </div>
                 <div className="acct-amt">
@@ -144,7 +323,7 @@ export function Accounts() {
                   <div className="alloc-track">
                     <div
                       className="alloc-fill"
-                      style={{ width: `${(a.balance / totalAvailableCash) * 100}%` }}
+                      style={{ width: `${finance.totalAvailableCash > 0 ? (a.balance / finance.totalAvailableCash) * 100 : 0}%` }}
                     />
                   </div>
                   <span className="num alloc-amt">{formatMoney(a.balance, { withCents: false })}</span>
@@ -155,11 +334,11 @@ export function Accounts() {
 
           <Card>
             <div className="card-title-text">
-              Liabilities <span className="faint" style={{ color: 'var(--amber)', fontWeight: 400 }}>{formatMoney(totalCreditOwed, { withCents: false })} owed</span>
+              Liabilities <span className="faint" style={{ color: 'var(--amber)', fontWeight: 400 }}>{formatMoney(finance.totalCreditOwed, { withCents: false })} owed</span>
             </div>
             <div className="alloc-row">
               <span className="alloc-label">Credit Cards · {creditCards.length}</span>
-              <span className="num alloc-amt">{formatMoney(totalCreditOwed, { withCents: false })}</span>
+              <span className="num alloc-amt">{formatMoney(finance.totalCreditOwed, { withCents: false })}</span>
             </div>
             <div className="alloc-row">
               <span className="alloc-label">Loans</span>
@@ -173,12 +352,12 @@ export function Accounts() {
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
-            <div style={{ fontWeight: 700 }}>Link a new account</div>
+            <div style={{ fontWeight: 700 }}>Link a real account</div>
             <div className="faint" style={{ textAlign: 'center' }}>
-              Connect a bank, e-wallet, or credit card to track it automatically.
+              Connecting a real bank, e-wallet, or credit card is planned for a future release. Use "+ Add account" above for a manual entry today.
             </div>
-            <button type="button" className="btn btn--primary">
-              Connect account
+            <button type="button" className="btn btn--primary" disabled title="Coming soon">
+              Connect account — coming soon
             </button>
           </Card>
         </div>

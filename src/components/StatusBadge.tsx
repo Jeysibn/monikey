@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { BudgetStatus } from '../data/mockData'
+import type { BudgetStatus } from '../domain/finance'
 import './StatusBadge.css'
 
 const LABELS: Record<BudgetStatus, string> = {

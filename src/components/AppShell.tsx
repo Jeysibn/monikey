@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { attentionItems } from '../data/mockData'
 import './AppShell.css'
 
 const NAV_ITEMS = [
@@ -91,6 +92,68 @@ function MoreMenu() {
   )
 }
 
+function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
+  return (
+    <div className="notif-menu" ref={ref}>
+      <button
+        type="button"
+        className="icon-btn notif-bell"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-label={`Notifications, ${attentionItems.length} need attention`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+        {attentionItems.length > 0 && <span className="notif-badge">{attentionItems.length}</span>}
+      </button>
+      {open && (
+        <div id={menuId} role="menu" className="notif-dropdown">
+          <div className="notif-head">
+            <span>Attention Needed</span>
+          </div>
+          {attentionItems.map((item) => (
+            <div key={item.id} role="menuitem" className="notif-item">
+              <span className={`notif-dot notif-dot--${item.severity}`} aria-hidden="true" />
+              <span>{item.title}</span>
+            </div>
+          ))}
+          <NavLink to="/transactions" role="menuitem" className="notif-see-all" onClick={() => setOpen(false)}>
+            See all →
+          </NavLink>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AppShell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction?: () => void }) {
   return (
     <div className="app-shell">
@@ -113,6 +176,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
           <MoreMenu />
         </nav>
         <div className="topbar-right">
+          <NotificationBell />
           {onAddTransaction && (
             <button type="button" className="btn btn--primary btn--compact" onClick={onAddTransaction}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">

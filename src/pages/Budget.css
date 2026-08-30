@@ -46,7 +46,7 @@
 
 .budget-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr 108px 92px;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
@@ -62,6 +62,9 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 5px;
+}
+.budget-row > .status-badge {
+  justify-self: center;
 }
 .budget-amt {
   font-size: 12.5px;

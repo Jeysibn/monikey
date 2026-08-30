@@ -1,14 +1,16 @@
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
+import { Sparkline } from '../components/Sparkline'
 import { Link } from 'react-router-dom'
 import {
+  accountColor,
   accounts,
-  attentionItems,
   budgetDaysRemaining,
   budgetNearLimitCount,
   budgetOverCount,
   budgetUnallocated,
   budgetUsedPct,
+  categoryColor,
   creditCards,
   expensesByDay,
   expensesToday,
@@ -31,33 +33,11 @@ export function Dashboard() {
   const activeGoalsPreview = goals.filter((g) => g.active)
   const completedCount = goals.filter((g) => !g.active).length
   const recent = transactions.slice(0, 5)
-  const maxDay = Math.max(...expensesByDay.map((d) => d.amount))
 
   return (
     <div className="dashboard">
-      <div className="attention-strip" role="status">
-        <div className="attention-title">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 9v4M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-          </svg>
-          Attention Needed
-        </div>
-        <ul className="attention-items">
-          {attentionItems.map((item) => (
-            <li key={item.id} className={`attention-item attention-item--${item.severity}`}>
-              <span className="attention-dot" aria-hidden="true" />
-              {item.title}
-            </li>
-          ))}
-        </ul>
-        <Link to="/transactions" className="see-all">
-          See all
-        </Link>
-      </div>
-
       <div className="dash-grid">
-        <Card className="span-row-2 balance-card">
+        <Card className="area-balance balance-card">
           <div className="eyebrow">Available Cash</div>
           <div className="bal-amount num">{formatMoney(totalAvailableCash, { withCents: true })}</div>
           <div className="faint">Across {accounts.length} cash sources</div>
@@ -95,7 +75,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="span-col-3">
+        <Card className="area-expenses">
           <CardTitle
             action={
               <span className="num" style={{ fontSize: 14 }}>
@@ -105,19 +85,25 @@ export function Dashboard() {
           >
             Expenses
           </CardTitle>
-          <div className="mini-bars">
-            {expensesByDay.map((d) => (
-              <div className="mini-bar-col" key={d.day}>
-                <div className="mini-bar-wrap">
-                  <div className="mini-bar" style={{ height: `${(d.amount / maxDay) * 100}%` }} />
-                </div>
-                <div className="mini-bar-label faint">{d.day}</div>
-              </div>
-            ))}
+          <div className="expenses-line">
+            <Sparkline
+              values={expensesByDay.map((d) => d.amount)}
+              width={700}
+              height={130}
+              strokeWidth={2.8}
+              className="expenses-spark"
+            />
+            <div className="months">
+              {expensesByDay.map((d, i) => (
+                <span key={d.day} className={i === expensesByDay.length - 1 ? 'num expenses-line-today' : undefined}>
+                  {d.day}
+                </span>
+              ))}
+            </div>
           </div>
         </Card>
 
-        <Card>
+        <Card className="area-budget">
           <CardTitle action={<span className="num" style={{ fontSize: 14 }}>{formatMoney(totalBudgetAllocated, { withCents: false })}</span>}>
             Budget
           </CardTitle>
@@ -144,7 +130,7 @@ export function Dashboard() {
           </Link>
         </Card>
 
-        <Card>
+        <Card className="area-goals">
           <CardTitle action={<span className="faint">{activeGoalsPreview.length} active</span>}>Goals</CardTitle>
           <ul className="mini-list mini-list--goals">
             {activeGoalsPreview.map((g) => (
@@ -164,7 +150,7 @@ export function Dashboard() {
           </Link>
         </Card>
 
-        <Card>
+        <Card className="area-spend">
           <CardTitle action={<span className="faint">by category</span>}>Spend Mix</CardTitle>
           <div className="num" style={{ fontSize: 20, fontWeight: 700 }}>
             {formatMoney(spendMixTotal, { withCents: false })}
@@ -181,7 +167,7 @@ export function Dashboard() {
           </ul>
         </Card>
 
-        <Card>
+        <Card className="area-ai">
           <CardTitle
             action={
               <span className="ai-online">
@@ -200,7 +186,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="span-col-2">
+        <Card className="area-credit">
           <CardTitle action={<span className="faint">{creditCards.length} cards · {formatMoney(totalCreditOwed, { withCents: false })} owed</span>}>
             Credit Cards
           </CardTitle>
@@ -228,7 +214,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card>
+        <Card className="area-portfolio">
           <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>My Portfolio</CardTitle>
           <div className="portfolio-grid">
             {portfolio.map((h) => (
@@ -239,6 +225,7 @@ export function Dashboard() {
                 <div className="kpi-delta--up" style={{ fontSize: 10.5 }}>
                   +{h.changePct}%
                 </div>
+                <Sparkline values={h.history} width={120} height={24} color="var(--teal)" strokeWidth={2} className="portfolio-spark" />
                 <div className="portfolio-foot">
                   <span>{h.ticker}</span>
                   <span className="faint">Units {h.units}</span>
@@ -248,7 +235,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="span-col-3">
+        <Card className="area-recent">
           <CardTitle action={<span className="faint">Today · Aug 29</span>}>Recent Transactions</CardTitle>
           <table className="tx-table">
             <tbody>
@@ -260,8 +247,21 @@ export function Dashboard() {
                       {t.source === 'ocr' ? 'OCR receipt' : 'Manual'} · {t.time ?? t.date}
                     </div>
                   </td>
-                  <td className="faint">{t.category ?? '—'}</td>
-                  <td className="faint">{t.accountLabel}</td>
+                  <td>
+                    {t.category ? (
+                      <span className="tx-tag" style={{ color: categoryColor(t.category), background: `color-mix(in oklch, ${categoryColor(t.category)} 16%, transparent)` }}>
+                        {t.category}
+                      </span>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="tx-acct">
+                      <span className="tx-acct-dot" style={{ background: accountColor(t.accountId) }} />
+                      <span className="faint">{t.accountLabel}</span>
+                    </span>
+                  </td>
                   <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoney(t.amount)}</td>
                 </tr>
               ))}

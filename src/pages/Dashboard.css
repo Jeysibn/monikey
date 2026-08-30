@@ -1,49 +1,3 @@
-.attention-strip {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 10px 17px;
-  margin-bottom: 16px;
-  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 22%);
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  flex-wrap: wrap;
-}
-.attention-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--amber);
-  flex: none;
-}
-.attention-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  flex: 1;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-.attention-item {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-.attention-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--amber);
-}
-.attention-item--info .attention-dot {
-  background: var(--cyan);
-}
 .see-all {
   font-size: 11px;
   font-weight: 600;
@@ -56,20 +10,44 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 @media (min-width: 1000px) {
   .dash-grid {
     grid-template-columns: 300px repeat(3, 1fr);
+    grid-template-rows: repeat(4, minmax(190px, auto));
+    grid-template-areas:
+      'balance  expenses expenses expenses'
+      'balance  budget   goals    spend'
+      'ai       credit   credit   portfolio'
+      'ai       recent   recent   portfolio';
   }
-  .span-col-2 {
-    grid-column: span 2;
+  .area-balance {
+    grid-area: balance;
   }
-  .span-col-3 {
-    grid-column: span 3;
+  .area-expenses {
+    grid-area: expenses;
   }
-  .span-row-2 {
-    grid-row: span 2;
+  .area-budget {
+    grid-area: budget;
+  }
+  .area-goals {
+    grid-area: goals;
+  }
+  .area-spend {
+    grid-area: spend;
+  }
+  .area-ai {
+    grid-area: ai;
+  }
+  .area-credit {
+    grid-area: credit;
+  }
+  .area-portfolio {
+    grid-area: portfolio;
+  }
+  .area-recent {
+    grid-area: recent;
   }
 }
 
@@ -131,36 +109,27 @@
   font-weight: 700;
 }
 
-.mini-bars {
+.expenses-line {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
   height: 140px;
   margin-top: 12px;
 }
-.mini-bar-col {
+.expenses-spark {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  height: 100%;
-}
-.mini-bar-wrap {
-  flex: 1;
+  min-height: 0;
   width: 100%;
+}
+.months {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.mini-bar {
-  width: 60%;
-  background: linear-gradient(180deg, var(--cyan), var(--cyan-dim));
-  border-radius: 6px 6px 2px 2px;
-  min-height: 4px;
-}
-.mini-bar-label {
+  justify-content: space-between;
+  margin-top: 6px;
   font-size: 10px;
+  color: var(--text-faint);
+}
+.expenses-line-today {
+  color: var(--cyan);
+  font-weight: 700;
 }
 
 .mini-list {
@@ -296,6 +265,11 @@
   flex-direction: column;
   gap: 4px;
 }
+.portfolio-spark {
+  width: 100%;
+  height: 24px;
+  margin: 2px 0;
+}
 .portfolio-foot {
   display: flex;
   justify-content: space-between;
@@ -306,6 +280,7 @@
 
 .tx-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
   margin-top: 6px;
@@ -314,16 +289,56 @@
   padding: 8px 6px;
   border-top: 1px solid var(--line);
   vertical-align: middle;
+  text-align: left;
 }
 .tx-table tr:first-child td {
   border-top: none;
 }
-.tx-amt--out {
+.tx-table td:nth-child(1) {
+  width: 40%;
+}
+.tx-table td:nth-child(2) {
+  width: 16%;
+  text-align: center;
+}
+.tx-table td:nth-child(3) {
+  width: 24%;
+}
+.tx-table td:nth-child(4) {
+  width: 20%;
+}
+.tx-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tx-acct {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+}
+.tx-acct .faint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-acct-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+.tx-table td.tx-amt--out {
   color: var(--text);
   font-weight: 700;
   text-align: right;
 }
-.tx-amt--in {
+.tx-table td.tx-amt--in {
   color: var(--teal);
   font-weight: 700;
   text-align: right;

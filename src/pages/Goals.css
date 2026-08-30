@@ -94,10 +94,31 @@
 .completed-actions {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
   flex: none;
 }
-.completed-actions .pill {
-  font-size: 10px;
-  padding: 5px 10px;
+.completed-actions .btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  justify-content: center;
+}
+.completed-actions .btn--outline {
+  color: var(--cyan);
+  background: oklch(80% 0.13 210 / 0.1);
+  border: 1px solid oklch(80% 0.13 210 / 0.35);
+}
+.completed-actions .btn--outline:hover {
+  background: oklch(80% 0.13 210 / 0.18);
+}
+.completed-actions .btn--muted {
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--card-border);
+}
+.completed-actions .btn--muted:hover {
+  color: var(--text-dim);
+  border-color: var(--text-faint);
 }

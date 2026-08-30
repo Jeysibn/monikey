@@ -49,6 +49,11 @@
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
+  color-scheme: dark;
+}
+.filter-select option {
+  color: var(--text);
+  background: var(--card);
 }
 
 .kpi-row {
@@ -66,25 +71,66 @@
 .tx-card {
   overflow-x: auto;
 }
+/* CSS Grid, not a native table: explicit fr/px tracks give exact,
+   predictable column widths that fill the card edge-to-edge with no
+   dead gaps — a native <table> either left dead space in short columns
+   (fixed layout) or got force-stretched to 100% width by Card's flex
+   container regardless of its own width (auto layout). Roles below
+   preserve table semantics for assistive tech and tests. */
 .full-tx-table {
-  width: 100%;
-  border-collapse: collapse;
+  display: flex;
+  flex-direction: column;
   font-size: 12px;
-  min-width: 720px;
+  min-width: 780px;
 }
-.full-tx-table th {
-  text-align: left;
+.tx-grid-row {
+  display: grid;
+  grid-template-columns: 60px 1.6fr 110px 1.1fr 90px 100px 90px;
+  column-gap: 14px;
+  align-items: center;
+  padding: 12px 8px;
+  border-top: 1px solid var(--line);
+}
+.tx-grid-head {
+  border-top: none;
+  padding: 0 8px 10px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
-  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
-.full-tx-table td {
-  padding: 12px 8px;
-  border-top: 1px solid var(--line);
-  vertical-align: middle;
+.tx-col-center {
+  text-align: center;
+}
+.tx-col-right {
+  text-align: right;
+}
+.tx-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tx-acct {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+}
+.tx-acct .faint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-acct-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
 }
 .tx-amt-out {
   text-align: right;

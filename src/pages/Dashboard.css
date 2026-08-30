@@ -51,6 +51,40 @@
   }
 }
 
+/* Below the desktop grid breakpoint, .dash-grid falls back to a single
+   auto-fit column and stacks cards in DOM order. Reorder them here to the
+   priority the review brief asks for on mobile: available cash, recent
+   transactions, budget, goals, then everything else. */
+@media (max-width: 999px) {
+  .area-balance {
+    order: 1;
+  }
+  .area-recent {
+    order: 2;
+  }
+  .area-budget {
+    order: 3;
+  }
+  .area-goals {
+    order: 4;
+  }
+  .area-expenses {
+    order: 5;
+  }
+  .area-credit {
+    order: 6;
+  }
+  .area-spend {
+    order: 7;
+  }
+  .area-ai {
+    order: 8;
+  }
+  .area-portfolio {
+    order: 9;
+  }
+}
+
 .balance-card {
   gap: 12px;
 }
@@ -87,24 +121,24 @@
   font-size: 12px;
   margin-bottom: 6px;
 }
-.acct-row {
+.bal-acct-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 6px 0;
   border-top: 1px solid var(--line);
 }
-.acct-row:first-of-type {
+.bal-acct-row:first-of-type {
   border-top: none;
 }
-.acct-name {
+.bal-acct-name {
   font-size: 12px;
   font-weight: 600;
 }
-.acct-type {
+.bal-acct-type {
   font-size: 10px;
 }
-.acct-amt {
+.bal-acct-amt {
   font-size: 12.5px;
   font-weight: 700;
 }
@@ -132,32 +166,9 @@
   font-weight: 700;
 }
 
-.mini-list {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 11.5px;
-}
-.mini-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-dim);
-}
 .mini-list--goals li {
   align-items: center;
 }
-.swatch {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  margin-right: 6px;
-}
-
 .ai-online {
   display: flex;
   align-items: center;
@@ -306,32 +317,6 @@
 }
 .tx-table td:nth-child(4) {
   width: 20%;
-}
-.tx-tag {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.tx-acct {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 100%;
-  min-width: 0;
-}
-.tx-acct .faint {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tx-acct-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  flex: none;
 }
 .tx-table td.tx-amt--out {
   color: var(--text);

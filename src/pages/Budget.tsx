@@ -1,27 +1,44 @@
+import { useId, useRef, useState } from 'react'
 import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
-import {
-  budgetCategories,
-  budgetDaysRemaining,
-  budgetNearLimitCount,
-  budgetOverCount,
-  budgetStatus,
-  budgetUnallocated,
-  budgetUsedPct,
-  budgetVsActual,
-  formatMoney,
-  totalBudgetAllocated,
-  totalBudgetRemaining,
-  totalBudgetSpent,
-} from '../data/mockData'
+import { useFinance } from '../hooks/useFinance'
+import { formatMoney } from '../utils/currency'
 import './Budget.css'
 
 export function Budget() {
+  const finance = useFinance()
+  const { budgetCategories, categories, budgetVsActual, totalBudgetAllocated } = finance.state
+  const [formOpen, setFormOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [allocated, setAllocated] = useState('')
+  const [error, setError] = useState('')
+  const nameId = useId()
+  const formRef = useRef<HTMLFormElement>(null)
+
   const overNames = budgetCategories
-    .filter((c) => budgetStatus(c.allocated, c.spent) === 'over_budget')
-    .map((c) => c.name)
+    .filter((c) => finance.budgetStatus(c.allocated, c.spent) === 'over_budget')
+    .map((c) => categories.find((cc) => cc.id === c.id)?.name ?? c.id)
     .join(', ')
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmedName = name.trim()
+    const amount = Number(allocated)
+    if (!trimmedName) {
+      setError('Category name is required.')
+      return
+    }
+    if (!allocated || Number.isNaN(amount) || amount <= 0) {
+      setError('Enter a budget amount greater than zero.')
+      return
+    }
+    finance.addBudgetCategory({ name: trimmedName, allocated: amount })
+    setName('')
+    setAllocated('')
+    setError('')
+    setFormOpen(false)
+  }
 
   return (
     <div>
@@ -33,22 +50,22 @@ export function Budget() {
         <Card>
           <div className="eyebrow">Total Budget</div>
           <div className="num kpi-val">{formatMoney(totalBudgetAllocated, { withCents: false })}</div>
-          <div className="faint">This month · Aug 2026</div>
+          <div className="faint">This month</div>
         </Card>
         <Card>
           <div className="eyebrow">Spent So Far</div>
-          <div className="num kpi-val">{formatMoney(totalBudgetSpent, { withCents: false })}</div>
-          <div className="kpi-delta--up">{budgetUsedPct}% of budget used</div>
+          <div className="num kpi-val">{formatMoney(finance.totalBudgetSpent, { withCents: false })}</div>
+          <div className="kpi-delta--up">{finance.budgetUsedPct}% of budget used</div>
         </Card>
         <Card>
           <div className="eyebrow">Remaining</div>
-          <div className="num kpi-val">{formatMoney(totalBudgetRemaining, { withCents: false })}</div>
-          <div className="kpi-delta--up">Within total budget · {budgetDaysRemaining} days left</div>
+          <div className="num kpi-val">{formatMoney(finance.totalBudgetRemaining, { withCents: false })}</div>
+          <div className="kpi-delta--up">Within total budget · {finance.budgetDaysRemaining} days left</div>
         </Card>
         <Card>
           <div className="eyebrow">Over Budget</div>
-          <div className="num kpi-val">{budgetOverCount} categories</div>
-          <div className="kpi-delta--down">{overNames}</div>
+          <div className="num kpi-val">{finance.budgetOverCount} categories</div>
+          <div className="kpi-delta--down">{overNames || 'None'}</div>
         </Card>
       </div>
 
@@ -56,26 +73,76 @@ export function Budget() {
         <Card className="cat-card">
           <div className="section-head">
             <span className="card-title-text">Category Budgets</span>
-            <button type="button" className="add-link">
+            <button type="button" className="add-link" aria-expanded={formOpen} onClick={() => setFormOpen((v) => !v)}>
               + New category
             </button>
           </div>
+
+          {formOpen && (
+            <form ref={formRef} className="new-category-form" onSubmit={handleSubmit}>
+              <label className="new-category-field">
+                <span className="tx-label" id={nameId}>
+                  Category name
+                </span>
+                <input
+                  type="text"
+                  className="tx-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Entertainment"
+                  aria-labelledby={nameId}
+                />
+              </label>
+              <label className="new-category-field">
+                <span className="tx-label">Monthly budget</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="tx-input"
+                  value={allocated}
+                  onChange={(e) => setAllocated(e.target.value)}
+                  placeholder="0.00"
+                />
+              </label>
+              {error && (
+                <p className="tx-error" role="alert">
+                  {error}
+                </p>
+              )}
+              <div className="new-category-actions">
+                <button type="button" className="btn btn--ghost" onClick={() => setFormOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn--primary">
+                  Add category
+                </button>
+              </div>
+            </form>
+          )}
+
           {budgetCategories.map((c) => {
-            const status = budgetStatus(c.allocated, c.spent)
-            const pct = Math.round((c.spent / c.allocated) * 100)
+            const status = finance.budgetStatus(c.allocated, c.spent)
+            const rawPct = Math.round((c.spent / c.allocated) * 100)
             const diff = c.allocated - c.spent
+            const category = categories.find((cc) => cc.id === c.id)
+            const valueText =
+              diff < 0
+                ? `${rawPct}% used, ${formatMoney(Math.abs(diff), { withCents: false })} over budget`
+                : `${rawPct}% used, ${formatMoney(diff, { withCents: false })} left`
             return (
               <div className="budget-row" key={c.id}>
                 <div className="budget-row-mid">
                   <div className="budget-row-top">
-                    <span style={{ fontWeight: 600, fontSize: 12.5 }}>{c.name}</span>
+                    <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
                     <span className="faint" style={{ fontSize: 10.5 }}>
                       {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
                     </span>
                   </div>
                   <ProgressBar
-                    pct={pct}
+                    pct={rawPct}
                     color={status === 'over_budget' ? 'var(--red)' : status === 'near_limit' ? 'var(--amber)' : 'var(--cyan)'}
+                    label={`${category?.name ?? c.id} budget used`}
+                    valueText={valueText}
                   />
                   {c.forecast && (
                     <div className="faint" style={{ fontSize: 9.5, marginTop: 3 }}>
@@ -99,25 +166,25 @@ export function Budget() {
             <div className="section-head">
               <span className="card-title-text">Budget Health</span>
               <span className="num" style={{ fontSize: 14 }}>
-                {budgetUsedPct}% used
+                {finance.budgetUsedPct}% used
               </span>
             </div>
-            <ProgressBar pct={budgetUsedPct} />
+            <ProgressBar pct={finance.budgetUsedPct} label="Overall budget used" />
             <ul className="mini-list">
               <li>
-                Days remaining <span className="num">{budgetDaysRemaining}</span>
+                Days remaining <span className="num">{finance.budgetDaysRemaining}</span>
               </li>
               <li>
-                On track <span className="num">0 categories</span>
+                On track <span className="num">{finance.budgetOnTrackCount} categories</span>
               </li>
               <li>
-                Near limit <span className="num">{budgetNearLimitCount} categories</span>
+                Near limit <span className="num">{finance.budgetNearLimitCount} categories</span>
               </li>
               <li>
-                Over budget <span className="num">{budgetOverCount} categories</span>
+                Over budget <span className="num">{finance.budgetOverCount} categories</span>
               </li>
               <li>
-                Unallocated <span className="num">{formatMoney(budgetUnallocated, { withCents: false })}</span>
+                Unallocated <span className="num">{formatMoney(finance.budgetUnallocated, { withCents: false })}</span>
               </li>
             </ul>
           </Card>
@@ -125,6 +192,20 @@ export function Budget() {
           <Card>
             <div className="section-head">
               <span className="card-title-text">Budget vs Actual</span>
+              <span className="faint" style={{ fontSize: 10.5 }}>
+                Last 6 months
+              </span>
+            </div>
+            <div className="bva-legend">
+              <span className="bva-legend-item">
+                <span className="bva-swatch bva-swatch--budget" /> Budget
+              </span>
+              <span className="bva-legend-item">
+                <span className="bva-swatch bva-swatch--actual" /> Actual
+              </span>
+              <span className="bva-legend-item">
+                <span className="bva-swatch bva-swatch--over" /> Actual (over budget)
+              </span>
             </div>
             <div className="bva-bars">
               {budgetVsActual.map((m) => (
@@ -139,6 +220,29 @@ export function Budget() {
                   <div className="faint bva-label">{m.month}</div>
                 </div>
               ))}
+            </div>
+            <div className="visually-hidden">
+              <table>
+                <caption>Budget vs actual spending by month, as a percentage of the monthly budget</caption>
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Budget</th>
+                    <th>Actual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {budgetVsActual.map((m) => (
+                    <tr key={m.month}>
+                      <td>{m.month}</td>
+                      <td>{m.budget}%</td>
+                      <td>
+                        {m.actual}% {m.actual > m.budget ? '(over budget)' : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </Card>
         </div>

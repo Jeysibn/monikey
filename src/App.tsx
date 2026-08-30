@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { AddTransactionModal } from './components/AddTransactionModal'
+import { Toast } from './components/Toast'
 import { Dashboard } from './pages/Dashboard'
 import { Transactions } from './pages/Transactions'
 import { Accounts } from './pages/Accounts'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/settings" element={<Placeholder title="Settings" />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={() => setAddTxOpen(false)} />
+      <Toast />
     </AppShell>
   )
 }

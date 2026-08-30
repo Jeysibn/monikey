@@ -1,15 +1,3 @@
-.kpi-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
-}
-.kpi-val {
-  font-size: 19px;
-  font-weight: 700;
-  margin-top: 2px;
-}
-
 .budget-split {
   display: grid;
   grid-template-columns: 1fr;
@@ -21,29 +9,6 @@
     grid-template-columns: 1.7fr 1fr;
   }
 }
-.accounts-col {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.card-title-text {
-  font-size: 13px;
-  font-weight: 600;
-}
-.add-link {
-  background: none;
-  border: none;
-  color: var(--cyan);
-  font-size: 11px;
-  font-weight: 600;
-}
-
 .budget-row {
   display: grid;
   grid-template-columns: 1fr 108px 92px;
@@ -73,21 +38,6 @@
 }
 .budget-amt--over {
   color: var(--red);
-}
-
-.mini-list {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 11.5px;
-}
-.mini-list li {
-  display: flex;
-  justify-content: space-between;
-  color: var(--text-dim);
 }
 
 .bva-bars {
@@ -127,4 +77,47 @@
 }
 .bva-label {
   font-size: 9.5px;
+}
+.bva-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.bva-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.bva-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.bva-swatch--budget {
+  background: var(--slate-lt);
+}
+.bva-swatch--actual {
+  background: var(--cyan);
+}
+.bva-swatch--over {
+  background: var(--red);
+}
+
+/* Stack category rows on narrow screens instead of forcing 3 fixed-width
+   columns (name/bar, status, amount) into a viewport too narrow for them. */
+@media (max-width: 520px) {
+  .budget-row {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+  .budget-row > .status-badge {
+    justify-self: start;
+  }
+  .budget-amt {
+    text-align: left;
+  }
 }

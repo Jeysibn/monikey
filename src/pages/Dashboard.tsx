@@ -1,53 +1,49 @@
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
+import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
-import {
-  accountColor,
-  accounts,
-  budgetDaysRemaining,
-  budgetNearLimitCount,
-  budgetOverCount,
-  budgetUnallocated,
-  budgetUsedPct,
-  categoryColor,
-  creditCards,
-  expensesByDay,
-  expensesToday,
-  formatMoney,
-  goals,
-  netCashFlow,
-  portfolio,
-  spendMix,
-  spendMixTotal,
-  totalAvailableCash,
-  totalBudgetAllocated,
-  totalBudgetRemaining,
-  totalCreditOwed,
-  transactions,
-} from '../data/mockData'
+import { useFinance } from '../hooks/useFinance'
+import { formatMoney } from '../utils/currency'
+import { formatDateLabel } from '../utils/date'
 import './Dashboard.css'
 
 export function Dashboard() {
+  const finance = useFinance()
+  const { accounts, creditCards, portfolio, expensesByDay } = finance.state
   const previewAccounts = accounts.slice(0, 4)
-  const activeGoalsPreview = goals.filter((g) => g.active)
-  const completedCount = goals.filter((g) => !g.active).length
-  const recent = transactions.slice(0, 5)
+  const activeGoalsPreview = finance.activeGoals
+  const completedCount = finance.completedGoals.length
+  const recent = finance.state.transactions.slice(0, 5)
+  const maxDay = Math.max(1, ...expensesByDay.map((d) => d.amount))
 
   return (
     <div className="dashboard">
+      <MoneyPosition />
+
       <div className="dash-grid">
         <Card className="area-balance balance-card">
           <div className="eyebrow">Available Cash</div>
-          <div className="bal-amount num">{formatMoney(totalAvailableCash, { withCents: true })}</div>
-          <div className="faint">Across {accounts.length} cash sources</div>
+          <div className="bal-amount num">{formatMoney(finance.totalAvailableCash, { withCents: true })}</div>
+          <div className="faint">
+            Across {accounts.length} cash sources
+            {typeof finance.availableCashMonthlyChangePct === 'number' && (
+              <>
+                {' · '}
+                <span className={finance.availableCashMonthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                  {finance.availableCashMonthlyChangePct >= 0 ? '+' : ''}
+                  {finance.availableCashMonthlyChangePct}% this month
+                </span>
+              </>
+            )}
+          </div>
 
           <div className="flow-row">
             <div>
-              <div className="flow-amt num">{formatMoney(netCashFlow)}</div>
-              <div className="eyebrow">Net Cash Flow</div>
+              <div className="flow-amt num">{formatMoney(finance.netCashFlow)}</div>
+              <div className="eyebrow">Net Cash Flow · this month</div>
             </div>
-            <span className="badge">Budget used {budgetUsedPct}%</span>
+            <span className="badge">Budget used {finance.budgetUsedPct}%</span>
           </div>
 
           <div className="acct-preview">
@@ -58,15 +54,15 @@ export function Dashboard() {
               </span>
             </div>
             {previewAccounts.map((a) => (
-              <div className="acct-row" key={a.id}>
-                <div className="acct-mid">
-                  <div className="acct-name">
+              <div className="bal-acct-row" key={a.id}>
+                <div className="bal-acct-mid">
+                  <div className="bal-acct-name">
                     {a.name}
                     {a.lastFour ? ` ••${a.lastFour}` : ''}
                   </div>
-                  <div className="acct-type faint">{a.institution ?? a.type}</div>
+                  <div className="bal-acct-type faint">{a.institution ?? a.type}</div>
                 </div>
-                <div className="acct-amt num">{formatMoney(a.balance, { withCents: false })}</div>
+                <div className="bal-acct-amt num">{formatMoney(a.balance, { withCents: false })}</div>
               </div>
             ))}
             <Link to="/accounts" className="see-all">
@@ -79,11 +75,11 @@ export function Dashboard() {
           <CardTitle
             action={
               <span className="num" style={{ fontSize: 14 }}>
-                {formatMoney(expensesToday, { withCents: false })} today
+                {formatMoney(finance.expensesToday, { withCents: false })} today
               </span>
             }
           >
-            Expenses
+            Expenses · this week
           </CardTitle>
           <div className="expenses-line">
             <Sparkline
@@ -100,29 +96,36 @@ export function Dashboard() {
                 </span>
               ))}
             </div>
+            <ul className="visually-hidden">
+              {expensesByDay.map((d) => (
+                <li key={d.day}>
+                  {d.day}: {formatMoney(d.amount, { withCents: false })}, {Math.round((d.amount / maxDay) * 100)}% of the week's highest day
+                </li>
+              ))}
+            </ul>
           </div>
         </Card>
 
         <Card className="area-budget">
-          <CardTitle action={<span className="num" style={{ fontSize: 14 }}>{formatMoney(totalBudgetAllocated, { withCents: false })}</span>}>
-            Budget
+          <CardTitle action={<span className="num" style={{ fontSize: 14 }}>{formatMoney(finance.state.totalBudgetAllocated, { withCents: false })}</span>}>
+            Budget · this month
           </CardTitle>
           <div className="faint" style={{ marginTop: -4, marginBottom: 8 }}>
-            {formatMoney(totalBudgetRemaining, { withCents: false })} remaining
+            {formatMoney(finance.totalBudgetRemaining, { withCents: false })} remaining
           </div>
-          <ProgressBar pct={budgetUsedPct} />
+          <ProgressBar pct={finance.budgetUsedPct} label="Total budget used" />
           <ul className="mini-list">
             <li>
-              Near limit <span className="num">{budgetNearLimitCount} categories</span>
+              On track <span className="num">{finance.budgetOnTrackCount} categories</span>
             </li>
             <li>
-              Over budget <span className="num">{budgetOverCount} categories</span>
+              Near limit <span className="num">{finance.budgetNearLimitCount} categories</span>
             </li>
             <li>
-              Unallocated <span className="num">{formatMoney(budgetUnallocated, { withCents: false })}</span>
+              Over budget <span className="num">{finance.budgetOverCount} categories</span>
             </li>
             <li>
-              Days remaining <span className="num">{budgetDaysRemaining}</span>
+              Unallocated <span className="num">{formatMoney(finance.budgetUnallocated, { withCents: false })}</span>
             </li>
           </ul>
           <Link to="/budget" className="see-all">
@@ -141,7 +144,7 @@ export function Dashboard() {
                     {g.status === 'behind_pace' ? 'Behind pace' : g.status === 'on_track' ? 'On track' : 'Just started'}
                   </div>
                 </div>
-                <span className="num">{Math.round((g.currentAmount / g.targetAmount) * 100)}%</span>
+                <span className="num">{finance.goalProgressPct(g)}%</span>
               </li>
             ))}
           </ul>
@@ -151,13 +154,13 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-spend">
-          <CardTitle action={<span className="faint">by category</span>}>Spend Mix</CardTitle>
+          <CardTitle action={<span className="faint">this month</span>}>Spend Mix</CardTitle>
           <div className="num" style={{ fontSize: 20, fontWeight: 700 }}>
-            {formatMoney(spendMixTotal, { withCents: false })}
+            {formatMoney(finance.spendMixTotal, { withCents: false })}
           </div>
           <ul className="mini-list">
-            {spendMix.map((s) => (
-              <li key={s.category}>
+            {finance.spendMix.map((s) => (
+              <li key={s.categoryId}>
                 <span>
                   <span className="swatch" style={{ background: s.color }} /> {s.category}
                 </span>
@@ -168,26 +171,21 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-ai">
-          <CardTitle
-            action={
-              <span className="ai-online">
-                <span className="ai-online-dot" /> online
-              </span>
-            }
-          >
-            AI Financial Assistant
-          </CardTitle>
+          <CardTitle action={<span className="faint">preview</span>}>AI Assistant Preview</CardTitle>
           <div className="ai-chat">
             <div className="ai-msg ai-msg--user">What&apos;s my highest expense?</div>
             <div className="ai-msg ai-msg--bot">Your highest is Shopping. Need details?</div>
           </div>
-          <div className="ai-input" aria-hidden="true">
-            <span className="faint">Ask a question…</span>
+          <div className="faint" style={{ marginTop: 8, fontSize: 11 }}>
+            Sample conversation only — a real AI assistant is planned for a future release.
           </div>
+          <button type="button" className="ai-input" disabled>
+            <span className="faint">Ask a question — coming soon</span>
+          </button>
         </Card>
 
         <Card className="area-credit">
-          <CardTitle action={<span className="faint">{creditCards.length} cards · {formatMoney(totalCreditOwed, { withCents: false })} owed</span>}>
+          <CardTitle action={<span className="faint">{creditCards.length} cards · {formatMoney(finance.totalCreditOwed, { withCents: false })} owed</span>}>
             Credit Cards
           </CardTitle>
           <div className="cc-row">
@@ -204,7 +202,12 @@ export function Dashboard() {
                   <div className="faint">
                     Due {c.dueDate} · min {formatMoney(c.minPayment, { withCents: false })}
                   </div>
-                  <ProgressBar pct={(c.balance / c.limit) * 100} color="var(--amber)" />
+                  <ProgressBar
+                    pct={(c.balance / c.limit) * 100}
+                    color="var(--amber)"
+                    label={`${c.name} used`}
+                    valueText={`${Math.round((c.balance / c.limit) * 100)}% used, ${formatMoney(c.balance, { withCents: false })} of ${formatMoney(c.limit, { withCents: false })}`}
+                  />
                   <div className="faint" style={{ fontSize: 10.5 }}>
                     {formatMoney(c.balance, { withCents: false })} used of {formatMoney(c.limit, { withCents: false })}
                   </div>
@@ -216,18 +219,29 @@ export function Dashboard() {
 
         <Card className="area-portfolio">
           <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>My Portfolio</CardTitle>
+          <div className="faint" style={{ marginTop: -6, marginBottom: 6, fontSize: 10.5 }}>
+            Sample data
+          </div>
           <div className="portfolio-grid">
             {portfolio.map((h) => (
               <div className="portfolio-tile" key={h.ticker}>
                 <div className="num" style={{ fontWeight: 700 }}>
                   {formatMoney(h.price, { withCents: true })}
                 </div>
-                <div className="kpi-delta--up" style={{ fontSize: 10.5 }}>
-                  +{h.changePct}%
+                <div className={h.changePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'} style={{ fontSize: 10.5 }}>
+                  {h.changePct >= 0 ? '+' : ''}
+                  {h.changePct}%
                 </div>
-                <Sparkline values={h.history} width={120} height={24} color="var(--teal)" strokeWidth={2} className="portfolio-spark" />
+                <Sparkline
+                  values={h.history}
+                  width={120}
+                  height={24}
+                  color={h.changePct >= 0 ? 'var(--teal)' : 'var(--red)'}
+                  strokeWidth={2}
+                  className="portfolio-spark"
+                />
                 <div className="portfolio-foot">
-                  <span>{h.ticker}</span>
+                  <span title={h.name}>{h.ticker}</span>
                   <span className="faint">Units {h.units}</span>
                 </div>
               </div>
@@ -236,7 +250,7 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-recent">
-          <CardTitle action={<span className="faint">Today · Aug 29</span>}>Recent Transactions</CardTitle>
+          <CardTitle action={<span className="faint">Most recent</span>}>Recent Transactions</CardTitle>
           <table className="tx-table">
             <tbody>
               {recent.map((t) => (
@@ -244,13 +258,16 @@ export function Dashboard() {
                   <td>
                     <div style={{ fontWeight: 600 }}>{t.title}</div>
                     <div className="faint" style={{ fontSize: 10.5 }}>
-                      {t.source === 'ocr' ? 'OCR receipt' : 'Manual'} · {t.time ?? t.date}
+                      {t.source === 'ocr' ? 'OCR receipt' : 'Manual'} · {t.time ?? formatDateLabel(t.date)}
                     </div>
                   </td>
                   <td>
-                    {t.category ? (
-                      <span className="tx-tag" style={{ color: categoryColor(t.category), background: `color-mix(in oklch, ${categoryColor(t.category)} 16%, transparent)` }}>
-                        {t.category}
+                    {t.categoryId ? (
+                      <span
+                        className="tx-tag"
+                        style={{ color: finance.categoryColor(t.categoryId), background: `color-mix(in oklch, ${finance.categoryColor(t.categoryId)} 16%, transparent)` }}
+                      >
+                        {finance.categoryName(t.categoryId)}
                       </span>
                     ) : (
                       <span className="faint">—</span>
@@ -258,8 +275,8 @@ export function Dashboard() {
                   </td>
                   <td>
                     <span className="tx-acct">
-                      <span className="tx-acct-dot" style={{ background: accountColor(t.accountId) }} />
-                      <span className="faint">{t.accountLabel}</span>
+                      <span className="tx-acct-dot" style={{ background: finance.transactionAccountDotColor(t) }} />
+                      <span className="faint">{finance.transactionAccountLabel(t)}</span>
                     </span>
                   </td>
                   <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoney(t.amount)}</td>

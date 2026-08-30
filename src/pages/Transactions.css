@@ -1,18 +1,3 @@
-.page-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.page-title {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 700;
-  margin: 0;
-}
-
 .toolbar {
   display: flex;
   gap: 10px;
@@ -56,18 +41,6 @@
   background: var(--card);
 }
 
-.kpi-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
-}
-.kpi-val {
-  font-size: 19px;
-  font-weight: 700;
-  margin-top: 2px;
-}
-
 .tx-card {
   overflow-x: auto;
 }
@@ -106,32 +79,6 @@
 .tx-col-right {
   text-align: right;
 }
-.tx-tag {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.tx-acct {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 100%;
-  min-width: 0;
-}
-.tx-acct .faint {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tx-acct-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  flex: none;
-}
 .tx-amt-out {
   text-align: right;
   font-weight: 700;
@@ -158,4 +105,49 @@
 }
 .empty-state .btn {
   margin-top: 14px;
+}
+
+/* Mobile card list — hidden on desktop, shown in place of the grid/table
+   below the tablet breakpoint (see FR-007). */
+.tx-mobile-list {
+  display: none;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+.tx-mobile-card {
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 22%);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tx-mobile-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tx-mobile-amt {
+  font-weight: 700;
+  flex: none;
+  white-space: nowrap;
+}
+.tx-mobile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .tx-card {
+    display: none;
+  }
+  .tx-mobile-list {
+    display: flex;
+  }
 }

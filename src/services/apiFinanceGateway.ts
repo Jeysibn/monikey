@@ -33,6 +33,19 @@ export interface FinanceGateway {
   addBudgetCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
 }
 
+export class FinanceApiError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly field?: string
+  constructor(status: number, code: string, message: string, field?: string) {
+    super(message)
+    this.name = 'FinanceApiError'
+    this.status = status
+    this.code = code
+    this.field = field
+  }
+}
+
 const minor = (value: number) => value / 100
 
 export class ApiFinanceGateway implements FinanceGateway {
@@ -42,7 +55,10 @@ export class ApiFinanceGateway implements FinanceGateway {
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...init.headers } })
-    if (!response.ok) throw new Error(`Monikey API request failed: ${response.status}`)
+    if (!response.ok) {
+      const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
+      throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? `Monikey API request failed: ${response.status}`, payload?.error?.field)
+    }
     return response.status === 204 ? (undefined as T) : response.json() as Promise<T>
   }
 

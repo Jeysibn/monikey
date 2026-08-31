@@ -4,6 +4,7 @@ import { buildLoggerOptions } from './config/logger.js'
 import { getPrismaClient, disconnectPrisma, pingDatabase } from './db/client.js'
 import { createLedgerModule } from './modules/ledger/ledger.module.js'
 import { processDueRecurringItems } from './modules/recurring/recurring.worker.js'
+import { enqueueDueBillNotifications } from './modules/notifications/outbox.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
   const ledger = createLedgerModule(prisma)
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
+    await enqueueDueBillNotifications(prisma, todayIso)
     const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
   }

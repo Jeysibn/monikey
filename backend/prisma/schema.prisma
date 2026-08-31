@@ -1,8 +1,7 @@
 // Monikey backend — Phase 1 + Phase 3 schema.
 // Scope: users, sessions, preferences, categories, financial accounts, credit
-// card details, transactions, transaction balance effects, and goals
-// (Phases 1 and 3). Budget/recurring/investment/reporting tables arrive in
-// later phases.
+// card details, transactions, transaction balance effects, goals, budgets,
+// and recurring definitions.
 //
 // IMPORTANT: this file must stay byte-for-byte consistent with what
 // `prisma/migrations/20260831000000_init/migration.sql` and
@@ -71,6 +70,7 @@ model User {
   transactions       Transaction[]
   goals              Goal[]
   budgetPeriods      BudgetPeriod[]
+  recurringItems     RecurringItem[]
 
   @@map("users")
 }
@@ -138,6 +138,7 @@ model Category {
   user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
   budgetAllocations BudgetAllocation[]
+  recurringItems RecurringItem[]
 
   @@index([userId])
   @@map("categories")
@@ -167,6 +168,7 @@ model FinancialAccount {
   toTransactions   Transaction[]           @relation("TransactionToAccount")
   balanceEffects   TransactionBalanceEffect[]
   goalContributions GoalContribution[]
+  recurringItems RecurringItem[]
 
   @@index([userId])
   @@map("financial_accounts")
@@ -312,6 +314,45 @@ model GoalContribution {
 
   @@index([goalId, createdAt])
   @@map("goal_contributions")
+}
+
+enum RecurringFrequency {
+  weekly
+  monthly
+  yearly
+
+  @@map("recurring_frequency")
+}
+
+enum RecurringStatus {
+  active
+  paused
+
+  @@map("recurring_status")
+}
+
+model RecurringItem {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  merchant     String
+  amountMinor  BigInt             @map("amount_minor")
+  frequency    RecurringFrequency
+  nextDueDate  DateTime           @map("next_due_date") @db.Date
+  accountId    String             @map("account_id") @db.Uuid
+  categoryId   String             @map("category_id") @db.Uuid
+  autopay      Boolean            @default(false)
+  status       RecurringStatus    @default(active)
+  lastPaidDate DateTime?          @map("last_paid_date") @db.Date
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, nextDueDate])
+  @@index([userId, status])
+  @@map("recurring_items")
 }
 
 model BudgetPeriod {

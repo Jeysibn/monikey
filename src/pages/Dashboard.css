@@ -1,5 +1,5 @@
 .see-all {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--cyan);
   text-align: right;
@@ -103,7 +103,7 @@
   font-weight: 700;
 }
 .badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--teal);
   background: oklch(74% 0.13 175 / 0.14);
@@ -284,7 +284,7 @@
 .portfolio-foot {
   display: flex;
   justify-content: space-between;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   margin-top: 6px;
 }
@@ -338,13 +338,15 @@
 .expenses-head-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .seg {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 .seg-pill {
   padding: 4px 10px;
-  font-size: 10.5px;
+  font-size: 12px;
 }

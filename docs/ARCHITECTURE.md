@@ -25,9 +25,22 @@ src/
                              synchronous, no fake network delay. Owns the
                              seed data and the shared category directory.
   state/
-    FinanceProvider.tsx    — a useReducer-based provider. Each mutation calls
-                             the repository once to compute the next state,
-                             then dispatches it.
+    FinanceProvider.tsx    — a useReducer-based provider. The repository is
+                             an injectable prop (default: the mock). The
+                             reducer itself is a trivial, pure `SET_STATE`
+                             replacement that never throws. Each exposed
+                             mutation is a `useCallback` that calls
+                             `repository.<method>(stateRef.current, ...)`
+                             directly on its own call stack — so a
+                             repository validation throw propagates to the
+                             caller normally, uncaught by the reducer — then
+                             updates a `stateRef` and dispatches `SET_STATE`
+                             with the result. Reading from `stateRef.current`
+                             rather than a stale closed-over `state` means
+                             back-to-back mutations issued before a
+                             re-render each apply to the previous
+                             mutation's result, never a stale render-time
+                             snapshot.
     financeContext.ts      — the React context + its value type.
     financeSelectors.ts    — pure derived-calculation functions over
                              FinanceState (totals, budget status, goal
@@ -43,8 +56,12 @@ src/
   utils/
     currency.ts            — the one Intl.NumberFormat('en-PH','PHP') config;
                              every ₱ amount in the app goes through this.
-    date.ts                — formats a transaction's stored ISO date for
-                             display; the one place that logic lives.
+    date.ts                — formats a transaction's stored ISO date/time for
+                             display and defines the reporting-period helpers
+                             (`monthPeriodContaining`, `isDateInPeriod`); the
+                             one place that logic lives.
+    money.ts               — the one money-input parser (`parseMoneyInput`)
+                             every finance form validates through.
   components/              — shared, reusable UI: Card, ProgressBar,
                              StatusBadge/Tag, Sparkline, MoneyPosition, Toast,
                              AppShell (top nav + More menu + notification
@@ -133,6 +150,46 @@ saving" on a completed goal — are real `disabled` controls labeled "coming
 soon," not clickable-looking dead ends. The dashboard's AI card is labeled
 "AI Assistant Preview" rather than claiming to be "online."
 
+## Reporting period
+
+All period-scoped totals (income, expense, transfers, budgets, trends) use a
+single `ReportingPeriod` shape — an inclusive `start` and exclusive `end` ISO
+date spanning one calendar month — produced by `monthPeriodContaining` in
+`src/utils/date.ts`. The active period is the calendar month containing the
+app's demo "today" (`DEMO_TODAY_ISO = '2026-08-29'`, see
+`src/state/financeSelectors.ts`), not the browser's real date, so the demo
+data reads consistently regardless of when it's opened. `isDateInPeriod`
+applies the same inclusive-start/exclusive-end rule everywhere a date is
+tested against a period, so a transaction on the 1st of the month counts and
+one on the 1st of the next month does not. Every period-scoped selector
+either defaults to this active period or accepts an explicit
+`ReportingPeriod` argument, so the same aggregation code backs both "this
+month" totals and any future period picker.
+
+## Goal-funding model ("funded savings")
+
+Adding money to a goal is a real transfer, not a label bump on a target
+number. `addGoalFunds` in `mockFinanceRepository.ts`:
+
+1. Debits the chosen source account's balance by the funded amount.
+2. Credits the goal's `currentAmount` by the same amount — so cash leaving an
+   account and savings accruing in a goal are always in balance; nothing is
+   created or destroyed.
+3. Records a normal ledger transaction for the debit (excluded from
+   `transferCount`, since it isn't a between-accounts transfer), so it's
+   visible in Transactions and correctly excluded from income/expense/trend
+   totals via the same transfer-exclusion rule used elsewhere.
+4. Rejects funding beyond the goal's remaining target (no overfunding) and
+   auto-transitions the goal to completed exactly when `currentAmount`
+   reaches `targetAmount`, recording a `reachedDate` distinct from the
+   original `targetDate`. A completed goal rejects further funding.
+
+`safeToSpendBreakdown` (Dashboard's "Estimated safe to spend") relies on this
+model directly: a completed/inactive goal's `monthlyContribution` is ignored
+in the projection, and a funded goal's `currentAmount` is never subtracted a
+second time, because that money already left an account balance when it was
+funded.
+
 ## Design decisions worth knowing
 
 - **Assets Distribution is bar-based, not a radar chart.** The design QA
@@ -157,16 +214,38 @@ soon," not clickable-looking dead ends. The dashboard's AI card is labeled
 ## No backend yet
 
 `services/mockFinanceRepository.ts` is explicitly a stand-in for a real API/
-service layer. When a backend exists, the intended path is to implement
-`FinanceRepository` against real HTTP calls (or swap in a query library at
-that point, which was deliberately not introduced for this mock phase) and
-leave `domain/finance.ts`, `state/financeSelectors.ts`, and every component
-untouched — they only depend on the `FinanceRepository` shape and
-`FinanceState`, never on how it's produced.
+service layer, and `FinanceProvider` takes it as an injectable `repository`
+prop (defaulting to the mock) rather than importing it directly — a test, or
+eventually a real adapter, can pass in its own `FinanceRepository`.
+
+Being honest about the seam: `FinanceRepository` today is a **synchronous
+in-memory state transformer**, not an HTTP-shaped contract. Every method
+takes the current `FinanceState` and returns the next one (plus the created
+record) immediately, with no `Promise`, no loading state, and no error
+channel. That shape is a deliberate, correct fit for a mock phase with no
+network — but it is *not* a drop-in target for real HTTP calls, which are
+asynchronous and fallible. Backing this with a real API will require
+widening `FinanceRepository`'s methods to return `Promise<...>` (or an
+async-command interface) and adding loading/error handling in
+`FinanceProvider` and every page that calls a mutation — `domain/finance.ts`
+and `state/financeSelectors.ts` (pure functions over an already-resolved
+`FinanceState`) are the only parts of this boundary expected to need no
+change.
 
 ## Testing
 
-Playwright specs live in `e2e/` (41 tests) and cover:
+### Unit tests
+
+`npm run test` runs the Vitest suite (73 tests, no browser) over the pure
+frontend logic: `financeSelectors.ts`, `date.ts`, `money.ts`,
+`mockFinanceRepository.ts`, and `FinanceProvider.tsx` (its reducer and the
+stale-closure/back-to-back-mutation behavior described above). This is the
+first line of defense for the financial calculations; the Playwright suite
+below still owns anything that depends on rendering, layout, or navigation.
+
+### End-to-end tests
+
+Playwright specs live in `e2e/` (57 tests) and cover:
 
 - `navigation.spec.ts` — all five pages reachable, the More menu and
   notification bell open/close with correct focus management, the mobile
@@ -186,6 +265,13 @@ Playwright specs live in `e2e/` (41 tests) and cover:
   values, the notification panel's plain-list semantics, and basic
   accessibility assertions (real `<nav>`, a real `type="search"` input, an
   accessible dialog name, labeled icon-only buttons).
+- `sr012-invariants.spec.ts` — end-to-end regression coverage, against the
+  running app rather than the unit-tested selectors directly, for the
+  reporting-period boundary, budget-category allocation, goal-funding
+  completion, transfer-fee reconciliation, recurring-vs-manual source
+  labeling, search-by-category/account, the Money Position placement and
+  wording, the Add Transaction modal's mobile layout, and the 320px
+  category-tag/account-column layout.
 
 Run them with `npm run test:e2e`. `playwright.config.ts` starts the app
 itself via its `webServer` option, so a normal `npx playwright install
@@ -201,11 +287,6 @@ anywhere `playwright install --with-deps` succeeds normally.
 
 ## Known limitations (frontend, by design, not silently dropped)
 
-- No unit-test runner is set up yet for `financeSelectors.ts`'s pure
-  functions — they're exercised indirectly through the Playwright suite
-  today. Adding Vitest (already Vite-native, no extra config needed) is the
-  natural next step once this logic has more edge cases worth testing in
-  isolation.
 - Investments, Recurring & Bills, Reports, and Settings remain honest
   "coming soon" placeholders behind the More menu — implementing them was
   explicitly out of scope for this pass.

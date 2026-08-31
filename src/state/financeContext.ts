@@ -20,7 +20,7 @@ export interface FinanceContextValue {
   addManualCreditCard: (input: AddManualCreditCardInput) => CreditCard
   addBudgetCategory: (input: AddBudgetCategoryInput) => BudgetCategory
   createGoal: (input: CreateGoalInput) => Goal
-  addGoalFunds: (goalId: string, amount: number) => void
+  addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal
 }
 
 export const FinanceContext = createContext<FinanceContextValue | null>(null)

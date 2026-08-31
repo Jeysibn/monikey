@@ -7,7 +7,7 @@ test.describe('Add Transaction modal', () => {
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Expense', selected: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Expense', pressed: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save Expense' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Cancel' }).click()
@@ -18,11 +18,11 @@ test.describe('Add Transaction modal', () => {
     await page.goto('/transactions')
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
 
-    await page.getByRole('tab', { name: 'Income' }).click()
+    await page.getByRole('button', { name: 'Income', exact: true }).click()
     await expect(page.getByLabel(/Source \/ Description/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save Income' })).toBeVisible()
 
-    await page.getByRole('tab', { name: 'Transfer' }).click()
+    await page.getByRole('button', { name: 'Transfer', exact: true }).click()
     await expect(page.getByLabel(/From Account/)).toBeVisible()
     await expect(page.getByLabel(/To Account/)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save Transfer' })).toBeVisible()
@@ -31,7 +31,7 @@ test.describe('Add Transaction modal', () => {
   test('transfer form blocks saving when From and To accounts match', async ({ page }) => {
     await page.goto('/transactions')
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await page.getByRole('tab', { name: 'Transfer' }).click()
+    await page.getByRole('button', { name: 'Transfer', exact: true }).click()
 
     await page.getByLabel(/From Account/).selectOption({ label: 'Checking ••4471' })
     await page.getByLabel(/To Account/).selectOption({ label: 'Checking ••4471' })
@@ -82,7 +82,7 @@ test.describe('Add Transaction modal', () => {
   test('a valid income can be entered and saved, and net cash flow updates', async ({ page }) => {
     await page.goto('/transactions')
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await page.getByRole('tab', { name: 'Income' }).click()
+    await page.getByRole('button', { name: 'Income', exact: true }).click()
     await page.locator('.tx-amount-input').fill('500')
     await page.getByPlaceholder('e.g. Freelance Payment').fill('Playwright Bonus')
     await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Salary' })
@@ -96,7 +96,7 @@ test.describe('Add Transaction modal', () => {
   test('a valid transfer can be entered and saved, and income/expense totals do not change', async ({ page }) => {
     await page.goto('/transactions')
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await page.getByRole('tab', { name: 'Transfer' }).click()
+    await page.getByRole('button', { name: 'Transfer', exact: true }).click()
     await page.locator('.tx-amount-input').fill('75')
     await page.getByLabel(/From Account/).selectOption({ label: 'Checking ••4471' })
     await page.getByLabel(/To Account/).selectOption({ label: 'Maya' })
@@ -112,12 +112,12 @@ test.describe('Add Transaction modal', () => {
   test('reopening the modal after a save starts from a clean Expense form', async ({ page }) => {
     await page.goto('/transactions')
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await page.getByRole('tab', { name: 'Income' }).click()
+    await page.getByRole('button', { name: 'Income', exact: true }).click()
     await page.locator('.tx-amount-input').fill('999')
     await page.getByRole('button', { name: 'Cancel' }).click()
 
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await expect(page.getByRole('tab', { name: 'Expense', selected: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Expense', pressed: true })).toBeVisible()
     await expect(page.locator('.tx-amount-input')).toHaveValue('')
   })
 })

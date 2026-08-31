@@ -40,6 +40,7 @@ export function useFinance() {
       totalGoalSavings: selectors.totalGoalSavings(state),
       monthlyContributionTotal: selectors.monthlyContributionTotal(state),
       avgGoalProgressPct: selectors.avgGoalProgressPct(state),
+      safeToSpendBreakdown: selectors.safeToSpendBreakdown(state),
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }),
     [state],
@@ -62,7 +63,13 @@ export function useFinance() {
     accountDotColor: selectors.accountDotColor,
     transactionAccountLabel: (t: Parameters<typeof selectors.transactionAccountLabel>[1]) =>
       selectors.transactionAccountLabel(state, t),
+    expensesTrend: (unit: selectors.ExpensesTrendUnit) => selectors.expensesTrend(state, unit),
     transactionAccountDotColor: selectors.transactionAccountDotColor,
+    transferFeeReconciliationLabel: (t: Parameters<typeof selectors.transferFeeReconciliationLabel>[1]) =>
+      selectors.transferFeeReconciliationLabel(state, t),
+    transactionSourceLabel: selectors.transactionSourceLabel,
+    transactionMatchesSearch: (t: Parameters<typeof selectors.transactionMatchesSearch>[1], query: string) =>
+      selectors.transactionMatchesSearch(state, t, query),
     budgetStatus: selectors.budgetStatus,
     goalProgressPct: selectors.goalProgressPct,
     goalRawProgressPct: selectors.goalRawProgressPct,

@@ -1,8 +1,8 @@
 .status-badge,
 .tag {
-  /* 11.5px, not the original 10px — this conveys budget/transaction
-     status, which FR-008 asks not to render below ~12px. */
-  font-size: 11.5px;
+  /* 12px, not the original 10px — this conveys budget/transaction
+     status, which FR-008/SR-011 asks not to render below ~12px. */
+  font-size: 12px;
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 999px;
@@ -29,7 +29,9 @@
 }
 .tag--expense {
   background: oklch(60% 0.02 255 / 0.35);
-  color: var(--text-dim);
+  /* --text, not --text-dim: --text-dim on this tint measured ~4.3:1,
+     just under the 4.5:1 WCAG AA floor (SR-011). */
+  color: var(--text);
 }
 .tag--transfer {
   background: oklch(72% 0.13 295 / 0.16);
@@ -45,5 +47,6 @@
 }
 .tag--neutral {
   background: oklch(60% 0.02 255 / 0.3);
-  color: var(--text-dim);
+  /* --text, not --text-dim (SR-011) — see .tag--expense. */
+  color: var(--text);
 }

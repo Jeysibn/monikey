@@ -20,6 +20,15 @@
   --red: oklch(68% 0.16 25);
   --slate: oklch(38% 0.02 255);
   --slate-lt: oklch(48% 0.02 255);
+  /* Text-safe variants of --slate/--slate-lt for use as a category tag's
+     foreground (as opposed to a fill/swatch). The base tokens are too dark
+     to read as text against their own 16%-tint tag background (SR-011):
+     --slate-lt as text measured ~2.4:1, --slate ~1.7:1, both failing the
+     4.5:1 WCAG AA floor for normal text. These are lightened within the
+     same neutral hue/chroma family until the same tag-background formula
+     clears 4.5:1 (verified ~5.0:1 and ~6.0:1 respectively). */
+  --slate-fg: oklch(68% 0.02 255);
+  --slate-lt-fg: oklch(74% 0.02 255);
 
   --radius-lg: 16px;
   --radius-md: 10px;

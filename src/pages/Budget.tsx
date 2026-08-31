@@ -4,6 +4,7 @@ import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
+import { parseMoneyInput } from '../utils/money'
 import './Budget.css'
 
 export function Budget() {
@@ -24,16 +25,32 @@ export function Budget() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmedName = name.trim()
-    const amount = Number(allocated)
     if (!trimmedName) {
       setError('Category name is required.')
       return
     }
-    if (!allocated || Number.isNaN(amount) || amount <= 0) {
+    if (!allocated.trim()) {
       setError('Enter a budget amount greater than zero.')
       return
     }
-    finance.addBudgetCategory({ name: trimmedName, allocated: amount })
+    const result = parseMoneyInput(allocated)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    if (result.value <= 0) {
+      setError('Enter a budget amount greater than zero.')
+      return
+    }
+    // The unallocated-funds and envelope-size rules live in the repository
+    // (see SR-002) so this form doesn't duplicate financial logic — it just
+    // surfaces whatever the repository rejects as an inline error.
+    try {
+      finance.addBudgetCategory({ name: trimmedName, allocated: result.value })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add category.')
+      return
+    }
     setName('')
     setAllocated('')
     setError('')

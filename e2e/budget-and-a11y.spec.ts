@@ -30,15 +30,32 @@ test.describe('Budget page', () => {
     expect(valueText).toContain('over budget')
   })
 
-  test('+ New category adds a row that participates in the same totals', async ({ page }) => {
+  test('+ New category consumes unallocated funds without expanding the total envelope', async ({ page }) => {
     await page.goto('/budget')
+    // Seed data: ₱11,600 total budget, ₱9,600 allocated across categories → ₱2,000 unallocated.
+    await expect(page.getByText('₱2,000')).toBeVisible()
+
     await page.getByRole('button', { name: '+ New category' }).click()
     await page.getByPlaceholder('e.g. Entertainment').fill('Entertainment')
     await page.getByRole('textbox', { name: 'Monthly budget' }).fill('500')
     await page.getByRole('button', { name: 'Add category' }).click()
 
     await expect(page.locator('.budget-row').getByText('Entertainment', { exact: true })).toBeVisible()
-    await expect(page.getByText('₱12,100')).toBeVisible() // total budget: 11,600 + 500
+    // Total envelope is unchanged...
+    await expect(page.getByText('₱11,600')).toBeVisible()
+    // ...but unallocated dropped by the new category's allocation.
+    await expect(page.getByText('₱1,500')).toBeVisible()
+  })
+
+  test('+ New category rejects an allocation greater than the unallocated amount', async ({ page }) => {
+    await page.goto('/budget')
+    await page.getByRole('button', { name: '+ New category' }).click()
+    await page.getByPlaceholder('e.g. Entertainment').fill('Too Big')
+    await page.getByRole('textbox', { name: 'Monthly budget' }).fill('5000')
+    await page.getByRole('button', { name: 'Add category' }).click()
+
+    await expect(page.getByRole('alert')).toContainText('unallocated')
+    await expect(page.locator('.budget-row').getByText('Too Big', { exact: true })).not.toBeVisible()
   })
 })
 
@@ -70,9 +87,15 @@ test.describe('Accounts page', () => {
 test.describe('Goals page', () => {
   test('Continue saving, Increase target, and Archive are honestly disabled', async ({ page }) => {
     await page.goto('/goals')
-    await expect(page.getByRole('button', { name: 'Continue saving' })).toBeDisabled()
-    await expect(page.getByRole('button', { name: 'Increase target' })).toBeDisabled()
-    await expect(page.getByRole('button', { name: 'Archive' }).first()).toBeDisabled()
+    await expect(page.getByRole('button', { name: /Continue saving/ })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /Increase target/ })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /Archive/ }).first()).toBeDisabled()
+  })
+
+  test('completed goal actions show a visible "Coming soon" note, not only a title attribute', async ({ page }) => {
+    await page.goto('/goals')
+    await expect(page.locator('.completed-actions .coming-soon-tag').first()).toBeVisible()
+    await expect(page.locator('.completed-actions .coming-soon-tag').first()).toHaveText('Coming soon')
   })
 
   test('completed goals show a reached date distinct from their target date', async ({ page }) => {
@@ -132,6 +155,37 @@ test.describe('Basic accessibility', () => {
     // on elements that don't do anything when activated (FR-008).
     await expect(page.getByRole('menuitem')).toHaveCount(0)
     await expect(page.locator('ul.notif-list li').first()).toBeVisible()
+  })
+
+  test('the transaction-type and expense-period segmented controls announce selection via aria-pressed, not misleading tab semantics', async ({ page }) => {
+    await page.goto('/')
+
+    const dailyBtn = page.getByRole('button', { name: 'Daily', exact: true })
+    const weeklyBtn = page.getByRole('button', { name: 'Weekly', exact: true })
+    await expect(dailyBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(weeklyBtn).toHaveAttribute('aria-pressed', 'false')
+    await weeklyBtn.click()
+    await expect(weeklyBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(dailyBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('tab')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Add Transaction' }).click()
+    await expect(page.getByRole('button', { name: 'Expense', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: 'Income', exact: true })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('tab')).toHaveCount(0)
+  })
+
+  test('scrollable regions show a visible scrollbar affordance rather than hiding it', async ({ page }) => {
+    await page.goto('/transactions')
+    const scrollability = await page.evaluate(() => {
+      const el = document.scrollingElement as HTMLElement
+      const style = getComputedStyle(document.documentElement)
+      return {
+        scrollHeightExceedsClient: el.scrollHeight > el.clientHeight,
+        scrollbarWidth: style.scrollbarWidth,
+      }
+    })
+    expect(scrollability.scrollbarWidth).not.toBe('none')
   })
 
   test('every budget category progress bar has a valid, clamped aria-valuenow', async ({ page }) => {

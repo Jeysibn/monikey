@@ -1,7 +1,17 @@
 // The contract the UI depends on for reading and mutating finance data.
 // `mockFinanceRepository.ts` is the only implementation today (in-memory,
-// synchronous). A future real backend would implement this same shape —
-// components and the provider would not need to change.
+// synchronous), and `FinanceProvider` takes an implementation of this
+// interface as an injectable `repository` prop (see FinanceProvider.tsx),
+// which is what lets a test swap in its own deterministic repository.
+//
+// Honest scope: this interface is a synchronous state transformer, not an
+// HTTP-shaped contract — every method takes a `FinanceState` and returns the
+// next one immediately, with no `Promise`, loading state, or error channel.
+// A real backend-backed implementation would need this interface widened to
+// return `Promise<...>` (or an async-command shape) and `FinanceProvider`
+// updated to handle pending/error states — components and
+// `state/financeSelectors.ts`, which only read an already-resolved
+// `FinanceState`, are the parts of this boundary expected to need no change.
 
 import type {
   Account,
@@ -24,5 +34,14 @@ export interface FinanceRepository {
   addManualCreditCard(state: FinanceState, input: AddManualCreditCardInput): { state: FinanceState; creditCard: CreditCard }
   addBudgetCategory(state: FinanceState, input: AddBudgetCategoryInput): { state: FinanceState; category: BudgetCategory }
   createGoal(state: FinanceState, input: CreateGoalInput): { state: FinanceState; goal: Goal }
-  addGoalFunds(state: FinanceState, goalId: string, amount: number): FinanceState
+  /**
+   * "Funded savings" model (see `Goal` in `domain/finance.ts`): funding a
+   * goal always names a source account, whose balance is reduced by the
+   * same amount recorded on the goal — never money created from nowhere.
+   * Throws if the goal doesn't exist, is no longer active, the source
+   * account can't be found, or `amount` would fund the goal past its
+   * `targetAmount` (overfunding is not supported — callers should offer at
+   * most the remaining amount).
+   */
+  addGoalFunds(state: FinanceState, goalId: string, sourceAccountId: string, amount: number): { state: FinanceState; goal: Goal }
 }

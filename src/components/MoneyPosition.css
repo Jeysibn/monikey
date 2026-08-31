@@ -6,7 +6,7 @@
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
-  margin-top: 16px;
+  margin-bottom: 16px;
 }
 .money-position-title {
   margin: 0 0 12px;
@@ -44,12 +44,12 @@
   font-weight: 700;
 }
 .money-position-label {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   margin-top: 2px;
 }
 .money-position-hint {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 2px;
 }
 .money-position-arrow {
@@ -63,6 +63,11 @@
 }
 .money-position-summary strong {
   color: var(--text);
+}
+.money-position-scope {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 @media (max-width: 640px) {

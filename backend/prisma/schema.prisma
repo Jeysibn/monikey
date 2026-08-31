@@ -71,6 +71,7 @@ model User {
   goals              Goal[]
   budgetPeriods      BudgetPeriod[]
   recurringItems     RecurringItem[]
+  notificationOutbox NotificationOutbox[]
 
   @@map("users")
 }
@@ -353,6 +354,36 @@ model RecurringItem {
   @@index([userId, nextDueDate])
   @@index([userId, status])
   @@map("recurring_items")
+}
+
+enum NotificationStatus {
+  pending
+  sending
+  sent
+  failed
+
+  @@map("notification_status")
+}
+
+model NotificationOutbox {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  kind         String
+  dedupeKey    String             @unique @map("dedupe_key")
+  payload      Json
+  status       NotificationStatus @default(pending)
+  availableAt  DateTime           @default(now()) @map("available_at") @db.Timestamptz(6)
+  sentAt       DateTime?          @map("sent_at") @db.Timestamptz(6)
+  attemptCount Int                @default(0) @map("attempt_count")
+  lastError    String?            @map("last_error")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([userId, kind])
+  @@map("notification_outbox")
 }
 
 model BudgetPeriod {

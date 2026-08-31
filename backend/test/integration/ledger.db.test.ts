@@ -23,7 +23,7 @@ describeIfDb('LedgerModule (real PostgreSQL)', () => {
       const retry = await ledger.postTransaction(userId, input)
       expect(retry.transaction.id).toBe(first.transaction.id)
       expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })).currentBalanceMinor).toBe(600n)
-      await expect(ledger.postTransaction(userId, { ...input, title: 'Too large', amountMinor: 601, idempotencyKey: 'ledger-test-overdraft' })).rejects.toMatchObject({ code: 'INSUFFICIENT_FUNDS' })
+      await expect(ledger.postTransaction(userId, { ...input, title: 'Too large', amountMinor: 601, idempotencyKey: 'ledger-test-overdraft' })).rejects.toMatchObject({ code: 'ASSET_OVERDRAFT' })
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.category.delete({ where: { id: categoryId } }).catch(() => undefined)
@@ -37,8 +37,10 @@ describeIfDb('LedgerModule (real PostgreSQL)', () => {
     const cardId = randomUUID()
     try {
       await prisma.user.create({ data: { id: userId, email: `${userId}@card.test`, passwordHash: 'test', displayName: 'Card Test' } })
-      await prisma.financialAccount.create({ data: { id: cardId, userId, name: 'Test card', accountType: 'credit_card', classification: 'liability', currentBalanceMinor: 0, openingBalanceMinor: 0 } })
-      await prisma.creditCardDetail.create({ data: { accountId: cardId, network: 'visa', creditLimitMinor: 100, dueDay: 15 } })
+      await prisma.$transaction(async (tx) => {
+        await tx.financialAccount.create({ data: { id: cardId, userId, name: 'Test card', accountType: 'credit_card', classification: 'liability', currentBalanceMinor: 0, openingBalanceMinor: 0 } })
+        await tx.creditCardDetail.create({ data: { accountId: cardId, network: 'visa', creditLimitMinor: 100, dueDay: 15 } })
+      })
       const ledger = new LedgerService(prisma, new LedgerRepository(prisma))
       const input = (key: string) => ({ type: 'expense' as const, title: 'Concurrent charge', categoryId: null, goalId: null, fromAccountId: cardId, toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 80, feeMinor: 0, currencyCode: 'PHP', source: 'manual' as const, status: 'cleared' as const, note: null, idempotencyKey: key })
       const results = await Promise.allSettled([ledger.postTransaction(userId, input('card-charge-a')), ledger.postTransaction(userId, input('card-charge-b'))])

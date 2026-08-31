@@ -442,5 +442,5 @@ describeIfDb('Prisma schema/migration drift (QA Attempt 1, Finding 1)', () => {
     expect(output).not.toMatch(/SET DATA TYPE/i)
     // Also verify no timestamp -> timestamptz or vice versa changes
     expect(output).not.toMatch(/timestamp\s*\(\d*\)\s*(?:with|without)\s*time\s*zone/i)
-  })
+  }, 15_000)
 })

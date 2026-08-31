@@ -22,6 +22,12 @@ export type AppErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'INTERNAL_ERROR'
+  // Added in Phase 2 (AuthModule) for login/register rate limiting (plan
+  // §16.1) — `@fastify/rate-limit`'s `errorResponseBuilder` throws whatever
+  // it returns into the normal Fastify error pipeline, so it needs a code
+  // this envelope already understands rather than falling through to a
+  // generic 500.
+  | 'RATE_LIMITED'
 
 /**
  * Thrown by domain/application code to signal a business-rule or client
@@ -54,6 +60,8 @@ function defaultStatusForCode(code: AppErrorCode): number {
       return 404
     case 'IDEMPOTENCY_CONFLICT':
       return 409
+    case 'RATE_LIMITED':
+      return 429
     case 'VALIDATION_ERROR':
     case 'ASSET_OVERDRAFT':
     case 'CREDIT_LIMIT_EXCEEDED':

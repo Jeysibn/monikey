@@ -47,6 +47,28 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return
     }
 
+    // QA Attempt 1 (Phase 2), Finding D4: Fastify's own body-parsing errors
+    // (malformed JSON, an unsupported/missing Content-Type for a route that
+    // requires one, a body over `bodyLimit`) arrive here as a `FastifyError`
+    // with a correct `statusCode` already set (400/415/413) — but nothing
+    // in this handler ever looked at it before falling through to the
+    // generic 500 branch below. Phase 1 had no body-accepting routes, so
+    // this was latent but unreachable until Phase 2's auth/settings POST/PUT
+    // endpoints. Only trust a genuine 4xx here: a library that mistakenly
+    // sets `statusCode` on a real 5xx failure should still be logged and
+    // reported as `INTERNAL_ERROR`, not echoed back as some arbitrary code.
+    if (
+      typeof fastifyError.statusCode === 'number' &&
+      fastifyError.statusCode >= 400 &&
+      fastifyError.statusCode < 500
+    ) {
+      request.log.warn({ err: error, requestId }, 'client request error')
+      reply
+        .status(fastifyError.statusCode)
+        .send(toErrorEnvelope('VALIDATION_ERROR', fastifyError.message || 'Invalid request.', requestId))
+      return
+    }
+
     request.log.error({ err: error, requestId }, 'unhandled error')
     reply
       .status(500)

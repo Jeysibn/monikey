@@ -30,6 +30,11 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
 
   INTEGRATIONS_MODE: z.enum(['stub', 'live']).default('stub'),
+  QUOTE_PROVIDER: z.enum(['stub', 'live']).default('stub'),
+  ALPHA_VANTAGE_API_KEY: z.string().optional(),
+  COINGECKO_API_KEY: z.string().optional(),
+  ALPHA_VANTAGE_URL: z.string().url().default('https://www.alphavantage.co/query'),
+  COINGECKO_URL: z.string().url().default('https://api.coingecko.com/api/v3/simple/price'),
   EMAIL_PROVIDER: z.enum(['mailpit', 'resend', 'stub']).default('mailpit'),
   MAILPIT_URL: z.string().url().default('http://mailpit:8025/api/v1/send'),
   RESEND_API_KEY: z.string().optional(),

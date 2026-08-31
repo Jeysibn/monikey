@@ -304,7 +304,7 @@ function DataPrivacySection({ resetToDefaults }: Pick<UseSettingsResult, 'resetT
           Export my data
         </button>
         <button type="button" className="btn btn--ghost" onClick={handleClearPreferences}>
-          Reset preferences
+          Clear local preferences
         </button>
       </div>
     </Card>

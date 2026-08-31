@@ -72,6 +72,9 @@ model User {
   budgetPeriods      BudgetPeriod[]
   recurringItems     RecurringItem[]
   notificationOutbox NotificationOutbox[]
+  instruments        Instrument[]
+  investmentTrades   InvestmentTrade[]
+  dividends          Dividend[]
 
   @@map("users")
 }
@@ -170,6 +173,7 @@ model FinancialAccount {
   balanceEffects   TransactionBalanceEffect[]
   goalContributions GoalContribution[]
   recurringItems RecurringItem[]
+  investmentTrades InvestmentTrade[]
 
   @@index([userId])
   @@map("financial_accounts")
@@ -384,6 +388,71 @@ model NotificationOutbox {
   @@index([status, availableAt])
   @@index([userId, kind])
   @@map("notification_outbox")
+}
+
+enum InvestmentTradeType {
+  buy
+  sell
+
+  @@map("investment_trade_type")
+}
+
+model Instrument {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  ticker      String
+  name        String
+  assetClass  String   @map("asset_class")
+  sector      String
+  currencyCode String  @default("PHP") @map("currency_code") @db.Char(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades InvestmentTrade[]
+  dividends Dividend[]
+
+  @@unique([userId, ticker])
+  @@index([ticker])
+  @@map("instruments")
+}
+
+model InvestmentTrade {
+  id             String              @id @default(uuid()) @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  instrumentId   String              @map("instrument_id") @db.Uuid
+  type           InvestmentTradeType
+  units          Decimal             @db.Decimal(30, 10)
+  priceMinor     BigInt              @map("price_minor")
+  occurredOn     DateTime            @map("occurred_on") @db.Date
+  cashAccountId  String?             @map("cash_account_id") @db.Uuid
+  note           String?
+  idempotencyKey String?             @map("idempotency_key")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  cashAccount FinancialAccount? @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, instrumentId, occurredOn])
+  @@map("investment_trades")
+}
+
+model Dividend {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  instrumentId String     @map("instrument_id") @db.Uuid
+  amountMinor  BigInt     @map("amount_minor")
+  occurredOn   DateTime   @map("occurred_on") @db.Date
+  note         String?
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+
+  @@index([userId, instrumentId, occurredOn])
+  @@map("dividends")
 }
 
 model BudgetPeriod {

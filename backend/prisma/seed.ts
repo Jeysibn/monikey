@@ -9,6 +9,7 @@
 // Idempotent: safe to run against an already-seeded database (upsert by id).
 import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
+import { createLedgerModule } from '../src/modules/ledger/ledger.module.js'
 
 const prisma = new PrismaClient()
 
@@ -29,8 +30,10 @@ const SYSTEM_CATEGORIES = [
 
 const DEMO_USER_ID = '00000000-0000-4000-8000-000000000010'
 const DEMO_ACCOUNTS = [
-  { id: '00000000-0000-4000-8000-000000000011', name: 'Checking', institution: 'BPI', accountType: 'checking' as const, balance: 412000, lastFour: '4471' },
-  { id: '00000000-0000-4000-8000-000000000012', name: 'Savings', institution: 'BDO', accountType: 'savings' as const, balance: 286000, lastFour: '8830' },
+  // Balances below are pre-activity values; the idempotent ledger posts below
+  // bring Checking/Savings to the displayed demo balances.
+  { id: '00000000-0000-4000-8000-000000000011', name: 'Checking', institution: 'BPI', accountType: 'checking' as const, balance: 399500, lastFour: '4471' },
+  { id: '00000000-0000-4000-8000-000000000012', name: 'Savings', institution: 'BDO', accountType: 'savings' as const, balance: 261000, lastFour: '8830' },
   { id: '00000000-0000-4000-8000-000000000013', name: 'GCash', institution: null, accountType: 'ewallet' as const, balance: 64000, lastFour: null },
   { id: '00000000-0000-4000-8000-000000000014', name: 'Maya', institution: null, accountType: 'ewallet' as const, balance: 30000, lastFour: null },
   { id: '00000000-0000-4000-8000-000000000015', name: 'Cash Wallet', institution: null, accountType: 'cash' as const, balance: 12000, lastFour: null },
@@ -71,12 +74,32 @@ async function main(): Promise<void> {
   await prisma.user.upsert({ where: { id: DEMO_USER_ID }, create: { id: DEMO_USER_ID, email: 'demo@monikey.local', passwordHash, displayName: 'Demo User', timezone: 'Asia/Manila', baseCurrency: 'PHP' }, update: { passwordHash, displayName: 'Demo User', timezone: 'Asia/Manila', baseCurrency: 'PHP' } })
   await prisma.userPreferences.upsert({ where: { userId: DEMO_USER_ID }, create: { userId: DEMO_USER_ID }, update: {} })
   for (const account of DEMO_ACCOUNTS) {
-    await prisma.financialAccount.upsert({ where: { id: account.id }, create: { id: account.id, userId: DEMO_USER_ID, name: account.name, institution: account.institution, accountType: account.accountType, classification: 'asset', currencyCode: 'PHP', openingBalanceMinor: BigInt(account.balance), currentBalanceMinor: BigInt(account.balance), lastFour: account.lastFour, syncStatus: 'manual', manual: true }, update: { name: account.name, currentBalanceMinor: BigInt(account.balance), openingBalanceMinor: BigInt(account.balance) } })
+    const finalBalance = account.id === DEMO_ACCOUNTS[0].id ? 412000 : account.id === DEMO_ACCOUNTS[1].id ? 286000 : account.balance
+    await prisma.financialAccount.upsert({ where: { id: account.id }, create: { id: account.id, userId: DEMO_USER_ID, name: account.name, institution: account.institution, accountType: account.accountType, classification: 'asset', currencyCode: 'PHP', openingBalanceMinor: BigInt(account.balance), currentBalanceMinor: BigInt(account.balance), lastFour: account.lastFour, syncStatus: 'manual', manual: true }, update: { name: account.name, currentBalanceMinor: BigInt(finalBalance), openingBalanceMinor: BigInt(account.balance) } })
   }
   for (const card of DEMO_CARDS) {
     await prisma.financialAccount.upsert({ where: { id: card.id }, create: { id: card.id, userId: DEMO_USER_ID, name: card.name, accountType: 'credit_card', classification: 'liability', currencyCode: 'PHP', openingBalanceMinor: BigInt(card.balance), currentBalanceMinor: BigInt(card.balance), lastFour: card.lastFour, syncStatus: 'manual', manual: true }, update: { name: card.name, currentBalanceMinor: BigInt(card.balance), openingBalanceMinor: BigInt(card.balance) } })
     await prisma.creditCardDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, network: card.network, creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) }, update: { creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) } })
   }
+  const ledger = createLedgerModule(prisma).service
+  await ledger.postTransaction(DEMO_USER_ID, {
+    type: 'income', title: 'Demo salary', categoryId: SYSTEM_CATEGORIES[6].id, goalId: null,
+    fromAccountId: null, toAccountId: DEMO_ACCOUNTS[0].id, occurredOn: '2026-08-01', occurredTime: null,
+    amountMinor: 50000, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared',
+    note: 'Seeded demo activity', idempotencyKey: 'demo:salary:2026-08-01',
+  })
+  await ledger.postTransaction(DEMO_USER_ID, {
+    type: 'expense', title: 'Demo groceries', categoryId: SYSTEM_CATEGORIES[1].id, goalId: null,
+    fromAccountId: DEMO_ACCOUNTS[0].id, toAccountId: null, occurredOn: '2026-08-05', occurredTime: null,
+    amountMinor: 12500, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared',
+    note: 'Seeded demo activity', idempotencyKey: 'demo:groceries:2026-08-05',
+  })
+  await ledger.postTransaction(DEMO_USER_ID, {
+    type: 'transfer', title: 'Demo savings transfer', categoryId: null, goalId: null,
+    fromAccountId: DEMO_ACCOUNTS[0].id, toAccountId: DEMO_ACCOUNTS[1].id, occurredOn: '2026-08-10', occurredTime: null,
+    amountMinor: 25000, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared',
+    note: 'Seeded demo activity', idempotencyKey: 'demo:savings-transfer:2026-08-10',
+  })
   for (const goal of DEMO_GOALS) {
     await prisma.goal.upsert({ where: { id: goal.id }, create: { id: goal.id, userId: DEMO_USER_ID, name: goal.name, targetMinor: BigInt(goal.target), currentMinor: BigInt(goal.current), currencyCode: 'PHP', targetDate: new Date(`${goal.date}T00:00:00Z`), monthlyContributionMinor: BigInt(goal.monthly), status: goal.status, active: goal.active }, update: { name: goal.name, targetMinor: BigInt(goal.target), currentMinor: BigInt(goal.current), targetDate: new Date(`${goal.date}T00:00:00Z`), monthlyContributionMinor: BigInt(goal.monthly), status: goal.status, active: goal.active } })
   }

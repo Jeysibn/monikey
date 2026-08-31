@@ -60,32 +60,47 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
   }, [stableGateway])
   const addManualAccount = useCallback(async (input: AddManualAccountInput) => {
     const result = await stableGateway.addManualAccount(input)
-    setState((current) => current ? { ...current, accounts: [...current.accounts, result] } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => {
+      if (refreshed) return refreshed.accounts.some((account) => account.id === result.id) ? refreshed : { ...refreshed, accounts: [...refreshed.accounts, result] }
+      return current ? { ...current, accounts: [...current.accounts, result] } : current
+    })
     return result
   }, [stableGateway])
   const addManualCreditCard = useCallback(async (input: AddManualCreditCardInput) => {
     const result = await stableGateway.addManualCreditCard(input)
-    setState((current) => current ? { ...current, creditCards: [...current.creditCards, result] } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => {
+      if (refreshed) return refreshed.creditCards.some((card) => card.id === result.id) ? refreshed : { ...refreshed, creditCards: [...refreshed.creditCards, result] }
+      return current ? { ...current, creditCards: [...current.creditCards, result] } : current
+    })
     return result
   }, [stableGateway])
   const createGoal = useCallback(async (input: CreateGoalInput) => {
     const result = await stableGateway.createGoal(input)
-    setState((current) => current ? { ...current, goals: [...current.goals, result] } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => {
+      if (refreshed) return refreshed.goals.some((goal) => goal.id === result.id) ? refreshed : { ...refreshed, goals: [...refreshed.goals, result] }
+      return current ? { ...current, goals: [...current.goals, result] } : current
+    })
     return result
   }, [stableGateway])
   const addGoalFunds = useCallback(async (goalId: string, sourceAccountId: string, amount: number, date: string) => {
     const result = await stableGateway.addGoalFunds(goalId, sourceAccountId, amount, date)
-    setState((current) => current ? { ...current, goals: current.goals.map((goal) => goal.id === result.id ? result : goal) } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => refreshed ?? (current ? { ...current, goals: current.goals.map((goal) => goal.id === result.id ? result : goal) } : current))
     return result
   }, [stableGateway])
   const setBudgetAllocation = useCallback(async (periodId: string, categoryId: string, allocated: number) => {
     const result = await stableGateway.setBudgetAllocation(periodId, categoryId, allocated)
-    setState((current) => current ? { ...current, budgetCategories: current.budgetCategories.some((item) => item.id === categoryId) ? current.budgetCategories.map((item) => item.id === categoryId ? { ...item, allocated: result.allocated } : item) : [...current.budgetCategories, result] } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => refreshed ?? (current ? { ...current, budgetCategories: current.budgetCategories.some((item) => item.id === categoryId) ? current.budgetCategories.map((item) => item.id === categoryId ? { ...item, allocated: result.allocated } : item) : [...current.budgetCategories, result] } : current))
     return result
   }, [stableGateway])
   const addBudgetCategory = useCallback(async (input: { name: string; allocated: number; color?: string }) => {
     const result = await stableGateway.addBudgetCategory(input)
-    setState((current) => current ? { ...current, categories: [...current.categories, { id: result.id, name: result.name, color: result.color, budgetable: true, transactionKinds: ['expense'] }], budgetCategories: [...current.budgetCategories, { id: result.id, allocated: result.allocated, spent: 0 }] } : current)
+    const refreshed = await stableGateway.load()
+    setState((current) => refreshed ?? (current ? { ...current, categories: [...current.categories, { id: result.id, name: result.name, color: result.color, budgetable: true, transactionKinds: ['expense'] }], budgetCategories: [...current.budgetCategories, { id: result.id, allocated: result.allocated, spent: 0 }] } : current))
     return result
   }, [stableGateway])
 

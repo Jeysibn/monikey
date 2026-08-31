@@ -41,7 +41,8 @@ test.describe('Primary navigation', () => {
 
     await page.getByRole('link', { name: /Investments/ }).click()
     await expect(page).toHaveURL(/\/investments$/)
-    await expect(page.getByText('Investments is coming soon')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible()
+    await expect(page.getByText('Portfolio Value')).toBeVisible()
   })
 
   test('More menu closes on outside click and Escape, and returns focus to the toggle', async ({ page }) => {

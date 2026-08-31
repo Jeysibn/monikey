@@ -16,6 +16,9 @@ import './common/auth/types.js'
 import { healthRoutes } from './modules/health/health.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { settingsRoutes } from './modules/settings/settings.routes.js'
+import { createLedgerModule } from './modules/ledger/ledger.module.js'
+import { createAccountsModule } from './modules/accounts/accounts.module.js'
+import { createBootstrapModule } from './modules/bootstrap/bootstrap.module.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -127,6 +130,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(healthRoutes, { prisma })
       await v1.register(authRoutes, { prisma, env, clock })
       await v1.register(settingsRoutes, { prisma, env, clock })
+
+      const ledger = createLedgerModule(prisma)
+      const accounts = createAccountsModule(prisma)
+      const bootstrap = createBootstrapModule(prisma, ledger.service, accounts.service)
+
+      await v1.register(ledger.registerRoutes)
+      await v1.register(accounts.registerRoutes)
+      await v1.register(bootstrap.registerRoutes)
     },
     { prefix: '/api/v1' },
   )

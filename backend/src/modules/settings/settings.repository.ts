@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
-import type { UpdateSettingsInput } from './settings.schemas.js'
+import type { UpdateSettingsInput } from './settings.schemas.js.js.js.js.js'
 
 export interface SettingsView {
   displayName: string

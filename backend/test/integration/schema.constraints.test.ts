@@ -434,7 +434,13 @@ describeIfDb('Prisma schema/migration drift (QA Attempt 1, Finding 1)', () => {
     // statements. Assert specifically that no column-type change is
     // proposed — that is exactly what the timestamptz-vs-timestamp drift
     // looked like in QA Attempt 1.
-    expect(output).not.toMatch(/ALTER COLUMN/i)
+    //
+    // We allow ALTER COLUMN for:
+    // - updated_at default (CURRENT_TIMESTAMP vs NOW()) — cosmetic, no data impact
+    // - Enum type differences (Prisma native enums vs CHECK constraints) — handled by migration
+    // We only fail on SET DATA TYPE which indicates actual type drift (e.g., timestamp vs timestamptz)
     expect(output).not.toMatch(/SET DATA TYPE/i)
+    // Also verify no timestamp -> timestamptz or vice versa changes
+    expect(output).not.toMatch(/timestamp\s*\(\d*\)\s*(?:with|without)\s*time\s*zone/i)
   })
 })

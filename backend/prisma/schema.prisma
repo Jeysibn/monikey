@@ -1,22 +1,23 @@
-// Monikey backend — Phase 1 schema.
-// Scope: users, sessions, preferences, categories, financial accounts, and
-// credit card details only (per Phase 1 of the implementation plan).
-// Ledger/budget/goal/recurring/investment/reporting tables arrive in later
-// phases and must not be added here ahead of schedule.
+// Monikey backend — Phase 1 + Phase 3 schema.
+// Scope: users, sessions, preferences, categories, financial accounts, credit
+// card details, transactions, transaction balance effects, and goals
+// (Phases 1 and 3). Budget/recurring/investment/reporting tables arrive in
+// later phases.
 //
 // IMPORTANT: this file must stay byte-for-byte consistent with what
-// `prisma/migrations/20260831000000_init/migration.sql` actually creates.
-// Every `DateTime` column is `@db.Timestamptz(6)` because the migration
-// creates `TIMESTAMPTZ` columns — a bare `DateTime` would describe Prisma's
+// `prisma/migrations/20260831000000_init/migration.sql` and
+// `prisma/migrations/20260831_phase3_ledger_transactions/migration.sql` actually create.
+// Every `DateTime` column is `@db.Timestamptz(6)` because the migrations
+// create `TIMESTAMPTZ` columns — a bare `DateTime` would describe Prisma's
 // default `timestamp(3)` (no timezone) and silently drift from the applied
 // schema (QA Attempt 1, Finding 1). Verify with:
 //   npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma \
 //     --to-url "$DATABASE_URL" --script
 // which must print no `ALTER COLUMN ... SET DATA TYPE` output.
 //
-// This schema also cannot represent the 6 CHECK constraints or the 3
-// triggers the migration adds (Prisma has no declarative support for either
-// in this version) — those exist ONLY in the raw migration SQL. Any future
+// This schema also cannot represent the CHECK constraints or the triggers
+// the migrations add (Prisma has no declarative support for either in this
+// version) — those exist ONLY in the raw migration SQL. Any future
 // `prisma migrate dev` diff must be hand-audited to re-append them; see
 // Database Schema.md in the Obsidian vault for the authoritative list.
 
@@ -67,6 +68,8 @@ model User {
   preferences        UserPreferences?
   categories         Category[]
   financialAccounts  FinancialAccount[]
+  transactions       Transaction[]
+  goals              Goal[]
 
   @@map("users")
 }
@@ -131,7 +134,8 @@ model Category {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
 
   @@index([userId])
   @@map("categories")
@@ -157,6 +161,9 @@ model FinancialAccount {
 
   user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   creditCardDetail CreditCardDetail?
+  fromTransactions Transaction[]           @relation("TransactionFromAccount")
+  toTransactions   Transaction[]           @relation("TransactionToAccount")
+  balanceEffects   TransactionBalanceEffect[]
 
   @@index([userId])
   @@map("financial_accounts")
@@ -174,4 +181,113 @@ model CreditCardDetail {
   account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("credit_card_details")
+}
+
+enum TransactionType {
+  income
+  expense
+  transfer
+
+  @@map("transaction_type")
+}
+
+enum TransactionSource {
+  manual
+  ocr
+  recurring
+
+  @@map("transaction_source")
+}
+
+enum TransactionStatus {
+  cleared
+  pending
+
+  @@map("transaction_status")
+}
+
+enum BalanceEffectRole {
+  source
+  destination
+  expense
+  income
+  card_charge
+  card_payment
+  fee
+
+  @@map("balance_effect_role")
+}
+
+model Transaction {
+  id                    String             @id @default(uuid()) @db.Uuid
+  userId                String             @map("user_id") @db.Uuid
+  type                  TransactionType    @map("type")
+  title                 String
+  categoryId            String?            @map("category_id") @db.Uuid
+  goalId                String?            @map("goal_id") @db.Uuid
+  fromAccountId         String?            @map("from_account_id") @db.Uuid
+  toAccountId           String?            @map("to_account_id") @db.Uuid
+  occurredOn            DateTime           @map("occurred_on") @db.Date
+  occurredTime          DateTime?          @map("occurred_time") @db.Time
+  amountMinor           BigInt             @map("amount_minor")
+  feeMinor              BigInt             @default(0) @map("fee_minor")
+  currencyCode          String             @default("PHP") @map("currency_code") @db.Char(3)
+  source                TransactionSource
+  status                TransactionStatus
+  note                  String?
+  idempotencyKey        String?            @unique @map("idempotency_key")
+  reversedTransactionId String?            @unique @map("reversed_transaction_id") @db.Uuid
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category            Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  goal                Goal?                  @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  fromAccount         FinancialAccount?      @relation("TransactionFromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
+  toAccount           FinancialAccount?      @relation("TransactionToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  reversedTransaction Transaction?           @relation("TransactionReversal", fields: [reversedTransactionId], references: [id], onDelete: SetNull)
+  reversingTransaction Transaction?          @relation("TransactionReversal")
+  balanceEffects      TransactionBalanceEffect[]
+
+  @@index([userId, occurredOn])
+  @@index([userId, categoryId, occurredOn])
+  @@map("transactions")
+}
+
+model TransactionBalanceEffect {
+  id                 String              @id @default(uuid()) @db.Uuid
+  transactionId      String              @map("transaction_id") @db.Uuid
+  accountId          String              @map("account_id") @db.Uuid
+  role               BalanceEffectRole
+  deltaMinor         BigInt              @map("delta_minor")
+  balanceAfterMinor  BigInt              @map("balance_after_minor")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@map("transaction_balance_effects")
+}
+
+model Goal {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  name                    String
+  targetMinor             BigInt   @map("target_minor")
+  currentMinor            BigInt   @default(0) @map("current_minor")
+  currencyCode            String   @default("PHP") @map("currency_code") @db.Char(3)
+  targetDate              DateTime @map("target_date") @db.Date
+  completedDate           DateTime? @map("completed_date") @db.Date
+  monthlyContributionMinor BigInt? @map("monthly_contribution_minor")
+  status                  String   @default("active")
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("goals")
 }

@@ -10,8 +10,8 @@ import {
   deleteSessionById,
   findUserByEmail,
   normalizeEmail,
-} from './auth.repository.js'
-import type { RegisterInput, LoginInput } from './auth.schemas.js'
+} from './auth.repository.js.js.js.js.js'
+import type { RegisterInput, LoginInput } from './auth.schemas.js.js.js.js.js'
 
 export interface AuthResult {
   user: AuthenticatedUser

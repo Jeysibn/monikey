@@ -9,6 +9,8 @@ export type AppErrorCode =
   | 'GOAL_INACTIVE'
   | 'UNKNOWN_ACCOUNT'
   | 'UNKNOWN_CATEGORY'
+  | 'UNKNOWN_TRANSACTION'
+  | 'UNKNOWN_GOAL'
   | 'CATEGORY_NOT_ALLOWED'
   | 'TRANSFER_SAME_ACCOUNT'
   | 'INVALID_TRANSACTION_KIND'
@@ -17,6 +19,9 @@ export type AppErrorCode =
   | 'INSUFFICIENT_HOLDING_UNITS'
   | 'EXTERNAL_PROVIDER_UNAVAILABLE'
   | 'EXTERNAL_PROVIDER_QUOTA_REACHED'
+  | 'ACCOUNT_ARCHIVED'
+  | 'ACCOUNT_NOT_EMPTY'
+  | 'ALREADY_REVERSED'
   | 'VALIDATION_ERROR'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
@@ -57,6 +62,8 @@ function defaultStatusForCode(code: AppErrorCode): number {
     case 'NOT_FOUND':
     case 'UNKNOWN_ACCOUNT':
     case 'UNKNOWN_CATEGORY':
+    case 'UNKNOWN_TRANSACTION':
+    case 'UNKNOWN_GOAL':
       return 404
     case 'IDEMPOTENCY_CONFLICT':
       return 409
@@ -73,6 +80,9 @@ function defaultStatusForCode(code: AppErrorCode): number {
     case 'INVALID_TRANSACTION_KIND':
     case 'RECURRING_OCCURRENCE_ALREADY_POSTED':
     case 'INSUFFICIENT_HOLDING_UNITS':
+    case 'ACCOUNT_ARCHIVED':
+    case 'ACCOUNT_NOT_EMPTY':
+    case 'ALREADY_REVERSED':
       return 422
     case 'EXTERNAL_PROVIDER_UNAVAILABLE':
     case 'EXTERNAL_PROVIDER_QUOTA_REACHED':

@@ -203,12 +203,36 @@ CREATE CONSTRAINT TRIGGER "credit_card_details_invariants"
 
 -- 2) Every credit_card/liability financial_accounts row must have a matching
 --    credit_card_details row (no more "skip if missing"), and its owed
---    balance must stay within [0, credit_limit_minor].
+--    balance must stay within [0, credit_limit_minor]. Also (QA Attempt 2,
+--    Finding D2): a row can never be UPDATEd *away* from credit_card/liability
+--    while a credit_card_details row still references it — the original
+--    version only checked the "is a card" branch and unconditionally
+--    RETURNed NEW for every other case, so `UPDATE financial_accounts SET
+--    account_type='cash', classification='asset'` on a live card sailed
+--    through untouched, leaving `credit_card_details` pointing at a
+--    now-asset account (the exact state Finding 2 forbids, reached from the
+--    other direction). Because this is still a deferred constraint trigger,
+--    the legitimate path — reclassify the account AND delete its
+--    credit_card_details row in the same transaction, in that order — still
+--    works: the immediate BEFORE DELETE guard on credit_card_details only
+--    blocks the delete while account_type is *still* 'credit_card' at the
+--    time of the delete statement, so reclassifying first makes the
+--    follow-up delete succeed, and by COMMIT no orphaned details row remains
+--    for this trigger to object to.
 CREATE OR REPLACE FUNCTION "enforce_financial_account_card_invariants"() RETURNS trigger AS $$
 DECLARE
     card_limit BIGINT;
+    orphaned_details_count INTEGER;
 BEGIN
     IF NEW."classification" <> 'liability' OR NEW."account_type" <> 'credit_card' THEN
+        SELECT COUNT(*) INTO orphaned_details_count
+        FROM "credit_card_details" ccd
+        WHERE ccd."account_id" = NEW."id";
+
+        IF orphaned_details_count > 0 THEN
+            RAISE EXCEPTION 'CATEGORY_NOT_ALLOWED: account % cannot be reclassified away from credit_card/liability while a credit_card_details row still references it; delete the details row in the same transaction first', NEW."id";
+        END IF;
+
         RETURN NEW;
     END IF;
 

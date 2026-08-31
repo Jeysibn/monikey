@@ -60,8 +60,8 @@ form's default date — to that date at once. See
 - [react-router-dom](https://reactrouter.com) for client-side routing
 - Plain CSS (design tokens in `src/styles/tokens.css`) — no CSS framework
 - [Playwright](https://playwright.dev) for end-to-end tests
-- A small frontend-only state layer (`src/state/`, `src/services/`,
-  `src/domain/`) — no backend yet, no external state-management library. See
+- A React state layer backed by the Fastify API through `ApiFinanceGateway` in
+  backend mode, with a deterministic mock adapter for local UI tests. See
   [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full shape.
 - Currency: Philippine peso (`en-PH`/`PHP` via `Intl.NumberFormat`), see
   `src/utils/currency.ts`. The configuration is module-level and

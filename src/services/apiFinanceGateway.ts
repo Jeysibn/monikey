@@ -19,7 +19,8 @@ type ApiAccount = {
 type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: number; feeMinor: number; source: Transaction['source']; status: Transaction['status']; note: string | null }
 type ApiGoal = { id: string; name: string; targetMinor: number; currentMinor: number; targetDate: string; completedDate: string | null; monthlyContributionMinor: number | null; status: string; active: boolean }
 type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: number; allocations: Array<{ id: string; categoryId: string; allocatedMinor: number }> }
-type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; }
+type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: number; occurredOn: string; note: string | null }
+type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: unknown[] } }
 
 export interface FinanceGateway {
   load(signal?: AbortSignal): Promise<FinanceState>
@@ -63,10 +64,11 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async load(signal?: AbortSignal): Promise<FinanceState> {
-    const { financeState } = await this.request<Bootstrap>('/bootstrap', { signal })
+    const bootstrap = await this.request<Bootstrap>('/bootstrap', { signal })
+    const { financeState } = bootstrap
     const accounts: Account[] = financeState.accounts.filter((a) => a.classification === 'asset').map((a) => ({ id: a.id, name: a.name, institution: a.institution ?? undefined, type: a.accountType, classification: a.classification, balance: minor(a.currentBalanceMinor), lastFour: a.lastFour ?? undefined, syncStatus: a.syncStatus, manual: a.manual }))
     const creditCards: CreditCard[] = financeState.accounts.filter((a) => a.classification === 'liability' && a.creditCardDetail).map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour ?? '', network: a.creditCardDetail!.network, balance: minor(a.currentBalanceMinor), limit: minor(a.creditCardDetail!.creditLimitMinor), dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(a.creditCardDetail!.dueDay).padStart(2, '0')}`, minPayment: minor(a.creditCardDetail!.minimumPaymentMinor), manual: a.manual }))
-    return { accounts, creditCards, categories: financeState.categories.map((c) => ({ id: c.id, name: c.name, color: c.color, budgetable: c.budgetable, transactionKinds: [ ...(c.allowsIncome ? ['income' as const] : []), ...(c.allowsExpense ? ['expense' as const] : []) ] })), transactions: financeState.transactions.map(this.mapTransaction), budgetCategories: [], totalBudgetAllocated: 0, goals: financeState.goals.map((g) => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as FinanceState['goals'][number]['status'], active: g.active })), attentionItems: [], portfolio: [], budgetVsActual: [] }
+    return { accounts, creditCards, categories: financeState.categories.map((c) => ({ id: c.id, name: c.name, color: c.color, budgetable: c.budgetable, transactionKinds: [ ...(c.allowsIncome ? ['income' as const] : []), ...(c.allowsExpense ? ['expense' as const] : []) ] })), transactions: financeState.transactions.map(this.mapTransaction), budgetCategories: [], totalBudgetAllocated: 0, goals: financeState.goals.map((g) => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as FinanceState['goals'][number]['status'], active: g.active })), attentionItems: [], portfolio: mapInvestmentHoldings(bootstrap.investmentActivity?.trades ?? []), budgetVsActual: [] }
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
@@ -119,4 +121,15 @@ export class ApiFinanceGateway implements FinanceGateway {
 
   private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined })
   private mapGoal = (g: ApiGoal): Goal => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as Goal['status'], active: g.active })
+}
+
+function mapInvestmentHoldings(trades: ApiInvestmentTrade[]): FinanceState['portfolio'] {
+  const positions = new Map<string, { units: number; price: number }>()
+  for (const trade of trades) {
+    const current = positions.get(trade.ticker) ?? { units: 0, price: 0 }
+    current.units += trade.type === 'buy' ? trade.units : -trade.units
+    current.price = minor(trade.priceMinor)
+    positions.set(trade.ticker, current)
+  }
+  return Array.from(positions.entries()).filter(([, position]) => position.units > 0).map(([ticker, position]) => ({ ticker, name: ticker, price: position.price, changePct: 0, units: position.units, history: [position.price] }))
 }

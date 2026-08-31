@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Env files (Vite loads .env / .env.*; keep example files trackable)
+.env
+.env.*
+!.env.example
+
+# Build/test artifacts
+coverage
+*.tsbuildinfo
+
 # Playwright
 test-results
 playwright-report

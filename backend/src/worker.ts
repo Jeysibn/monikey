@@ -29,8 +29,14 @@ async function main(): Promise<void> {
     await deliverNotificationOutbox(prisma, emailProvider)
     const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
     if (env.QUOTE_PROVIDER === 'live') {
-      const refreshed = await refreshQuoteSnapshots(prisma, quoteProvider)
-      if (refreshed > 0) logger.info({ refreshed }, 'refreshed investment quotes')
+      try {
+        const refreshed = await refreshQuoteSnapshots(prisma, quoteProvider)
+        if (refreshed > 0) logger.info({ refreshed }, 'refreshed investment quotes')
+      } catch (err) {
+        // Market-data outages are non-critical: retain the last snapshot and
+        // allow recurring payments and notification delivery to complete.
+        logger.warn({ err }, 'investment quote refresh skipped')
+      }
     }
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
   }

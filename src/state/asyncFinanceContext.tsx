@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal } from '../domain/finance'
 import type { FinanceGateway } from '../services/apiFinanceGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
+import { FinanceContext, type FinanceContextValue } from './financeContext'
 
 export type FinanceBootStatus = 'loading' | 'ready' | 'error'
 
@@ -70,7 +71,17 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
   }, [stableGateway])
 
   const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds])
-  return <AsyncFinanceContext.Provider value={value}>{children}</AsyncFinanceContext.Provider>
+  const financeValue = useMemo<FinanceContextValue>(() => ({
+    state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
+    todayIso: new Date().toISOString().slice(0, 10),
+    addTransaction,
+    addManualAccount,
+    addManualCreditCard,
+    addBudgetCategory: () => Promise.reject(new Error('Budget API is not available yet')),
+    createGoal,
+    addGoalFunds: (goalId, sourceAccountId, amount) => addGoalFunds(goalId, sourceAccountId, amount, new Date().toISOString().slice(0, 10)),
+  }), [state, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds])
+  return <AsyncFinanceContext.Provider value={value}><FinanceContext.Provider value={financeValue}>{children}</FinanceContext.Provider></AsyncFinanceContext.Provider>
 }
 
 export function useAsyncFinance(): AsyncFinanceContextValue {

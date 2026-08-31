@@ -23,12 +23,12 @@ export interface FinanceContextValue {
    * a second clock.
    */
   todayIso: string
-  addTransaction: (input: AddTransactionInput) => Transaction
-  addManualAccount: (input: AddManualAccountInput) => Account
-  addManualCreditCard: (input: AddManualCreditCardInput) => CreditCard
-  addBudgetCategory: (input: AddBudgetCategoryInput) => BudgetCategory
-  createGoal: (input: CreateGoalInput) => Goal
-  addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal
+  addTransaction: (input: AddTransactionInput) => Transaction | Promise<Transaction>
+  addManualAccount: (input: AddManualAccountInput) => Account | Promise<Account>
+  addManualCreditCard: (input: AddManualCreditCardInput) => CreditCard | Promise<CreditCard>
+  addBudgetCategory: (input: AddBudgetCategoryInput) => BudgetCategory | Promise<BudgetCategory>
+  createGoal: (input: CreateGoalInput) => Goal | Promise<Goal>
+  addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal | Promise<Goal>
 }
 
 export const FinanceContext = createContext<FinanceContextValue | null>(null)

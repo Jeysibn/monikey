@@ -30,7 +30,7 @@ export interface FinanceGateway {
   addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal>
   createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod>
   setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
-  addBudgetCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }>
 }
 
 export class FinanceApiError extends Error {
@@ -107,8 +107,14 @@ export class ApiFinanceGateway implements FinanceGateway {
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: 0 }
   }
 
-  async addBudgetCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
-    return this.request('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
+  async addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }> {
+    const category = await this.request<{ id: string; name: string; color: string }>('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
+    const now = new Date()
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+    const period = await this.createBudgetPeriod(start, end, 0, signal)
+    await this.setBudgetAllocation(period.id, category.id, input.allocated, signal)
+    return { ...category, allocated: input.allocated }
   }
 
   private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined })

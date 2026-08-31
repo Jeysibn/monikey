@@ -9,6 +9,7 @@ import { Accounts } from './pages/Accounts'
 import { Budget } from './pages/Budget'
 import { Goals } from './pages/Goals'
 import { Investments } from './pages/Investments'
+import { Recurring } from './pages/Recurring'
 import { Placeholder } from './pages/Placeholder'
 
 export default function App() {
@@ -23,7 +24,7 @@ export default function App() {
         <Route path="/budget" element={<Budget />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="/investments" element={<Investments />} />
-        <Route path="/recurring" element={<Placeholder title="Recurring & Bills" />} />
+        <Route path="/recurring" element={<Recurring />} />
         <Route path="/reports" element={<Placeholder title="Reports" />} />
         <Route path="/settings" element={<Placeholder title="Settings" />} />
       </Routes>

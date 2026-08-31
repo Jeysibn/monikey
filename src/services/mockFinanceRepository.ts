@@ -115,6 +115,8 @@ function initialState(): FinanceState {
     { ticker: 'AMZN', name: 'Amazon', price: 986.45, changePct: -0.4, units: 12, history: [1010, 1005, 992, 998, 975, 981, 970, 986.45] },
     { ticker: 'MSFT', name: 'Microsoft', price: 2140.8, changePct: 1.2, units: 41, history: [1980, 2005, 2032, 2018, 2065, 2098, 2110, 2140.8] },
     { ticker: 'NVDA', name: 'Nvidia', price: 3402.15, changePct: 2.6, units: 16, history: [3020, 3105, 3180, 3160, 3255, 3298, 3350, 3402.15] },
+    { ticker: 'BTC', name: 'Bitcoin', price: 61250.4, changePct: 1.8, units: 0.42, history: [58200, 59100, 57800, 60300, 59750, 60900, 60100, 61250.4] },
+    { ticker: 'ETH', name: 'Ethereum', price: 3380.75, changePct: -1.1, units: 3.5, history: [3250, 3310, 3405, 3380, 3450, 3390, 3418, 3380.75] },
   ]
 
   const budgetVsActual = [

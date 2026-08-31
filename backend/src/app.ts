@@ -20,6 +20,7 @@ import { createLedgerModule } from './modules/ledger/ledger.module.js'
 import { createAccountsModule } from './modules/accounts/accounts.module.js'
 import { createBootstrapModule } from './modules/bootstrap/bootstrap.module.js'
 import { goalsRoutes } from './modules/goals/goals.routes.js'
+import { budgetRoutes } from './modules/budget/budget.routes.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -140,6 +141,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(accounts.registerRoutes)
       await v1.register(bootstrap.registerRoutes)
       await v1.register(goalsRoutes, { prisma, ledgerService: ledger.service, appOrigin: env.APP_ORIGIN })
+      await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
     },
     { prefix: '/api/v1' },
   )

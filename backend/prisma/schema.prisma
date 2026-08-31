@@ -70,6 +70,7 @@ model User {
   financialAccounts  FinancialAccount[]
   transactions       Transaction[]
   goals              Goal[]
+  budgetPeriods      BudgetPeriod[]
 
   @@map("users")
 }
@@ -136,6 +137,7 @@ model Category {
 
   user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
+  budgetAllocations BudgetAllocation[]
 
   @@index([userId])
   @@map("categories")
@@ -309,4 +311,36 @@ model GoalContribution {
 
   @@index([goalId, createdAt])
   @@map("goal_contributions")
+}
+
+model BudgetPeriod {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  periodStart   DateTime @map("period_start") @db.Date
+  periodEnd     DateTime @map("period_end") @db.Date
+  incomePoolMinor BigInt @default(0) @map("income_pool_minor")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocations BudgetAllocation[]
+
+  @@unique([userId, periodStart, periodEnd])
+  @@index([userId, periodStart])
+  @@map("budget_periods")
+}
+
+model BudgetAllocation {
+  id            String       @id @default(uuid()) @db.Uuid
+  budgetPeriodId String      @map("budget_period_id") @db.Uuid
+  categoryId    String       @map("category_id") @db.Uuid
+  allocatedMinor BigInt      @map("allocated_minor")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  budgetPeriod BudgetPeriod @relation(fields: [budgetPeriodId], references: [id], onDelete: Cascade)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([budgetPeriodId, categoryId])
+  @@map("budget_allocations")
 }

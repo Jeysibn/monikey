@@ -89,13 +89,14 @@ export class BootstrapService {
   ) {}
 
   async getBootstrap(userId: string): Promise<BootstrapResponse> {
-    const [user, accounts, categories, transactions, goals, preferences] = await Promise.all([
+    const [user, accounts, categories, transactions, goals, preferences, budgetPeriods] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.accountsService.listAccounts(userId),
       this.prisma.category.findMany({ where: { OR: [{ userId }, { userId: null }], archivedAt: null } }),
       this.ledgerService.listTransactions({ userId, limit: 1000 }),
       this.prisma.goal.findMany({ where: { userId } }),
       this.prisma.userPreferences.findUnique({ where: { userId } }),
+      this.prisma.budgetPeriod.findMany({ where: { userId }, include: { allocations: true }, orderBy: { periodStart: 'desc' } }),
     ]);
 
     if (!user) throw new Error('User not found');
@@ -123,7 +124,7 @@ export class BootstrapService {
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt.toISOString(),
         })),
-        budgets: [],
+        budgets: budgetPeriods.map((period) => ({ id: period.id, userId: period.userId, periodStart: period.periodStart.toISOString().slice(0, 10), periodEnd: period.periodEnd.toISOString().slice(0, 10), incomePoolMinor: Number(period.incomePoolMinor), createdAt: period.createdAt.toISOString(), updatedAt: period.updatedAt.toISOString(), allocations: period.allocations.map((allocation) => ({ id: allocation.id, budgetPeriodId: allocation.budgetPeriodId, categoryId: allocation.categoryId, allocatedMinor: Number(allocation.allocatedMinor) })) })),
         goals: goals.map((g) => ({
           id: g.id,
           userId: g.userId,

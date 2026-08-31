@@ -293,6 +293,120 @@ describeIfDb('Phase 1 database constraints and triggers (real PostgreSQL)', () =
       prisma.financialAccount.update({ where: { id: accountId }, data: { currentBalanceMinor: 50000n } }),
     ).resolves.toBeDefined()
   })
+
+  // --- QA Attempt 2, Finding D2: reclassifying a live card account -----
+
+  it('rejects reclassifying a live credit_card/liability account to cash/asset while its credit_card_details row still exists', async () => {
+    const userId = await createUser()
+    const accountId = randomUUID()
+    await prisma.$transaction([
+      prisma.financialAccount.create({
+        data: { id: accountId, userId, name: 'Card', accountType: 'credit_card', classification: 'liability' },
+      }),
+      prisma.creditCardDetail.create({
+        data: { accountId, network: 'visa', creditLimitMinor: 100000n, dueDay: 15 },
+      }),
+    ])
+
+    // QA Attempt 2's exact repro: reclassify alone, in one statement/one
+    // transaction, with the credit_card_details row left in place.
+    await expect(
+      prisma.financialAccount.update({
+        where: { id: accountId },
+        data: { accountType: 'cash', classification: 'asset' },
+      }),
+    ).rejects.toThrow()
+
+    // The account must still genuinely be a live, bounded card afterward —
+    // not silently reclassified by a rolled-back-but-partially-applied
+    // update (Postgres transactions don't allow that, but this proves it,
+    // not just assumes it).
+    const stillACard = await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })
+    expect(stillACard.accountType).toBe('credit_card')
+    expect(stillACard.classification).toBe('liability')
+  })
+
+  it('rejects the two-step bypass: reclassify then delete credit_card_details in a follow-up transaction', async () => {
+    const userId = await createUser()
+    const accountId = randomUUID()
+    await prisma.$transaction([
+      prisma.financialAccount.create({
+        data: { id: accountId, userId, name: 'Card', accountType: 'credit_card', classification: 'liability' },
+      }),
+      prisma.creditCardDetail.create({
+        data: { accountId, network: 'visa', creditLimitMinor: 100000n, dueDay: 15 },
+      }),
+    ])
+
+    // Reclassify commits on its own (no delete in this transaction) — the
+    // deferred trigger fires at commit and must reject it outright, exactly
+    // like the single-statement case above.
+    await expect(
+      prisma.financialAccount.update({
+        where: { id: accountId },
+        data: { accountType: 'cash', classification: 'asset' },
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('allows the legitimate one-transaction path: reclassify AND delete credit_card_details together', async () => {
+    const userId = await createUser()
+    const accountId = randomUUID()
+    await prisma.$transaction([
+      prisma.financialAccount.create({
+        data: { id: accountId, userId, name: 'Former Card', accountType: 'credit_card', classification: 'liability' },
+      }),
+      prisma.creditCardDetail.create({
+        data: { accountId, network: 'visa', creditLimitMinor: 100000n, dueDay: 15 },
+      }),
+    ])
+
+    // Reclassify first, then delete the details row, in the SAME
+    // transaction — the immediate BEFORE DELETE guard only blocks the
+    // delete while account_type is still 'credit_card' *at delete time*,
+    // and by then this transaction has already changed it. This is the
+    // documented, intended way to convert a card account to a plain asset.
+    await expect(
+      prisma.$transaction([
+        prisma.financialAccount.update({
+          where: { id: accountId },
+          data: { accountType: 'cash', classification: 'asset' },
+        }),
+        prisma.creditCardDetail.delete({ where: { accountId } }),
+      ]),
+    ).resolves.toBeDefined()
+
+    const reclassified = await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })
+    expect(reclassified.accountType).toBe('cash')
+    expect(reclassified.classification).toBe('asset')
+    await expect(prisma.creditCardDetail.findUnique({ where: { accountId } })).resolves.toBeNull()
+  })
+
+  it('rejects attempting the bypass in the wrong order: delete credit_card_details before reclassifying', async () => {
+    const userId = await createUser()
+    const accountId = randomUUID()
+    await prisma.$transaction([
+      prisma.financialAccount.create({
+        data: { id: accountId, userId, name: 'Card', accountType: 'credit_card', classification: 'liability' },
+      }),
+      prisma.creditCardDetail.create({
+        data: { accountId, network: 'visa', creditLimitMinor: 100000n, dueDay: 15 },
+      }),
+    ])
+
+    // Delete-then-reclassify (wrong order): the immediate BEFORE DELETE
+    // guard sees account_type still 'credit_card' at delete time and
+    // rejects the delete before the reclassify ever runs.
+    await expect(
+      prisma.$transaction([
+        prisma.creditCardDetail.delete({ where: { accountId } }),
+        prisma.financialAccount.update({
+          where: { id: accountId },
+          data: { accountType: 'cash', classification: 'asset' },
+        }),
+      ]),
+    ).rejects.toThrow()
+  })
 })
 
 describeIfDb('Prisma schema/migration drift (QA Attempt 1, Finding 1)', () => {

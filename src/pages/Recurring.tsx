@@ -8,6 +8,7 @@ import { formatMoney } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { formatDateLabel, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import type { AddRecurringItemInput, RecurringDueState, RecurringFrequency } from '../domain/recurring'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Recurring.css'
 
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
@@ -83,7 +84,7 @@ function AddRecurringItemForm({
   onClose,
 }: {
   todayIso: string
-  onAdd: (input: AddRecurringItemInput) => void
+  onAdd: (input: AddRecurringItemInput) => void | Promise<void>
   onClose: () => void
 }) {
   const finance = useFinance()
@@ -101,8 +102,9 @@ function AddRecurringItemForm({
   const [categoryId, setCategoryId] = useState(budgetableCategories[0]?.id ?? '')
   const [autopay, setAutopay] = useState(false)
   const { errors, field, errorId, fail, clear } = useFieldErrors<ItemField>(ITEM_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmedMerchant = merchant.trim()
     if (!trimmedMerchant) {
@@ -142,14 +144,22 @@ function AddRecurringItemForm({
       fail({ categoryId: 'Select a category.' })
       return
     }
-    onAdd({ merchant: trimmedMerchant, amount: amountResult.value, frequency, nextDueDate, accountId, categoryId, autopay })
-    setMerchant('')
-    setAmount('')
-    setFrequency('monthly')
-    setNextDueDate('')
-    setAutopay(false)
-    clear()
-    onClose()
+    try {
+      setSubmitting(true)
+      const pending = onAdd({ merchant: trimmedMerchant, amount: amountResult.value, frequency, nextDueDate, accountId, categoryId, autopay })
+      if (pending) await pending
+      setMerchant('')
+      setAmount('')
+      setFrequency('monthly')
+      setNextDueDate('')
+      setAutopay(false)
+      clear()
+      onClose()
+    } catch (err) {
+      fail({ merchant: err instanceof Error ? err.message : 'Could not save recurring item.' })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -265,11 +275,11 @@ function AddRecurringItemForm({
       </label>
 
       <div className="new-category-actions">
-        <button type="button" className="btn btn--ghost" onClick={onClose}>
+        <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary">
-          Add recurring item
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Saving…' : 'Add recurring item'}
         </button>
       </div>
     </form>
@@ -278,10 +288,40 @@ function AddRecurringItemForm({
 
 export function Recurring() {
   const finance = useFinance()
-  const { items, pauseItem, resumeItem, markAsPaid, addItem } = useRecurring()
+  const asyncFinance = useAsyncFinanceOptional()
+  const localRecurring = useRecurring()
+  const items = asyncFinance ? asyncFinance.recurringItems : localRecurring.items
   const [formOpen, setFormOpen] = useState(false)
-
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const todayIso = finance.todayIso
+
+  const handleAdd = (input: AddRecurringItemInput) => {
+    setActionError(null)
+    if (asyncFinance) return asyncFinance.addRecurringItem(input).then(() => undefined)
+    localRecurring.addItem(input)
+  }
+  const handleStatus = async (id: string, status: 'active' | 'paused') => {
+    setBusyId(id)
+    setActionError(null)
+    try {
+      if (asyncFinance) await asyncFinance.setRecurringStatus(id, status)
+      else if (status === 'active') localRecurring.resumeItem(id)
+      else localRecurring.pauseItem(id)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update recurring item.')
+    } finally { setBusyId(null) }
+  }
+  const handlePaid = async (id: string) => {
+    setBusyId(id)
+    setActionError(null)
+    try {
+      if (asyncFinance) await asyncFinance.markRecurringPaid(id)
+      else localRecurring.markAsPaid(id, todayIso)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not mark recurring item as paid.')
+    } finally { setBusyId(null) }
+  }
 
   const rows = useMemo(
     () =>
@@ -334,8 +374,10 @@ export function Recurring() {
           </button>
         </div>
 
+        {actionError && <p className="tx-error" role="alert">{actionError}</p>}
+
         {formOpen && (
-          <AddRecurringItemForm todayIso={todayIso} onAdd={(input) => addItem(input)} onClose={() => setFormOpen(false)} />
+          <AddRecurringItemForm todayIso={todayIso} onAdd={handleAdd} onClose={() => setFormOpen(false)} />
         )}
 
         {rows.length === 0 ? (
@@ -375,19 +417,19 @@ export function Recurring() {
 
                 <div className="rec-row-actions">
                   {item.status === 'active' ? (
-                    <button type="button" className="btn btn--ghost btn--compact" onClick={() => pauseItem(item.id)}>
+                    <button type="button" className="btn btn--ghost btn--compact" disabled={busyId === item.id} onClick={() => void handleStatus(item.id, 'paused')}>
                       <PauseIcon /> Pause
                     </button>
                   ) : (
-                    <button type="button" className="btn btn--ghost btn--compact" onClick={() => resumeItem(item.id)}>
+                    <button type="button" className="btn btn--ghost btn--compact" disabled={busyId === item.id} onClick={() => void handleStatus(item.id, 'active')}>
                       <ResumeIcon /> Resume
                     </button>
                   )}
                   <button
                     type="button"
                     className="btn btn--primary btn--compact"
-                    disabled={item.status === 'paused'}
-                    onClick={() => markAsPaid(item.id, todayIso)}
+                    disabled={item.status === 'paused' || busyId === item.id}
+                    onClick={() => void handlePaid(item.id)}
                   >
                     <CheckIcon /> Mark as paid
                   </button>

@@ -52,6 +52,24 @@ export class LedgerRepository {
   ): Promise<PostTransactionResult> {
     const { type, title, categoryId, goalId, fromAccountId, toAccountId, occurredOn, occurredTime, amountMinor, feeMinor, currencyCode, source, status, note, idempotencyKey } = input;
 
+    if (idempotencyKey) {
+      const existing = await tx.transaction.findFirst({
+        where: { userId, idempotencyKey },
+        include: { balanceEffects: true },
+      });
+      if (existing) {
+        return {
+          transaction: this.mapTransaction(existing),
+          balanceEffects: existing.balanceEffects.map((effect) => ({
+            accountId: effect.accountId,
+            role: effect.role,
+            deltaMinor: Number(effect.deltaMinor),
+            balanceAfterMinor: Number(effect.balanceAfterMinor),
+          })),
+        };
+      }
+    }
+
     // Lock affected accounts
     const accountIds = new Set<string>();
     if (fromAccountId) accountIds.add(fromAccountId);

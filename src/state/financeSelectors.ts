@@ -1,25 +1,32 @@
 // Pure, independently-testable derived calculations over FinanceState.
-// Nothing here mutates state or reads component props — every function
-// takes a FinanceState (or a slice of it) and returns a value. Components
-// call these through `useFinance()` rather than recomputing figures inline.
+// Nothing here mutates state, reads component props, or asks the machine
+// what day it is — every function takes a FinanceState (or a slice of it),
+// plus an explicit `todayIso`/`ReportingPeriod` where the calculation is
+// time-dependent, and returns a value. Components call these through
+// `useFinance()`, which resolves `todayIso` once from the injected
+// `AppClock` (TR-001) and passes it down, rather than recomputing figures
+// inline or calling `new Date()`.
 
 import type { Account, BudgetStatus, Category, CreditCard, FinanceState, Goal, ReportingPeriod, Transaction } from '../domain/finance'
-import { DEMO_TODAY_ISO, isDateInPeriod, localDateFromIso, monthPeriodContaining } from '../utils/date'
+import {
+  addDaysToIso,
+  formatDateLabel,
+  isDateInPeriod,
+  isIsoDateWithinInclusive,
+  isoFromLocalDate,
+  localDateFromIso,
+  monthPeriodContaining,
+} from '../utils/date'
 import { formatMoney } from '../utils/currency'
 
 // ---- Reporting period ---------------------------------------------------
-// The single definition of "this month" / "today" used by every period-based
+// The single definition of "this reporting month" used by every period-based
 // calculation below. Nothing else in the app (component or selector) should
 // define its own month boundary or compare ISO date strings directly.
 
-/** The calendar month every "this month" KPI is computed over. */
-export function activeReportingPeriod(): ReportingPeriod {
-  return monthPeriodContaining(DEMO_TODAY_ISO)
-}
-
-/** The date every "today" figure refers to. */
-export function today(): string {
-  return DEMO_TODAY_ISO
+/** The calendar month every period-scoped KPI is computed over, for a given "today". */
+export function activeReportingPeriod(todayIso: string): ReportingPeriod {
+  return monthPeriodContaining(todayIso)
 }
 
 // ---- Accounts / credit ------------------------------------------------
@@ -73,16 +80,24 @@ export function findCreditCard(state: FinanceState, id?: string): CreditCard | u
   return state.creditCards.find((c) => c.id === id)
 }
 
+/** True when the id names a credit card rather than an asset account — the transfer form uses this to switch to card-payment wording (TR-003). */
+export function isCreditCardId(state: FinanceState, id?: string): boolean {
+  return !!id && state.creditCards.some((c) => c.id === id)
+}
+
 // ---- Transactions / cash flow -----------------------------------------
 // Rule: transfers never count toward income, expenses, or net cash flow.
+// That includes a credit-card payment (an asset → card transfer, TR-003),
+// which moves money between two things the user already owns/owes and so
+// must not change either cash-flow total.
 
-export function totalIncome(state: FinanceState, period: ReportingPeriod = activeReportingPeriod()): number {
+export function totalIncome(state: FinanceState, period: ReportingPeriod): number {
   return state.transactions
     .filter((t) => t.type === 'income' && isDateInPeriod(t.date, period))
     .reduce((s, t) => s + t.amount, 0)
 }
 
-export function totalExpenses(state: FinanceState, period: ReportingPeriod = activeReportingPeriod()): number {
+export function totalExpenses(state: FinanceState, period: ReportingPeriod): number {
   return Math.abs(
     state.transactions
       .filter((t) => t.type === 'expense' && isDateInPeriod(t.date, period))
@@ -90,12 +105,12 @@ export function totalExpenses(state: FinanceState, period: ReportingPeriod = act
   )
 }
 
-export function netCashFlow(state: FinanceState, period: ReportingPeriod = activeReportingPeriod()): number {
+export function netCashFlow(state: FinanceState, period: ReportingPeriod): number {
   return totalIncome(state, period) - totalExpenses(state, period)
 }
 
 /** Counts account-to-account transfers only — goal-funding transfers (see `Transaction.goalId`) are a different kind of movement and are surfaced on the Goals page instead. */
-export function transferCount(state: FinanceState, period: ReportingPeriod = activeReportingPeriod()): number {
+export function transferCount(state: FinanceState, period: ReportingPeriod): number {
   return state.transactions.filter((t) => t.type === 'transfer' && !t.goalId && isDateInPeriod(t.date, period)).length
 }
 
@@ -122,15 +137,22 @@ export function accountDotColor(accountId?: string): string {
   return (accountId && ACCOUNT_DOT_COLORS[accountId]) || 'var(--text-faint)'
 }
 
-// ---- Expense trend (SR-004) --------------------------------------------
+// ---- Expense trend (SR-004 / TR-005) -----------------------------------
 // The dashboard's expense chart, legend, and accessible table all read from
 // `expensesTrend` below — there is no separate `expensesTrend` slice of
 // `FinanceState` to drift out of sync with the transaction ledger. Every
-// bucket is a live sum over `state.transactions`, so adding, in particular,
-// an expense dated `today()` changes both `expensesToday` and the relevant
-// chart bucket on the next render. Transfers (including goal-funding
-// transfers, which carry a `goalId`) are never expenses and are excluded by
-// the `type === 'expense'` filter shared by every helper here.
+// bucket is a live sum over `state.transactions`, so adding an expense dated
+// `todayIso` changes both `expensesToday` and the relevant chart bucket on
+// the next render. Transfers (including goal-funding transfers, which carry
+// a `goalId`) are never expenses and are excluded by the
+// `type === 'expense'` filter shared by every helper here.
+//
+// TR-005: each bucket now carries its own inclusive date range, and
+// `expensesTrendTitle` derives the chart's title from the same definition
+// the buckets are built from — so a title can never claim a window the data
+// doesn't cover (the old map said Weekly = "this month" while the buckets
+// were four rolling 7-day windows, and Monthly = "this year" over six
+// calendar months).
 
 const WEEKDAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MONTH_LABELS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -148,9 +170,9 @@ function expenseAmountInRange(state: FinanceState, start: Date, end: Date): numb
   )
 }
 
-/** Total expenses posted on `today()` — the "today" figure shown next to the daily chart. */
-export function expensesToday(state: FinanceState): number {
-  const day = localDateFromIso(today())
+/** Total expenses posted on `todayIso` — the "today" figure shown next to the daily chart. */
+export function expensesToday(state: FinanceState, todayIso: string): number {
+  const day = localDateFromIso(todayIso)
   if (!day) return 0
   const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)
   return expenseAmountInRange(state, day, next)
@@ -158,49 +180,96 @@ export function expensesToday(state: FinanceState): number {
 
 export type ExpensesTrendUnit = 'daily' | 'weekly' | 'monthly'
 
+/** One bucket of the expense trend chart, carrying the exact window it sums. */
+export interface ExpenseTrendPoint {
+  /** Short axis label (`MON`, `W1`, `AUG`) — display only, never parsed. */
+  day: string
+  amount: number
+  /** Inclusive first day of the bucket (`YYYY-MM-DD`). */
+  startIso: string
+  /** Inclusive last day of the bucket (`YYYY-MM-DD`). */
+  endIso: string
+  /** Human-readable range, e.g. `Aug 23 – Aug 29`, for tooltips and assistive technology. */
+  rangeLabel: string
+}
+
+function rangeLabel(startIso: string, endIso: string): string {
+  return startIso === endIso ? formatDateLabel(startIso) : `${formatDateLabel(startIso)} – ${formatDateLabel(endIso)}`
+}
+
+function point(state: FinanceState, label: string, start: Date, endExclusive: Date): ExpenseTrendPoint {
+  const startIso = isoFromLocalDate(start)
+  const endIso = isoFromLocalDate(new Date(endExclusive.getFullYear(), endExclusive.getMonth(), endExclusive.getDate() - 1))
+  return {
+    day: label,
+    amount: expenseAmountInRange(state, start, endExclusive),
+    startIso,
+    endIso,
+    rangeLabel: rangeLabel(startIso, endIso),
+  }
+}
+
 /**
  * The single aggregation function backing every view of the Dashboard
  * expense trend chart. All three units bucket the same expense transactions,
- * anchored at `today()`, so switching the period control can never desync
- * the chart, its legend, or the accessible `<table>`/list built from the
- * same array:
- *   - `daily`: the 7 calendar days ending at (and including) `today()`.
- *   - `weekly`: the 4 rolling 7-day windows ending at `today()` (oldest
- *     first), labeled W1..W4.
+ * anchored at `todayIso`, so switching the period control can never desync
+ * the chart, its legend, or the accessible list built from the same array:
+ *   - `daily`: the 7 calendar days ending at (and including) today.
+ *   - `weekly`: the 4 rolling 7-day windows ending today (oldest first),
+ *     labeled W1..W4 — NOT calendar weeks and NOT the calendar month.
  *   - `monthly`: the 6 calendar months ending with the month containing
- *     `today()`, labeled by month abbreviation.
+ *     today, labeled by month abbreviation — NOT the calendar year.
  */
-export function expensesTrend(state: FinanceState, unit: ExpensesTrendUnit): { day: string; amount: number }[] {
-  const anchor = localDateFromIso(today())
+export function expensesTrend(state: FinanceState, unit: ExpensesTrendUnit, todayIso: string): ExpenseTrendPoint[] {
+  const anchor = localDateFromIso(todayIso)
   if (!anchor) return []
+  const y = anchor.getFullYear()
+  const mo = anchor.getMonth()
+  const d = anchor.getDate()
 
   if (unit === 'daily') {
-    const points: { day: string; amount: number }[] = []
+    const points: ExpenseTrendPoint[] = []
     for (let i = 6; i >= 0; i--) {
-      const day = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - i)
+      const day = new Date(y, mo, d - i)
       const next = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)
-      points.push({ day: WEEKDAY_LABELS[day.getDay()], amount: expenseAmountInRange(state, day, next) })
+      points.push(point(state, WEEKDAY_LABELS[day.getDay()], day, next))
     }
     return points
   }
 
   if (unit === 'weekly') {
-    const points: { day: string; amount: number }[] = []
+    const points: ExpenseTrendPoint[] = []
     for (let w = 3; w >= 0; w--) {
-      const end = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - w * 7 + 1)
+      const end = new Date(y, mo, d - w * 7 + 1)
       const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 7)
-      points.push({ day: `W${4 - w}`, amount: expenseAmountInRange(state, start, end) })
+      points.push(point(state, `W${4 - w}`, start, end))
     }
     return points
   }
 
-  const points: { day: string; amount: number }[] = []
+  const points: ExpenseTrendPoint[] = []
   for (let m = 5; m >= 0; m--) {
-    const start = new Date(anchor.getFullYear(), anchor.getMonth() - m, 1)
-    const end = new Date(anchor.getFullYear(), anchor.getMonth() - m + 1, 1)
-    points.push({ day: MONTH_LABELS[start.getMonth()], amount: expenseAmountInRange(state, start, end) })
+    const start = new Date(y, mo - m, 1)
+    const end = new Date(y, mo - m + 1, 1)
+    points.push(point(state, MONTH_LABELS[start.getMonth()], start, end))
   }
   return points
+}
+
+/**
+ * The chart title for a unit — derived from the same bucket definition
+ * above, so the words and the data can't drift apart (TR-005).
+ */
+export function expensesTrendTitle(unit: ExpensesTrendUnit): string {
+  if (unit === 'daily') return 'Last 7 days'
+  if (unit === 'weekly') return 'Last 4 weeks'
+  return 'Last 6 months'
+}
+
+/** The full range the chart currently covers, e.g. `Aug 2 – Aug 29`, for the title's range caption. */
+export function expensesTrendRangeLabel(points: ExpenseTrendPoint[]): string {
+  if (points.length === 0) return ''
+  return rangeLabel(points[0].startIso, points[points.length - 1].endIso)
 }
 
 // ---- Budget -------------------------------------------------------------
@@ -246,8 +315,8 @@ export function budgetOverCount(state: FinanceState): number {
   return countByStatus(state, 'over_budget')
 }
 
-export function budgetDaysRemaining(period: ReportingPeriod = activeReportingPeriod()): number {
-  const now = localDateFromIso(today())
+export function budgetDaysRemaining(todayIso: string, period: ReportingPeriod = activeReportingPeriod(todayIso)): number {
+  const now = localDateFromIso(todayIso)
   const end = localDateFromIso(period.end)
   if (!now || !end) return 0
   const msPerDay = 24 * 60 * 60 * 1000
@@ -289,11 +358,12 @@ export function totalGoalSavings(state: FinanceState): number {
   return state.goals.reduce((s, g) => s + g.currentAmount, 0)
 }
 
-export function monthlyContributionTotal(state: FinanceState): number {
+/** Total of every ACTIVE goal's *planned* monthly contribution. Planned, not automated: nothing moves this money until the user funds the goal (TR-004). */
+export function plannedMonthlyContributionTotal(state: FinanceState): number {
   return activeGoals(state).reduce((s, g) => s + (g.monthlyContribution ?? 0), 0)
 }
 
-/** Average progress across ACTIVE goals only — a completed goal at 100%+ would otherwise inflate this. */
+/** Average progress across ACTIVE goals only — a completed goal at 100% would otherwise inflate this. */
 export function avgGoalProgressPct(state: FinanceState): number {
   const active = activeGoals(state)
   if (active.length === 0) return 0
@@ -305,7 +375,28 @@ export function goalProgressPct(goal: Goal): number {
   return Math.max(0, Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)))
 }
 
-// ---- Money position / "Estimated safe to spend" (SR-008) ---------------
+/** True (uncapped) progress percentage. With overfunding unsupported (TR-004) this never exceeds 100 for valid state. */
+export function goalRawProgressPct(goal: Goal): number {
+  return Math.round((goal.currentAmount / goal.targetAmount) * 100)
+}
+
+// ---- Money position / "Estimated safe to spend" (SR-008 / TR-003) -------
+
+/**
+ * The documented commitment horizon for Money Position: a credit card's
+ * minimum payment counts as an upcoming commitment only when its due date
+ * falls within the next 30 days, inclusive of today (TR-003). "Due soon" is
+ * therefore a real date filter, not a figure of speech — a card due in four
+ * months is not a claim on this month's cash, and a card with no valid
+ * stored due date contributes nothing.
+ */
+export const COMMITMENT_HORIZON_DAYS = 30
+
+/** The credit cards whose minimum payment falls inside the commitment horizon. */
+export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): CreditCard[] {
+  const horizonEnd = addDaysToIso(todayIso, COMMITMENT_HORIZON_DAYS)
+  return state.creditCards.filter((c) => isIsoDateWithinInclusive(c.dueDate, todayIso, horizonEnd))
+}
 
 /**
  * Line-by-line breakdown behind the dashboard's "Estimated safe to spend"
@@ -319,13 +410,14 @@ export function goalProgressPct(goal: Goal): number {
  * balance. It must NOT be subtracted again here, and this selector does
  * not touch `currentAmount`/`totalGoalSavings` at all.
  *
- * `plannedGoalContributions` (`monthlyContributionTotal`) is a different
- * number: a goal's *pledged pace* for the month (`Goal.monthlyContribution`),
- * which is not moved out of any account until the user actually calls
- * `addGoalFunds`. That money is still sitting in `totalAvailableCash`, so
- * subtracting it here is not a double-count — it is treating an intended,
- * not-yet-executed transfer the same way an upcoming credit card minimum
- * (also unpaid) is treated: a known near-term claim on today's cash.
+ * `plannedGoalContributions` is a different number: a goal's *planned* pace
+ * for the month (`Goal.monthlyContribution`), which is not moved out of any
+ * account until the user actually calls `addGoalFunds` — there is no
+ * automation behind it (TR-004). That money is still sitting in
+ * `totalAvailableCash`, so subtracting it here is not a double-count — it is
+ * treating an intended, not-yet-executed transfer the same way an upcoming
+ * credit card minimum (also unpaid) is treated: a known near-term claim on
+ * today's cash.
  *
  * Deliberately excluded: recurring bills. Monikey has no recurring-bills
  * feature yet, so there is no data source for rent, subscriptions, or
@@ -336,19 +428,17 @@ export interface SafeToSpendBreakdown {
   upcomingCreditMinimums: number
   plannedGoalContributions: number
   safeToSpend: number
+  /** How many cards contributed a minimum payment inside the horizon. */
+  cardsDueCount: number
 }
 
-export function safeToSpendBreakdown(state: FinanceState): SafeToSpendBreakdown {
+export function safeToSpendBreakdown(state: FinanceState, todayIso: string): SafeToSpendBreakdown {
   const availableCash = totalAvailableCash(state)
-  const upcomingCreditMinimums = state.creditCards.reduce((sum, c) => sum + c.minPayment, 0)
-  const plannedGoalContributions = monthlyContributionTotal(state)
+  const dueCards = cardsDueWithinHorizon(state, todayIso)
+  const upcomingCreditMinimums = dueCards.reduce((sum, c) => sum + c.minPayment, 0)
+  const plannedGoalContributions = plannedMonthlyContributionTotal(state)
   const safeToSpend = Math.max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions)
-  return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend }
-}
-
-/** True (uncapped) progress percentage, e.g. 107% for a goal exceeded past its target. */
-export function goalRawProgressPct(goal: Goal): number {
-  return Math.round((goal.currentAmount / goal.targetAmount) * 100)
+  return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length }
 }
 
 // ---- Transaction list helpers ---------------------------------------------
@@ -382,6 +472,17 @@ export function transferFeeReconciliationLabel(state: FinanceState, t: Transacti
   if (t.type !== 'transfer' || !t.fee || t.fee <= 0) return undefined
   const total = t.amount + t.fee
   return `${formatMoney(t.amount)} transfer + ${formatMoney(t.fee)} fee = ${formatMoney(total)} from ${accountLabel(state, t.fromAccountId)}`
+}
+
+/**
+ * A credit-card payment is an asset → card transfer (TR-003). It keeps full
+ * transfer semantics — excluded from income, expenses, and net cash flow —
+ * so the ledger row explains what it did to both balances rather than
+ * looking like an unexplained outflow.
+ */
+export function cardPaymentReconciliationLabel(state: FinanceState, t: Transaction): string | undefined {
+  if (t.type !== 'transfer' || t.goalId || !isCreditCardId(state, t.toAccountId)) return undefined
+  return `Credit card payment · ${formatMoney(t.amount)} from ${accountLabel(state, t.fromAccountId)} reduced ${accountLabel(state, t.toAccountId)} owed by the same amount (not an expense)`
 }
 
 /** Source label for a transaction, distinguishing manual, OCR, and recurring entries (SR-010). Never collapse `recurring` into `manual`. */

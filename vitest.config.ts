@@ -11,5 +11,11 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     environment: 'jsdom',
+    // Pinned to a non-UTC zone on purpose. Every date helper in the app is
+    // local-calendar based (see `utils/date.ts`), so running the whole suite
+    // at UTC+8 proves none of it accidentally depends on the local offset
+    // being zero — and it is what lets `clock.test.ts` distinguish a genuine
+    // local date from a UTC-shifted one.
+    env: { TZ: 'Asia/Manila' },
   },
 })

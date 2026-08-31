@@ -9,11 +9,27 @@ export interface CurrencyConfig {
   currency: string
 }
 
-// Not yet exposed as a user setting — kept as a single mutable module-level
-// config so that future work (a settings page) can call `setCurrencyConfig`
-// without touching every call site.
+// Honest scope (TR-010): this configuration is MODULE-LEVEL AND NON-REACTIVE.
+// `formatMoney` is a plain function, not a hook, and nothing subscribes to
+// this variable — so calling `setCurrencyConfig` at runtime changes only the
+// amounts formatted *after* the next render that happens to occur for some
+// other reason. It does NOT re-render the app, and half the screen can end
+// up in the old currency.
+//
+// Runtime currency switching is therefore explicitly UNSUPPORTED until a
+// Settings page exists. Making it work means moving this config into React
+// state/context (a `CurrencyProvider` + `useMoneyFormatter()` hook) so that
+// changing it re-renders every consumer — the same shape the app clock uses
+// today (`AppClock`, injected at the root in `main.tsx`). `setCurrencyConfig`
+// is kept only for one-time configuration before the first render (and for
+// tests); it is not a user-facing setting hook.
 let currencyConfig: CurrencyConfig = { locale: 'en-PH', currency: 'PHP' }
 
+/**
+ * Sets the app-wide currency/locale. Intended for one-time setup before the
+ * first render, or for tests. Calling this while the app is running does not
+ * re-render anything — see the note above.
+ */
 export function setCurrencyConfig(config: CurrencyConfig): void {
   currencyConfig = config
 }

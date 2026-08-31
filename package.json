@@ -10,7 +10,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "test:e2e": "playwright test",
     "test": "vitest run",
-    "screenshots": "npm run build && node scripts/capture-screenshots.mjs"
+    "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
+    "test:e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "react": "^19.2.8",

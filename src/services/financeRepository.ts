@@ -4,6 +4,12 @@
 // interface as an injectable `repository` prop (see FinanceProvider.tsx),
 // which is what lets a test swap in its own deterministic repository.
 //
+// Every mutation below is expected to enforce the shared finance invariants
+// in `domain/financeRules.ts` before returning a new state, and to throw a
+// `FinanceValidationError` (leaving the passed-in state untouched) when an
+// invariant would be violated — UI validation is an earlier, friendlier
+// surface for the same rules, never a substitute for them (TR-002).
+//
 // Honest scope: this interface is a synchronous state transformer, not an
 // HTTP-shaped contract — every method takes a `FinanceState` and returns the
 // next one immediately, with no `Promise`, loading state, or error channel.
@@ -38,10 +44,12 @@ export interface FinanceRepository {
    * "Funded savings" model (see `Goal` in `domain/finance.ts`): funding a
    * goal always names a source account, whose balance is reduced by the
    * same amount recorded on the goal — never money created from nowhere.
-   * Throws if the goal doesn't exist, is no longer active, the source
-   * account can't be found, or `amount` would fund the goal past its
-   * `targetAmount` (overfunding is not supported — callers should offer at
-   * most the remaining amount).
+   * Throws a `FinanceValidationError` if the goal doesn't exist, is no
+   * longer active, the source account can't be found, `amount` would fund
+   * the goal past its `targetAmount` (overfunding is not supported), or
+   * `amount` exceeds the source account's balance (asset overdraft is not
+   * supported — see `domain/financeRules.ts`). Callers should offer at most
+   * `maxFundableAmount(state, goalId, sourceAccountId)`.
    */
   addGoalFunds(state: FinanceState, goalId: string, sourceAccountId: string, amount: number): { state: FinanceState; goal: Goal }
 }

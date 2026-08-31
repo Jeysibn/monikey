@@ -24,6 +24,13 @@
   font-size: 12.5px;
   font-weight: 600;
 }
+/* Institution/sync status, credit-card due date + minimum, and the card's
+   limit: essential account metadata, so it holds the 12px floor rather than
+   the old inherited `.faint` sizing (TR-009). */
+.acct-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
 .acct-amt {
   text-align: right;
   flex: none;

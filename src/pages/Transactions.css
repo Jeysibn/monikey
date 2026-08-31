@@ -151,3 +151,11 @@
     display: flex;
   }
 }
+
+/* Transaction source, time, note, and the fee / card-payment reconciliation
+   lines: the detail that makes a row reconcilable, so it holds the 12px
+   essential-text floor (TR-009). */
+.tx-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}

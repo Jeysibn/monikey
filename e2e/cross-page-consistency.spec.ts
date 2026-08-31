@@ -58,13 +58,18 @@ test.describe('Cross-page data consistency', () => {
     await expect(page.getByText(/2 goals completed/)).toBeVisible()
   })
 
-  test('Goals Monthly Contribution matches the sum of visible active auto-save amounts', async ({ page }) => {
+  // TR-004: the wording is "planned", not "auto-save" — no automation moves
+  // this money, so the KPI, the goal cards, and Money Position all say so.
+  test('Goals Planned Monthly Contribution matches the sum of the visible active monthly plans', async ({ page }) => {
     await page.goto('/goals')
+    await expect(page.getByText('Planned Monthly Contribution')).toBeVisible()
     await expect(page.getByText('₱360.00')).toBeVisible()
-    await expect(page.getByText('auto-saved across 3 active goals')).toBeVisible()
-    await expect(page.getByText('Auto-save ₱100/mo')).toBeVisible()
-    await expect(page.getByText('Auto-save ₱60/mo')).toBeVisible()
-    await expect(page.getByText('Auto-save ₱200/mo')).toBeVisible()
+    await expect(page.getByText('planned across 3 active goals')).toBeVisible()
+    await expect(page.getByText('Monthly plan ₱100/mo')).toBeVisible()
+    await expect(page.getByText('Monthly plan ₱60/mo')).toBeVisible()
+    await expect(page.getByText('Monthly plan ₱200/mo')).toBeVisible()
+    // No "auto-save" language survives anywhere on the page.
+    await expect(page.getByText(/auto-save/i)).toHaveCount(0)
   })
 
   test('Average goal progress is computed from active goals only, not inflated by completed ones', async ({ page }) => {

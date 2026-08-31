@@ -68,15 +68,15 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
 
       <div className="kpi-row">
         <Card>
-          <div className="eyebrow">Income · this month</div>
+          <div className="eyebrow">Income · {finance.activePeriodLabel}</div>
           <div className="num kpi-val">{formatMoney(finance.totalIncome)}</div>
         </Card>
         <Card>
-          <div className="eyebrow">Expenses · this month</div>
+          <div className="eyebrow">Expenses · {finance.activePeriodLabel}</div>
           <div className="num kpi-val">{formatMoney(finance.totalExpenses)}</div>
         </Card>
         <Card>
-          <div className="eyebrow">Net Cash Flow · this month</div>
+          <div className="eyebrow">Net Cash Flow · {finance.activePeriodLabel}</div>
           <div className="num kpi-val">{formatMoney(finance.netCashFlow)}</div>
           <div className="faint">income − expenses</div>
         </Card>
@@ -125,15 +125,16 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                 </span>
                 <span role="cell">
                   <div style={{ fontWeight: 600 }}>{t.title}</div>
-                  <div className="faint" style={{ fontSize: 10.5 }}>
+                  <div className="tx-meta">
                     {finance.transactionSourceLabel(t)}
                     {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
                     {t.note ? ` · ${t.note}` : ''}
                   </div>
                   {finance.transferFeeReconciliationLabel(t) && (
-                    <div className="faint" style={{ fontSize: 10.5 }}>
-                      {finance.transferFeeReconciliationLabel(t)}
-                    </div>
+                    <div className="tx-meta">{finance.transferFeeReconciliationLabel(t)}</div>
+                  )}
+                  {finance.cardPaymentReconciliationLabel(t) && (
+                    <div className="tx-meta">{finance.cardPaymentReconciliationLabel(t)}</div>
                   )}
                 </span>
                 <span role="cell" className="tx-col-center">
@@ -180,16 +181,17 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
               <div className="tx-mobile-top">
                 <div>
                   <div style={{ fontWeight: 600 }}>{t.title}</div>
-                  <div className="faint" style={{ fontSize: 11 }}>
+                  <div className="tx-meta">
                     {formatDateLabel(t.date)}
                     {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
                     {' · '}
                     {finance.transactionSourceLabel(t)}
                   </div>
                   {finance.transferFeeReconciliationLabel(t) && (
-                    <div className="faint" style={{ fontSize: 10.5 }}>
-                      {finance.transferFeeReconciliationLabel(t)}
-                    </div>
+                    <div className="tx-meta">{finance.transferFeeReconciliationLabel(t)}</div>
+                  )}
+                  {finance.cardPaymentReconciliationLabel(t) && (
+                    <div className="tx-meta">{finance.cardPaymentReconciliationLabel(t)}</div>
                   )}
                 </div>
                 <span className={`num tx-mobile-amt ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>

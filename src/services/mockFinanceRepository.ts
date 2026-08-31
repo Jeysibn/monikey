@@ -1,14 +1,33 @@
 // The only FinanceRepository implementation today: everything is in-memory
 // and synchronous (no fake network delay — see coding constraints).
 // `FinanceProvider` takes a `FinanceRepository` as an injectable prop and
-// defaults to this one. See `financeRepository.ts` for why a real
-// backend-backed implementation is not a same-shape drop-in — that contract
-// is synchronous and would need to become async first.
+// defaults to one built from the app clock. See `financeRepository.ts` for
+// why a real backend-backed implementation is not a same-shape drop-in —
+// that contract is synchronous and would need to become async first.
+//
+// TR-001: this repository is built around an injected `AppClock`, never a
+// bare `new Date()` or a hardcoded date constant. The clock decides which
+// reporting period a new expense counts toward, what date a goal-funding
+// transfer is stamped with, and what date a goal completes on.
+//
+// TR-002: every mutation runs the shared domain validators in
+// `domain/financeRules.ts` BEFORE building any new state object, so a
+// rejected mutation leaves the caller's state completely untouched —
+// the invariants hold whether or not the calling form validated first.
 
 import type { Account, BudgetCategory, Category, CreditCard, FinanceState, Goal, Transaction } from '../domain/finance'
 import type { FinanceRepository } from './financeRepository'
-import { DEMO_TODAY_ISO, isDateInPeriod, isIsoDateBefore, monthPeriodContaining } from '../utils/date'
-import { formatMoney } from '../utils/currency'
+import type { AppClock } from '../utils/clock'
+import { demoClock } from '../utils/clock'
+import { isDateInPeriod, monthPeriodContaining } from '../utils/date'
+import {
+  validateAddBudgetCategory,
+  validateAddGoalFunds,
+  validateAddManualAccount,
+  validateAddManualCreditCard,
+  validateAddTransaction,
+  validateCreateGoal,
+} from '../domain/financeRules'
 
 let idCounter = 0
 /** Stable, unique-enough ids for a mock/in-memory session (not persisted). */
@@ -34,6 +53,10 @@ const CATEGORIES: Category[] = [
 
 const NEW_CATEGORY_PALETTE = ['var(--cyan)', 'var(--teal)', 'var(--purple)', 'var(--amber)', 'var(--slate-lt-fg)']
 
+// TR-008: seed records use exactly the same storage formats as records the
+// app creates — dates as strict `YYYY-MM-DD`, times as strict 24-hour
+// `HH:mm`, goal target/completed dates and card due dates as real ISO dates
+// rather than presentation strings like `'Mar 2027'` or `'Sep 15'`.
 function initialState(): FinanceState {
   const accounts: Account[] = [
     { id: 'checking', name: 'Checking', institution: 'BPI', type: 'checking', classification: 'asset', balance: 4120, lastFour: '4471', syncStatus: 'Synced today', monthlyChangePct: 1.8 },
@@ -44,20 +67,20 @@ function initialState(): FinanceState {
   ]
 
   const creditCards: CreditCard[] = [
-    { id: 'visa', name: 'Visa Platinum', lastFour: '2290', network: 'visa', balance: 1460, limit: 5000, dueDate: 'Sep 15', minPayment: 75 },
-    { id: 'mastercard', name: 'Mastercard', lastFour: '7734', network: 'mastercard', balance: 610, limit: 2000, dueDate: 'Sep 22', minPayment: 30 },
+    { id: 'visa', name: 'Visa Platinum', lastFour: '2290', network: 'visa', balance: 1460, limit: 5000, dueDate: '2026-09-15', minPayment: 75 },
+    { id: 'mastercard', name: 'Mastercard', lastFour: '7734', network: 'mastercard', balance: 610, limit: 2000, dueDate: '2026-09-22', minPayment: 30 },
   ]
 
   const transactions: Transaction[] = [
-    { id: 'tx1', type: 'expense', title: 'Cafe Amoreza', categoryId: 'food', accountId: 'checking', date: '2026-08-29', time: '9:14 AM', amount: -6.4, source: 'manual', status: 'cleared' },
-    { id: 'tx2', type: 'expense', title: 'Grab Grocery', categoryId: 'shopping', accountId: 'gcash', date: '2026-08-29', time: '8:02 AM', amount: -41.85, source: 'ocr', status: 'cleared' },
-    { id: 'tx3', type: 'expense', title: 'Grab Ride', categoryId: 'transport', accountId: 'visa', date: '2026-08-29', time: '7:48 PM', amount: -8.2, source: 'manual', status: 'cleared' },
-    { id: 'tx4', type: 'income', title: 'Payroll Deposit', categoryId: 'salary', accountId: 'checking', date: '2026-08-28', time: '9:00 AM', amount: 2150, source: 'manual', status: 'cleared' },
-    { id: 'tx5', type: 'expense', title: 'Meralco Bill', categoryId: 'utilities', accountId: 'savings', date: '2026-08-27', time: '6:30 PM', amount: -64.1, source: 'ocr', status: 'cleared' },
+    { id: 'tx1', type: 'expense', title: 'Cafe Amoreza', categoryId: 'food', accountId: 'checking', date: '2026-08-29', time: '09:14', amount: -6.4, source: 'manual', status: 'cleared' },
+    { id: 'tx2', type: 'expense', title: 'Grab Grocery', categoryId: 'shopping', accountId: 'gcash', date: '2026-08-29', time: '08:02', amount: -41.85, source: 'ocr', status: 'cleared' },
+    { id: 'tx3', type: 'expense', title: 'Grab Ride', categoryId: 'transport', accountId: 'visa', date: '2026-08-29', time: '19:48', amount: -8.2, source: 'manual', status: 'cleared' },
+    { id: 'tx4', type: 'income', title: 'Payroll Deposit', categoryId: 'salary', accountId: 'checking', date: '2026-08-28', time: '09:00', amount: 2150, source: 'manual', status: 'cleared' },
+    { id: 'tx5', type: 'expense', title: 'Meralco Bill', categoryId: 'utilities', accountId: 'savings', date: '2026-08-27', time: '18:30', amount: -64.1, source: 'ocr', status: 'cleared' },
     { id: 'tx6', type: 'transfer', title: 'Checking → GCash', fromAccountId: 'checking', toAccountId: 'gcash', date: '2026-08-26', amount: 500, source: 'manual', status: 'cleared', note: 'No budget impact' },
     { id: 'tx7', type: 'expense', title: 'Netflix', categoryId: 'subscriptions', accountId: 'visa', date: '2026-08-25', source: 'recurring', status: 'pending', amount: -15 },
-    { id: 'tx8', type: 'income', title: 'Freelance Payment', categoryId: 'salary', accountId: 'checking', date: '2026-08-24', time: '4:20 PM', amount: 350, source: 'manual', status: 'cleared' },
-    { id: 'tx9', type: 'expense', title: 'Grab Ride', categoryId: 'transport', accountId: 'mastercard', date: '2026-08-23', time: '8:05 AM', amount: -9.1, source: 'manual', status: 'cleared' },
+    { id: 'tx8', type: 'income', title: 'Freelance Payment', categoryId: 'salary', accountId: 'checking', date: '2026-08-24', time: '16:20', amount: 350, source: 'manual', status: 'cleared' },
+    { id: 'tx9', type: 'expense', title: 'Grab Ride', categoryId: 'transport', accountId: 'mastercard', date: '2026-08-23', time: '08:05', amount: -9.1, source: 'manual', status: 'cleared' },
   ]
 
   const budgetCategories: BudgetCategory[] = [
@@ -69,12 +92,16 @@ function initialState(): FinanceState {
     { id: 'debt', allocated: 1800, spent: 1973 },
   ]
 
+  // TR-004: `home` used to hold ₱3,743 against a ₱3,500 target, contradicting
+  // the documented no-overfunding rule the repository enforces for
+  // user-created goals. Seed data now satisfies the same invariant:
+  // `currentAmount <= targetAmount` for every goal.
   const goals: Goal[] = [
-    { id: 'travel', name: 'Travel', targetAmount: 4000, currentAmount: 2125, targetDate: 'Mar 2027', monthlyContribution: 100, requiredContribution: 184, status: 'behind_pace', active: true },
-    { id: 'laptop', name: 'New Laptop', targetAmount: 1300, currentAmount: 1179, targetDate: 'Oct 2026', monthlyContribution: 60, status: 'on_track', active: true },
-    { id: 'car', name: 'Car Down Payment', targetAmount: 5000, currentAmount: 13, targetDate: 'Jun 2027', monthlyContribution: 200, status: 'just_started', active: true },
-    { id: 'home', name: 'Home Fund', targetAmount: 3500, currentAmount: 3743, targetDate: 'Nov 2026', completedDate: 'Jul 2026', status: 'goal_reached', active: false },
-    { id: 'emergency', name: 'Emergency Fund', targetAmount: 3700, currentAmount: 3700, targetDate: 'Dec 2025', completedDate: 'Jan 2026', status: 'completed', active: false },
+    { id: 'travel', name: 'Travel', targetAmount: 4000, currentAmount: 2125, targetDate: '2027-03-01', monthlyContribution: 100, requiredContribution: 184, status: 'behind_pace', active: true },
+    { id: 'laptop', name: 'New Laptop', targetAmount: 1300, currentAmount: 1179, targetDate: '2026-10-01', monthlyContribution: 60, status: 'on_track', active: true },
+    { id: 'car', name: 'Car Down Payment', targetAmount: 5000, currentAmount: 13, targetDate: '2027-06-01', monthlyContribution: 200, status: 'just_started', active: true },
+    { id: 'home', name: 'Home Fund', targetAmount: 3500, currentAmount: 3500, targetDate: '2026-11-01', completedDate: '2026-07-15', status: 'goal_reached', active: false },
+    { id: 'emergency', name: 'Emergency Fund', targetAmount: 3700, currentAmount: 3700, targetDate: '2025-12-01', completedDate: '2026-01-15', status: 'completed', active: false },
   ]
 
   const attentionItems = [
@@ -113,202 +140,182 @@ function initialState(): FinanceState {
   }
 }
 
-export const mockFinanceRepository: FinanceRepository = {
-  getInitialState: initialState,
+/**
+ * Builds an in-memory repository bound to one application clock (TR-001).
+ * Tests inject a `fixedClock(...)` to advance time explicitly; the app uses
+ * the same clock the UI reads its reporting period from, so a saved
+ * transaction and the KPI totals can never disagree about what "today" is.
+ */
+export function createMockFinanceRepository(clock: AppClock = demoClock): FinanceRepository {
+  return {
+    getInitialState: initialState,
 
-  addTransaction(state, input) {
-    const isTransfer = input.type === 'transfer'
-    const signedAmount = isTransfer ? input.amount : input.type === 'income' ? input.amount : -input.amount
+    addTransaction(state, input) {
+      // TR-002: validate first — nothing below runs for a rejected mutation,
+      // so the caller keeps the exact state object it passed in.
+      validateAddTransaction(state, input)
 
-    const transaction: Transaction = {
-      id: nextId('tx'),
-      type: input.type,
-      title: input.title,
-      categoryId: isTransfer ? undefined : input.categoryId,
-      accountId: isTransfer ? undefined : input.accountId,
-      fromAccountId: isTransfer ? input.fromAccountId : undefined,
-      toAccountId: isTransfer ? input.toAccountId : undefined,
-      date: input.date,
-      time: input.time,
-      amount: signedAmount,
-      fee: input.fee && input.fee > 0 ? input.fee : undefined,
-      source: 'manual',
-      status: 'cleared',
-      note: input.note,
-    }
+      const isTransfer = input.type === 'transfer'
+      const signedAmount = isTransfer ? input.amount : input.type === 'income' ? input.amount : -input.amount
 
-    // Keep account/card balances consistent with the ledger.
-    let accounts = state.accounts
-    let creditCards = state.creditCards
-    const applyDelta = (id: string | undefined, delta: number) => {
-      if (!id) return
-      accounts = accounts.map((a) => (a.id === id ? { ...a, balance: a.balance + delta } : a))
-      creditCards = creditCards.map((c) => (c.id === id ? { ...c, balance: c.balance - delta } : c))
-    }
+      const transaction: Transaction = {
+        id: nextId('tx'),
+        type: input.type,
+        title: input.title.trim(),
+        categoryId: isTransfer ? undefined : input.categoryId,
+        accountId: isTransfer ? undefined : input.accountId,
+        fromAccountId: isTransfer ? input.fromAccountId : undefined,
+        toAccountId: isTransfer ? input.toAccountId : undefined,
+        date: input.date,
+        time: input.time || undefined,
+        amount: signedAmount,
+        fee: input.fee && input.fee > 0 ? input.fee : undefined,
+        source: 'manual',
+        status: 'cleared',
+        note: input.note,
+      }
 
-    if (isTransfer) {
-      applyDelta(input.fromAccountId, -input.amount - (input.fee ?? 0))
-      applyDelta(input.toAccountId, input.amount)
-    } else {
-      applyDelta(input.accountId, signedAmount)
-    }
+      // Keep account/card balances consistent with the ledger. A positive
+      // delta credits an asset account and REDUCES a credit card's amount
+      // owed — which is what makes an asset → card transfer a card payment
+      // (TR-003) with ordinary transfer semantics.
+      let accounts = state.accounts
+      let creditCards = state.creditCards
+      const applyDelta = (id: string | undefined, delta: number) => {
+        if (!id) return
+        accounts = accounts.map((a) => (a.id === id ? { ...a, balance: a.balance + delta } : a))
+        creditCards = creditCards.map((c) => (c.id === id ? { ...c, balance: c.balance - delta } : c))
+      }
 
-    // Keep the matching budget category's spend in sync for expenses — but
-    // only when the transaction actually falls inside the active reporting
-    // period. An expense dated outside "this month" is still recorded on
-    // the ledger (it shows up in transaction history) but must not move a
-    // budget figure that's labeled "this month".
-    let budgetCategories = state.budgetCategories
-    const activePeriod = monthPeriodContaining(DEMO_TODAY_ISO)
-    if (input.type === 'expense' && input.categoryId && isDateInPeriod(input.date, activePeriod)) {
-      budgetCategories = budgetCategories.map((c) =>
-        c.id === input.categoryId ? { ...c, spent: c.spent + input.amount } : c,
+      if (isTransfer) {
+        applyDelta(input.fromAccountId, -input.amount - (input.fee ?? 0))
+        applyDelta(input.toAccountId, input.amount)
+      } else {
+        applyDelta(input.accountId, signedAmount)
+      }
+
+      // Keep the matching budget category's spend in sync for expenses — but
+      // only when the transaction actually falls inside the active reporting
+      // period. An expense dated outside the reporting month is still
+      // recorded on the ledger (it shows up in transaction history) but must
+      // not move a budget figure scoped to that month.
+      let budgetCategories = state.budgetCategories
+      const activePeriod = monthPeriodContaining(clock.todayIso())
+      if (input.type === 'expense' && input.categoryId && isDateInPeriod(input.date, activePeriod)) {
+        budgetCategories = budgetCategories.map((c) =>
+          c.id === input.categoryId ? { ...c, spent: c.spent + input.amount } : c,
+        )
+      }
+
+      return {
+        state: { ...state, transactions: [transaction, ...state.transactions], accounts, creditCards, budgetCategories },
+        transaction,
+      }
+    },
+
+    addManualAccount(state, input) {
+      validateAddManualAccount(input)
+      const account: Account = {
+        id: nextId('acct'),
+        name: input.name.trim(),
+        institution: input.institution,
+        type: input.type,
+        classification: 'asset',
+        balance: input.balance,
+        lastFour: input.lastFour,
+        syncStatus: 'Manual · updated by you',
+        manual: true,
+      }
+      return { state: { ...state, accounts: [...state.accounts, account] }, account }
+    },
+
+    addManualCreditCard(state, input) {
+      validateAddManualCreditCard(input, clock.todayIso())
+      const creditCard: CreditCard = {
+        id: nextId('cc'),
+        name: input.name.trim(),
+        lastFour: input.lastFour,
+        network: input.network,
+        balance: input.balance,
+        limit: input.limit,
+        dueDate: input.dueDate,
+        minPayment: input.minPayment,
+        manual: true,
+      }
+      return { state: { ...state, creditCards: [...state.creditCards, creditCard] }, creditCard }
+    },
+
+    addBudgetCategory(state, input) {
+      validateAddBudgetCategory(state, input)
+      const id = nextId('cat')
+      const color = input.color ?? NEW_CATEGORY_PALETTE[state.categories.length % NEW_CATEGORY_PALETTE.length]
+      const category: Category = { id, name: input.name.trim(), color, budgetable: true, transactionKinds: ['expense'] }
+      const budgetCategory: BudgetCategory = { id, allocated: input.allocated, spent: 0 }
+      return {
+        state: {
+          ...state,
+          categories: [...state.categories, category],
+          budgetCategories: [...state.budgetCategories, budgetCategory],
+        },
+        category: budgetCategory,
+      }
+    },
+
+    createGoal(state, input) {
+      validateCreateGoal(input, clock.todayIso())
+      const goal: Goal = {
+        id: nextId('goal'),
+        name: input.name.trim(),
+        targetAmount: input.targetAmount,
+        currentAmount: 0,
+        targetDate: input.targetDate,
+        monthlyContribution: input.monthlyContribution,
+        status: 'just_started',
+        active: true,
+      }
+      return { state: { ...state, goals: [...state.goals, goal] }, goal }
+    },
+
+    addGoalFunds(state, goalId, sourceAccountId, amount) {
+      validateAddGoalFunds(state, goalId, sourceAccountId, amount)
+      const goal = state.goals.find((g) => g.id === goalId)!
+      const today = clock.todayIso()
+
+      const accounts = state.accounts.map((a) => (a.id === sourceAccountId ? { ...a, balance: a.balance - amount } : a))
+
+      const transaction: Transaction = {
+        id: nextId('tx'),
+        type: 'transfer',
+        title: `Goal funding · ${goal.name}`,
+        fromAccountId: sourceAccountId,
+        goalId,
+        date: today,
+        amount,
+        source: 'manual',
+        status: 'cleared',
+        note: 'No budget impact',
+      }
+
+      const newCurrentAmount = goal.currentAmount + amount
+      const reachedTarget = newCurrentAmount >= goal.targetAmount
+      const goals = state.goals.map((g) =>
+        g.id === goalId
+          ? {
+              ...g,
+              currentAmount: newCurrentAmount,
+              ...(reachedTarget ? { status: 'goal_reached' as const, active: false, completedDate: today } : {}),
+            }
+          : g,
       )
-    }
+      const updatedGoal = goals.find((g) => g.id === goalId)!
 
-    return {
-      state: { ...state, transactions: [transaction, ...state.transactions], accounts, creditCards, budgetCategories },
-      transaction,
-    }
-  },
-
-  addManualAccount(state, input) {
-    const account: Account = {
-      id: nextId('acct'),
-      name: input.name,
-      institution: input.institution,
-      type: input.type,
-      classification: 'asset',
-      balance: input.balance,
-      lastFour: input.lastFour,
-      syncStatus: 'Manual · updated by you',
-      manual: true,
-    }
-    return { state: { ...state, accounts: [...state.accounts, account] }, account }
-  },
-
-  addManualCreditCard(state, input) {
-    // Documented rule (SR-007): a credit card's current balance may never
-    // exceed its own credit limit — that combination isn't a valid card
-    // state, so it's rejected here rather than allowed with a warning.
-    if (input.balance > input.limit) {
-      throw new Error(`Balance can’t exceed the ${formatMoney(input.limit, { withCents: false })} credit limit.`)
-    }
-    const creditCard: CreditCard = {
-      id: nextId('cc'),
-      name: input.name,
-      lastFour: input.lastFour,
-      network: input.network,
-      balance: input.balance,
-      limit: input.limit,
-      dueDate: input.dueDate,
-      minPayment: input.minPayment,
-      manual: true,
-    }
-    return { state: { ...state, creditCards: [...state.creditCards, creditCard] }, creditCard }
-  },
-
-  addBudgetCategory(state, input) {
-    // `totalBudgetAllocated` is the fixed monthly envelope, not a running
-    // sum that grows every time a category is created — see SR-002.
-    // Unallocated money is the envelope minus what's already allocated to
-    // existing categories, so a new category can only ever *consume* from
-    // that remainder, never expand the envelope.
-    const currentlyUnallocated = state.totalBudgetAllocated - state.budgetCategories.reduce((s, c) => s + c.allocated, 0)
-    if (!Number.isFinite(input.allocated) || input.allocated <= 0) {
-      throw new Error('Enter a budget amount greater than zero.')
-    }
-    if (input.allocated > currentlyUnallocated) {
-      throw new Error(`Allocation can’t exceed the ${formatMoney(currentlyUnallocated, { withCents: false })} unallocated.`)
-    }
-
-    const id = nextId('cat')
-    const color = input.color ?? NEW_CATEGORY_PALETTE[state.categories.length % NEW_CATEGORY_PALETTE.length]
-    const category: Category = { id, name: input.name, color, budgetable: true, transactionKinds: ['expense'] }
-    const budgetCategory: BudgetCategory = { id, allocated: input.allocated, spent: 0 }
-    return {
-      state: {
-        ...state,
-        categories: [...state.categories, category],
-        budgetCategories: [...state.budgetCategories, budgetCategory],
-      },
-      category: budgetCategory,
-    }
-  },
-
-  createGoal(state, input) {
-    // A goal targeting a date already in the past can never be "on track" —
-    // reject it here so the invariant holds regardless of which form calls
-    // this (SR-007).
-    if (isIsoDateBefore(input.targetDate, DEMO_TODAY_ISO)) {
-      throw new Error('Target date can’t be in the past.')
-    }
-    const goal: Goal = {
-      id: nextId('goal'),
-      name: input.name,
-      targetAmount: input.targetAmount,
-      currentAmount: 0,
-      targetDate: input.targetDate,
-      monthlyContribution: input.monthlyContribution,
-      status: 'just_started',
-      active: true,
-    }
-    return { state: { ...state, goals: [...state.goals, goal] }, goal }
-  },
-
-  addGoalFunds(state, goalId, sourceAccountId, amount) {
-    const goal = state.goals.find((g) => g.id === goalId)
-    if (!goal) {
-      throw new Error('Goal not found.')
-    }
-    if (!goal.active) {
-      throw new Error('This goal is already complete and can’t receive more funds.')
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error('Enter an amount greater than zero.')
-    }
-    const sourceAccount = state.accounts.find((a) => a.id === sourceAccountId && a.classification === 'asset')
-    if (!sourceAccount) {
-      throw new Error('Select an account to fund this goal from.')
-    }
-    const remaining = goal.targetAmount - goal.currentAmount
-    if (amount > remaining) {
-      throw new Error(`Enter at most ${formatMoney(remaining, { withCents: false })} — that’s all this goal needs to reach its target.`)
-    }
-
-    const accounts = state.accounts.map((a) => (a.id === sourceAccountId ? { ...a, balance: a.balance - amount } : a))
-
-    const transaction: Transaction = {
-      id: nextId('tx'),
-      type: 'transfer',
-      title: `Goal funding · ${goal.name}`,
-      fromAccountId: sourceAccountId,
-      goalId,
-      date: DEMO_TODAY_ISO,
-      amount,
-      source: 'manual',
-      status: 'cleared',
-      note: 'No budget impact',
-    }
-
-    const newCurrentAmount = goal.currentAmount + amount
-    const reachedTarget = newCurrentAmount >= goal.targetAmount
-    const goals = state.goals.map((g) =>
-      g.id === goalId
-        ? {
-            ...g,
-            currentAmount: newCurrentAmount,
-            ...(reachedTarget
-              ? { status: 'goal_reached' as const, active: false, completedDate: DEMO_TODAY_ISO }
-              : {}),
-          }
-        : g,
-    )
-    const updatedGoal = goals.find((g) => g.id === goalId)!
-
-    return {
-      state: { ...state, accounts, goals, transactions: [transaction, ...state.transactions] },
-      goal: updatedGoal,
-    }
-  },
+      return {
+        state: { ...state, accounts, goals, transactions: [transaction, ...state.transactions] },
+        goal: updatedGoal,
+      }
+    },
+  }
 }
+
+/** The app's default repository, bound to the demo clock. */
+export const mockFinanceRepository: FinanceRepository = createMockFinanceRepository(demoClock)

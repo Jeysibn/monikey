@@ -135,11 +135,11 @@ export function useInvestments() {
   }, [enrichedHoldings])
 
   const transactions = useMemo(
-    () => [...SEED_TRANSACTIONS, ...loggedTransactions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [loggedTransactions],
+    () => [...(finance.state.investmentActivity?.trades ?? SEED_TRANSACTIONS), ...loggedTransactions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [finance.state.investmentActivity, loggedTransactions],
   )
 
-  const dividends = SEED_DIVIDENDS
+  const dividends = finance.state.investmentActivity?.dividends ?? SEED_DIVIDENDS
   const totalDividends = useMemo(() => dividends.reduce((sum, d) => sum + d.amount, 0), [dividends])
 
   const tickers = useMemo(() => holdings.map((h) => h.ticker), [holdings])

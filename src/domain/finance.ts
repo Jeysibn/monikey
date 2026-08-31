@@ -180,6 +180,10 @@ export interface FinanceState {
   attentionItems: AttentionItem[]
   portfolio: Holding[]
   budgetVsActual: BudgetVsActualPoint[]
+  investmentActivity?: {
+    trades: Array<{ id: string; ticker: string; type: 'buy' | 'sell'; units: number; price: number; amount: number; date: string; note?: string }>
+    dividends: Array<{ id: string; ticker: string; amount: number; date: string }>
+  }
 }
 
 // ---- Mutation inputs -------------------------------------------------

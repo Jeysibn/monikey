@@ -335,11 +335,8 @@ export class LedgerRepository {
         const fromAcc = accountMap.get(fromAccountId)!;
         const toAcc = accountMap.get(toAccountId)!;
 
-        if (fromAcc.classification === 'liability' && fromAcc.accountType === 'credit_card') {
+        if (toAcc.classification === 'liability' && toAcc.accountType === 'credit_card') {
           // Card payment: from asset to card liability
-          if (toAcc.classification !== 'liability' || toAcc.accountType !== 'credit_card') {
-            throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must go to a credit card account.', { field: 'toAccountId' });
-          }
           const cardDetail = toAcc.creditCardDetail;
           if (!cardDetail) throw new AppError('UNKNOWN_ACCOUNT', 'Credit card details not found.', { field: 'toAccountId' });
           const owed = Number(toAcc.currentBalanceMinor);
@@ -347,7 +344,6 @@ export class LedgerRepository {
           if (amountMinor > owed) {
             throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card payment cannot exceed amount owed.', { field: 'amountMinor' });
           }
-          // fromAcc must be asset
           if (fromAcc.classification !== 'asset') {
             throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must come from an asset account.', { field: 'fromAccountId' });
           }

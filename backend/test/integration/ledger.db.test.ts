@@ -52,4 +52,28 @@ describeIfDb('LedgerModule (real PostgreSQL)', () => {
       await prisma.$disconnect()
     }
   })
+
+  it('posts a card payment as a transfer that reduces both balances', async () => {
+    const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
+    const userId = randomUUID()
+    const cashId = randomUUID()
+    const cardId = randomUUID()
+    try {
+      await prisma.user.create({ data: { id: userId, email: `${userId}@payment.test`, passwordHash: 'test', displayName: 'Payment Test' } })
+      await prisma.financialAccount.create({ data: { id: cashId, userId, name: 'Payment cash', accountType: 'checking', classification: 'asset', currentBalanceMinor: 200, openingBalanceMinor: 200 } })
+      await prisma.$transaction(async (tx) => {
+        await tx.financialAccount.create({ data: { id: cardId, userId, name: 'Payment card', accountType: 'credit_card', classification: 'liability', currentBalanceMinor: 100, openingBalanceMinor: 100 } })
+        await tx.creditCardDetail.create({ data: { accountId: cardId, network: 'visa', creditLimitMinor: 500, dueDay: 15 } })
+      })
+      const ledger = new LedgerService(prisma, new LedgerRepository(prisma))
+      const result = await ledger.postTransaction(userId, { type: 'transfer', title: 'Card payment', categoryId: null, goalId: null, fromAccountId: cashId, toAccountId: cardId, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 40, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared', note: null, idempotencyKey: 'card-payment-test' })
+      expect(result.transaction.type).toBe('transfer')
+      expect(result.balanceEffects.map((effect) => effect.role)).toEqual(['card_payment', 'card_payment'])
+      expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: cashId } })).currentBalanceMinor).toBe(160n)
+      expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: cardId } })).currentBalanceMinor).toBe(60n)
+    } finally {
+      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
+      await prisma.$disconnect()
+    }
+  })
 })

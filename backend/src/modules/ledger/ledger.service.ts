@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { LedgerRepository } from './ledger.repository.js';
 import { AppError } from '../../common/errors/appError.js';
 import type { PostTransactionInput, ReverseTransactionInput, TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page } from './ledger.schemas.js';
@@ -9,6 +10,13 @@ export class LedgerService {
   async postTransaction(userId: string, input: PostTransactionInput): Promise<PostTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
       return this.repo.postTransaction(tx as any, userId, input);
+    });
+  }
+
+  async postTransactionWithCallback<T>(userId: string, input: PostTransactionInput, callback: (tx: Prisma.TransactionClient, result: PostTransactionResult) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await this.repo.postTransaction(tx as any, userId, input);
+      return callback(tx, result);
     });
   }
 

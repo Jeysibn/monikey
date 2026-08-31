@@ -76,5 +76,12 @@ services:
       api:
         condition: service_healthy
 
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: [mail]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
 volumes:
   postgres_data:

@@ -7,6 +7,7 @@ import { processDueRecurringItems } from './modules/recurring/recurring.worker.j
 import { enqueueDueBillNotifications, enqueueWeeklySummaryNotifications } from './modules/notifications/outbox.js'
 import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
+import { createQuoteProvider, refreshQuoteSnapshots } from './modules/investments/quotes.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -20,12 +21,17 @@ async function main(): Promise<void> {
   await pingDatabase(prisma)
   const ledger = createLedgerModule(prisma)
   const emailProvider = createEmailProvider(env)
+  const quoteProvider = createQuoteProvider(env)
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
     await enqueueDueBillNotifications(prisma, todayIso)
     if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
     await deliverNotificationOutbox(prisma, emailProvider)
     const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
+    if (env.QUOTE_PROVIDER === 'live') {
+      const refreshed = await refreshQuoteSnapshots(prisma, quoteProvider)
+      if (refreshed > 0) logger.info({ refreshed }, 'refreshed investment quotes')
+    }
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
   }
   await runRecurring()

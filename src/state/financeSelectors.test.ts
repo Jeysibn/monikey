@@ -3,12 +3,15 @@ import type { Account, Category, CreditCard, FinanceState, Goal, Transaction } f
 import {
   activeReportingPeriod,
   budgetDaysRemaining,
+  cardPaymentReconciliationLabel,
+  cardsDueWithinHorizon,
   categoriesForTransactionType,
   expensesToday,
   expensesTrend,
+  expensesTrendRangeLabel,
+  expensesTrendTitle,
   netCashFlow,
   safeToSpendBreakdown,
-  today,
   totalExpenses,
   totalIncome,
   transactionMatchesSearch,
@@ -16,6 +19,16 @@ import {
   transferCount,
   transferFeeReconciliationLabel,
 } from './financeSelectors'
+import { DEMO_TODAY_ISO } from '../utils/clock'
+
+// TR-001: every time-dependent selector takes an explicit `todayIso` (or a
+// `ReportingPeriod` derived from one). These tests pin it to the demo clock
+// rather than the machine's date, so they are timezone- and date-independent.
+const TODAY = DEMO_TODAY_ISO
+const PERIOD = activeReportingPeriod(TODAY)
+function today() {
+  return TODAY
+}
 
 function makeState(transactions: Transaction[]): FinanceState {
   return {
@@ -84,33 +97,32 @@ const transfer: Transaction = {
   status: 'cleared',
 }
 
-describe('activeReportingPeriod / today', () => {
-  it('is the calendar month containing the demo "today"', () => {
-    const period = activeReportingPeriod()
-    expect(period).toEqual({ start: '2026-08-01', end: '2026-09-01' })
-    expect(today()).toBe('2026-08-29')
+describe('activeReportingPeriod', () => {
+  it('is the calendar month containing the injected "today"', () => {
+    expect(activeReportingPeriod(TODAY)).toEqual({ start: '2026-08-01', end: '2026-09-01' })
+    expect(TODAY).toBe('2026-08-29')
   })
 })
 
 describe('period-scoped totals', () => {
   it('only counts income/expenses dated inside the active period', () => {
     const state = makeState([inMonth, inMonthExpense, outOfMonthExpense, outOfMonthIncome, transfer])
-    expect(totalIncome(state)).toBe(1000)
-    expect(totalExpenses(state)).toBe(200)
-    expect(netCashFlow(state)).toBe(800)
+    expect(totalIncome(state, PERIOD)).toBe(1000)
+    expect(totalExpenses(state, PERIOD)).toBe(200)
+    expect(netCashFlow(state, PERIOD)).toBe(800)
   })
 
   it('excludes transfers from income, expenses, and net cash flow regardless of period', () => {
     const state = makeState([transfer])
-    expect(totalIncome(state)).toBe(0)
-    expect(totalExpenses(state)).toBe(0)
-    expect(netCashFlow(state)).toBe(0)
+    expect(totalIncome(state, PERIOD)).toBe(0)
+    expect(totalExpenses(state, PERIOD)).toBe(0)
+    expect(netCashFlow(state, PERIOD)).toBe(0)
   })
 
   it('counts transfers only when they fall inside the active period', () => {
     const outOfMonthTransfer: Transaction = { ...transfer, id: 'transfer-2', date: '2026-01-01' }
     const state = makeState([transfer, outOfMonthTransfer])
-    expect(transferCount(state)).toBe(1)
+    expect(transferCount(state, PERIOD)).toBe(1)
   })
 
   it('accepts an explicit period instead of the default active one', () => {
@@ -124,14 +136,14 @@ describe('period-scoped totals', () => {
     const startOfMonth: Transaction = { ...inMonth, id: 'start', date: '2026-08-01', amount: 10 }
     const startOfNextMonth: Transaction = { ...inMonth, id: 'next', date: '2026-09-01', amount: 20 }
     const state = makeState([startOfMonth, startOfNextMonth])
-    expect(totalIncome(state)).toBe(10)
+    expect(totalIncome(state, PERIOD)).toBe(10)
   })
 })
 
 describe('budgetDaysRemaining', () => {
   it('counts the days left in the active period from the demo "today"', () => {
     // 2026-08-29 -> period end 2026-09-01 => 3 days remaining
-    expect(budgetDaysRemaining()).toBe(3)
+    expect(budgetDaysRemaining(TODAY)).toBe(3)
   })
 })
 
@@ -140,7 +152,7 @@ describe('expensesToday / expensesTrend (SR-004: transaction-derived)', () => {
 
   it('expensesToday sums only expense transactions dated today()', () => {
     const state = makeState([todayExpense, inMonthExpense, inMonth, transfer])
-    expect(expensesToday(state)).toBe(75)
+    expect(expensesToday(state, TODAY)).toBe(75)
   })
 
   it('expensesToday ignores income and transfers dated today, including goal-funding transfers', () => {
@@ -148,16 +160,16 @@ describe('expensesToday / expensesTrend (SR-004: transaction-derived)', () => {
     const transferToday: Transaction = { ...transfer, id: 'transfer-today', date: today() }
     const goalTransferToday: Transaction = { ...transfer, id: 'goal-today', date: today(), goalId: 'travel' }
     const state = makeState([incomeToday, transferToday, goalTransferToday])
-    expect(expensesToday(state)).toBe(0)
+    expect(expensesToday(state, TODAY)).toBe(0)
   })
 
   it('adding a new expense dated today changes the daily bucket for today', () => {
     const before = makeState([inMonthExpense])
-    const dailyBefore = expensesTrend(before, 'daily')
+    const dailyBefore = expensesTrend(before, 'daily', TODAY)
     const todayBucketBefore = dailyBefore[dailyBefore.length - 1].amount
 
     const after = makeState([inMonthExpense, todayExpense])
-    const dailyAfter = expensesTrend(after, 'daily')
+    const dailyAfter = expensesTrend(after, 'daily', TODAY)
     const todayBucketAfter = dailyAfter[dailyAfter.length - 1].amount
 
     expect(todayBucketAfter).toBe(todayBucketBefore + 75)
@@ -165,9 +177,9 @@ describe('expensesToday / expensesTrend (SR-004: transaction-derived)', () => {
 
   it('daily/weekly/monthly views derive from the same transaction data and total consistently for a single-day dataset', () => {
     const state = makeState([todayExpense])
-    const daily = expensesTrend(state, 'daily')
-    const weekly = expensesTrend(state, 'weekly')
-    const monthly = expensesTrend(state, 'monthly')
+    const daily = expensesTrend(state, 'daily', TODAY)
+    const weekly = expensesTrend(state, 'weekly', TODAY)
+    const monthly = expensesTrend(state, 'monthly', TODAY)
 
     expect(daily.reduce((s, d) => s + d.amount, 0)).toBe(75)
     expect(weekly.reduce((s, d) => s + d.amount, 0)).toBe(75)
@@ -180,9 +192,9 @@ describe('expensesToday / expensesTrend (SR-004: transaction-derived)', () => {
   it('excludes transfers (including goal-funding transfers) from every trend view', () => {
     const goalTransferToday: Transaction = { ...transfer, id: 'goal-today', date: today(), goalId: 'travel', amount: 500 }
     const state = makeState([goalTransferToday])
-    expect(expensesTrend(state, 'daily').reduce((s, d) => s + d.amount, 0)).toBe(0)
-    expect(expensesTrend(state, 'weekly').reduce((s, d) => s + d.amount, 0)).toBe(0)
-    expect(expensesTrend(state, 'monthly').reduce((s, d) => s + d.amount, 0)).toBe(0)
+    expect(expensesTrend(state, 'daily', TODAY).reduce((s, d) => s + d.amount, 0)).toBe(0)
+    expect(expensesTrend(state, 'weekly', TODAY).reduce((s, d) => s + d.amount, 0)).toBe(0)
+    expect(expensesTrend(state, 'monthly', TODAY).reduce((s, d) => s + d.amount, 0)).toBe(0)
   })
 })
 
@@ -259,7 +271,7 @@ describe('safeToSpendBreakdown (SR-008)', () => {
   }
 
   it('reconciles exactly: safeToSpend = availableCash - upcomingCreditMinimums - plannedGoalContributions', () => {
-    const breakdown = safeToSpendBreakdown(makeMoneyState())
+    const breakdown = safeToSpendBreakdown(makeMoneyState(), TODAY)
     expect(breakdown.availableCash).toBe(10_000)
     expect(breakdown.upcomingCreditMinimums).toBe(300)
     expect(breakdown.plannedGoalContributions).toBe(500)
@@ -268,7 +280,7 @@ describe('safeToSpendBreakdown (SR-008)', () => {
   })
 
   it('ignores an inactive/completed goal’s monthlyContribution (SR-003 alignment)', () => {
-    const breakdown = safeToSpendBreakdown(makeMoneyState())
+    const breakdown = safeToSpendBreakdown(makeMoneyState(), TODAY)
     // Only the active goal's 500 is counted, not the completed goal's 999.
     expect(breakdown.plannedGoalContributions).toBe(500)
   })
@@ -282,15 +294,13 @@ describe('safeToSpendBreakdown (SR-008)', () => {
       accounts: [{ ...asset, balance: 9500 }], // as if 500 was just moved out
       goals: [{ ...activeGoal, currentAmount: 5500 }, completedGoal],
     })
-    const breakdown = safeToSpendBreakdown(fundedState)
+    const breakdown = safeToSpendBreakdown(fundedState, TODAY)
     expect(breakdown.availableCash).toBe(9500)
     expect(breakdown.safeToSpend).toBe(9500 - 300 - 500)
   })
 
   it('floors at zero rather than going negative', () => {
-    const breakdown = safeToSpendBreakdown(
-      makeMoneyState({ accounts: [{ ...asset, balance: 100 }] }),
-    )
+    const breakdown = safeToSpendBreakdown(makeMoneyState({ accounts: [{ ...asset, balance: 100 }] }), TODAY)
     expect(breakdown.safeToSpend).toBe(0)
   })
 })
@@ -395,5 +405,141 @@ describe('transactionMatchesSearch (SR-010)', () => {
 
   it('matches everything for an empty query', () => {
     expect(transactionMatchesSearch(makeSearchState(), tx, '')).toBe(true)
+  })
+})
+
+// TR-005: a chart title must describe exactly the window its buckets cover.
+describe('expense chart windows and titles (TR-005)', () => {
+  it('titles name the real window, not a calendar period the buckets do not cover', () => {
+    expect(expensesTrendTitle('daily')).toBe('Last 7 days')
+    expect(expensesTrendTitle('weekly')).toBe('Last 4 weeks')
+    expect(expensesTrendTitle('monthly')).toBe('Last 6 months')
+  })
+
+  it('daily buckets are the 7 calendar days ending today', () => {
+    const points = expensesTrend(makeState([]), 'daily', '2026-08-29')
+    expect(points).toHaveLength(7)
+    expect(points[0].startIso).toBe('2026-08-23')
+    expect(points[0].endIso).toBe('2026-08-23')
+    expect(points[6].startIso).toBe('2026-08-29')
+    expect(expensesTrendRangeLabel(points)).toBe('Aug 23 – Aug 29')
+  })
+
+  it('weekly buckets are four rolling 7-day windows — spanning a month boundary, not a calendar month', () => {
+    const points = expensesTrend(makeState([]), 'weekly', '2026-09-03')
+    expect(points).toHaveLength(4)
+    expect(points[0].startIso).toBe('2026-08-07')
+    expect(points[3].endIso).toBe('2026-09-03')
+    // The oldest bucket starts in August even though "today" is September:
+    // the title says "Last 4 weeks", and that is exactly what it covers.
+    expect(expensesTrendRangeLabel(points)).toBe('Aug 7 – Sep 3')
+    // Each bucket's own label is the exact window it sums — asserting the
+    // literal strings, not merely that a dash is present somewhere.
+    expect(points.map((p) => p.rangeLabel)).toEqual([
+      'Aug 7 – Aug 13',
+      'Aug 14 – Aug 20',
+      'Aug 21 – Aug 27',
+      'Aug 28 – Sep 3',
+    ])
+    expect(points.map((p) => p.day)).toEqual(['W1', 'W2', 'W3', 'W4'])
+  })
+
+  it('monthly buckets are the six calendar months ending with today’s month, across a year boundary', () => {
+    const points = expensesTrend(makeState([]), 'monthly', '2027-02-10')
+    expect(points).toHaveLength(6)
+    expect(points.map((p) => p.day)).toEqual(['SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB'])
+    expect(points[0].startIso).toBe('2026-09-01')
+    expect(points[0].endIso).toBe('2026-09-30')
+    expect(points[5].startIso).toBe('2027-02-01')
+    expect(points[5].endIso).toBe('2027-02-28')
+    expect(expensesTrendRangeLabel(points)).toBe('Sep 1 – Feb 28')
+  })
+
+  it('sums each expense into the bucket whose declared range contains it, at a month boundary', () => {
+    const lastDayOfAugust: Transaction = { ...inMonthExpense, id: 'aug-31', date: '2026-08-31', amount: -10 }
+    const firstDayOfSeptember: Transaction = { ...inMonthExpense, id: 'sep-01', date: '2026-09-01', amount: -20 }
+    const state = makeState([lastDayOfAugust, firstDayOfSeptember])
+    const points = expensesTrend(state, 'monthly', '2026-09-01')
+
+    const august = points.find((p) => p.day === 'AUG')!
+    const september = points.find((p) => p.day === 'SEP')!
+    expect(august.amount).toBe(10)
+    expect(september.amount).toBe(20)
+    // Every bucket's own range brackets the transactions it counted.
+    expect(august.startIso <= '2026-08-31' && '2026-08-31' <= august.endIso).toBe(true)
+    expect(september.startIso <= '2026-09-01' && '2026-09-01' <= september.endIso).toBe(true)
+  })
+
+  it('handles a leap-February bucket range correctly', () => {
+    const points = expensesTrend(makeState([]), 'monthly', '2028-02-15')
+    expect(points[5].endIso).toBe('2028-02-29')
+  })
+})
+
+// TR-003: "due soon" is a documented 30-day filter, not a figure of speech.
+describe('Money Position commitment horizon (TR-003)', () => {
+  const near: CreditCard = { id: 'near', name: 'Near', lastFour: '1111', network: 'visa', balance: 100, limit: 1000, dueDate: '2026-09-10', minPayment: 50 }
+  const edge: CreditCard = { id: 'edge', name: 'Edge', lastFour: '2222', network: 'visa', balance: 100, limit: 1000, dueDate: '2026-09-28', minPayment: 25 }
+  const far: CreditCard = { id: 'far', name: 'Far', lastFour: '3333', network: 'visa', balance: 100, limit: 1000, dueDate: '2026-12-01', minPayment: 500 }
+  const past: CreditCard = { id: 'past', name: 'Past', lastFour: '4444', network: 'visa', balance: 100, limit: 1000, dueDate: '2026-08-01', minPayment: 700 }
+
+  function horizonState(): FinanceState {
+    return { ...makeState([]), creditCards: [near, edge, far, past] }
+  }
+
+  it('counts only minimums due within the next 30 days, inclusive of today and the last day', () => {
+    // Horizon from 2026-08-29 runs through 2026-09-28.
+    const cards = cardsDueWithinHorizon(horizonState(), TODAY)
+    expect(cards.map((c) => c.id)).toEqual(['near', 'edge'])
+  })
+
+  it('subtracts exactly those minimums in the safe-to-spend breakdown', () => {
+    const breakdown = safeToSpendBreakdown(horizonState(), TODAY)
+    expect(breakdown.upcomingCreditMinimums).toBe(75)
+    expect(breakdown.cardsDueCount).toBe(2)
+  })
+
+  it('ignores a card whose stored due date is not a real date', () => {
+    const broken: CreditCard = { ...far, id: 'broken', dueDate: 'Not set', minPayment: 999 }
+    const state: FinanceState = { ...makeState([]), creditCards: [broken] }
+    expect(cardsDueWithinHorizon(state, TODAY)).toHaveLength(0)
+    expect(safeToSpendBreakdown(state, TODAY).upcomingCreditMinimums).toBe(0)
+  })
+})
+
+describe('cardPaymentReconciliationLabel (TR-003)', () => {
+  function cardState(): FinanceState {
+    return {
+      ...makeState([]),
+      accounts: [{ id: 'checking', name: 'Checking', type: 'checking', classification: 'asset', balance: 0, syncStatus: 'x' }] as Account[],
+      creditCards: [
+        { id: 'visa', name: 'Visa Platinum', lastFour: '2290', network: 'visa', balance: 1460, limit: 5000, dueDate: '2026-09-15', minPayment: 75 },
+      ],
+    }
+  }
+
+  const payment: Transaction = {
+    id: 'pay',
+    type: 'transfer',
+    title: 'Card payment · Checking → Visa Platinum ••2290',
+    fromAccountId: 'checking',
+    toAccountId: 'visa',
+    date: '2026-08-29',
+    amount: 500,
+    source: 'manual',
+    status: 'cleared',
+  }
+
+  it('explains a card payment as a transfer that reduced the amount owed, not an expense', () => {
+    const label = cardPaymentReconciliationLabel(cardState(), payment)
+    expect(label).toContain('Credit card payment')
+    expect(label).toContain('₱500.00')
+    expect(label).toContain('Visa Platinum')
+    expect(label).toContain('not an expense')
+  })
+
+  it('returns undefined for an account-to-account transfer and for a goal-funding transfer', () => {
+    expect(cardPaymentReconciliationLabel(cardState(), { ...payment, toAccountId: 'checking' })).toBeUndefined()
+    expect(cardPaymentReconciliationLabel(cardState(), { ...payment, goalId: 'travel' })).toBeUndefined()
   })
 })

@@ -247,3 +247,12 @@ button {
   justify-content: flex-end;
   gap: 8px;
 }
+/* Explanatory help inside a local form (why a card needs a due date, how
+   much of a goal is fundable). It carries meaning, so it holds the 12px
+   essential-text floor (TR-009). */
+.form-help {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-faint);
+  margin: 0;
+}

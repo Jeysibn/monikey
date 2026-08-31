@@ -1,140 +1,126 @@
-import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type {
   AddBudgetCategoryInput,
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
   CreateGoalInput,
-  FinanceState,
 } from '../domain/finance'
 import type { FinanceRepository } from '../services/financeRepository'
-import { mockFinanceRepository } from '../services/mockFinanceRepository'
+import { createMockFinanceRepository } from '../services/mockFinanceRepository'
+import type { AppClock } from '../utils/clock'
+import { demoClock } from '../utils/clock'
+import { createFinanceStore } from './financeStore'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
-
-// The reducer here is intentionally trivial and cannot throw: it only ever
-// installs a next `FinanceState` that a `useCallback` below has *already*
-// computed by calling the repository. This is what fixes two problems at
-// once:
-//
-// 1. Stale closures / lost mutations: each `useCallback` reads the latest
-//    state from `stateRef` (updated synchronously the instant a mutation
-//    succeeds), not from the `state` value closed over at render time. So
-//    two mutations fired back-to-back before any re-render each still see
-//    the *result* of the previous one, not the same stale snapshot.
-// 2. Catchable validation errors: because the repository call happens
-//    directly inside the `useCallback` — on the caller's own synchronous
-//    call stack — a validation throw (e.g. `addBudgetCategory` rejecting an
-//    over-allocation) propagates as a normal exception straight back to
-//    whatever `try/catch` in a page component invoked it. Nothing routes it
-//    through React's dispatch machinery, where a thrown reducer would
-//    surface as an uncaught `pageerror` and unmount the whole tree instead.
-type Action = { type: 'SET_STATE'; state: FinanceState }
-
-/** Exported for the regression test below — trivial and pure, no repository calls, cannot throw. */
-export function createReducer() {
-  return function reducer(state: FinanceState, action: Action): FinanceState {
-    switch (action.type) {
-      case 'SET_STATE':
-        return action.state
-      default:
-        return state
-    }
-  }
-}
 
 export interface FinanceProviderProps {
   children: ReactNode
   /**
-   * The data layer to run mutations against. Defaults to the in-memory
-   * `mockFinanceRepository`. Tests (or a future real backend adapter — see
-   * `financeRepository.ts` for the honest scope of that seam today) can pass
-   * their own `FinanceRepository` to get deterministic, isolated state.
+   * The data layer to run mutations against. Defaults to an in-memory mock
+   * repository bound to `clock`. Tests (or a future real backend adapter —
+   * see `financeRepository.ts` for the honest scope of that seam today) can
+   * pass their own `FinanceRepository` to get deterministic, isolated state.
    */
   repository?: FinanceRepository
+  /**
+   * The one application clock (TR-001). Everything time-dependent in the app
+   * — the active reporting period, the Add Transaction form's default date,
+   * trend buckets, budget days remaining, goal target validation, and the
+   * dates stamped on goal-funding/completion — resolves through this.
+   * Defaults to the fixed demo clock; tests inject `fixedClock('…')` to
+   * freeze or advance time.
+   */
+  clock?: AppClock
 }
 
-export function FinanceProvider({ children, repository = mockFinanceRepository }: FinanceProviderProps) {
-  const reducer = useMemo(() => createReducer(), [])
-  const [state, dispatch] = useReducer(reducer, undefined, repository.getInitialState)
+/**
+ * TR-006: React-safe state wiring. The authoritative finance state lives in
+ * an external store (`financeStore.ts`) read through `useSyncExternalStore`
+ * — no ref is written or read during render to keep mutations fresh, and no
+ * non-component value is exported from this module.
+ */
+export function FinanceProvider({ children, clock = demoClock, repository }: FinanceProviderProps) {
+  // Falling back to a mock built from THIS provider's clock keeps the one
+  // clock rule intact even when no repository is injected.
+  const [defaultRepository] = useState(() => createMockFinanceRepository(clock))
+  const activeRepository = repository ?? defaultRepository
 
-  // Always the latest state, updated synchronously the moment a mutation
-  // succeeds — never stale across back-to-back calls made before React has
-  // re-rendered. Kept in sync with `state` on every render too, so it never
-  // drifts if `state` ever changes via some path other than these mutations.
-  const stateRef = useRef(state)
-  if (stateRef.current !== state) {
-    stateRef.current = state
-  }
+  // `useState`'s initializer creates one store per provider instance without
+  // touching a ref during render. Seeding it is pure (it only reads
+  // `getInitialState()`), so React Strict Mode's double-invoke simply
+  // discards one unused store.
+  const [store] = useState(() => createFinanceStore(activeRepository.getInitialState()))
+  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState)
 
   const addTransaction = useCallback(
-    (input: AddTransactionInput) => {
-      const { state: next, transaction } = repository.addTransaction(stateRef.current, input)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return transaction
-    },
-    [repository],
+    (input: AddTransactionInput) =>
+      store.run((s) => {
+        const { state: next, transaction } = activeRepository.addTransaction(s, input)
+        return { state: next, result: transaction }
+      }),
+    [store, activeRepository],
   )
 
   const addManualAccount = useCallback(
-    (input: AddManualAccountInput) => {
-      const { state: next, account } = repository.addManualAccount(stateRef.current, input)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return account
-    },
-    [repository],
+    (input: AddManualAccountInput) =>
+      store.run((s) => {
+        const { state: next, account } = activeRepository.addManualAccount(s, input)
+        return { state: next, result: account }
+      }),
+    [store, activeRepository],
   )
 
   const addManualCreditCard = useCallback(
-    (input: AddManualCreditCardInput) => {
-      const { state: next, creditCard } = repository.addManualCreditCard(stateRef.current, input)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return creditCard
-    },
-    [repository],
+    (input: AddManualCreditCardInput) =>
+      store.run((s) => {
+        const { state: next, creditCard } = activeRepository.addManualCreditCard(s, input)
+        return { state: next, result: creditCard }
+      }),
+    [store, activeRepository],
   )
 
   const addBudgetCategory = useCallback(
-    (input: AddBudgetCategoryInput) => {
-      const { state: next, category } = repository.addBudgetCategory(stateRef.current, input)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return category
-    },
-    [repository],
+    (input: AddBudgetCategoryInput) =>
+      store.run((s) => {
+        const { state: next, category } = activeRepository.addBudgetCategory(s, input)
+        return { state: next, result: category }
+      }),
+    [store, activeRepository],
   )
 
   const createGoal = useCallback(
-    (input: CreateGoalInput) => {
-      const { state: next, goal } = repository.createGoal(stateRef.current, input)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return goal
-    },
-    [repository],
+    (input: CreateGoalInput) =>
+      store.run((s) => {
+        const { state: next, goal } = activeRepository.createGoal(s, input)
+        return { state: next, result: goal }
+      }),
+    [store, activeRepository],
   )
 
   const addGoalFunds = useCallback(
-    (goalId: string, sourceAccountId: string, amount: number) => {
-      const { state: next, goal } = repository.addGoalFunds(stateRef.current, goalId, sourceAccountId, amount)
-      stateRef.current = next
-      dispatch({ type: 'SET_STATE', state: next })
-      return goal
-    },
-    [repository],
+    (goalId: string, sourceAccountId: string, amount: number) =>
+      store.run((s) => {
+        const { state: next, goal } = activeRepository.addGoalFunds(s, goalId, sourceAccountId, amount)
+        return { state: next, result: goal }
+      }),
+    [store, activeRepository],
   )
 
-  const value: FinanceContextValue = {
-    state,
-    addTransaction,
-    addManualAccount,
-    addManualCreditCard,
-    addBudgetCategory,
-    createGoal,
-    addGoalFunds,
-  }
+  // Memoized so consumers don't re-render on unrelated parent renders — the
+  // value changes only when the finance state or a mutation identity does.
+  const value = useMemo<FinanceContextValue>(
+    () => ({
+      state,
+      todayIso: clock.todayIso(),
+      addTransaction,
+      addManualAccount,
+      addManualCreditCard,
+      addBudgetCategory,
+      createGoal,
+      addGoalFunds,
+    }),
+    [state, clock, addTransaction, addManualAccount, addManualCreditCard, addBudgetCategory, createGoal, addGoalFunds],
+  )
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>
 }

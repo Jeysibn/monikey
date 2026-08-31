@@ -121,3 +121,16 @@
     text-align: left;
   }
 }
+
+/* Period caption, per-category spent/allocated figures, and the forecast
+   line: all essential budget information, raised to the 12px floor from
+   9.5–10.5px (TR-009). */
+.budget-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.budget-forecast {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}

@@ -15,12 +15,23 @@ import './MoneyPosition.css'
  */
 export function MoneyPosition() {
   const finance = useFinance()
-  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend } = finance.safeToSpendBreakdown
+  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount } =
+    finance.safeToSpendBreakdown
 
   const steps = [
     { label: 'Available cash', value: availableCash, hint: `${finance.state.accounts.length} cash sources` },
-    { label: 'Upcoming commitments', value: upcomingCreditMinimums, hint: 'Credit card minimum payments due soon' },
-    { label: 'Planned goal contributions', value: plannedGoalContributions, hint: 'This month’s pledged pace across active goals, not yet moved' },
+    {
+      label: 'Upcoming commitments',
+      value: upcomingCreditMinimums,
+      // TR-003: "due soon" is a real, documented date filter — the next 30
+      // days — not a figure of speech.
+      hint: `Minimum payments on ${cardsDueCount} card${cardsDueCount === 1 ? '' : 's'} due in the next 30 days`,
+    },
+    {
+      label: 'Planned goal contributions',
+      value: plannedGoalContributions,
+      hint: `Your planned pace for ${finance.activePeriodLabel} across active goals — nothing is moved automatically`,
+    },
     { label: 'Estimated safe to spend', value: safeToSpend, hint: 'What’s left after known commitments', emphasis: true },
   ]
 
@@ -45,13 +56,14 @@ export function MoneyPosition() {
       </div>
       <p className="money-position-summary faint">
         You have {formatMoney(availableCash, { withCents: false })} in cash. After{' '}
-        {formatMoney(upcomingCreditMinimums, { withCents: false })} in upcoming card payments and{' '}
-        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals this month (not yet moved out of your accounts), you have an{' '}
-        <strong>estimated {formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
+        {formatMoney(upcomingCreditMinimums, { withCents: false })} in card minimums due within 30 days and{' '}
+        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals in {finance.activePeriodLabel} (not yet moved out
+        of your accounts), you have an <strong>estimated {formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
       </p>
       <p className="money-position-scope faint">
-        Included: cash account balances, credit card minimum payments, and this month’s planned goal contributions. Excluded: recurring
-        bills and subscriptions — Monikey doesn’t track those yet, so this estimate may be higher than what’s truly free to spend.
+        Included: cash account balances, credit card minimum payments due in the next 30 days, and {finance.activePeriodLabel}’s planned
+        goal contributions. Excluded: recurring bills and subscriptions — Monikey doesn’t track those yet, so this estimate may be higher
+        than what’s truly free to spend.
       </p>
     </section>
   )

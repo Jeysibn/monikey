@@ -1,11 +1,16 @@
-import { useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
+import { useFieldErrors } from '../hooks/useFieldErrors'
 import { formatMoney } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
+import { FinanceValidationError } from '../domain/financeRules'
 import './Budget.css'
+
+const CATEGORY_FIELDS = ['name', 'allocated'] as const
+type CategoryField = (typeof CATEGORY_FIELDS)[number]
 
 export function Budget() {
   const finance = useFinance()
@@ -13,9 +18,7 @@ export function Budget() {
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [allocated, setAllocated] = useState('')
-  const [error, setError] = useState('')
-  const nameId = useId()
-  const formRef = useRef<HTMLFormElement>(null)
+  const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
 
   const overNames = budgetCategories
     .filter((c) => finance.budgetStatus(c.allocated, c.spent) === 'over_budget')
@@ -26,34 +29,35 @@ export function Budget() {
     e.preventDefault()
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('Category name is required.')
+      fail({ name: 'Category name is required.' })
       return
     }
     if (!allocated.trim()) {
-      setError('Enter a budget amount greater than zero.')
+      fail({ allocated: 'Enter a budget amount greater than zero.' })
       return
     }
     const result = parseMoneyInput(allocated)
     if (!result.ok) {
-      setError(result.error)
+      fail({ allocated: result.error })
       return
     }
     if (result.value <= 0) {
-      setError('Enter a budget amount greater than zero.')
+      fail({ allocated: 'Enter a budget amount greater than zero.' })
       return
     }
     // The unallocated-funds and envelope-size rules live in the repository
-    // (see SR-002) so this form doesn't duplicate financial logic — it just
-    // surfaces whatever the repository rejects as an inline error.
+    // (see SR-002/TR-002) so this form doesn't duplicate financial logic —
+    // it just surfaces whatever the repository rejects on the field at fault.
     try {
       finance.addBudgetCategory({ name: trimmedName, allocated: result.value })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add category.')
+      const at = err instanceof FinanceValidationError && err.field ? (err.field as CategoryField) : 'allocated'
+      fail({ [at]: err instanceof Error ? err.message : 'Could not add category.' })
       return
     }
     setName('')
     setAllocated('')
-    setError('')
+    clear()
     setFormOpen(false)
   }
 
@@ -67,7 +71,7 @@ export function Budget() {
         <Card>
           <div className="eyebrow">Total Budget</div>
           <div className="num kpi-val">{formatMoney(totalBudgetAllocated, { withCents: false })}</div>
-          <div className="faint">This month</div>
+          <div className="budget-meta">{finance.activePeriodLabel}</div>
         </Card>
         <Card>
           <div className="eyebrow">Spent So Far</div>
@@ -96,19 +100,22 @@ export function Budget() {
           </div>
 
           {formOpen && (
-            <form ref={formRef} className="new-category-form" onSubmit={handleSubmit}>
+            <form className="new-category-form" onSubmit={handleSubmit} noValidate>
               <label className="new-category-field">
-                <span className="tx-label" id={nameId}>
-                  Category name
-                </span>
+                <span className="tx-label">Category name</span>
                 <input
                   type="text"
                   className="tx-input"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Entertainment"
-                  aria-labelledby={nameId}
+                  aria-label="Category name"
+                  {...field('name', (e) => setName(e.target.value))}
                 />
+                {errors.name && (
+                  <p className="tx-error" role="alert" id={errorId('name')}>
+                    {errors.name}
+                  </p>
+                )}
               </label>
               <label className="new-category-field">
                 <span className="tx-label">Monthly budget</span>
@@ -117,15 +124,16 @@ export function Budget() {
                   inputMode="decimal"
                   className="tx-input"
                   value={allocated}
-                  onChange={(e) => setAllocated(e.target.value)}
                   placeholder="0.00"
+                  aria-label="Monthly budget"
+                  {...field('allocated', (e) => setAllocated(e.target.value))}
                 />
+                {errors.allocated && (
+                  <p className="tx-error" role="alert" id={errorId('allocated')}>
+                    {errors.allocated}
+                  </p>
+                )}
               </label>
-              {error && (
-                <p className="tx-error" role="alert">
-                  {error}
-                </p>
-              )}
               <div className="new-category-actions">
                 <button type="button" className="btn btn--ghost" onClick={() => setFormOpen(false)}>
                   Cancel
@@ -151,7 +159,7 @@ export function Budget() {
                 <div className="budget-row-mid">
                   <div className="budget-row-top">
                     <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
-                    <span className="faint" style={{ fontSize: 10.5 }}>
+                    <span className="budget-meta">
                       {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
                     </span>
                   </div>
@@ -162,7 +170,7 @@ export function Budget() {
                     valueText={valueText}
                   />
                   {c.forecast && (
-                    <div className="faint" style={{ fontSize: 9.5, marginTop: 3 }}>
+                    <div className="budget-forecast">
                       Forecast {formatMoney(c.forecast, { withCents: false })} · projected{' '}
                       {formatMoney(Math.abs(c.forecast - c.allocated), { withCents: false })}{' '}
                       {c.forecast > c.allocated ? 'over' : 'under'}
@@ -209,9 +217,7 @@ export function Budget() {
           <Card>
             <div className="section-head">
               <span className="card-title-text">Budget vs Actual</span>
-              <span className="faint" style={{ fontSize: 10.5 }}>
-                Last 6 months
-              </span>
+              <span className="budget-meta">Last 6 months</span>
             </div>
             <div className="bva-legend">
               <span className="bva-legend-item">

@@ -1,8 +1,11 @@
 import { useId, useState } from 'react'
 import { Card } from '../components/Card'
 import { useFinance } from '../hooks/useFinance'
+import { useFieldErrors } from '../hooks/useFieldErrors'
 import { formatMoney } from '../utils/currency'
+import { formatDueDateLabel } from '../utils/date'
 import { parseMoneyInput } from '../utils/money'
+import { FinanceValidationError } from '../domain/financeRules'
 import type { AccountType } from '../domain/finance'
 import './Accounts.css'
 
@@ -20,45 +23,61 @@ const SECTION_TYPE_LABELS: Record<Exclude<AccountType, 'credit_card'>, string> =
   cash: 'Cash',
 }
 
+const ACCOUNT_FIELDS = ['name', 'type', 'balance'] as const
+type AccountField = (typeof ACCOUNT_FIELDS)[number]
+
 function AddAccountForm({ section, onClose }: { section: AccountSection; onClose: () => void }) {
   const finance = useFinance()
   const [name, setName] = useState('')
   const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(SECTION_TYPES[section][0])
   const [balance, setBalance] = useState('')
-  const [error, setError] = useState('')
+  const { errors, field, errorId, fail } = useFieldErrors<AccountField>(ACCOUNT_FIELDS)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
-      setError('Account name is required.')
+      fail({ name: 'Account name is required.' })
       return
     }
     if (!balance.trim()) {
-      setError('Enter a starting balance of zero or more.')
+      fail({ balance: 'Enter a starting balance of zero or more.' })
       return
     }
     const result = parseMoneyInput(balance)
     if (!result.ok) {
-      setError(result.error)
+      fail({ balance: result.error })
       return
     }
     try {
       finance.addManualAccount({ name: name.trim(), type, balance: result.value })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add account.')
+      const at = err instanceof FinanceValidationError && err.field ? (err.field as AccountField) : 'name'
+      fail({ [at]: err instanceof Error ? err.message : 'Could not add account.' })
     }
   }
 
   return (
-    <form className="new-category-form" onSubmit={handleSubmit}>
+    <form className="new-category-form" onSubmit={handleSubmit} noValidate>
       <label className="new-category-field">
         <span className="tx-label">Account name</span>
-        <input type="text" className="tx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. PayMaya" autoFocus />
+        <input
+          type="text"
+          className="tx-input"
+          value={name}
+          placeholder="e.g. PayMaya"
+          autoFocus
+          {...field('name', (e) => setName(e.target.value))}
+        />
+        {errors.name && (
+          <p className="tx-error" role="alert" id={errorId('name')}>
+            {errors.name}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Type</span>
-        <select className="tx-input" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+        <select className="tx-input" value={type} {...field('type', (e) => setType(e.target.value as typeof type))}>
           {SECTION_TYPES[section].map((t) => (
             <option key={t} value={t}>
               {SECTION_TYPE_LABELS[t]}
@@ -68,13 +87,20 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
       </label>
       <label className="new-category-field">
         <span className="tx-label">Starting balance</span>
-        <input type="text" inputMode="decimal" className="tx-input" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" />
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={balance}
+          placeholder="0.00"
+          {...field('balance', (e) => setBalance(e.target.value))}
+        />
+        {errors.balance && (
+          <p className="tx-error" role="alert" id={errorId('balance')}>
+            {errors.balance}
+          </p>
+        )}
       </label>
-      {error && (
-        <p className="tx-error" role="alert">
-          {error}
-        </p>
-      )}
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
@@ -87,6 +113,9 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
   )
 }
 
+const CARD_FIELDS = ['name', 'lastFour', 'network', 'limit', 'balance', 'dueDate', 'minPayment'] as const
+type CardField = (typeof CARD_FIELDS)[number]
+
 function AddCardForm({ onClose }: { onClose: () => void }) {
   const finance = useFinance()
   const [name, setName] = useState('')
@@ -94,64 +123,87 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
   const [network, setNetwork] = useState<'visa' | 'mastercard'>('visa')
   const [limit, setLimit] = useState('')
   const [balance, setBalance] = useState('')
-  const [error, setError] = useState('')
+  // TR-003: a card carries a real due date and minimum payment from the
+  // moment it is created, so it can contribute to Money Position's upcoming
+  // commitments instead of being stored as `dueDate: 'Not set'`/`minPayment: 0`.
+  const [dueDate, setDueDate] = useState('')
+  const [minPayment, setMinPayment] = useState('')
+  const { errors, field, errorId, fail } = useFieldErrors<CardField>(CARD_FIELDS)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
-      setError('Card name is required.')
+      fail({ name: 'Card name is required.' })
       return
     }
     if (!/^\d{4}$/.test(lastFour)) {
-      setError('Enter the last 4 digits of the card.')
+      fail({ lastFour: 'Enter the last 4 digits of the card.' })
       return
     }
     if (!limit.trim()) {
-      setError('Enter a credit limit greater than zero.')
+      fail({ limit: 'Enter a credit limit greater than zero.' })
       return
     }
     const limitResult = parseMoneyInput(limit)
     if (!limitResult.ok) {
-      setError(limitResult.error)
+      fail({ limit: limitResult.error })
       return
     }
     if (limitResult.value <= 0) {
-      setError('Enter a credit limit greater than zero.')
+      fail({ limit: 'Enter a credit limit greater than zero.' })
       return
     }
     const balanceResult = balance.trim() ? parseMoneyInput(balance) : { ok: true as const, value: 0 }
     if (!balanceResult.ok) {
-      setError(balanceResult.error)
+      fail({ balance: balanceResult.error })
       return
     }
-    // Documented rule (SR-007): a card's balance may not exceed its own
-    // limit — the repository also enforces this, this is just an earlier,
-    // friendlier surface for the same rule.
-    if (balanceResult.value > limitResult.value) {
-      setError(`Current balance can’t exceed the ${formatMoney(limitResult.value, { withCents: false })} credit limit.`)
+    if (!dueDate) {
+      fail({ dueDate: 'Enter a payment due date.' })
+      return
+    }
+    const minResult = minPayment.trim() ? parseMoneyInput(minPayment) : { ok: true as const, value: 0 }
+    if (!minResult.ok) {
+      fail({ minPayment: minResult.error })
       return
     }
     try {
+      // The credit-limit and due-date rules live in the repository
+      // (domain/financeRules.ts, TR-002) — this form only surfaces whatever
+      // it rejects on the field that caused it.
       finance.addManualCreditCard({
         name: name.trim(),
         lastFour,
         network,
         limit: limitResult.value,
         balance: balanceResult.value,
-        dueDate: 'Not set',
-        minPayment: 0,
+        dueDate,
+        minPayment: minResult.value,
       })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add card.')
+      const at = err instanceof FinanceValidationError && err.field ? (err.field as CardField) : 'name'
+      fail({ [at]: err instanceof Error ? err.message : 'Could not add card.' })
     }
   }
 
   return (
-    <form className="new-category-form" onSubmit={handleSubmit}>
+    <form className="new-category-form" onSubmit={handleSubmit} noValidate>
       <label className="new-category-field">
         <span className="tx-label">Card name</span>
-        <input type="text" className="tx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BPI Rewards" autoFocus />
+        <input
+          type="text"
+          className="tx-input"
+          value={name}
+          placeholder="e.g. BPI Rewards"
+          autoFocus
+          {...field('name', (e) => setName(e.target.value))}
+        />
+        {errors.name && (
+          <p className="tx-error" role="alert" id={errorId('name')}>
+            {errors.name}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Last 4 digits</span>
@@ -161,30 +213,87 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
           maxLength={4}
           className="tx-input"
           value={lastFour}
-          onChange={(e) => setLastFour(e.target.value.replace(/\D/g, ''))}
           placeholder="1234"
+          {...field('lastFour', (e) => setLastFour(e.target.value.replace(/\D/g, '')))}
         />
+        {errors.lastFour && (
+          <p className="tx-error" role="alert" id={errorId('lastFour')}>
+            {errors.lastFour}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Network</span>
-        <select className="tx-input" value={network} onChange={(e) => setNetwork(e.target.value as typeof network)}>
+        <select className="tx-input" value={network} {...field('network', (e) => setNetwork(e.target.value as typeof network))}>
           <option value="visa">Visa</option>
           <option value="mastercard">Mastercard</option>
         </select>
       </label>
       <label className="new-category-field">
         <span className="tx-label">Credit limit</span>
-        <input type="text" inputMode="decimal" className="tx-input" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="0.00" />
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={limit}
+          placeholder="0.00"
+          {...field('limit', (e) => setLimit(e.target.value))}
+        />
+        {errors.limit && (
+          <p className="tx-error" role="alert" id={errorId('limit')}>
+            {errors.limit}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Current balance (optional)</span>
-        <input type="text" inputMode="decimal" className="tx-input" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" />
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={balance}
+          placeholder="0.00"
+          {...field('balance', (e) => setBalance(e.target.value))}
+        />
+        {errors.balance && (
+          <p className="tx-error" role="alert" id={errorId('balance')}>
+            {errors.balance}
+          </p>
+        )}
       </label>
-      {error && (
-        <p className="tx-error" role="alert">
-          {error}
-        </p>
-      )}
+      <label className="new-category-field">
+        <span className="tx-label">Payment due date</span>
+        {/* FINDING-009: a due date already in the past can never fall inside
+            the 30-day commitment horizon, so the card would silently never
+            count. The domain rejects it; `min` stops it being offered. */}
+        <input type="date" className="tx-input" min={finance.todayIso} value={dueDate} {...field('dueDate', (e) => setDueDate(e.target.value))} />
+        {errors.dueDate && (
+          <p className="tx-error" role="alert" id={errorId('dueDate')}>
+            {errors.dueDate}
+          </p>
+        )}
+      </label>
+      <label className="new-category-field">
+        {/* Blank means zero, so it is labeled optional like its sibling. */}
+        <span className="tx-label">Minimum payment (optional)</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={minPayment}
+          placeholder="0.00"
+          {...field('minPayment', (e) => setMinPayment(e.target.value))}
+        />
+        {errors.minPayment && (
+          <p className="tx-error" role="alert" id={errorId('minPayment')}>
+            {errors.minPayment}
+          </p>
+        )}
+      </label>
+      <p className="form-help">
+        The due date and minimum payment are what let this card appear in your money position’s upcoming commitments — minimums due within
+        the next 30 days are counted.
+      </p>
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
@@ -223,7 +332,7 @@ export function Accounts() {
           {typeof finance.availableCashMonthlyChangePct === 'number' && (
             <div className={finance.availableCashMonthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
               {finance.availableCashMonthlyChangePct >= 0 ? '+' : ''}
-              {finance.availableCashMonthlyChangePct}% this month
+              {finance.availableCashMonthlyChangePct}% in {finance.activePeriodLabel}
             </div>
           )}
         </Card>
@@ -272,7 +381,7 @@ export function Accounts() {
                     {a.name}
                     {a.lastFour ? ` ••${a.lastFour}` : ''}
                   </div>
-                  <div className="faint">
+                  <div className="acct-meta">
                     {a.institution ? `${a.institution} · ` : ''}
                     {a.syncStatus}
                   </div>
@@ -312,7 +421,7 @@ export function Accounts() {
               <div className="account-row" key={a.id}>
                 <div>
                   <div className="acct-name">{a.name}</div>
-                  <div className="faint">{a.syncStatus}</div>
+                  <div className="acct-meta">{a.syncStatus}</div>
                 </div>
                 <div className="acct-amt">
                   <div className="num">{formatMoney(a.balance)}</div>
@@ -341,15 +450,15 @@ export function Accounts() {
                   <div className="acct-name">
                     {c.name} ••{c.lastFour}
                   </div>
-                  <div className="faint">
-                    {c.dueDate === 'Not set' ? 'Due date not set' : `Due ${c.dueDate} · min ${formatMoney(c.minPayment, { withCents: false })}`}
+                  <div className="acct-meta">
+                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
                   </div>
                 </div>
                 <div className="acct-amt">
                   <div className="num" style={{ color: 'var(--amber)' }}>
                     {formatMoney(c.balance)}
                   </div>
-                  <div className="faint">of {formatMoney(c.limit, { withCents: false })}</div>
+                  <div className="acct-meta">of {formatMoney(c.limit, { withCents: false })}</div>
                 </div>
               </div>
             ))}

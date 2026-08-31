@@ -6,12 +6,11 @@ import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
-import { formatDateLabel, formatTimeLabel } from '../utils/date'
+import { formatDateLabel, formatDueDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
 
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
 const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
-const PERIOD_TITLE: Record<ExpensesPeriod, string> = { daily: 'this week', weekly: 'this month', monthly: 'this year' }
 
 export function Dashboard() {
   const finance = useFinance()
@@ -21,7 +20,11 @@ export function Dashboard() {
   const completedCount = finance.completedGoals.length
   const recent = finance.state.transactions.slice(0, 5)
   const [period, setPeriod] = useState<ExpensesPeriod>('daily')
+  // TR-005: the chart title and the buckets come from the same selector, so
+  // the words always describe the exact window the data covers.
   const expensesByDay = finance.expensesTrend(period)
+  const expensesTitle = finance.expensesTrendTitle(period)
+  const expensesRange = finance.expensesTrendRangeLabel(expensesByDay)
   const maxDay = Math.max(1, ...expensesByDay.map((d) => d.amount))
 
   return (
@@ -39,7 +42,7 @@ export function Dashboard() {
                 {' · '}
                 <span className={finance.availableCashMonthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
                   {finance.availableCashMonthlyChangePct >= 0 ? '+' : ''}
-                  {finance.availableCashMonthlyChangePct}% this month
+                  {finance.availableCashMonthlyChangePct}% in {finance.activePeriodLabel}
                 </span>
               </>
             )}
@@ -48,7 +51,7 @@ export function Dashboard() {
           <div className="flow-row">
             <div>
               <div className="flow-amt num">{formatMoney(finance.netCashFlow)}</div>
-              <div className="eyebrow">Net Cash Flow · this month</div>
+              <div className="eyebrow">Net Cash Flow · {finance.activePeriodLabel}</div>
             </div>
             <span className="badge">Budget used {finance.budgetUsedPct}%</span>
           </div>
@@ -103,8 +106,9 @@ export function Dashboard() {
               </div>
             }
           >
-            Expenses · {PERIOD_TITLE[period]}
+            Expenses · {expensesTitle}
           </CardTitle>
+          <div className="expenses-range">{expensesRange}</div>
           <div className="expenses-line">
             <Sparkline
               key={period}
@@ -116,15 +120,22 @@ export function Dashboard() {
             />
             <div className="months">
               {expensesByDay.map((d, i) => (
-                <span key={d.day} className={i === expensesByDay.length - 1 ? 'num expenses-line-today' : undefined}>
+                <span
+                  key={d.startIso}
+                  className={i === expensesByDay.length - 1 ? 'num expenses-line-today' : undefined}
+                  title={`${d.day}: ${d.rangeLabel}`}
+                >
                   {d.day}
                 </span>
               ))}
             </div>
+            {/* Each bucket announces the exact dates it covers, so `W1`–`W4`
+                never has to be guessed at (TR-005). */}
             <ul className="visually-hidden">
               {expensesByDay.map((d) => (
-                <li key={d.day}>
-                  {d.day}: {formatMoney(d.amount, { withCents: false })}, {Math.round((d.amount / maxDay) * 100)}% of the highest point shown
+                <li key={d.startIso}>
+                  {d.day} ({d.rangeLabel}): {formatMoney(d.amount, { withCents: false })}, {Math.round((d.amount / maxDay) * 100)}% of the
+                  highest point shown
                 </li>
               ))}
             </ul>
@@ -133,7 +144,7 @@ export function Dashboard() {
 
         <Card className="area-budget">
           <CardTitle action={<span className="num" style={{ fontSize: 14 }}>{formatMoney(finance.state.totalBudgetAllocated, { withCents: false })}</span>}>
-            Budget · this month
+            Budget · {finance.activePeriodLabel}
           </CardTitle>
           <div className="faint" style={{ marginTop: -4, marginBottom: 8 }}>
             {formatMoney(finance.totalBudgetRemaining, { withCents: false })} remaining
@@ -165,7 +176,7 @@ export function Dashboard() {
               <li key={g.id}>
                 <div>
                   <div style={{ fontWeight: 600 }}>{g.name}</div>
-                  <div className="faint" style={{ fontSize: 10.5 }}>
+                  <div className="dash-meta">
                     {g.status === 'behind_pace' ? 'Behind pace' : g.status === 'on_track' ? 'On track' : 'Just started'}
                   </div>
                 </div>
@@ -179,7 +190,7 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-spend">
-          <CardTitle action={<span className="faint">this month</span>}>Spend Mix</CardTitle>
+          <CardTitle action={<span className="faint">{finance.activePeriodLabel}</span>}>Spend Mix</CardTitle>
           <div className="num" style={{ fontSize: 20, fontWeight: 700 }}>
             {formatMoney(finance.spendMixTotal, { withCents: false })}
           </div>
@@ -201,7 +212,7 @@ export function Dashboard() {
             <div className="ai-msg ai-msg--user">What&apos;s my highest expense?</div>
             <div className="ai-msg ai-msg--bot">Your highest is Shopping. Need details?</div>
           </div>
-          <div className="faint" style={{ marginTop: 8, fontSize: 11 }}>
+          <div className="dash-meta" style={{ marginTop: 8 }}>
             Sample conversation only — a real AI assistant is planned for a future release.
           </div>
           <button type="button" className="ai-input" disabled>
@@ -224,8 +235,8 @@ export function Dashboard() {
                   <div style={{ fontWeight: 600 }}>
                     {c.name} ••{c.lastFour}
                   </div>
-                  <div className="faint">
-                    Due {c.dueDate} · min {formatMoney(c.minPayment, { withCents: false })}
+                  <div className="dash-meta">
+                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
                   </div>
                   <ProgressBar
                     pct={(c.balance / c.limit) * 100}
@@ -233,7 +244,7 @@ export function Dashboard() {
                     label={`${c.name} used`}
                     valueText={`${Math.round((c.balance / c.limit) * 100)}% used, ${formatMoney(c.balance, { withCents: false })} of ${formatMoney(c.limit, { withCents: false })}`}
                   />
-                  <div className="faint" style={{ fontSize: 10.5 }}>
+                  <div className="dash-meta">
                     {formatMoney(c.balance, { withCents: false })} used of {formatMoney(c.limit, { withCents: false })}
                   </div>
                 </div>
@@ -244,7 +255,7 @@ export function Dashboard() {
 
         <Card className="area-portfolio">
           <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>My Portfolio</CardTitle>
-          <div className="faint" style={{ marginTop: -6, marginBottom: 6, fontSize: 10.5 }}>
+          <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
             Sample data
           </div>
           <div className="portfolio-grid">
@@ -253,7 +264,7 @@ export function Dashboard() {
                 <div className="num" style={{ fontWeight: 700 }}>
                   {formatMoney(h.price, { withCents: true })}
                 </div>
-                <div className={h.changePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'} style={{ fontSize: 10.5 }}>
+                <div className={h.changePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
                   {h.changePct >= 0 ? '+' : ''}
                   {h.changePct}%
                 </div>
@@ -282,14 +293,15 @@ export function Dashboard() {
                 <tr key={t.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{t.title}</div>
-                    <div className="faint" style={{ fontSize: 10.5 }}>
+                    <div className="dash-meta">
                       {finance.transactionSourceLabel(t)} · {formatDateLabel(t.date)}
                       {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
                     </div>
                     {finance.transferFeeReconciliationLabel(t) && (
-                      <div className="faint" style={{ fontSize: 10.5 }}>
-                        {finance.transferFeeReconciliationLabel(t)}
-                      </div>
+                      <div className="dash-meta">{finance.transferFeeReconciliationLabel(t)}</div>
+                    )}
+                    {finance.cardPaymentReconciliationLabel(t) && (
+                      <div className="dash-meta">{finance.cardPaymentReconciliationLabel(t)}</div>
                     )}
                   </td>
                   <td>

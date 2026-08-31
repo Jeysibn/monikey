@@ -1,10 +1,12 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { useFinance } from '../hooks/useFinance'
+import { useFieldErrors } from '../hooks/useFieldErrors'
 import { formatMoney } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
-import { DEMO_TODAY_ISO, formatGoalDate, isIsoDateBefore } from '../utils/date'
+import { formatGoalDate, isIsoDateBefore, isValidIsoDate } from '../utils/date'
+import { FinanceValidationError } from '../domain/financeRules'
 import './Goals.css'
 
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
@@ -15,88 +17,92 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   completed: { label: 'Completed', tone: 'ok' },
 }
 
-function AddFundsForm({ goalId, remaining, onClose }: { goalId: string; remaining: number; onClose: () => void }) {
+const FUNDS_FIELDS = ['sourceAccountId', 'amount'] as const
+type FundsField = (typeof FUNDS_FIELDS)[number]
+
+function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void }) {
   const finance = useFinance()
   const cashAccounts = finance.state.accounts.filter((a) => a.classification === 'asset')
   const [amount, setAmount] = useState('')
   const [sourceAccountId, setSourceAccountId] = useState(cashAccounts[0]?.id ?? '')
-  const [error, setError] = useState('')
-  const amountInputId = useId()
-  const accountInputId = useId()
+  const { errors, field, errorId, fail } = useFieldErrors<FundsField>(FUNDS_FIELDS)
+
+  // TR-004: the ceiling shown to the user is the smaller of what the source
+  // account actually holds and what the goal still needs — derived by the
+  // domain rule (`maxFundableAmount`), not recomputed here, so the form can
+  // never offer an amount the repository would reject.
+  const maxFundable = finance.maxFundableAmount(goalId, sourceAccountId)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!sourceAccountId) {
+      fail({ sourceAccountId: 'Select an account to fund this goal from.' })
+      return
+    }
     if (!amount.trim()) {
-      setError('Enter an amount greater than zero.')
+      fail({ amount: 'Enter an amount greater than zero.' })
       return
     }
     const result = parseMoneyInput(amount)
     if (!result.ok) {
-      setError(result.error)
+      fail({ amount: result.error })
       return
     }
     if (result.value <= 0) {
-      setError('Enter an amount greater than zero.')
-      return
-    }
-    if (!sourceAccountId) {
-      setError('Select an account to fund this goal from.')
-      return
-    }
-    if (result.value > remaining) {
-      setError(`Enter at most ${formatMoney(remaining, { withCents: false })} — that’s all this goal needs.`)
+      fail({ amount: 'Enter an amount greater than zero.' })
       return
     }
     try {
       finance.addGoalFunds(goalId, sourceAccountId, result.value)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add funds.')
+      const at = err instanceof FinanceValidationError && err.field === 'sourceAccountId' ? 'sourceAccountId' : 'amount'
+      fail({ [at]: err instanceof Error ? err.message : 'Could not add funds.' })
     }
   }
 
   return (
-    <form className="add-funds-form" onSubmit={handleSubmit}>
+    <form className="add-funds-form" onSubmit={handleSubmit} noValidate>
       <label className="add-funds-field">
-        <span className="visually-hidden" id={accountInputId}>
-          Fund from account
-        </span>
         <select
           className="tx-input"
           value={sourceAccountId}
-          onChange={(e) => setSourceAccountId(e.target.value)}
-          aria-labelledby={accountInputId}
+          aria-label="Fund from account"
+          {...field('sourceAccountId', (e) => setSourceAccountId(e.target.value))}
         >
           {cashAccounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatMoney(a.balance, { withCents: false })} available
+              {a.name} · {formatMoney(a.balance)} available
             </option>
           ))}
         </select>
+        {errors.sourceAccountId && (
+          <p className="tx-error" role="alert" id={errorId('sourceAccountId')}>
+            {errors.sourceAccountId}
+          </p>
+        )}
       </label>
       <label className="add-funds-field">
-        <span className="visually-hidden" id={amountInputId}>
-          Amount to add
-        </span>
         <input
           type="text"
           inputMode="decimal"
           className="tx-input"
           placeholder="0.00"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          aria-labelledby={amountInputId}
+          aria-label="Amount to add"
           autoFocus
+          {...field('amount', (e) => setAmount(e.target.value))}
         />
+        {errors.amount && (
+          <p className="tx-error" role="alert" id={errorId('amount')}>
+            {errors.amount}
+          </p>
+        )}
       </label>
-      <p className="faint" style={{ fontSize: 10 }}>
-        Up to {formatMoney(remaining, { withCents: false })} to reach this goal — funds move out of the selected account.
+      <p className="form-help">
+        Up to {formatMoney(maxFundable)} — the smaller of this account’s balance and what the goal still needs. The money moves out of the
+        selected account.
       </p>
-      {error && (
-        <p className="tx-error" role="alert">
-          {error}
-        </p>
-      )}
       <div className="add-funds-actions">
         <button type="button" className="btn btn--ghost btn--compact" onClick={onClose}>
           Cancel
@@ -109,46 +115,55 @@ function AddFundsForm({ goalId, remaining, onClose }: { goalId: string; remainin
   )
 }
 
+const GOAL_FIELDS = ['name', 'targetAmount', 'targetDate', 'monthlyContribution'] as const
+type GoalField = (typeof GOAL_FIELDS)[number]
+
 function CreateGoalForm({ onClose }: { onClose: () => void }) {
   const finance = useFinance()
   const [name, setName] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [monthlyContribution, setMonthlyContribution] = useState('')
-  const [error, setError] = useState('')
+  const { errors, field, errorId, fail } = useFieldErrors<GoalField>(GOAL_FIELDS)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
-      setError('Goal name is required.')
+      fail({ name: 'Goal name is required.' })
       return
     }
     if (!targetAmount.trim()) {
-      setError('Enter a target amount greater than zero.')
+      fail({ targetAmount: 'Enter a target amount greater than zero.' })
       return
     }
     const targetResult = parseMoneyInput(targetAmount)
     if (!targetResult.ok) {
-      setError(targetResult.error)
+      fail({ targetAmount: targetResult.error })
       return
     }
     if (targetResult.value <= 0) {
-      setError('Enter a target amount greater than zero.')
+      fail({ targetAmount: 'Enter a target amount greater than zero.' })
       return
     }
     if (!targetDate) {
-      setError('Target date is required.')
+      fail({ targetDate: 'Target date is required.' })
       return
     }
-    if (isIsoDateBefore(targetDate, DEMO_TODAY_ISO)) {
-      setError('Target date can’t be in the past.')
+    if (!isValidIsoDate(targetDate)) {
+      fail({ targetDate: 'Enter a real target date.' })
+      return
+    }
+    // TR-001: "in the past" is measured against the one application clock,
+    // the same one the repository validates against.
+    if (isIsoDateBefore(targetDate, finance.todayIso)) {
+      fail({ targetDate: 'Target date can’t be in the past.' })
       return
     }
     let monthly: number | undefined
     if (monthlyContribution.trim()) {
       const monthlyResult = parseMoneyInput(monthlyContribution)
       if (!monthlyResult.ok) {
-        setError(monthlyResult.error)
+        fail({ monthlyContribution: monthlyResult.error })
         return
       }
       monthly = monthlyResult.value
@@ -157,33 +172,81 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
       finance.createGoal({ name: name.trim(), targetAmount: targetResult.value, targetDate, monthlyContribution: monthly })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create goal.')
+      const at = err instanceof FinanceValidationError && err.field ? (err.field as GoalField) : 'name'
+      fail({ [at]: err instanceof Error ? err.message : 'Could not create goal.' })
     }
   }
 
   return (
-    <form className="create-goal-form" onSubmit={handleSubmit}>
+    <form className="create-goal-form" onSubmit={handleSubmit} noValidate>
       <label className="new-category-field">
         <span className="tx-label">Goal name</span>
-        <input type="text" className="tx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. New Phone" autoFocus />
+        <input
+          type="text"
+          className="tx-input"
+          value={name}
+          placeholder="e.g. New Phone"
+          autoFocus
+          {...field('name', (e) => setName(e.target.value))}
+        />
+        {errors.name && (
+          <p className="tx-error" role="alert" id={errorId('name')}>
+            {errors.name}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Target amount</span>
-        <input type="text" inputMode="decimal" className="tx-input" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} placeholder="0.00" />
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={targetAmount}
+          placeholder="0.00"
+          {...field('targetAmount', (e) => setTargetAmount(e.target.value))}
+        />
+        {errors.targetAmount && (
+          <p className="tx-error" role="alert" id={errorId('targetAmount')}>
+            {errors.targetAmount}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
         <span className="tx-label">Target date</span>
-        <input type="date" className="tx-input" min={DEMO_TODAY_ISO} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+        <input
+          type="date"
+          className="tx-input"
+          min={finance.todayIso}
+          value={targetDate}
+          {...field('targetDate', (e) => setTargetDate(e.target.value))}
+        />
+        {errors.targetDate && (
+          <p className="tx-error" role="alert" id={errorId('targetDate')}>
+            {errors.targetDate}
+          </p>
+        )}
       </label>
       <label className="new-category-field">
-        <span className="tx-label">Monthly auto-save (optional)</span>
-        <input type="text" inputMode="decimal" className="tx-input" value={monthlyContribution} onChange={(e) => setMonthlyContribution(e.target.value)} placeholder="0.00" />
+        {/* TR-004: "planned", not "auto-save" — nothing moves this money
+            automatically; it is only a plan Money Position reserves against. */}
+        <span className="tx-label">Planned monthly contribution (optional)</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={monthlyContribution}
+          placeholder="0.00"
+          {...field('monthlyContribution', (e) => setMonthlyContribution(e.target.value))}
+        />
+        {errors.monthlyContribution && (
+          <p className="tx-error" role="alert" id={errorId('monthlyContribution')}>
+            {errors.monthlyContribution}
+          </p>
+        )}
       </label>
-      {error && (
-        <p className="tx-error" role="alert">
-          {error}
-        </p>
-      )}
+      <p className="form-help">
+        A planned contribution is a target pace, not an automatic transfer — you still add funds yourself.
+      </p>
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
@@ -223,9 +286,9 @@ export function Goals() {
           <div className="num kpi-val">{finance.avgGoalProgressPct}%</div>
         </Card>
         <Card>
-          <div className="eyebrow">Monthly Contribution</div>
-          <div className="num kpi-val">{formatMoney(finance.monthlyContributionTotal)}</div>
-          <div className="kpi-delta--up">auto-saved across {finance.activeGoals.length} active goals</div>
+          <div className="eyebrow">Planned Monthly Contribution</div>
+          <div className="num kpi-val">{formatMoney(finance.plannedMonthlyContributionTotal)}</div>
+          <div className="kpi-delta--up">planned across {finance.activeGoals.length} active goals</div>
         </Card>
       </div>
 
@@ -243,9 +306,7 @@ export function Goals() {
               <div className="goal-top">
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
-                  <div className="faint" style={{ fontSize: 10 }}>
-                    Target · {formatGoalDate(g.targetDate)}
-                  </div>
+                  <div className="goal-meta">Target · {formatGoalDate(g.targetDate)}</div>
                 </div>
               </div>
               <div className="goal-nums">
@@ -258,7 +319,7 @@ export function Goals() {
                 pct={pct}
                 color={status.tone === 'warn' ? 'var(--amber)' : 'var(--cyan)'}
                 label={`${g.name} goal progress`}
-                valueText={rawPct > 100 ? `${rawPct}% — goal exceeded` : `${rawPct}%`}
+                valueText={`${rawPct}%`}
               />
               <div className={`goal-status goal-status--${status.tone}`}>
                 {rawPct}% · {status.label}
@@ -267,16 +328,14 @@ export function Goals() {
                 <div className="goal-required">Need ~{formatMoney(g.requiredContribution, { withCents: false })}/mo to reach this goal on time</div>
               )}
               <div className="goal-foot">
-                <span className="faint">Auto-save {formatMoney(g.monthlyContribution ?? 0, { withCents: false })}/mo</span>
+                <span className="goal-meta">Monthly plan {formatMoney(g.monthlyContribution ?? 0, { withCents: false })}/mo</span>
                 {addFundsFor === g.id ? null : (
                   <button type="button" className="pill" onClick={() => setAddFundsFor(g.id)}>
                     + Add funds
                   </button>
                 )}
               </div>
-              {addFundsFor === g.id && (
-                <AddFundsForm goalId={g.id} remaining={Math.max(0, g.targetAmount - g.currentAmount)} onClose={() => setAddFundsFor(null)} />
-              )}
+              {addFundsFor === g.id && <AddFundsForm goalId={g.id} onClose={() => setAddFundsFor(null)} />}
             </Card>
           )
         })}
@@ -292,7 +351,7 @@ export function Goals() {
               </div>
               <div style={{ fontWeight: 700 }}>New Goal</div>
               <div className="faint" style={{ textAlign: 'center' }}>
-                Set a target, a date, and an auto-save amount.
+                Set a target, a date, and a planned monthly amount.
               </div>
               <button type="button" className="btn btn--primary" onClick={() => setCreatingGoal(true)}>
                 Create goal
@@ -311,7 +370,7 @@ export function Goals() {
           <Card className="completed-card" key={g.id}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
-              <div className="faint" style={{ fontSize: 10 }}>
+              <div className="goal-meta">
                 Reached {formatGoalDate(g.completedDate ?? g.targetDate)} · {finance.goalRawProgressPct(g)}% of{' '}
                 {formatMoney(g.targetAmount, { withCents: false })}
               </div>

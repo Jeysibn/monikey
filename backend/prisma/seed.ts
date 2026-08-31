@@ -78,8 +78,10 @@ async function main(): Promise<void> {
     await prisma.financialAccount.upsert({ where: { id: account.id }, create: { id: account.id, userId: DEMO_USER_ID, name: account.name, institution: account.institution, accountType: account.accountType, classification: 'asset', currencyCode: 'PHP', openingBalanceMinor: BigInt(account.balance), currentBalanceMinor: BigInt(account.balance), lastFour: account.lastFour, syncStatus: 'manual', manual: true }, update: { name: account.name, currentBalanceMinor: BigInt(finalBalance), openingBalanceMinor: BigInt(account.balance) } })
   }
   for (const card of DEMO_CARDS) {
-    await prisma.financialAccount.upsert({ where: { id: card.id }, create: { id: card.id, userId: DEMO_USER_ID, name: card.name, accountType: 'credit_card', classification: 'liability', currencyCode: 'PHP', openingBalanceMinor: BigInt(card.balance), currentBalanceMinor: BigInt(card.balance), lastFour: card.lastFour, syncStatus: 'manual', manual: true }, update: { name: card.name, currentBalanceMinor: BigInt(card.balance), openingBalanceMinor: BigInt(card.balance) } })
-    await prisma.creditCardDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, network: card.network, creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) }, update: { creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) } })
+    await prisma.$transaction(async (tx) => {
+      await tx.financialAccount.upsert({ where: { id: card.id }, create: { id: card.id, userId: DEMO_USER_ID, name: card.name, accountType: 'credit_card', classification: 'liability', currencyCode: 'PHP', openingBalanceMinor: BigInt(card.balance), currentBalanceMinor: BigInt(card.balance), lastFour: card.lastFour, syncStatus: 'manual', manual: true }, update: { name: card.name, currentBalanceMinor: BigInt(card.balance), openingBalanceMinor: BigInt(card.balance) } })
+      await tx.creditCardDetail.upsert({ where: { accountId: card.id }, create: { accountId: card.id, network: card.network, creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) }, update: { creditLimitMinor: BigInt(card.limit), dueDay: card.dueDay, minimumPaymentMinor: BigInt(card.minimum) } })
+    })
   }
   const ledger = createLedgerModule(prisma).service
   await ledger.postTransaction(DEMO_USER_ID, {

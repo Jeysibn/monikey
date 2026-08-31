@@ -30,6 +30,10 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
 
   INTEGRATIONS_MODE: z.enum(['stub', 'live']).default('stub'),
+  EMAIL_PROVIDER: z.enum(['mailpit', 'resend', 'stub']).default('mailpit'),
+  MAILPIT_URL: z.string().url().default('http://mailpit:8025/api/v1/send'),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().email().default('monikey@example.com'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 

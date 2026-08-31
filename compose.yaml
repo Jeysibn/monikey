@@ -72,6 +72,8 @@ services:
       dockerfile: docker/Web.Dockerfile
     ports:
       - "8080:80"
+    environment:
+      NGINX_DNS_RESOLVER: ${NGINX_DNS_RESOLVER:-127.0.0.11}
     depends_on:
       api:
         condition: service_healthy

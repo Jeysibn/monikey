@@ -3,6 +3,8 @@ import type {
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
+  CreateGoalInput,
+  Goal,
   CreditCard,
   FinanceState,
   Transaction,
@@ -22,6 +24,8 @@ export interface FinanceGateway {
   addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction>
   addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account>
   addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard>
+  createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal>
+  addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal>
 }
 
 const minor = (value: number) => value / 100
@@ -60,5 +64,19 @@ export class ApiFinanceGateway implements FinanceGateway {
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
   }
 
+  async createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal> {
+    const goal = await this.request<ApiGoal>('/goals', { method: 'POST', signal, body: JSON.stringify({ name: input.name, targetMinor: Math.round(input.targetAmount * 100), targetDate: input.targetDate, monthlyContributionMinor: input.monthlyContribution == null ? null : Math.round(input.monthlyContribution * 100) }) })
+    return this.mapGoal(goal)
+  }
+
+  async addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal> {
+    await this.request(`/goals/${goalId}/fund`, { method: 'POST', signal, body: JSON.stringify({ sourceAccountId, amountMinor: Math.round(amount * 100), occurredOn: date }) })
+    const state = await this.load(signal)
+    const goal = state.goals.find((candidate) => candidate.id === goalId)
+    if (!goal) throw new Error('Goal was not returned after funding')
+    return goal
+  }
+
   private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined })
+  private mapGoal = (g: ApiGoal): Goal => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as Goal['status'], active: g.active })
 }

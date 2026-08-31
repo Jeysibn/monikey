@@ -11,6 +11,8 @@ RUN npm run build
 # ---- runtime: Nginx serving the static build + /api proxy -------------
 FROM nginx:1.27-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/resolve-nginx-dns.sh /docker-entrypoint.d/05-resolve-nginx-dns.sh
+RUN chmod +x /docker-entrypoint.d/05-resolve-nginx-dns.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

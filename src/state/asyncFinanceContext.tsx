@@ -101,3 +101,7 @@ export function useAsyncFinance(): AsyncFinanceContextValue {
   if (!context) throw new Error('useAsyncFinance must be used inside AsyncFinanceProvider')
   return context
 }
+
+export function useAsyncFinanceOptional(): AsyncFinanceContextValue | null {
+  return useContext(AsyncFinanceContext)
+}

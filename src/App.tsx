@@ -11,7 +11,7 @@ import { Goals } from './pages/Goals'
 import { Investments } from './pages/Investments'
 import { Recurring } from './pages/Recurring'
 import { Reports } from './pages/Reports'
-import { Placeholder } from './pages/Placeholder'
+import { Settings } from './pages/Settings'
 
 export default function App() {
   const [addTxOpen, setAddTxOpen] = useState(false)
@@ -27,7 +27,7 @@ export default function App() {
         <Route path="/investments" element={<Investments />} />
         <Route path="/recurring" element={<Recurring />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Placeholder title="Settings" />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={() => setAddTxOpen(false)} />
       <Toast />

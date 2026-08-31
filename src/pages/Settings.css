@@ -1,0 +1,120 @@
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.settings-field-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* One toggle-preference row: label + help text on the left, switch on the
+   right. Reused by Notifications and the one working Display Preference. */
+.settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+.settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.settings-toggle-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-toggle-help {
+  display: block;
+  margin-top: 3px;
+}
+
+/* A checkbox-backed switch, styled to match the dark-fintech surface rather
+   than the browser default checkbox. The real <input> stays in the DOM
+   (visually hidden, not display:none) so it keeps native keyboard and
+   screen-reader semantics. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.switch-track {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--slate);
+  border: 1px solid var(--card-border);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  transition: background-color 0.15s ease;
+}
+.switch-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 0.15s ease;
+}
+.switch input:checked + .switch-track {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(16px);
+  background: var(--cyan-ink);
+}
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.settings-account-list li {
+  align-items: center;
+}
+
+.add-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .settings-toggle-row {
+    gap: 10px;
+  }
+  .settings-field-row {
+    flex-direction: column;
+  }
+}

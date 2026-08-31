@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { LedgerService } from '../ledger/ledger.service';
-import { AccountsService } from '../accounts/accounts.service';
-import type { AccountView } from '../accounts/accounts.schemas';
-import type { TransactionView } from '../ledger/ledger.schemas';
+import { LedgerService } from '../ledger/ledger.service.js';
+import { AccountsService } from '../accounts/accounts.service.js';
+import type { AccountView } from '../accounts/accounts.schemas.js';
+import type { TransactionView } from '../ledger/ledger.schemas.js';
 
 export interface FinanceState {
   accounts: AccountView[];
@@ -92,7 +92,7 @@ export class BootstrapService {
     const [user, accounts, categories, transactions, goals, preferences] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.accountsService.listAccounts(userId),
-      this.prisma.category.findMany({ where: { userId: { in: [userId, null] }, archivedAt: null } }),
+      this.prisma.category.findMany({ where: { OR: [{ userId }, { userId: null }], archivedAt: null } }),
       this.ledgerService.listTransactions({ userId, limit: 1000 }),
       this.prisma.goal.findMany({ where: { userId } }),
       this.prisma.userPreferences.findUnique({ where: { userId } }),
@@ -113,7 +113,7 @@ export class BootstrapService {
         transactions: transactions.items,
         categories: categories.map((c) => ({
           id: c.id,
-          userId: c.userId,
+          userId: c.userId ?? null,
           name: c.name,
           color: c.color,
           budgetable: c.budgetable,
@@ -131,7 +131,7 @@ export class BootstrapService {
           targetMinor: Number(g.targetMinor),
           currentMinor: Number(g.currentMinor),
           currencyCode: g.currencyCode,
-          targetDate: g.targetDate.toISOString().split('T')[0],
+          targetDate: g.targetDate.toISOString().split('T')[0]!,
           completedDate: g.completedDate?.toISOString().split('T')[0] ?? null,
           monthlyContributionMinor: g.monthlyContributionMinor ? Number(g.monthlyContributionMinor) : null,
           status: g.status,
@@ -154,7 +154,7 @@ export class BootstrapService {
         externalOcrEnabled: preferences?.externalOcrEnabled ?? false,
         detailedAiContextEnabled: preferences?.detailedAiContextEnabled ?? false,
       },
-      serverDate: new Date().toISOString().split('T')[0],
+      serverDate: new Date().toISOString().split('T')[0]!,
       dataVersion: '1.0',
     };
   }

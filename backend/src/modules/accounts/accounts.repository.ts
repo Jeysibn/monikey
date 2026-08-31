@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import type { AccountView, CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js.js.js.js';
+import type { AccountView, CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js';
 import { AppError } from '../../common/errors/appError.js';
 
 type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
@@ -101,8 +101,8 @@ export class AccountsRepository {
     input: UpdateAccountInput
   ): Promise<AccountView> {
     const account = await tx.financialAccount.findFirst({ where: { id, userId } });
-    if (!account) throw new AppError('UNKNOWN_ACCOUNT', 'Account not found.', 'id');
-    if (account.archivedAt) throw new AppError('ACCOUNT_ARCHIVED', 'Cannot update archived account.', 'id');
+    if (!account) throw new AppError('UNKNOWN_ACCOUNT', 'Account not found.', { field: 'id' });
+    if (account.archivedAt) throw new AppError('ACCOUNT_ARCHIVED', 'Cannot update archived account.', { field: 'id' });
 
     const updated = await tx.financialAccount.update({
       where: { id },
@@ -119,19 +119,19 @@ export class AccountsRepository {
     id: string
   ): Promise<void> {
     const account = await tx.financialAccount.findFirst({ where: { id, userId } });
-    if (!account) throw new AppError('UNKNOWN_ACCOUNT', 'Account not found.', 'id');
-    if (account.archivedAt) throw new AppError('ACCOUNT_ARCHIVED', 'Account already archived.', 'id');
+    if (!account) throw new AppError('UNKNOWN_ACCOUNT', 'Account not found.', { field: 'id' });
+    if (account.archivedAt) throw new AppError('ACCOUNT_ARCHIVED', 'Account already archived.', { field: 'id' });
 
     // Check if account has non-zero balance
     if (account.currentBalanceMinor !== 0n) {
-      throw new AppError('ACCOUNT_NOT_EMPTY', 'Cannot archive account with non-zero balance.', 'id');
+      throw new AppError('ACCOUNT_NOT_EMPTY', 'Cannot archive account with non-zero balance.', { field: 'id' });
     }
 
     // Check for credit card details
     if (account.accountType === 'credit_card') {
       const detail = await tx.creditCardDetail.findUnique({ where: { accountId: id } });
       if (detail) {
-        throw new AppError('CATEGORY_NOT_ALLOWED', 'Must remove credit card details before archiving.', 'id');
+        throw new AppError('CATEGORY_NOT_ALLOWED', 'Must remove credit card details before archiving.', { field: 'id' });
       }
     }
 

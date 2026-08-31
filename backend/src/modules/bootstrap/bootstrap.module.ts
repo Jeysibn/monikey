@@ -1,7 +1,7 @@
-import { BootstrapService } from './bootstrap.service.js.js.js.js';
-import { bootstrapRoutes } from './bootstrap.routes.js.js.js.js';
-import { LedgerService } from '../ledger/ledger.service';
-import { AccountsService } from '../accounts/accounts.service';
+import { BootstrapService } from './bootstrap.service.js';
+import { bootstrapRoutes } from './bootstrap.routes.js';
+import { LedgerService } from '../ledger/ledger.service.js';
+import { AccountsService } from '../accounts/accounts.service.js';
 import { PrismaClient } from '@prisma/client';
 
 export interface BootstrapModule {
@@ -15,7 +15,7 @@ export function createBootstrapModule(prisma: PrismaClient, ledgerService: Ledge
   return {
     service,
     async registerRoutes(app: any) {
-      await app.register(bootstrapRoutes, { prefix: '/api/v1', service });
+      await app.register(bootstrapRoutes, { service, prisma });
     },
   };
 }

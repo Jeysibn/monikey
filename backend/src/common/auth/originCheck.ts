@@ -3,6 +3,7 @@ import { AppError } from '../errors/appError.js'
 import type { Env } from '../../config/env.js'
 
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+export const originCheck = originCheckPreHandler
 
 /**
  * CSRF/origin policy for cookie-authenticated mutations (plan §16.3). Since

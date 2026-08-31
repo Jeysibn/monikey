@@ -411,6 +411,7 @@ model Instrument {
   user  User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   trades InvestmentTrade[]
   dividends Dividend[]
+  quoteSnapshots QuoteSnapshot[]
 
   @@unique([userId, ticker])
   @@index([ticker])
@@ -453,6 +454,21 @@ model Dividend {
 
   @@index([userId, instrumentId, occurredOn])
   @@map("dividends")
+}
+
+model QuoteSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  instrumentId String   @map("instrument_id") @db.Uuid
+  source       String
+  priceMinor   BigInt   @map("price_minor")
+  currencyCode String   @default("PHP") @map("currency_code") @db.Char(3)
+  fetchedAt    DateTime @map("fetched_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([instrumentId, fetchedAt])
+  @@map("quote_snapshots")
 }
 
 model BudgetPeriod {

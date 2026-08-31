@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { LedgerRepository } from './ledger.repository.js';
-import { AppError } from '../../common/errors/appError.js';
 import type { PostTransactionInput, ReverseTransactionInput, TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page } from './ledger.schemas.js';
 
 export class LedgerService {

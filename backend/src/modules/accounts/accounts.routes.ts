@@ -16,7 +16,7 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
   // GET /accounts
   f.get(
     '/accounts',
-    async (req, reply) => {
+    async (req) => {
       const accounts = await service.listAccounts(req.user!.id);
       return accounts;
     }
@@ -52,7 +52,7 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
     {
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
-    async (req, reply) => {
+    async (req) => {
       const account = await service.updateAccount(req.user!.id, req.params.id, updateAccountSchema.parse(req.body));
       return account;
     }

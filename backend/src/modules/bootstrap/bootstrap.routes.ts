@@ -9,7 +9,7 @@ export async function bootstrapRoutes(fastify: FastifyInstance, options: { servi
 
   fastify.get(
     '/bootstrap',
-    async (req, reply) => {
+    async (req) => {
       const bootstrap = await service.getBootstrap(req.user!.id);
       return bootstrap;
     }

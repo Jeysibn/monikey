@@ -1,6 +1,8 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import type { TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page, PostTransactionInput, BalanceEffectRole } from './ledger.schemas.js.js.js.js.js';
+import type { TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page, PostTransactionInput } from './ledger.schemas.js';
 import { AppError } from '../../common/errors/appError.js';
+
+type BalanceEffectRole = 'source' | 'destination' | 'expense' | 'income' | 'card_charge' | 'card_payment' | 'fee';
 
 type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
@@ -18,8 +20,7 @@ export class LedgerRepository {
     const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId } = query;
 
     const where: Prisma.TransactionWhereInput = { userId };
-    if (fromDate) where.occurredOn = { ...where.occurredOn, gte: new Date(fromDate) };
-    if (toDate) where.occurredOn = { ...where.occurredOn, lte: new Date(toDate) };
+    if (fromDate || toDate) where.occurredOn = { ...(fromDate ? { gte: new Date(fromDate) } : {}), ...(toDate ? { lte: new Date(toDate) } : {}) };
     if (type) where.type = type;
     if (categoryId) where.categoryId = categoryId;
     if (accountId) {
@@ -35,7 +36,7 @@ export class LedgerRepository {
 
     const hasMore = transactions.length > limit;
     const items = hasMore ? transactions.slice(0, limit) : transactions;
-    const nextCursor = hasMore ? items[items.length - 1].id : null;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
 
     return {
       items: items.map(this.mapTransaction),
@@ -58,13 +59,13 @@ export class LedgerRepository {
     if (categoryId) {
       const cat = await tx.category.findUnique({ where: { id: categoryId } });
       if (!cat || (cat.userId && cat.userId !== userId)) {
-        throw new AppError('UNKNOWN_CATEGORY', 'Category not found.', 'categoryId');
+        throw new AppError('UNKNOWN_CATEGORY', 'Category not found.', { field: 'categoryId' });
       }
     }
     if (goalId) {
       const goal = await tx.goal.findUnique({ where: { id: goalId } });
       if (!goal || goal.userId !== userId) {
-        throw new AppError('UNKNOWN_GOAL', 'Goal not found.', 'goalId');
+        throw new AppError('UNKNOWN_GOAL', 'Goal not found.', { field: 'goalId' });
       }
     }
 
@@ -80,16 +81,16 @@ export class LedgerRepository {
     const accountMap = new Map(accounts.filter(Boolean).map(a => [a!.id, a!]));
     for (const id of accountIds) {
       if (!accountMap.has(id)) {
-        throw new AppError('UNKNOWN_ACCOUNT', `Account ${id} not found.`, 'accountId');
+        throw new AppError('UNKNOWN_ACCOUNT', `Account ${id} not found.`, { field: 'accountId' });
       }
       const acc = accountMap.get(id)!;
       if (acc.userId !== userId) {
-        throw new AppError('UNKNOWN_ACCOUNT', `Account ${id} not owned by user.`, 'accountId');
+        throw new AppError('UNKNOWN_ACCOUNT', `Account ${id} not owned by user.`, { field: 'accountId' });
       }
     }
 
     // Validate invariants
-    this.validateInvariants(type, accountMap, fromAccountId, toAccountId, amountMinor, feeMinor);
+    this.validateInvariants(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor);
 
     // Create transaction
     const transaction = await tx.transaction.create({
@@ -109,12 +110,12 @@ export class LedgerRepository {
         source,
         status,
         note,
-        idempotencyKey,
+        idempotencyKey: idempotencyKey ?? undefined,
       },
     });
 
     // Calculate balance effects
-    const balanceEffects = this.calculateBalanceEffects(type, accountMap, fromAccountId, toAccountId, amountMinor, feeMinor);
+    const balanceEffects = this.calculateBalanceEffects(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor);
 
     // Insert balance effects and update account balances
     for (const effect of balanceEffects) {
@@ -137,12 +138,12 @@ export class LedgerRepository {
     // Handle goal funding
     if (goalId && type === 'transfer') {
       const goal = await tx.goal.findUnique({ where: { id: goalId } });
-      if (!goal) throw new AppError('UNKNOWN_GOAL', 'Goal not found.', 'goalId');
-      if (!goal.active) throw new AppError('GOAL_INACTIVE', 'Goal is not active.', 'goalId');
+      if (!goal) throw new AppError('UNKNOWN_GOAL', 'Goal not found.', { field: 'goalId' });
+      if (!goal.active) throw new AppError('GOAL_INACTIVE', 'Goal is not active.', { field: 'goalId' });
 
       const remaining = Number(goal.targetMinor) - Number(goal.currentMinor);
       if (amountMinor > remaining) {
-        throw new AppError('GOAL_OVERFUNDED', 'Funding exceeds goal target.', 'amountMinor');
+        throw new AppError('GOAL_OVERFUNDED', 'Funding exceeds goal target.', { field: 'amountMinor' });
       }
 
       await tx.goal.update({
@@ -179,10 +180,10 @@ export class LedgerRepository {
     });
 
     if (!original) {
-      throw new AppError('UNKNOWN_TRANSACTION', 'Transaction not found.', 'id');
+      throw new AppError('UNKNOWN_TRANSACTION', 'Transaction not found.', { field: 'id' });
     }
     if (original.reversedTransactionId) {
-      throw new AppError('ALREADY_REVERSED', 'Transaction already reversed.', 'id');
+      throw new AppError('ALREADY_REVERSED', 'Transaction already reversed.', { field: 'id' });
     }
 
     // Lock affected accounts
@@ -282,52 +283,52 @@ export class LedgerRepository {
 
     switch (type) {
       case 'expense': {
-        if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Expense requires fromAccountId.', 'fromAccountId');
+        if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Expense requires fromAccountId.', { field: 'fromAccountId' });
         const acc = accountMap.get(fromAccountId)!;
-        if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Expense must use an asset account.', 'fromAccountId');
+        if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Expense must use an asset account.', { field: 'fromAccountId' });
         if (Number(acc.currentBalanceMinor) < totalAmount) {
-          throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', 'amountMinor');
+          throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
         }
         break;
       }
       case 'income': {
-        if (!toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Income requires toAccountId.', 'toAccountId');
+        if (!toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Income requires toAccountId.', { field: 'toAccountId' });
         const acc = accountMap.get(toAccountId)!;
-        if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Income must use an asset account.', 'toAccountId');
+        if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Income must use an asset account.', { field: 'toAccountId' });
         break;
       }
       case 'transfer': {
-        if (!fromAccountId || !toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer requires fromAccountId and toAccountId.', 'fromAccountId');
-        if (fromAccountId === toAccountId) throw new AppError('TRANSFER_SAME_ACCOUNT', 'Transfer cannot use the same source and destination.', 'fromAccountId');
+        if (!fromAccountId || !toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer requires fromAccountId and toAccountId.', { field: 'fromAccountId' });
+        if (fromAccountId === toAccountId) throw new AppError('TRANSFER_SAME_ACCOUNT', 'Transfer cannot use the same source and destination.', { field: 'fromAccountId' });
         const fromAcc = accountMap.get(fromAccountId)!;
         const toAcc = accountMap.get(toAccountId)!;
 
         if (fromAcc.classification === 'liability' && fromAcc.accountType === 'credit_card') {
           // Card payment: from asset to card liability
           if (toAcc.classification !== 'liability' || toAcc.accountType !== 'credit_card') {
-            throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must go to a credit card account.', 'toAccountId');
+            throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must go to a credit card account.', { field: 'toAccountId' });
           }
           const cardDetail = toAcc.creditCardDetail;
-          if (!cardDetail) throw new AppError('UNKNOWN_ACCOUNT', 'Credit card details not found.', 'toAccountId');
+          if (!cardDetail) throw new AppError('UNKNOWN_ACCOUNT', 'Credit card details not found.', { field: 'toAccountId' });
           const owed = Number(toAcc.currentBalanceMinor);
-          if (owed === 0) throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card has no balance to pay.', 'amountMinor');
+          if (owed === 0) throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card has no balance to pay.', { field: 'amountMinor' });
           if (amountMinor > owed) {
-            throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card payment cannot exceed amount owed.', 'amountMinor');
+            throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card payment cannot exceed amount owed.', { field: 'amountMinor' });
           }
           // fromAcc must be asset
           if (fromAcc.classification !== 'asset') {
-            throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must come from an asset account.', 'fromAccountId');
+            throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must come from an asset account.', { field: 'fromAccountId' });
           }
           if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
-            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', 'amountMinor');
+            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
         } else if (fromAcc.classification === 'asset' && toAcc.classification === 'asset') {
           // Asset to asset transfer
           if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
-            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', 'amountMinor');
+            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
         } else {
-          throw new AppError('INVALID_TRANSACTION_KIND', 'Invalid transfer account combination.', 'fromAccountId');
+          throw new AppError('INVALID_TRANSACTION_KIND', 'Invalid transfer account combination.', { field: 'fromAccountId' });
         }
         break;
       }

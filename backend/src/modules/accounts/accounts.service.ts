@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { AccountsRepository } from './accounts.repository.js.js.js.js';
-import type { AccountView, CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js.js.js.js';
+import { AccountsRepository } from './accounts.repository.js';
+import type { AccountView, CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js';
 
 export class AccountsService {
   constructor(private prisma: PrismaClient, private repo: AccountsRepository) {}

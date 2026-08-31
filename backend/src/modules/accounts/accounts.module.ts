@@ -1,6 +1,6 @@
-import { AccountsService } from './accounts.service.js.js.js.js';
-import { AccountsRepository } from './accounts.repository.js.js.js.js';
-import { accountsRoutes } from './accounts.routes.js.js.js.js';
+import { AccountsService } from './accounts.service.js';
+import { AccountsRepository } from './accounts.repository.js';
+import { accountsRoutes } from './accounts.routes.js';
 import { PrismaClient } from '@prisma/client';
 
 export interface AccountsModule {
@@ -17,7 +17,7 @@ export function createAccountsModule(prisma: PrismaClient): AccountsModule {
     service,
     repo,
     async registerRoutes(app: any) {
-      await app.register(accountsRoutes, { prefix: '/api/v1', service });
+      await app.register(accountsRoutes, { service, prisma });
     },
   };
 }

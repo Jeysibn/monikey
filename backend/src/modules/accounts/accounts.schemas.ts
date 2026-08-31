@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { accountTypeSchema } from '../ledger/ledger.schemas';
+import { accountTypeSchema } from '../ledger/ledger.schemas.js';
 
 export const createAccountSchema = z.object({
   name: z.string().min(1).max(100),

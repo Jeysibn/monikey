@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const accountTypeSchema = z.enum(['checking', 'savings', 'ewallet', 'cash', 'credit_card']);
+
 export const transactionTypeSchema = z.enum(['income', 'expense', 'transfer']);
 export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring']);
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);

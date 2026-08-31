@@ -5,8 +5,8 @@ import type { Clock } from '../../common/auth/authGuard.js'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { AppError } from '../../common/errors/appError.js'
-import { getSettingsForUser, updateSettingsForUser } from './settings.repository.js.js.js.js.js'
-import { updateSettingsSchema } from './settings.schemas.js.js.js.js.js'
+import { getSettingsForUser, updateSettingsForUser } from './settings.repository.js'
+import { updateSettingsSchema } from './settings.schemas.js'
 
 export interface SettingsRoutesOptions {
   prisma: PrismaClient

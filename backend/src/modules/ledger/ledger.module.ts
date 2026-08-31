@@ -1,6 +1,6 @@
-import { LedgerService } from './ledger.service.js.js.js.js';
-import { LedgerRepository } from './ledger.repository.js.js.js.js';
-import { ledgerRoutes } from './ledger.routes.js.js.js.js';
+import { LedgerService } from './ledger.service.js';
+import { LedgerRepository } from './ledger.repository.js';
+import { ledgerRoutes } from './ledger.routes.js';
 import { PrismaClient } from '@prisma/client';
 
 export interface LedgerModule {
@@ -17,7 +17,7 @@ export function createLedgerModule(prisma: PrismaClient): LedgerModule {
     service,
     repo,
     async registerRoutes(app: any) {
-      await app.register(ledgerRoutes, { prefix: '/api/v1', service });
+      await app.register(ledgerRoutes, { service, prisma });
     },
   };
 }

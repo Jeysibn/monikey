@@ -30,4 +30,24 @@ describeIfDb('LedgerModule (real PostgreSQL)', () => {
       await prisma.$disconnect()
     }
   })
+
+  it('serializes concurrent card charges so the credit limit cannot be exceeded', async () => {
+    const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
+    const userId = randomUUID()
+    const cardId = randomUUID()
+    try {
+      await prisma.user.create({ data: { id: userId, email: `${userId}@card.test`, passwordHash: 'test', displayName: 'Card Test' } })
+      await prisma.financialAccount.create({ data: { id: cardId, userId, name: 'Test card', accountType: 'credit_card', classification: 'liability', currentBalanceMinor: 0, openingBalanceMinor: 0 } })
+      await prisma.creditCardDetail.create({ data: { accountId: cardId, network: 'visa', creditLimitMinor: 100, dueDay: 15 } })
+      const ledger = new LedgerService(prisma, new LedgerRepository(prisma))
+      const input = (key: string) => ({ type: 'expense' as const, title: 'Concurrent charge', categoryId: null, goalId: null, fromAccountId: cardId, toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 80, feeMinor: 0, currencyCode: 'PHP', source: 'manual' as const, status: 'cleared' as const, note: null, idempotencyKey: key })
+      const results = await Promise.allSettled([ledger.postTransaction(userId, input('card-charge-a')), ledger.postTransaction(userId, input('card-charge-b'))])
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+      expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: cardId } })).currentBalanceMinor).toBe(80n)
+    } finally {
+      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
+      await prisma.$disconnect()
+    }
+  })
 })

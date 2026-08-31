@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal } from '../domain/finance'
+import type { AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, BudgetCategory, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal } from '../domain/finance'
 import type { FinanceGateway } from '../services/apiFinanceGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
@@ -16,6 +16,7 @@ export interface AsyncFinanceContextValue {
   addManualCreditCard: (input: AddManualCreditCardInput) => Promise<CreditCard>
   createGoal: (input: CreateGoalInput) => Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number, date: string) => Promise<Goal>
+  setBudgetAllocation: (periodId: string, categoryId: string, allocated: number) => Promise<BudgetCategory>
 }
 
 const AsyncFinanceContext = createContext<AsyncFinanceContextValue | null>(null)
@@ -69,8 +70,13 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
     setState((current) => current ? { ...current, goals: current.goals.map((goal) => goal.id === result.id ? result : goal) } : current)
     return result
   }, [stableGateway])
+  const setBudgetAllocation = useCallback(async (periodId: string, categoryId: string, allocated: number) => {
+    const result = await stableGateway.setBudgetAllocation(periodId, categoryId, allocated)
+    setState((current) => current ? { ...current, budgetCategories: current.budgetCategories.some((item) => item.id === categoryId) ? current.budgetCategories.map((item) => item.id === categoryId ? { ...item, allocated: result.allocated } : item) : [...current.budgetCategories, result] } : current)
+    return result
+  }, [stableGateway])
 
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     todayIso: new Date().toISOString().slice(0, 10),

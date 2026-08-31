@@ -3,6 +3,7 @@ import type { UpdateSettingsInput } from './settings.schemas.js'
 
 export interface SettingsView {
   displayName: string
+  email: string
   timezone: string
   baseCurrency: string
   billDueReminders: boolean
@@ -80,7 +81,7 @@ export async function updateSettingsForUser(
 }
 
 function toView(
-  user: { displayName: string; timezone: string; baseCurrency: string },
+  user: { displayName: string; email: string; timezone: string; baseCurrency: string },
   preferences: {
     billDueReminders: boolean
     budgetNearLimitWarnings: boolean
@@ -93,6 +94,7 @@ function toView(
 ): SettingsView {
   return {
     displayName: user.displayName,
+    email: user.email,
     timezone: user.timezone,
     baseCurrency: user.baseCurrency,
     billDueReminders: preferences.billDueReminders,

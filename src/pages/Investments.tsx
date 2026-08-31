@@ -9,6 +9,7 @@ import { formatMoney } from '../utils/currency'
 import { formatDateLabel, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import { parseMoneyInput } from '../utils/money'
 import type { InvestmentTransactionType } from '../domain/investments'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Investments.css'
 
 const TX_TYPE_LABEL: Record<InvestmentTransactionType, string> = { buy: 'Buy', sell: 'Sell' }
@@ -24,7 +25,7 @@ function LogTransactionForm({
 }: {
   tickers: string[]
   todayIso: string
-  onLog: (input: { ticker: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void
+  onLog: (input: { ticker: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void | Promise<void>
   onClose: () => void
 }) {
   const [ticker, setTicker] = useState(tickers[0] ?? '')
@@ -34,8 +35,9 @@ function LogTransactionForm({
   const [date, setDate] = useState(todayIso)
   const [note, setNote] = useState('')
   const { errors, field, errorId, fail } = useFieldErrors<TxField>(TX_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!ticker) {
       fail({ ticker: 'Select a ticker.' })
@@ -79,8 +81,14 @@ function LogTransactionForm({
       fail({ date: 'Date can’t be in the future.' })
       return
     }
-    onLog({ ticker, type, units: unitsResult.value, price: priceResult.value, date, note: note.trim() || undefined })
-    onClose()
+    try {
+      setSubmitting(true)
+      const pending = onLog({ ticker, type, units: unitsResult.value, price: priceResult.value, date, note: note.trim() || undefined })
+      if (pending) await pending
+      onClose()
+    } catch (err) {
+      fail({ ticker: err instanceof Error ? err.message : 'Could not save investment trade.' })
+    } finally { setSubmitting(false) }
   }
 
   return (
@@ -169,11 +177,11 @@ function LogTransactionForm({
       </div>
       <p className="form-help">This logs the trade to your activity feed only — it does not change the sample holding units or price shown above.</p>
       <div className="new-category-actions">
-        <button type="button" className="btn btn--ghost" onClick={onClose}>
+        <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary">
-          Log transaction
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Saving…' : 'Log transaction'}
         </button>
       </div>
     </form>
@@ -183,7 +191,13 @@ function LogTransactionForm({
 export function Investments() {
   const finance = useFinance()
   const inv = useInvestments()
+  const asyncFinance = useAsyncFinanceOptional()
   const [logOpen, setLogOpen] = useState(false)
+  const handleLog = (input: { ticker: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
+    if (!asyncFinance) { inv.logTransaction(input); return }
+    const holding = inv.holdings.find((item) => item.ticker === input.ticker)
+    return asyncFinance.addInvestmentTrade({ ...input, name: holding?.name ?? input.ticker, assetClass: holding?.assetClass ?? 'equity', sector: holding?.sector ?? 'Other' })
+  }
 
   const perfLabels = inv.performanceHistory.map((_, i) => (i === inv.performanceHistory.length - 1 ? 'Today' : `T-${inv.performanceHistory.length - 1 - i}`))
 
@@ -383,7 +397,7 @@ export function Investments() {
             </button>
           </div>
           {logOpen && (
-            <LogTransactionForm tickers={inv.tickers} todayIso={finance.todayIso} onLog={inv.logTransaction} onClose={() => setLogOpen(false)} />
+            <LogTransactionForm tickers={inv.tickers} todayIso={finance.todayIso} onLog={handleLog} onClose={() => setLogOpen(false)} />
           )}
           <ul className="inv-tx-list">
             {inv.transactions.map((t) => (

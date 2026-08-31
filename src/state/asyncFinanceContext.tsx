@@ -4,6 +4,9 @@ import type { FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import type { RecurringGateway } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
+import type { InvestmentTradeInput } from '../services/apiInvestmentGateway'
+import type { InvestmentGateway } from '../services/apiInvestmentGateway'
+import { ApiInvestmentGateway } from '../services/apiInvestmentGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
 
@@ -25,6 +28,7 @@ export interface AsyncFinanceContextValue {
   addRecurringItem: (input: AddRecurringItemInput) => Promise<RecurringItem>
   setRecurringStatus: (id: string, status: 'active' | 'paused') => Promise<RecurringItem>
   markRecurringPaid: (id: string) => Promise<RecurringItem>
+  addInvestmentTrade: (input: InvestmentTradeInput) => Promise<void>
 }
 
 const AsyncFinanceContext = createContext<AsyncFinanceContextValue | null>(null)
@@ -43,6 +47,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   const [attempt, setAttempt] = useState(0)
   const [stableRecurringGateway] = useState(() => recurringGateway ?? (gateway ? undefined : new ApiRecurringGateway()))
   const [recurringItems, setRecurringItems] = useState<RecurringItem[]>([])
+  const [stableInvestmentGateway] = useState<InvestmentGateway | undefined>(() => gateway ? undefined : new ApiInvestmentGateway())
 
   useEffect(() => {
     const controller = new AbortController()
@@ -136,8 +141,14 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     setRecurringItems((current) => current.map((item) => item.id === id ? result : item))
     return result
   }, [stableRecurringGateway])
+  const addInvestmentTrade = useCallback(async (input: InvestmentTradeInput) => {
+    if (!stableInvestmentGateway) throw new Error('Investment backend is not configured')
+    await stableInvestmentGateway.addTrade(input)
+    const refreshed = await stableGateway.load()
+    if (refreshed) setState(refreshed)
+  }, [stableGateway, stableInvestmentGateway])
 
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation, addBudgetCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation, addBudgetCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation, addBudgetCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, addInvestmentTrade }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds, setBudgetAllocation, addBudgetCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, addInvestmentTrade])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     todayIso: new Date().toISOString().slice(0, 10),

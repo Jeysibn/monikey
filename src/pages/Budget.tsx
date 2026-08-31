@@ -7,6 +7,7 @@ import { useFieldErrors } from '../hooks/useFieldErrors'
 import { formatMoney } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { FinanceValidationError } from '../domain/financeRules'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Budget.css'
 
 const CATEGORY_FIELDS = ['name', 'allocated'] as const
@@ -14,10 +15,12 @@ type CategoryField = (typeof CATEGORY_FIELDS)[number]
 
 export function Budget() {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const { budgetCategories, categories, budgetVsActual, totalBudgetAllocated } = finance.state
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [allocated, setAllocated] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
 
   const overNames = budgetCategories
@@ -25,7 +28,7 @@ export function Budget() {
     .map((c) => categories.find((cc) => cc.id === c.id)?.name ?? c.id)
     .join(', ')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmedName = name.trim()
     if (!trimmedName) {
@@ -49,11 +52,15 @@ export function Budget() {
     // (see SR-002/TR-002) so this form doesn't duplicate financial logic —
     // it just surfaces whatever the repository rejects on the field at fault.
     try {
-      finance.addBudgetCategory({ name: trimmedName, allocated: result.value })
+      setSubmitting(true)
+      if (asyncFinance) await asyncFinance.addBudgetCategory({ name: trimmedName, allocated: result.value })
+      else finance.addBudgetCategory({ name: trimmedName, allocated: result.value })
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as CategoryField) : 'allocated'
       fail({ [at]: err instanceof Error ? err.message : 'Could not add category.' })
       return
+    } finally {
+      setSubmitting(false)
     }
     setName('')
     setAllocated('')
@@ -138,8 +145,8 @@ export function Budget() {
                 <button type="button" className="btn btn--ghost" onClick={() => setFormOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn--primary">
-                  Add category
+                <button type="submit" className="btn btn--primary" disabled={submitting || asyncFinance?.status === 'loading'}>
+                  {submitting ? 'Saving…' : 'Add category'}
                 </button>
               </div>
             </form>

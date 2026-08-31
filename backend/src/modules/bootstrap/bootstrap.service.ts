@@ -49,6 +49,11 @@ export interface FinanceState {
     createdAt: string;
     updatedAt: string;
   }>;
+  recurring: Array<{
+    id: string; userId: string; merchant: string; amountMinor: number; frequency: string; nextDueDate: string;
+    accountId: string; categoryId: string; autopay: boolean; status: string; lastPaidDate: string | null;
+    createdAt: string; updatedAt: string;
+  }>;
 }
 
 export interface BootstrapResponse {
@@ -89,7 +94,7 @@ export class BootstrapService {
   ) {}
 
   async getBootstrap(userId: string): Promise<BootstrapResponse> {
-    const [user, accounts, categories, transactions, goals, preferences, budgetPeriods] = await Promise.all([
+    const [user, accounts, categories, transactions, goals, preferences, budgetPeriods, recurring] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.accountsService.listAccounts(userId),
       this.prisma.category.findMany({ where: { OR: [{ userId }, { userId: null }], archivedAt: null } }),
@@ -97,6 +102,7 @@ export class BootstrapService {
       this.prisma.goal.findMany({ where: { userId } }),
       this.prisma.userPreferences.findUnique({ where: { userId } }),
       this.prisma.budgetPeriod.findMany({ where: { userId }, include: { allocations: true }, orderBy: { periodStart: 'desc' } }),
+      this.prisma.recurringItem.findMany({ where: { userId }, orderBy: { nextDueDate: 'asc' } }),
     ]);
 
     if (!user) throw new Error('User not found');
@@ -140,8 +146,9 @@ export class BootstrapService {
           createdAt: g.createdAt.toISOString(),
           updatedAt: g.updatedAt.toISOString(),
         })),
+        recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       },
-      recurring: [],
+      recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       investmentActivity: { trades: [], dividends: [] },
       settings: {
         displayName: user.displayName,

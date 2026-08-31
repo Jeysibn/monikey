@@ -238,7 +238,7 @@ model Transaction {
   source                TransactionSource
   status                TransactionStatus
   note                  String?
-  idempotencyKey        String?            @unique @map("idempotency_key")
+  idempotencyKey        String?            @map("idempotency_key")
   reversedTransactionId String?            @unique @map("reversed_transaction_id") @db.Uuid
   createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -255,6 +255,7 @@ model Transaction {
 
   @@index([userId, occurredOn])
   @@index([userId, categoryId, occurredOn])
+  @@unique([userId, idempotencyKey], map: "transactions_user_id_idempotency_key_idx")
   @@map("transactions")
 }
 

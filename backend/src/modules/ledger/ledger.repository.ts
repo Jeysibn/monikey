@@ -81,10 +81,19 @@ export class LedgerRepository {
       }
     }
     if (goalId) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM goals WHERE id = ${goalId}::uuid AND user_id = ${userId}::uuid FOR UPDATE`);
       const goal = await tx.goal.findUnique({ where: { id: goalId } });
       if (!goal || goal.userId !== userId) {
         throw new AppError('UNKNOWN_GOAL', 'Goal not found.', { field: 'goalId' });
       }
+    }
+
+    // Lock all affected rows in a stable order before reading balances. The
+    // ordered lock prevents concurrent transfers from deadlocking while the
+    // lock makes the invariant checks authoritative for this transaction.
+    const sortedAccountIds = Array.from(accountIds).sort();
+    if (sortedAccountIds.length > 0) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM financial_accounts WHERE user_id = ${userId}::uuid AND id IN (${Prisma.join(sortedAccountIds.map((id) => Prisma.sql`${id}::uuid`))}) FOR UPDATE`);
     }
 
     const accounts = await Promise.all(
@@ -199,6 +208,10 @@ export class LedgerRepository {
 
     // Lock affected accounts
     const accountIds = new Set(original.balanceEffects.map(e => e.accountId));
+    const sortedAccountIds = Array.from(accountIds).sort();
+    if (sortedAccountIds.length > 0) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM financial_accounts WHERE user_id = ${userId}::uuid AND id IN (${Prisma.join(sortedAccountIds.map((id) => Prisma.sql`${id}::uuid`))}) FOR UPDATE`);
+    }
     const accounts = await Promise.all(
       Array.from(accountIds).map(id =>
         tx.financialAccount.findUnique({ where: { id }, include: { creditCardDetail: true } })
@@ -264,6 +277,7 @@ export class LedgerRepository {
 
     // Handle goal contribution reversal
     if (original.goalId) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM goals WHERE id = ${original.goalId}::uuid AND user_id = ${userId}::uuid FOR UPDATE`);
       await tx.goal.update({
         where: { id: original.goalId },
         data: { currentMinor: { decrement: original.amountMinor } },

@@ -94,7 +94,7 @@ export class BootstrapService {
   ) {}
 
   async getBootstrap(userId: string): Promise<BootstrapResponse> {
-    const [user, accounts, categories, transactions, goals, preferences, budgetPeriods, recurring] = await Promise.all([
+    const [user, accounts, categories, transactions, goals, preferences, budgetPeriods, recurring, investmentTrades, dividends] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.accountsService.listAccounts(userId),
       this.prisma.category.findMany({ where: { OR: [{ userId }, { userId: null }], archivedAt: null } }),
@@ -103,6 +103,8 @@ export class BootstrapService {
       this.prisma.userPreferences.findUnique({ where: { userId } }),
       this.prisma.budgetPeriod.findMany({ where: { userId }, include: { allocations: true }, orderBy: { periodStart: 'desc' } }),
       this.prisma.recurringItem.findMany({ where: { userId }, orderBy: { nextDueDate: 'asc' } }),
+      this.prisma.investmentTrade.findMany({ where: { userId }, include: { instrument: true }, orderBy: { occurredOn: 'asc' } }),
+      this.prisma.dividend.findMany({ where: { userId }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
     ]);
 
     if (!user) throw new Error('User not found');
@@ -149,7 +151,10 @@ export class BootstrapService {
         recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       },
       recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
-      investmentActivity: { trades: [], dividends: [] },
+      investmentActivity: {
+        trades: investmentTrades.map((trade) => ({ id: trade.id, ticker: trade.instrument.ticker, type: trade.type, units: Number(trade.units), priceMinor: Number(trade.priceMinor), amountMinor: Number(trade.units) * Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10), note: trade.note ?? null })),
+        dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.instrument.ticker, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10), note: dividend.note ?? null })),
+      },
       settings: {
         displayName: user.displayName,
         timezone: user.timezone,

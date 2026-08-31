@@ -48,7 +48,14 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
 
   const addTransaction = useCallback(async (input: AddTransactionInput) => {
     const result = await stableGateway.addTransaction(input)
-    setState((current) => current ? { ...current, transactions: [result, ...current.transactions] } : current)
+    // A posted transaction changes balances, goals, budget spending, and
+    // related selectors. Reload the authoritative snapshot instead of
+    // maintaining a partial client-side projection of those effects.
+    const refreshed = await stableGateway.load()
+    setState((current) => {
+      if (refreshed) return refreshed.transactions.some((transaction) => transaction.id === result.id) ? refreshed : { ...refreshed, transactions: [result, ...refreshed.transactions] }
+      return current ? { ...current, transactions: [result, ...current.transactions] } : current
+    })
     return result
   }, [stableGateway])
   const addManualAccount = useCallback(async (input: AddManualAccountInput) => {

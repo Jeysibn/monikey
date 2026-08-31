@@ -17,7 +17,7 @@ export interface AsyncFinanceContextValue {
   createGoal: (input: CreateGoalInput) => Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number, date: string) => Promise<Goal>
   setBudgetAllocation: (periodId: string, categoryId: string, allocated: number) => Promise<BudgetCategory>
-  addBudgetCategory: (input: { name: string; color?: string }) => Promise<{ id: string; name: string; color: string }>
+  addBudgetCategory: (input: { name: string; allocated: number; color?: string }) => Promise<{ id: string; name: string; color: string; allocated: number }>
 }
 
 const AsyncFinanceContext = createContext<AsyncFinanceContextValue | null>(null)
@@ -76,9 +76,9 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
     setState((current) => current ? { ...current, budgetCategories: current.budgetCategories.some((item) => item.id === categoryId) ? current.budgetCategories.map((item) => item.id === categoryId ? { ...item, allocated: result.allocated } : item) : [...current.budgetCategories, result] } : current)
     return result
   }, [stableGateway])
-  const addBudgetCategory = useCallback(async (input: { name: string; color?: string }) => {
+  const addBudgetCategory = useCallback(async (input: { name: string; allocated: number; color?: string }) => {
     const result = await stableGateway.addBudgetCategory(input)
-    setState((current) => current ? { ...current, categories: [...current.categories, { id: result.id, name: result.name, color: result.color, budgetable: true, transactionKinds: ['expense'] }], budgetCategories: [...current.budgetCategories, { id: result.id, allocated: 0, spent: 0 }] } : current)
+    setState((current) => current ? { ...current, categories: [...current.categories, { id: result.id, name: result.name, color: result.color, budgetable: true, transactionKinds: ['expense'] }], budgetCategories: [...current.budgetCategories, { id: result.id, allocated: result.allocated, spent: 0 }] } : current)
     return result
   }, [stableGateway])
 
@@ -89,7 +89,7 @@ export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProvider
     addTransaction,
     addManualAccount,
     addManualCreditCard,
-    addBudgetCategory: (input) => addBudgetCategory(input).then((category) => ({ id: category.id, name: category.name, allocated: 0, spent: 0 })),
+    addBudgetCategory: (input) => addBudgetCategory(input).then((category) => ({ id: category.id, name: category.name, allocated: input.allocated, spent: 0 })),
     createGoal,
     addGoalFunds: (goalId, sourceAccountId, amount) => addGoalFunds(goalId, sourceAccountId, amount, new Date().toISOString().slice(0, 10)),
   }), [state, addTransaction, addManualAccount, addManualCreditCard, createGoal, addGoalFunds])

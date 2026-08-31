@@ -1,0 +1,171 @@
+// Monikey backend — Phase 1 schema.
+// Scope: users, sessions, preferences, categories, financial accounts, and
+// credit card details only (per Phase 1 of the implementation plan).
+// Ledger/budget/goal/recurring/investment/reporting tables arrive in later
+// phases and must not be added here ahead of schedule.
+//
+// IMPORTANT: this file must stay byte-for-byte consistent with what
+// `prisma/migrations/20260831000000_init/migration.sql` actually creates.
+// Every `DateTime` column is `@db.Timestamptz(6)` because the migration
+// creates `TIMESTAMPTZ` columns — a bare `DateTime` would describe Prisma's
+// default `timestamp(3)` (no timezone) and silently drift from the applied
+// schema (QA Attempt 1, Finding 1). Verify with:
+//   npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma \
+//     --to-url "$DATABASE_URL" --script
+// which must print no `ALTER COLUMN ... SET DATA TYPE` output.
+//
+// This schema also cannot represent the 6 CHECK constraints or the 3
+// triggers the migration adds (Prisma has no declarative support for either
+// in this version) — those exist ONLY in the raw migration SQL. Any future
+// `prisma migrate dev` diff must be hand-audited to re-append them; see
+// Database Schema.md in the Obsidian vault for the authoritative list.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  checking
+  savings
+  ewallet
+  cash
+  credit_card
+
+  @@map("account_type")
+}
+
+enum AccountClassification {
+  asset
+  liability
+
+  @@map("account_classification")
+}
+
+enum CardNetwork {
+  visa
+  mastercard
+
+  @@map("card_network")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  displayName  String   @map("display_name")
+  timezone     String   @default("Asia/Manila")
+  baseCurrency String   @default("PHP") @map("base_currency") @db.Char(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions           UserSession[]
+  preferences        UserPreferences?
+  categories         Category[]
+  financialAccounts  FinancialAccount[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAgent   String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+// NOTE (deliberate Phase-1 deviation, recorded per orchestrator sign-off —
+// see the Phase 1 development log "Problems Encountered" and
+// Database Schema.md): the plan's Phase 1 checklist lists only
+// users/sessions/categories/accounts/cards. This table is genuinely Phase 2
+// territory (settings persistence), but is included now as harmless
+// pre-provisioning: it has no FK/behavioral coupling to anything Phase 1
+// builds, Phase 2's AuthModule/SettingsModule will consume it unchanged, and
+// removing it would require a churny down-migration for zero benefit. If
+// Phase 2 needs a different shape, add a follow-up migration — do not edit
+// this one.
+model UserPreferences {
+  userId                        String   @id @map("user_id") @db.Uuid
+  billDueReminders              Boolean  @default(true) @map("bill_due_reminders")
+  budgetNearLimitWarnings       Boolean  @default(true) @map("budget_near_limit_warnings")
+  weeklySummaryEmail            Boolean  @default(false) @map("weekly_summary_email")
+  hideCents                     Boolean  @default(false) @map("hide_cents")
+  externalAiEnabled             Boolean  @default(false) @map("external_ai_enabled")
+  externalOcrEnabled            Boolean  @default(false) @map("external_ocr_enabled")
+  detailedAiContextEnabled      Boolean  @default(false) @map("detailed_ai_context_enabled")
+  createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Category {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  name              String
+  color             String
+  budgetable        Boolean   @default(true)
+  allowsIncome      Boolean   @default(false) @map("allows_income")
+  allowsExpense     Boolean   @default(true) @map("allows_expense")
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("categories")
+}
+
+model FinancialAccount {
+  id                  String                @id @default(uuid()) @db.Uuid
+  userId              String                @map("user_id") @db.Uuid
+  name                String
+  institution         String?
+  accountType         AccountType           @map("account_type")
+  classification      AccountClassification
+  currencyCode        String                @default("PHP") @map("currency_code") @db.Char(3)
+  openingBalanceMinor BigInt                @default(0) @map("opening_balance_minor")
+  currentBalanceMinor BigInt                @default(0) @map("current_balance_minor")
+  lastFour            String?               @map("last_four")
+  syncStatus          String                @default("manual") @map("sync_status")
+  manual              Boolean               @default(true)
+  version             Int                   @default(0)
+  archivedAt          DateTime?             @map("archived_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditCardDetail CreditCardDetail?
+
+  @@index([userId])
+  @@map("financial_accounts")
+}
+
+model CreditCardDetail {
+  accountId          String   @id @map("account_id") @db.Uuid
+  network            CardNetwork
+  creditLimitMinor   BigInt   @map("credit_limit_minor")
+  dueDay             Int      @map("due_day")
+  minimumPaymentMinor BigInt  @default(0) @map("minimum_payment_minor")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("credit_card_details")
+}

@@ -27,11 +27,8 @@ playwright-report
 blob-report
 playwright/.cache
 
-# Claude Code local runtime state — ignore everything under .claude/
-# except hand-authored, shared config (agent definitions)
-.claude/*
-!.claude/agents/
-!.claude/agents/**
+# Claude Code local state — not shared project config
+.claude/
 
 # Editor directories and files
 .vscode/*

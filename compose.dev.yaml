@@ -1,0 +1,30 @@
+# Local development overlay. Usage:
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+#
+# Mounts source for faster iteration and runs the API/worker via tsx watch
+# instead of the compiled production build. The db/migrate services are
+# unchanged from compose.yaml.
+services:
+  api:
+    build:
+      context: ./backend
+      target: build
+    command: ["npx", "tsx", "watch", "src/server.ts"]
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+
+  worker:
+    build:
+      context: ./backend
+      target: build
+    command: ["npx", "tsx", "watch", "src/worker.ts"]
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug

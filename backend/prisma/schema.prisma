@@ -82,7 +82,13 @@ model UserSession {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // TODO(Phase 5 / JobModule): a scheduled cleanup job should periodically
+  // delete rows where expires_at is in the past. Not built in Phase 2 — the
+  // auth guard already refuses to authenticate an expired session (and
+  // opportunistically deletes the one row it just resolved), so correctness
+  // does not depend on this job; it only bounds table growth over time.
   @@index([userId])
+  @@index([expiresAt])
   @@map("user_sessions")
 }
 

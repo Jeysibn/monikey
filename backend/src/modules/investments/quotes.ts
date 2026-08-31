@@ -97,6 +97,24 @@ export function createQuoteProvider(config: {
   return new CompositeQuoteProvider(providers)
 }
 
+export async function refreshQuoteSnapshots(
+  prisma: { instrument: { findMany(args: unknown): Promise<Array<{ id: string; ticker: string }>> }; quoteSnapshot: { create(args: unknown): Promise<unknown> } },
+  provider: QuoteProvider,
+  now = new Date(),
+): Promise<number> {
+  const instruments = await prisma.instrument.findMany({ where: { userId: { not: null } }, select: { id: true, ticker: true } })
+  if (instruments.length === 0) return 0
+  const quotes = await provider.getQuotes(instruments.map((instrument) => instrument.ticker))
+  let saved = 0
+  for (const instrument of instruments) {
+    const quote = quotes.get(instrument.ticker.toUpperCase())
+    if (!quote) continue
+    await prisma.quoteSnapshot.create({ data: { instrumentId: instrument.id, source: quote.source, priceMinor: BigInt(quote.priceMinor), currencyCode: quote.currencyCode ?? 'USD', fetchedAt: now } })
+    saved += 1
+  }
+  return saved
+}
+
 export function isQuoteStale(fetchedAt: Date, now = new Date(), maxAgeMs = 24 * 60 * 60 * 1000): boolean {
   return now.getTime() - fetchedAt.getTime() > maxAgeMs
 }

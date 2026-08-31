@@ -197,6 +197,8 @@ export interface AddTransactionInput {
   amount: number
   fee?: number
   note?: string
+  /** Stable per-submit key used by the backend to make retries safe. */
+  idempotencyKey?: string
 }
 
 export interface AddManualAccountInput {

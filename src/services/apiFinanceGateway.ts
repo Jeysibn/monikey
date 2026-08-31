@@ -70,7 +70,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<{ transaction: ApiTransaction }>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100), feeMinor: Math.round((input.fee ?? 0) * 100), note: input.note ?? null, source: 'manual', status: 'cleared' }) })
+    const result = await this.request<{ transaction: ApiTransaction }>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100), feeMinor: Math.round((input.fee ?? 0) * 100), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
     return this.mapTransaction(result.transaction)
   }
 

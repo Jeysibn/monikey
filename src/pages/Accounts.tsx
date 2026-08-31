@@ -2,29 +2,52 @@ import { useId, useState } from 'react'
 import { Card } from '../components/Card'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
+import { parseMoneyInput } from '../utils/money'
 import type { AccountType } from '../domain/finance'
 import './Accounts.css'
 
-function AddAccountForm({ onClose }: { onClose: () => void }) {
+type AccountSection = 'bank' | 'wallet'
+
+const SECTION_TYPES: Record<AccountSection, Exclude<AccountType, 'credit_card'>[]> = {
+  bank: ['checking', 'savings'],
+  wallet: ['ewallet', 'cash'],
+}
+
+const SECTION_TYPE_LABELS: Record<Exclude<AccountType, 'credit_card'>, string> = {
+  checking: 'Bank — Checking',
+  savings: 'Bank — Savings',
+  ewallet: 'E-Wallet',
+  cash: 'Cash',
+}
+
+function AddAccountForm({ section, onClose }: { section: AccountSection; onClose: () => void }) {
   const finance = useFinance()
   const [name, setName] = useState('')
-  const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>('ewallet')
+  const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(SECTION_TYPES[section][0])
   const [balance, setBalance] = useState('')
   const [error, setError] = useState('')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const amount = Number(balance)
     if (!name.trim()) {
       setError('Account name is required.')
       return
     }
-    if (balance === '' || Number.isNaN(amount) || amount < 0) {
+    if (!balance.trim()) {
       setError('Enter a starting balance of zero or more.')
       return
     }
-    finance.addManualAccount({ name: name.trim(), type, balance: amount })
-    onClose()
+    const result = parseMoneyInput(balance)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    try {
+      finance.addManualAccount({ name: name.trim(), type, balance: result.value })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add account.')
+    }
   }
 
   return (
@@ -36,10 +59,11 @@ function AddAccountForm({ onClose }: { onClose: () => void }) {
       <label className="new-category-field">
         <span className="tx-label">Type</span>
         <select className="tx-input" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-          <option value="checking">Bank — Checking</option>
-          <option value="savings">Bank — Savings</option>
-          <option value="ewallet">E-Wallet</option>
-          <option value="cash">Cash</option>
+          {SECTION_TYPES[section].map((t) => (
+            <option key={t} value={t}>
+              {SECTION_TYPE_LABELS[t]}
+            </option>
+          ))}
         </select>
       </label>
       <label className="new-category-field">
@@ -74,8 +98,6 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const limitAmount = Number(limit)
-    const balanceAmount = balance === '' ? 0 : Number(balance)
     if (!name.trim()) {
       setError('Card name is required.')
       return
@@ -84,24 +106,45 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
       setError('Enter the last 4 digits of the card.')
       return
     }
-    if (!limit || Number.isNaN(limitAmount) || limitAmount <= 0) {
+    if (!limit.trim()) {
       setError('Enter a credit limit greater than zero.')
       return
     }
-    if (Number.isNaN(balanceAmount) || balanceAmount < 0) {
-      setError('Current balance cannot be negative.')
+    const limitResult = parseMoneyInput(limit)
+    if (!limitResult.ok) {
+      setError(limitResult.error)
       return
     }
-    finance.addManualCreditCard({
-      name: name.trim(),
-      lastFour,
-      network,
-      limit: limitAmount,
-      balance: balanceAmount,
-      dueDate: 'Not set',
-      minPayment: 0,
-    })
-    onClose()
+    if (limitResult.value <= 0) {
+      setError('Enter a credit limit greater than zero.')
+      return
+    }
+    const balanceResult = balance.trim() ? parseMoneyInput(balance) : { ok: true as const, value: 0 }
+    if (!balanceResult.ok) {
+      setError(balanceResult.error)
+      return
+    }
+    // Documented rule (SR-007): a card's balance may not exceed its own
+    // limit — the repository also enforces this, this is just an earlier,
+    // friendlier surface for the same rule.
+    if (balanceResult.value > limitResult.value) {
+      setError(`Current balance can’t exceed the ${formatMoney(limitResult.value, { withCents: false })} credit limit.`)
+      return
+    }
+    try {
+      finance.addManualCreditCard({
+        name: name.trim(),
+        lastFour,
+        network,
+        limit: limitResult.value,
+        balance: balanceResult.value,
+        dueDate: 'Not set',
+        minPayment: 0,
+      })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add card.')
+    }
   }
 
   return (
@@ -219,7 +262,7 @@ export function Accounts() {
             </div>
             {addingAccount === 'bank' && (
               <div id={bankFormId}>
-                <AddAccountForm onClose={() => setAddingAccount(null)} />
+                <AddAccountForm section="bank" onClose={() => setAddingAccount(null)} />
               </div>
             )}
             {banks.map((a) => (
@@ -262,7 +305,7 @@ export function Accounts() {
             </div>
             {addingAccount === 'wallet' && (
               <div id={walletFormId}>
-                <AddAccountForm onClose={() => setAddingAccount(null)} />
+                <AddAccountForm section="wallet" onClose={() => setAddingAccount(null)} />
               </div>
             )}
             {wallets.map((a) => (

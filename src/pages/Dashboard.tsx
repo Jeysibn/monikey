@@ -6,7 +6,7 @@ import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
-import { formatDateLabel } from '../utils/date'
+import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
 
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
@@ -15,17 +15,19 @@ const PERIOD_TITLE: Record<ExpensesPeriod, string> = { daily: 'this week', weekl
 
 export function Dashboard() {
   const finance = useFinance()
-  const { accounts, creditCards, portfolio, expensesTrend } = finance.state
+  const { accounts, creditCards, portfolio } = finance.state
   const previewAccounts = accounts.slice(0, 4)
   const activeGoalsPreview = finance.activeGoals
   const completedCount = finance.completedGoals.length
   const recent = finance.state.transactions.slice(0, 5)
   const [period, setPeriod] = useState<ExpensesPeriod>('daily')
-  const expensesByDay = expensesTrend[period]
+  const expensesByDay = finance.expensesTrend(period)
   const maxDay = Math.max(1, ...expensesByDay.map((d) => d.amount))
 
   return (
     <div className="dashboard">
+      <MoneyPosition />
+
       <div className="dash-grid">
         <Card className="area-balance balance-card">
           <div className="eyebrow">Available Cash</div>
@@ -80,13 +82,12 @@ export function Dashboard() {
           <CardTitle
             action={
               <div className="expenses-head-right">
-                <div className="seg" role="tablist" aria-label="Expenses period">
+                <div className="seg" role="group" aria-label="Expenses period">
                   {(['daily', 'weekly', 'monthly'] as ExpensesPeriod[]).map((p) => (
                     <button
                       key={p}
                       type="button"
-                      role="tab"
-                      aria-selected={period === p}
+                      aria-pressed={period === p}
                       className={`pill seg-pill${period === p ? ' pill--active' : ''}`}
                       onClick={() => setPeriod(p)}
                     >
@@ -282,8 +283,14 @@ export function Dashboard() {
                   <td>
                     <div style={{ fontWeight: 600 }}>{t.title}</div>
                     <div className="faint" style={{ fontSize: 10.5 }}>
-                      {t.source === 'ocr' ? 'OCR receipt' : 'Manual'} · {t.time ?? formatDateLabel(t.date)}
+                      {finance.transactionSourceLabel(t)} · {formatDateLabel(t.date)}
+                      {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
                     </div>
+                    {finance.transferFeeReconciliationLabel(t) && (
+                      <div className="faint" style={{ fontSize: 10.5 }}>
+                        {finance.transferFeeReconciliationLabel(t)}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {t.categoryId ? (
@@ -310,8 +317,6 @@ export function Dashboard() {
           </table>
         </Card>
       </div>
-
-      <MoneyPosition />
     </div>
   )
 }

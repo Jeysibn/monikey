@@ -3,7 +3,7 @@ import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
-import { formatDateLabel } from '../utils/date'
+import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import type { TransactionType } from '../domain/finance'
 import './Transactions.css'
 
@@ -22,10 +22,10 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
       if (typeFilter !== 'all' && t.type !== typeFilter) return false
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
+      if (search && !finance.transactionMatchesSearch(t, search)) return false
       return true
     })
-  }, [transactions, search, typeFilter])
+  }, [transactions, search, typeFilter, finance])
 
   return (
     <div className="transactions-page">
@@ -70,12 +70,10 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
         <Card>
           <div className="eyebrow">Income · this month</div>
           <div className="num kpi-val">{formatMoney(finance.totalIncome)}</div>
-          <div className="faint">this month</div>
         </Card>
         <Card>
           <div className="eyebrow">Expenses · this month</div>
           <div className="num kpi-val">{formatMoney(finance.totalExpenses)}</div>
-          <div className="faint">this month</div>
         </Card>
         <Card>
           <div className="eyebrow">Net Cash Flow · this month</div>
@@ -128,10 +126,15 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                 <span role="cell">
                   <div style={{ fontWeight: 600 }}>{t.title}</div>
                   <div className="faint" style={{ fontSize: 10.5 }}>
-                    {t.source === 'ocr' ? 'OCR receipt' : t.source === 'recurring' ? 'Recurring' : 'Manual'}
-                    {t.time ? ` · ${t.time}` : ''}
+                    {finance.transactionSourceLabel(t)}
+                    {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
                     {t.note ? ` · ${t.note}` : ''}
                   </div>
+                  {finance.transferFeeReconciliationLabel(t) && (
+                    <div className="faint" style={{ fontSize: 10.5 }}>
+                      {finance.transferFeeReconciliationLabel(t)}
+                    </div>
+                  )}
                 </span>
                 <span role="cell" className="tx-col-center">
                   {t.categoryId ? (
@@ -179,8 +182,15 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                   <div style={{ fontWeight: 600 }}>{t.title}</div>
                   <div className="faint" style={{ fontSize: 11 }}>
                     {formatDateLabel(t.date)}
-                    {t.time ? ` · ${t.time}` : ''}
+                    {t.time ? ` · ${formatTimeLabel(t.time)}` : ''}
+                    {' · '}
+                    {finance.transactionSourceLabel(t)}
                   </div>
+                  {finance.transferFeeReconciliationLabel(t) && (
+                    <div className="faint" style={{ fontSize: 10.5 }}>
+                      {finance.transferFeeReconciliationLabel(t)}
+                    </div>
+                  )}
                 </div>
                 <span className={`num tx-mobile-amt ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
                   {formatMoney(t.amount)}

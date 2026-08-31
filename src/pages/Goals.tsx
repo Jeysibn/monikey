@@ -3,6 +3,8 @@ import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { useFinance } from '../hooks/useFinance'
 import { formatMoney } from '../utils/currency'
+import { parseMoneyInput } from '../utils/money'
+import { DEMO_TODAY_ISO, formatGoalDate, isIsoDateBefore } from '../utils/date'
 import './Goals.css'
 
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
@@ -13,27 +15,67 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   completed: { label: 'Completed', tone: 'ok' },
 }
 
-function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void }) {
+function AddFundsForm({ goalId, remaining, onClose }: { goalId: string; remaining: number; onClose: () => void }) {
   const finance = useFinance()
+  const cashAccounts = finance.state.accounts.filter((a) => a.classification === 'asset')
   const [amount, setAmount] = useState('')
+  const [sourceAccountId, setSourceAccountId] = useState(cashAccounts[0]?.id ?? '')
   const [error, setError] = useState('')
-  const inputId = useId()
+  const amountInputId = useId()
+  const accountInputId = useId()
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const value = Number(amount)
-    if (!amount || Number.isNaN(value) || value <= 0) {
+    if (!amount.trim()) {
       setError('Enter an amount greater than zero.')
       return
     }
-    finance.addGoalFunds(goalId, value)
-    onClose()
+    const result = parseMoneyInput(amount)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    if (result.value <= 0) {
+      setError('Enter an amount greater than zero.')
+      return
+    }
+    if (!sourceAccountId) {
+      setError('Select an account to fund this goal from.')
+      return
+    }
+    if (result.value > remaining) {
+      setError(`Enter at most ${formatMoney(remaining, { withCents: false })} — that’s all this goal needs.`)
+      return
+    }
+    try {
+      finance.addGoalFunds(goalId, sourceAccountId, result.value)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add funds.')
+    }
   }
 
   return (
     <form className="add-funds-form" onSubmit={handleSubmit}>
       <label className="add-funds-field">
-        <span className="visually-hidden" id={inputId}>
+        <span className="visually-hidden" id={accountInputId}>
+          Fund from account
+        </span>
+        <select
+          className="tx-input"
+          value={sourceAccountId}
+          onChange={(e) => setSourceAccountId(e.target.value)}
+          aria-labelledby={accountInputId}
+        >
+          {cashAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} · {formatMoney(a.balance, { withCents: false })} available
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="add-funds-field">
+        <span className="visually-hidden" id={amountInputId}>
           Amount to add
         </span>
         <input
@@ -43,10 +85,13 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
           placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          aria-labelledby={inputId}
+          aria-labelledby={amountInputId}
           autoFocus
         />
       </label>
+      <p className="faint" style={{ fontSize: 10 }}>
+        Up to {formatMoney(remaining, { withCents: false })} to reach this goal — funds move out of the selected account.
+      </p>
       {error && (
         <p className="tx-error" role="alert">
           {error}
@@ -74,12 +119,20 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const target = Number(targetAmount)
     if (!name.trim()) {
       setError('Goal name is required.')
       return
     }
-    if (!targetAmount || Number.isNaN(target) || target <= 0) {
+    if (!targetAmount.trim()) {
+      setError('Enter a target amount greater than zero.')
+      return
+    }
+    const targetResult = parseMoneyInput(targetAmount)
+    if (!targetResult.ok) {
+      setError(targetResult.error)
+      return
+    }
+    if (targetResult.value <= 0) {
       setError('Enter a target amount greater than zero.')
       return
     }
@@ -87,13 +140,25 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
       setError('Target date is required.')
       return
     }
-    const monthly = monthlyContribution ? Number(monthlyContribution) : undefined
-    if (monthly !== undefined && (Number.isNaN(monthly) || monthly < 0)) {
-      setError('Monthly auto-save cannot be negative.')
+    if (isIsoDateBefore(targetDate, DEMO_TODAY_ISO)) {
+      setError('Target date can’t be in the past.')
       return
     }
-    finance.createGoal({ name: name.trim(), targetAmount: target, targetDate, monthlyContribution: monthly })
-    onClose()
+    let monthly: number | undefined
+    if (monthlyContribution.trim()) {
+      const monthlyResult = parseMoneyInput(monthlyContribution)
+      if (!monthlyResult.ok) {
+        setError(monthlyResult.error)
+        return
+      }
+      monthly = monthlyResult.value
+    }
+    try {
+      finance.createGoal({ name: name.trim(), targetAmount: targetResult.value, targetDate, monthlyContribution: monthly })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create goal.')
+    }
   }
 
   return (
@@ -108,7 +173,7 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
       </label>
       <label className="new-category-field">
         <span className="tx-label">Target date</span>
-        <input type="date" className="tx-input" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+        <input type="date" className="tx-input" min={DEMO_TODAY_ISO} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
       </label>
       <label className="new-category-field">
         <span className="tx-label">Monthly auto-save (optional)</span>
@@ -179,7 +244,7 @@ export function Goals() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
                   <div className="faint" style={{ fontSize: 10 }}>
-                    Target · {g.targetDate}
+                    Target · {formatGoalDate(g.targetDate)}
                   </div>
                 </div>
               </div>
@@ -209,7 +274,9 @@ export function Goals() {
                   </button>
                 )}
               </div>
-              {addFundsFor === g.id && <AddFundsForm goalId={g.id} onClose={() => setAddFundsFor(null)} />}
+              {addFundsFor === g.id && (
+                <AddFundsForm goalId={g.id} remaining={Math.max(0, g.targetAmount - g.currentAmount)} onClose={() => setAddFundsFor(null)} />
+              )}
             </Card>
           )
         })}
@@ -245,7 +312,7 @@ export function Goals() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
               <div className="faint" style={{ fontSize: 10 }}>
-                Reached {g.completedDate ?? g.targetDate} · {finance.goalRawProgressPct(g)}% of{' '}
+                Reached {formatGoalDate(g.completedDate ?? g.targetDate)} · {finance.goalRawProgressPct(g)}% of{' '}
                 {formatMoney(g.targetAmount, { withCents: false })}
               </div>
             </div>
@@ -255,12 +322,13 @@ export function Goals() {
             <div className="completed-actions">
               <button type="button" className="btn btn--outline" disabled title="Coming soon">
                 {g.id === 'home' ? 'Continue saving' : 'Increase target'}
+                <span className="coming-soon-tag">Coming soon</span>
               </button>
               <button type="button" className="btn btn--muted" disabled title="Coming soon">
                 Archive
+                <span className="coming-soon-tag">Coming soon</span>
               </button>
             </div>
-            <p className="visually-hidden">Continuing a goal, increasing its target, and archiving are planned for a future release.</p>
           </Card>
         ))}
       </div>

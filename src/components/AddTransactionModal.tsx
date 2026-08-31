@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useFinance } from '../hooks/useFinance'
 import { showToast } from '../hooks/toastBus'
 import type { TransactionType } from '../domain/finance'
+import { categoriesForTransactionType } from '../state/financeSelectors'
+import { parseMoneyInput } from '../utils/money'
 import './AddTransactionModal.css'
 
 type TxTab = TransactionType
@@ -71,9 +73,12 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {}
-    const amountValue = Number(form.amount)
-    if (!form.amount || Number.isNaN(amountValue) || amountValue <= 0) {
+    if (!form.amount.trim()) {
       errors.amount = 'Enter an amount greater than zero.'
+    } else {
+      const amountResult = parseMoneyInput(form.amount)
+      if (!amountResult.ok) errors.amount = amountResult.error
+      else if (amountResult.value <= 0) errors.amount = 'Enter an amount greater than zero.'
     }
     if (form.tab !== 'transfer') {
       if (!form.title.trim()) errors.title = 'Description is required.'
@@ -87,9 +92,9 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
       if (form.fromAccountId && form.fromAccountId === form.toAccountId) {
         errors.toAccountId = "From Account and To Account can't be the same."
       }
-      if (form.fee) {
-        const feeValue = Number(form.fee)
-        if (Number.isNaN(feeValue) || feeValue < 0) errors.fee = 'Transfer fee cannot be negative.'
+      if (form.fee.trim()) {
+        const feeResult = parseMoneyInput(form.fee)
+        if (!feeResult.ok) errors.fee = feeResult.error
       }
     }
     if (!form.date) errors.date = 'Date is required.'
@@ -104,28 +109,42 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
       return
     }
 
-    const amountValue = Number(form.amount)
+    const amountResult = parseMoneyInput(form.amount)
+    if (!amountResult.ok) {
+      setForm((f) => ({ ...f, errors: { ...f.errors, amount: amountResult.error } }))
+      return
+    }
+    const feeResult = form.fee.trim() ? parseMoneyInput(form.fee) : undefined
+    if (feeResult && !feeResult.ok) {
+      setForm((f) => ({ ...f, errors: { ...f.errors, fee: feeResult.error } }))
+      return
+    }
     const title = form.tab === 'transfer' ? `${finance.accountLabel(form.fromAccountId)} → ${finance.accountLabel(form.toAccountId)}` : form.title.trim()
 
-    finance.addTransaction({
-      type: form.tab,
-      title,
-      categoryId: form.tab !== 'transfer' ? form.categoryId : undefined,
-      accountId: form.tab !== 'transfer' ? form.accountId : undefined,
-      fromAccountId: form.tab === 'transfer' ? form.fromAccountId : undefined,
-      toAccountId: form.tab === 'transfer' ? form.toAccountId : undefined,
-      date: form.date,
-      time: form.time || undefined,
-      amount: amountValue,
-      fee: form.fee ? Number(form.fee) : undefined,
-      note: form.note.trim() || undefined,
-    })
+    try {
+      finance.addTransaction({
+        type: form.tab,
+        title,
+        categoryId: form.tab !== 'transfer' ? form.categoryId : undefined,
+        accountId: form.tab !== 'transfer' ? form.accountId : undefined,
+        fromAccountId: form.tab === 'transfer' ? form.fromAccountId : undefined,
+        toAccountId: form.tab === 'transfer' ? form.toAccountId : undefined,
+        date: form.date,
+        time: form.time || undefined,
+        amount: amountResult.value,
+        fee: feeResult && feeResult.ok ? feeResult.value : undefined,
+        note: form.note.trim() || undefined,
+      })
+    } catch (err) {
+      setForm((f) => ({ ...f, errors: { ...f.errors, amount: err instanceof Error ? err.message : 'Could not save transaction.' } }))
+      return
+    }
 
     showToast(`${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
     handleClose()
   }
 
-  const categories = finance.state.categories
+  const categories = form.tab === 'transfer' ? [] : categoriesForTransactionType(finance.state.categories, form.tab)
   const accountOptions = finance.state.accounts
   // Expenses can be paid from an asset account or charged to a credit card;
   // income and transfers only move between asset accounts.
@@ -154,13 +173,12 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
           </button>
         </div>
 
-        <div className="tx-tabs" role="tablist" aria-label="Transaction type">
+        <div className="tx-tabs" role="group" aria-label="Transaction type">
           {(['expense', 'income', 'transfer'] as TxTab[]).map((t) => (
             <button
               key={t}
               type="button"
-              role="tab"
-              aria-selected={form.tab === t}
+              aria-pressed={form.tab === t}
               className={`tx-tab${form.tab === t ? ' tx-tab--active' : ''}`}
               onClick={() => setTab(t)}
             >
@@ -184,7 +202,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
                 className="tx-amount-input"
                 placeholder="0.00"
                 value={form.amount}
-                onChange={(e) => update('amount', e.target.value.replace(/[^0-9.]/g, ''))}
+                onChange={(e) => update('amount', e.target.value)}
                 aria-labelledby={amountId}
                 aria-invalid={!!form.errors.amount}
                 aria-describedby={form.errors.amount ? `${amountId}-error` : undefined}
@@ -334,7 +352,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
                   className="tx-input"
                   placeholder="Optional"
                   value={form.fee}
-                  onChange={(e) => update('fee', e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => update('fee', e.target.value)}
                 />
                 {form.errors.fee && (
                   <p className="tx-error" role="alert">

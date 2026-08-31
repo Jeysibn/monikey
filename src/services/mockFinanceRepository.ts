@@ -1,10 +1,14 @@
 // The only FinanceRepository implementation today: everything is in-memory
-// and synchronous (no fake network delay — see coding constraints). A real
-// backend-backed repository would implement the same `FinanceRepository`
-// contract; the provider and components would not need to change.
+// and synchronous (no fake network delay — see coding constraints).
+// `FinanceProvider` takes a `FinanceRepository` as an injectable prop and
+// defaults to this one. See `financeRepository.ts` for why a real
+// backend-backed implementation is not a same-shape drop-in — that contract
+// is synchronous and would need to become async first.
 
 import type { Account, BudgetCategory, Category, CreditCard, FinanceState, Goal, Transaction } from '../domain/finance'
 import type { FinanceRepository } from './financeRepository'
+import { DEMO_TODAY_ISO, isDateInPeriod, isIsoDateBefore, monthPeriodContaining } from '../utils/date'
+import { formatMoney } from '../utils/currency'
 
 let idCounter = 0
 /** Stable, unique-enough ids for a mock/in-memory session (not persisted). */
@@ -18,17 +22,17 @@ function nextId(prefix: string): string {
 // transactions reference a category by id — nothing else stores a
 // category's display name or color a second time.
 const CATEGORIES: Category[] = [
-  { id: 'housing', name: 'Housing', color: 'var(--cyan)', budgetable: true },
-  { id: 'food', name: 'Food & Groceries', color: 'var(--teal)', budgetable: true },
-  { id: 'transport', name: 'Transport', color: 'var(--purple)', budgetable: true },
-  { id: 'shopping', name: 'Shopping', color: 'var(--amber)', budgetable: true },
-  { id: 'utilities', name: 'Utilities', color: 'var(--slate-lt)', budgetable: true },
-  { id: 'debt', name: 'Debt Payments', color: 'var(--slate)', budgetable: true },
-  { id: 'salary', name: 'Salary', color: 'var(--cyan)', budgetable: false },
-  { id: 'subscriptions', name: 'Subscriptions', color: 'var(--purple)', budgetable: false },
+  { id: 'housing', name: 'Housing', color: 'var(--cyan)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'food', name: 'Food & Groceries', color: 'var(--teal)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'transport', name: 'Transport', color: 'var(--purple)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'shopping', name: 'Shopping', color: 'var(--amber)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'utilities', name: 'Utilities', color: 'var(--slate-lt-fg)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'debt', name: 'Debt Payments', color: 'var(--slate-fg)', budgetable: true, transactionKinds: ['expense'] },
+  { id: 'salary', name: 'Salary', color: 'var(--cyan)', budgetable: false, transactionKinds: ['income'] },
+  { id: 'subscriptions', name: 'Subscriptions', color: 'var(--purple)', budgetable: false, transactionKinds: ['expense'] },
 ]
 
-const NEW_CATEGORY_PALETTE = ['var(--cyan)', 'var(--teal)', 'var(--purple)', 'var(--amber)', 'var(--slate-lt)']
+const NEW_CATEGORY_PALETTE = ['var(--cyan)', 'var(--teal)', 'var(--purple)', 'var(--amber)', 'var(--slate-lt-fg)']
 
 function initialState(): FinanceState {
   const accounts: Account[] = [
@@ -86,32 +90,6 @@ function initialState(): FinanceState {
     { ticker: 'NVDA', name: 'Nvidia', price: 3402.15, changePct: 2.6, units: 16, history: [3020, 3105, 3180, 3160, 3255, 3298, 3350, 3402.15] },
   ]
 
-  const expensesTrend = {
-    daily: [
-      { day: 'MON', amount: 180 },
-      { day: 'TUE', amount: 240 },
-      { day: 'WED', amount: 95 },
-      { day: 'THU', amount: 410 },
-      { day: 'FRI', amount: 150 },
-      { day: 'SAT', amount: 205 },
-      { day: 'SUN', amount: 312 },
-    ],
-    weekly: [
-      { day: 'W1', amount: 1180 },
-      { day: 'W2', amount: 1420 },
-      { day: 'W3', amount: 980 },
-      { day: 'W4', amount: 1592 },
-    ],
-    monthly: [
-      { day: 'MAR', amount: 8620 },
-      { day: 'APR', amount: 9340 },
-      { day: 'MAY', amount: 7980 },
-      { day: 'JUN', amount: 9870 },
-      { day: 'JUL', amount: 8410 },
-      { day: 'AUG', amount: 9498 },
-    ],
-  }
-
   const budgetVsActual = [
     { month: 'MAR', budget: 70, actual: 62 },
     { month: 'APR', budget: 70, actual: 75 },
@@ -131,18 +109,8 @@ function initialState(): FinanceState {
     goals,
     attentionItems,
     portfolio,
-    expensesTrend,
     budgetVsActual,
   }
-}
-
-function accountLabelForId(state: FinanceState, id?: string): string {
-  if (!id) return 'Unknown account'
-  const account = state.accounts.find((a) => a.id === id)
-  if (account) return account.lastFour ? `${account.name} ••${account.lastFour}` : account.name
-  const card = state.creditCards.find((c) => c.id === id)
-  if (card) return `${card.name} ••${card.lastFour}`
-  return 'Unknown account'
 }
 
 export const mockFinanceRepository: FinanceRepository = {
@@ -185,9 +153,14 @@ export const mockFinanceRepository: FinanceRepository = {
       applyDelta(input.accountId, signedAmount)
     }
 
-    // Keep the matching budget category's spend in sync for expenses.
+    // Keep the matching budget category's spend in sync for expenses — but
+    // only when the transaction actually falls inside the active reporting
+    // period. An expense dated outside "this month" is still recorded on
+    // the ledger (it shows up in transaction history) but must not move a
+    // budget figure that's labeled "this month".
     let budgetCategories = state.budgetCategories
-    if (input.type === 'expense' && input.categoryId) {
+    const activePeriod = monthPeriodContaining(DEMO_TODAY_ISO)
+    if (input.type === 'expense' && input.categoryId && isDateInPeriod(input.date, activePeriod)) {
       budgetCategories = budgetCategories.map((c) =>
         c.id === input.categoryId ? { ...c, spent: c.spent + input.amount } : c,
       )
@@ -215,6 +188,12 @@ export const mockFinanceRepository: FinanceRepository = {
   },
 
   addManualCreditCard(state, input) {
+    // Documented rule (SR-007): a credit card's current balance may never
+    // exceed its own credit limit — that combination isn't a valid card
+    // state, so it's rejected here rather than allowed with a warning.
+    if (input.balance > input.limit) {
+      throw new Error(`Balance can’t exceed the ${formatMoney(input.limit, { withCents: false })} credit limit.`)
+    }
     const creditCard: CreditCard = {
       id: nextId('cc'),
       name: input.name,
@@ -230,22 +209,40 @@ export const mockFinanceRepository: FinanceRepository = {
   },
 
   addBudgetCategory(state, input) {
+    // `totalBudgetAllocated` is the fixed monthly envelope, not a running
+    // sum that grows every time a category is created — see SR-002.
+    // Unallocated money is the envelope minus what's already allocated to
+    // existing categories, so a new category can only ever *consume* from
+    // that remainder, never expand the envelope.
+    const currentlyUnallocated = state.totalBudgetAllocated - state.budgetCategories.reduce((s, c) => s + c.allocated, 0)
+    if (!Number.isFinite(input.allocated) || input.allocated <= 0) {
+      throw new Error('Enter a budget amount greater than zero.')
+    }
+    if (input.allocated > currentlyUnallocated) {
+      throw new Error(`Allocation can’t exceed the ${formatMoney(currentlyUnallocated, { withCents: false })} unallocated.`)
+    }
+
     const id = nextId('cat')
     const color = input.color ?? NEW_CATEGORY_PALETTE[state.categories.length % NEW_CATEGORY_PALETTE.length]
-    const category: Category = { id, name: input.name, color, budgetable: true }
+    const category: Category = { id, name: input.name, color, budgetable: true, transactionKinds: ['expense'] }
     const budgetCategory: BudgetCategory = { id, allocated: input.allocated, spent: 0 }
     return {
       state: {
         ...state,
         categories: [...state.categories, category],
         budgetCategories: [...state.budgetCategories, budgetCategory],
-        totalBudgetAllocated: state.totalBudgetAllocated + input.allocated,
       },
       category: budgetCategory,
     }
   },
 
   createGoal(state, input) {
+    // A goal targeting a date already in the past can never be "on track" —
+    // reject it here so the invariant holds regardless of which form calls
+    // this (SR-007).
+    if (isIsoDateBefore(input.targetDate, DEMO_TODAY_ISO)) {
+      throw new Error('Target date can’t be in the past.')
+    }
     const goal: Goal = {
       id: nextId('goal'),
       name: input.name,
@@ -259,12 +256,59 @@ export const mockFinanceRepository: FinanceRepository = {
     return { state: { ...state, goals: [...state.goals, goal] }, goal }
   },
 
-  addGoalFunds(state, goalId, amount) {
+  addGoalFunds(state, goalId, sourceAccountId, amount) {
+    const goal = state.goals.find((g) => g.id === goalId)
+    if (!goal) {
+      throw new Error('Goal not found.')
+    }
+    if (!goal.active) {
+      throw new Error('This goal is already complete and can’t receive more funds.')
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Enter an amount greater than zero.')
+    }
+    const sourceAccount = state.accounts.find((a) => a.id === sourceAccountId && a.classification === 'asset')
+    if (!sourceAccount) {
+      throw new Error('Select an account to fund this goal from.')
+    }
+    const remaining = goal.targetAmount - goal.currentAmount
+    if (amount > remaining) {
+      throw new Error(`Enter at most ${formatMoney(remaining, { withCents: false })} — that’s all this goal needs to reach its target.`)
+    }
+
+    const accounts = state.accounts.map((a) => (a.id === sourceAccountId ? { ...a, balance: a.balance - amount } : a))
+
+    const transaction: Transaction = {
+      id: nextId('tx'),
+      type: 'transfer',
+      title: `Goal funding · ${goal.name}`,
+      fromAccountId: sourceAccountId,
+      goalId,
+      date: DEMO_TODAY_ISO,
+      amount,
+      source: 'manual',
+      status: 'cleared',
+      note: 'No budget impact',
+    }
+
+    const newCurrentAmount = goal.currentAmount + amount
+    const reachedTarget = newCurrentAmount >= goal.targetAmount
+    const goals = state.goals.map((g) =>
+      g.id === goalId
+        ? {
+            ...g,
+            currentAmount: newCurrentAmount,
+            ...(reachedTarget
+              ? { status: 'goal_reached' as const, active: false, completedDate: DEMO_TODAY_ISO }
+              : {}),
+          }
+        : g,
+    )
+    const updatedGoal = goals.find((g) => g.id === goalId)!
+
     return {
-      ...state,
-      goals: state.goals.map((g) => (g.id === goalId ? { ...g, currentAmount: g.currentAmount + amount } : g)),
+      state: { ...state, accounts, goals, transactions: [transaction, ...state.transactions] },
+      goal: updatedGoal,
     }
   },
 }
-
-export { accountLabelForId }

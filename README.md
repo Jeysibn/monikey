@@ -56,7 +56,9 @@ npm run dev       # http://localhost:5173
 | `npm run build` | Type-check (`tsc -b`) and build for production into `dist/` |
 | `npm run preview` | Serve the production build at `http://localhost:4173` |
 | `npm run lint` | Run `oxlint` |
+| `npm run test` | Run the Vitest unit-test suite (`financeSelectors.ts`, `date.ts`, `money.ts`, `mockFinanceRepository.ts`, `FinanceProvider.tsx`) |
 | `npm run test:e2e` | Run the Playwright end-to-end suite (builds and serves automatically) |
+| `npm run screenshots` | Build and regenerate the screenshots under `docs/screenshots/` |
 
 ### Running the end-to-end tests
 
@@ -66,10 +68,13 @@ npm run test:e2e
 
 This builds the app, starts it on `http://localhost:4173` (via
 `playwright.config.ts`'s `webServer`), and runs every spec in `e2e/` against
-it — 41 tests covering navigation, the Add Transaction workflow (including
+it — 57 tests covering navigation, the Add Transaction workflow (including
 saving each transaction type end-to-end), the local Account/Budget-category/
 Goal workflows, cross-page data consistency, responsive behavior at 390px,
-and basic accessibility. On a normal machine with
+basic accessibility, and the financial-invariant regression checks in
+`e2e/sr012-invariants.spec.ts`. The frontend logic itself (selectors, date/
+money parsing, the mock repository, and the state provider) also has a
+73-test Vitest unit suite — run with `npm run test`. On a normal machine with
 `npx playwright install --with-deps` already run once, this just works. See
 [`docs/ARCHITECTURE.md#testing`](./docs/ARCHITECTURE.md#testing) for one
 sandbox-specific note about running Playwright in a minimal container.

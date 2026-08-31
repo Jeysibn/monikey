@@ -5,19 +5,23 @@ import './MoneyPosition.css'
 /**
  * Monikey's one memorable dashboard element: explains the user's current
  * financial position as a relationship between real, derived figures —
- * not a decorative stat. See FR-009 in the frontend review brief.
+ * not a decorative stat. See FR-009 in the frontend review brief, and
+ * SR-008 for the "Estimated" qualifier, placement, and breakdown wording.
+ *
+ * The label is "Estimated safe to spend" rather than a bare "Safe to
+ * spend" because the inputs are known to be incomplete: recurring bills
+ * (rent, subscriptions, utilities) have no data source in this app yet
+ * and are excluded, not assumed to be zero.
  */
 export function MoneyPosition() {
   const finance = useFinance()
-  const upcomingCommitments = finance.state.creditCards.reduce((s, c) => s + c.minPayment, 0)
-  const allocatedToGoals = finance.monthlyContributionTotal
-  const safeToSpend = Math.max(0, finance.totalAvailableCash - upcomingCommitments - allocatedToGoals)
+  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend } = finance.safeToSpendBreakdown
 
   const steps = [
-    { label: 'Available cash', value: finance.totalAvailableCash, hint: `${finance.state.accounts.length} cash sources` },
-    { label: 'Upcoming commitments', value: upcomingCommitments, hint: 'Credit card minimum payments due soon' },
-    { label: 'Allocated to goals', value: allocatedToGoals, hint: 'This month’s auto-save across active goals' },
-    { label: 'Safe to spend', value: safeToSpend, hint: 'What’s left after commitments and goals', emphasis: true },
+    { label: 'Available cash', value: availableCash, hint: `${finance.state.accounts.length} cash sources` },
+    { label: 'Upcoming commitments', value: upcomingCreditMinimums, hint: 'Credit card minimum payments due soon' },
+    { label: 'Planned goal contributions', value: plannedGoalContributions, hint: 'This month’s pledged pace across active goals, not yet moved' },
+    { label: 'Estimated safe to spend', value: safeToSpend, hint: 'What’s left after known commitments', emphasis: true },
   ]
 
   return (
@@ -40,10 +44,14 @@ export function MoneyPosition() {
         ))}
       </div>
       <p className="money-position-summary faint">
-        You have {formatMoney(finance.totalAvailableCash, { withCents: false })} in cash. After{' '}
-        {formatMoney(upcomingCommitments, { withCents: false })} in upcoming card payments and{' '}
-        {formatMoney(allocatedToGoals, { withCents: false })} auto-saved toward goals this month, you have{' '}
-        <strong>{formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
+        You have {formatMoney(availableCash, { withCents: false })} in cash. After{' '}
+        {formatMoney(upcomingCreditMinimums, { withCents: false })} in upcoming card payments and{' '}
+        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals this month (not yet moved out of your accounts), you have an{' '}
+        <strong>estimated {formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
+      </p>
+      <p className="money-position-scope faint">
+        Included: cash account balances, credit card minimum payments, and this month’s planned goal contributions. Excluded: recurring
+        bills and subscriptions — Monikey doesn’t track those yet, so this estimate may be higher than what’s truly free to spend.
       </p>
     </section>
   )

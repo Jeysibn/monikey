@@ -310,9 +310,16 @@ export class LedgerRepository {
       case 'expense': {
         if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Expense requires fromAccountId.', { field: 'fromAccountId' });
         const acc = accountMap.get(fromAccountId)!;
-        if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Expense must use an asset account.', { field: 'fromAccountId' });
-        if (Number(acc.currentBalanceMinor) < totalAmount) {
-          throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
+        if (acc.classification === 'liability' && acc.accountType === 'credit_card') {
+          const limit = Number(acc.creditCardDetail?.creditLimitMinor ?? 0);
+          if (!acc.creditCardDetail || Number(acc.currentBalanceMinor) + amountMinor > limit) {
+            throw new AppError('CREDIT_LIMIT_EXCEEDED', 'This charge would exceed the credit limit.', { field: 'amountMinor' });
+          }
+        } else {
+          if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Expense must use an asset account.', { field: 'fromAccountId' });
+          if (Number(acc.currentBalanceMinor) < totalAmount) {
+            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
+          }
         }
         break;
       }
@@ -373,11 +380,10 @@ export class LedgerRepository {
     switch (type) {
       case 'expense': {
         const acc = accountMap.get(fromAccountId!)!;
-        const newBalance = Number(acc.currentBalanceMinor) - amountMinor - feeMinor;
-        effects.push({ accountId: fromAccountId!, role: 'expense', deltaMinor: -amountMinor, balanceAfterMinor: newBalance });
-        if (feeMinor > 0) {
-          effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: newBalance });
-        }
+        const cardCharge = acc.classification === 'liability' && acc.accountType === 'credit_card';
+        const newBalance = cardCharge ? Number(acc.currentBalanceMinor) + amountMinor : Number(acc.currentBalanceMinor) - amountMinor - feeMinor;
+        effects.push({ accountId: fromAccountId!, role: cardCharge ? 'card_charge' : 'expense', deltaMinor: cardCharge ? amountMinor : -amountMinor, balanceAfterMinor: newBalance });
+        if (feeMinor > 0 && !cardCharge) effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: newBalance });
         break;
       }
       case 'income': {

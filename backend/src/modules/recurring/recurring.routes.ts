@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
+import { LedgerService } from '../ledger/ledger.service.js'
 
 const frequency = z.enum(['weekly', 'monthly', 'yearly'])
 const createSchema = z.object({ merchant: z.string().trim().min(1).max(160), amountMinor: z.number().int().positive(), frequency, nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), accountId: z.string().uuid(), categoryId: z.string().uuid(), autopay: z.boolean().default(false) })
@@ -12,7 +13,7 @@ function view(item: any) {
   return { id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }
 }
 
-export async function recurringRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string }) {
+export async function recurringRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string; ledgerService: LedgerService }) {
   const requireAuth = authGuard({ prisma: options.prisma })
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: options.appOrigin })
   app.get('/recurring', { preHandler: requireAuth }, async (request) => {
@@ -37,4 +38,25 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const updated = await options.prisma.recurringItem.findFirstOrThrow({ where: { id: request.params.id, userId: request.user!.id } })
     return view(updated)
   })
+  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+    const item = await options.prisma.recurringItem.findFirst({ where: { id: request.params.id, userId: request.user!.id, status: 'active' } })
+    if (!item) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Active recurring item not found.', requestId: request.id } })
+    const idempotencyKey = `recurring:${item.id}:${item.nextDueDate.toISOString().slice(0, 10)}`
+    await options.ledgerService.postTransaction(request.user!.id, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: item.nextDueDate.toISOString().slice(0, 10), occurredTime: null, amountMinor: Number(item.amountMinor), feeMinor: 0, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
+    const nextDueDate = advanceDate(item.nextDueDate, item.frequency)
+    const updated = await options.prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate, lastPaidDate: item.nextDueDate, } })
+    return reply.code(201).send(view(updated))
+  })
+}
+
+function advanceDate(date: Date, frequency: 'weekly' | 'monthly' | 'yearly'): Date {
+  if (frequency === 'weekly') {
+    const next = new Date(date)
+    next.setUTCDate(next.getUTCDate() + 7)
+    return next
+  }
+  const next = new Date(date)
+  if (frequency === 'monthly') next.setUTCMonth(next.getUTCMonth() + 1)
+  else next.setUTCFullYear(next.getUTCFullYear() + 1)
+  return next
 }

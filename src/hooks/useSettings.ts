@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { DisplayPreferences, NotificationPreferences, SettingsState, UserProfile } from '../domain/settings'
+import type { SettingsGateway } from '../services/apiSettingsGateway'
 
 /**
  * Namespaced so it can never collide with a key some other feature reads or
@@ -65,13 +66,21 @@ function writeStoredSettings(next: SettingsState): void {
  * blocked or throws. Nothing here touches finance state — see `useFinance`
  * for that, read-only, elsewhere on this page.
  */
-export function useSettings() {
+export function useSettings(gateway?: SettingsGateway) {
   const [settings, setSettings] = useState<SettingsState>(() => readStoredSettings())
+
+  useEffect(() => {
+    if (!gateway) return
+    let active = true
+    gateway.load().then((next) => { if (active) setSettings(next) }).catch(() => undefined)
+    return () => { active = false }
+  }, [gateway])
 
   const persist = useCallback((next: SettingsState) => {
     setSettings(next)
-    writeStoredSettings(next)
-  }, [])
+    if (gateway) void gateway.save(next).catch(() => undefined)
+    else writeStoredSettings(next)
+  }, [gateway])
 
   const saveProfile = useCallback(
     (profile: UserProfile) => {

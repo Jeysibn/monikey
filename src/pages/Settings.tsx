@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardTitle } from '../components/Card'
 import { useFinance } from '../hooks/useFinance'
@@ -7,6 +7,8 @@ import { useFieldErrors } from '../hooks/useFieldErrors'
 import { showToast } from '../hooks/toastBus'
 import { formatMoney } from '../utils/currency'
 import type { NotificationPreferences } from '../domain/settings'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
+import { ApiSettingsGateway } from '../services/apiSettingsGateway'
 import './Settings.css'
 
 const PROFILE_FIELDS = ['displayName', 'email'] as const
@@ -40,8 +42,7 @@ function ProfileSection({ settings, saveProfile }: Pick<UseSettingsResult, 'sett
     <Card>
       <CardTitle>Profile</CardTitle>
       <p className="form-help">
-        Local to this device only — Monikey doesn’t have an account system yet, so this name and email are used for display purposes here and
-        aren’t sent anywhere.
+        In mock mode these preferences stay on this device; backend mode loads and saves them through your authenticated Monikey account.
       </p>
       <form className="settings-form" onSubmit={handleSubmit} noValidate>
         <label className="new-category-field">
@@ -295,16 +296,15 @@ function DataPrivacySection({ resetToDefaults }: Pick<UseSettingsResult, 'resetT
     <Card>
       <CardTitle>Data &amp; Privacy</CardTitle>
       <p className="form-help">
-        Export downloads everything currently in your finance data (accounts, cards, transactions, budgets, goals) as one JSON file. Clearing
-        local preferences resets only this Settings page’s own saved profile, notification, and display choices — your finance data is never
-        touched by either action.
+        Export downloads everything currently in your finance data (accounts, cards, transactions, budgets, goals) as one JSON file. Resetting
+        preferences changes only your profile, notification, and display choices — your finance data is never touched.
       </p>
       <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 10 }}>
         <button type="button" className="btn btn--primary" onClick={handleExport}>
           Export my data
         </button>
         <button type="button" className="btn btn--ghost" onClick={handleClearPreferences}>
-          Clear local preferences
+          Reset preferences
         </button>
       </div>
     </Card>
@@ -316,7 +316,7 @@ function SecuritySection() {
     <Card>
       <CardTitle>Security</CardTitle>
       <p className="form-help">
-        There’s no authentication system behind Monikey yet, so these are placeholders — not working controls that quietly do nothing.
+        Authentication is handled by the backend session. Password changes and two-factor authentication are planned controls.
       </p>
       <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 10 }}>
         <button type="button" className="btn btn--ghost" disabled title="Coming soon">
@@ -337,7 +337,9 @@ export function Settings() {
   // each section its own independent copy: toggling a preference in one
   // card silently didn't move any other card reading the same value, and
   // "Clear local preferences" only reset the card that clicked it.
-  const settingsApi = useSettings()
+  const asyncFinance = useAsyncFinanceOptional()
+  const settingsGateway = useMemo(() => asyncFinance ? new ApiSettingsGateway() : undefined, [asyncFinance])
+  const settingsApi = useSettings(settingsGateway)
 
   return (
     <div>

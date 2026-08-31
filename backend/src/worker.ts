@@ -2,6 +2,8 @@ import pino from 'pino'
 import { loadEnv, EnvValidationError } from './config/env.js'
 import { buildLoggerOptions } from './config/logger.js'
 import { getPrismaClient, disconnectPrisma, pingDatabase } from './db/client.js'
+import { createLedgerModule } from './modules/ledger/ledger.module.js'
+import { processDueRecurringItems } from './modules/recurring/recurring.worker.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -13,7 +15,14 @@ async function main(): Promise<void> {
   const prisma = getPrismaClient()
 
   await pingDatabase(prisma)
-  logger.info('worker connected to database; no jobs registered yet (Phase 1 scaffold)')
+  const ledger = createLedgerModule(prisma)
+  const runRecurring = async () => {
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
+    if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
+  }
+  await runRecurring()
+  logger.info('worker connected to database; recurring due-job runner registered')
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down')
@@ -24,9 +33,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
   // Keep the process alive; a real scheduler/queue loop arrives with JobModule.
-  setInterval(() => {
-    logger.debug('worker heartbeat')
-  }, 60_000)
+  setInterval(() => { void runRecurring().catch((err) => logger.error({ err }, 'recurring due-job run failed')) }, 60_000)
 }
 
 main().catch((err) => {

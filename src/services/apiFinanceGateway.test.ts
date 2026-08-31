@@ -35,4 +35,16 @@ describe('ApiFinanceGateway', () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({}, 422))
     await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toThrow('422')
   })
+
+  it('uses minor units for budget period and allocation commands', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-08-01', periodEnd: '2026-09-01', incomePoolMinor: 250000, allocations: [] }))
+      .mockResolvedValueOnce(response({ id: 'allocation-1', categoryId: 'food', allocatedMinor: 160000 }))
+    const api = new ApiFinanceGateway('/api/v1', fetcher)
+    await api.createBudgetPeriod('2026-08-01', '2026-09-01', 2500)
+    const allocation = await api.setBudgetAllocation('period-1', 'food', 1600)
+    expect(allocation).toMatchObject({ id: 'food', allocated: 1600 })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ incomePoolMinor: 250000 })
+    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ allocatedMinor: 160000 })
+  })
 })

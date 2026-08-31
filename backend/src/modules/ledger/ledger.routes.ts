@@ -44,7 +44,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
         },
       },
     },
-    async (req, reply) => {
+    async (req) => {
       const { cursor, limit, fromDate, toDate, type, categoryId, accountId } = req.query as any;
       const result = await service.listTransactions({
         userId: req.user!.id,

@@ -10,6 +10,7 @@ import { Budget } from './pages/Budget'
 import { Goals } from './pages/Goals'
 import { Investments } from './pages/Investments'
 import { Recurring } from './pages/Recurring'
+import { Reports } from './pages/Reports'
 import { Placeholder } from './pages/Placeholder'
 
 export default function App() {
@@ -25,7 +26,7 @@ export default function App() {
         <Route path="/goals" element={<Goals />} />
         <Route path="/investments" element={<Investments />} />
         <Route path="/recurring" element={<Recurring />} />
-        <Route path="/reports" element={<Placeholder title="Reports" />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Placeholder title="Settings" />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={() => setAddTxOpen(false)} />

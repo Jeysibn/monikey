@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiFinanceGateway } from './apiFinanceGateway'
+import { ApiFinanceGateway, FinanceApiError } from './apiFinanceGateway'
 
 const account = (overrides: Record<string, unknown> = {}) => ({
   id: 'account-1', name: 'Checking', institution: 'BPI', accountType: 'checking', classification: 'asset', currentBalanceMinor: 412050, lastFour: '4471', syncStatus: 'manual', manual: true, ...overrides,
@@ -33,7 +33,14 @@ describe('ApiFinanceGateway', () => {
 
   it('surfaces non-success API responses', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({}, 422))
-    await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toThrow('422')
+    await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toMatchObject({ status: 422, code: 'INTERNAL_ERROR' })
+  })
+
+  it('preserves the backend error envelope for domain validation', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ error: { code: 'ASSET_OVERDRAFT', message: 'Insufficient balance.', field: 'amountMinor' } }, 422))
+    const error = await new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 }).catch((cause) => cause)
+    expect(error).toBeInstanceOf(FinanceApiError)
+    expect(error).toMatchObject({ status: 422, code: 'ASSET_OVERDRAFT', message: 'Insufficient balance.', field: 'amountMinor' })
   })
 
   it('uses minor units for budget period and allocation commands', async () => {

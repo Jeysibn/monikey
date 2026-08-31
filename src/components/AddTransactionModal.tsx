@@ -7,6 +7,7 @@ import { FinanceValidationError } from '../domain/financeRules'
 import { categoriesForTransactionType } from '../state/financeSelectors'
 import { parseMoneyInput } from '../utils/money'
 import { isValidIsoDate, isValidTime24 } from '../utils/date'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './AddTransactionModal.css'
 
 type TxTab = TransactionType
@@ -39,10 +40,12 @@ function emptyFormState(defaultDate: string) {
 
 export function AddTransactionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const triggerFocusRef = useRef<Element | null>(null)
   const [form, setForm] = useState(() => emptyFormState(finance.todayIso))
+  const [submitting, setSubmitting] = useState(false)
   // TR-009 / FINDING-010: the same shared hook the page forms use, rather
   // than a second hand-rolled copy of the accessibility contract.
   const { errors, field, errorId, fail, clear } = useFieldErrors<FieldName>(FIELD_ORDER)
@@ -109,7 +112,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
     return errors
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const validationErrors = validate()
     if (Object.keys(validationErrors).length > 0) {
@@ -133,7 +136,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
     const title = form.tab === 'transfer' ? transferTitle : form.title.trim()
 
     try {
-      finance.addTransaction({
+      const input = {
         type: form.tab,
         title,
         categoryId: form.tab !== 'transfer' ? form.categoryId : undefined,
@@ -145,7 +148,13 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
         amount: amountResult.value,
         fee: feeResult && feeResult.ok ? feeResult.value : undefined,
         note: form.note.trim() || undefined,
-      })
+      }
+      if (asyncFinance) {
+        setSubmitting(true)
+        await asyncFinance.addTransaction(input)
+      } else {
+        finance.addTransaction(input)
+      }
     } catch (err) {
       // The repository owns the finance invariants (TR-002); this places
       // whatever it rejected on the exact control at fault.
@@ -153,6 +162,8 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
       const message = err instanceof Error ? err.message : 'Could not save transaction.'
       fail({ [errorField]: message })
       return
+    } finally {
+      setSubmitting(false)
     }
 
     showToast(payingCard ? 'Card payment saved' : `${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
@@ -200,7 +211,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
           <h2 id="add-tx-title" className="tx-modal-title">
             Add Transaction
           </h2>
-          <button type="button" className="tx-modal-close" aria-label="Close" onClick={handleClose}>
+          <button type="button" className="tx-modal-close" aria-label="Close" onClick={handleClose} disabled={submitting}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
@@ -215,6 +226,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
               aria-pressed={form.tab === t}
               className={`tx-tab${form.tab === t ? ' tx-tab--active' : ''}`}
               onClick={() => setTab(t)}
+              disabled={submitting}
             >
               {t[0].toUpperCase() + t.slice(1)}
             </button>
@@ -443,11 +455,11 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
         </div>
 
         <div className="tx-foot">
-          <button type="button" className="btn btn--ghost" onClick={handleClose}>
+          <button type="button" className="btn btn--ghost" onClick={handleClose} disabled={submitting}>
             Cancel
           </button>
-          <button type="submit" className="btn btn--primary" disabled={sameAccount}>
-            Save {form.tab[0].toUpperCase() + form.tab.slice(1)}
+          <button type="submit" className="btn btn--primary" disabled={sameAccount || submitting}>
+            {submitting ? 'Saving…' : `Save ${form.tab[0].toUpperCase() + form.tab.slice(1)}`}
           </button>
         </div>
       </form>

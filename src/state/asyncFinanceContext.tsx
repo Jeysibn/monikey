@@ -22,7 +22,8 @@ export interface AsyncFinanceProviderProps {
   gateway?: FinanceGateway
 }
 
-export function AsyncFinanceProvider({ children, gateway = new ApiFinanceGateway() }: AsyncFinanceProviderProps) {
+export function AsyncFinanceProvider({ children, gateway }: AsyncFinanceProviderProps) {
+  const [stableGateway] = useState(() => gateway ?? new ApiFinanceGateway())
   const [status, setStatus] = useState<FinanceBootStatus>('loading')
   const [state, setState] = useState<FinanceState | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -32,29 +33,29 @@ export function AsyncFinanceProvider({ children, gateway = new ApiFinanceGateway
     const controller = new AbortController()
     setStatus('loading')
     setError(null)
-    gateway.load(controller.signal).then((next) => {
+    stableGateway.load(controller.signal).then((next) => {
       if (!controller.signal.aborted) { setState(next); setStatus('ready') }
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) { setError(cause instanceof Error ? cause : new Error('Unable to load finance data')); setStatus('error') }
     })
     return () => controller.abort()
-  }, [gateway, attempt])
+  }, [stableGateway, attempt])
 
   const addTransaction = useCallback(async (input: AddTransactionInput) => {
-    const result = await gateway.addTransaction(input)
+    const result = await stableGateway.addTransaction(input)
     setState((current) => current ? { ...current, transactions: [result, ...current.transactions] } : current)
     return result
-  }, [gateway])
+  }, [stableGateway])
   const addManualAccount = useCallback(async (input: AddManualAccountInput) => {
-    const result = await gateway.addManualAccount(input)
+    const result = await stableGateway.addManualAccount(input)
     setState((current) => current ? { ...current, accounts: [...current.accounts, result] } : current)
     return result
-  }, [gateway])
+  }, [stableGateway])
   const addManualCreditCard = useCallback(async (input: AddManualCreditCardInput) => {
-    const result = await gateway.addManualCreditCard(input)
+    const result = await stableGateway.addManualCreditCard(input)
     setState((current) => current ? { ...current, creditCards: [...current.creditCards, result] } : current)
     return result
-  }, [gateway])
+  }, [stableGateway])
 
   const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, addManualAccount, addManualCreditCard }), [state, status, error, addTransaction, addManualAccount, addManualCreditCard])
   return <AsyncFinanceContext.Provider value={value}>{children}</AsyncFinanceContext.Provider>

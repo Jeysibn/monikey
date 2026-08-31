@@ -169,15 +169,8 @@ export class LedgerRepository {
         data: { currentMinor: { increment: BigInt(amountMinor) } },
       });
 
-      // TODO(Phase 3+): Add goal_contributions table and migration
-      // await tx.goalContribution.create({
-      //   data: {
-      //     goalId,
-      //     transactionId: transaction.id,
-      //     sourceAccountId: fromAccountId!,
-      //     amountMinor: BigInt(amountMinor),
-      //   },
-      // });
+      if (!fromAccountId) throw new AppError('UNKNOWN_ACCOUNT', 'Goal funding requires a source account.', { field: 'fromAccountId' });
+      await tx.goalContribution.create({ data: { goalId, transactionId: transaction.id, sourceAccountId: fromAccountId, amountMinor: BigInt(amountMinor) } });
     }
 
     return {

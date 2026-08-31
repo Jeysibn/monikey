@@ -26,9 +26,9 @@ describe('ApiFinanceGateway', () => {
 
   it('posts positive minor-unit amounts and maps an expense response', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ transaction: { id: 'tx-2', type: 'expense', title: 'Lunch', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 1234, feeMinor: 50, source: 'manual', status: 'cleared', note: 'test' } }))
-    const result = await new ApiFinanceGateway('/api/v1', fetcher).addTransaction({ type: 'expense', title: 'Lunch', categoryId: 'food', accountId: 'account-1', date: '2026-08-31', amount: 12.34, fee: 0.5 })
+    const result = await new ApiFinanceGateway('/api/v1', fetcher).addTransaction({ type: 'expense', title: 'Lunch', categoryId: 'food', accountId: 'account-1', date: '2026-08-31', amount: 12.34, fee: 0.5, idempotencyKey: 'submit-1' })
     expect(result).toMatchObject({ amount: -12.34, fee: 0.5 })
-    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: 1234, feeMinor: 50, fromAccountId: 'account-1', toAccountId: null })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: 1234, feeMinor: 50, fromAccountId: 'account-1', toAccountId: null, idempotencyKey: 'submit-1' })
   })
 
   it('surfaces non-success API responses', async () => {

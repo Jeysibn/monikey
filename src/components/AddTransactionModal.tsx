@@ -44,6 +44,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
   const dialogRef = useRef<HTMLDialogElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const triggerFocusRef = useRef<Element | null>(null)
+  const idempotencyKeyRef = useRef<string | null>(null)
   const [form, setForm] = useState(() => emptyFormState(finance.todayIso))
   const [submitting, setSubmitting] = useState(false)
   // TR-009 / FINDING-010: the same shared hook the page forms use, rather
@@ -148,6 +149,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
         amount: amountResult.value,
         fee: feeResult && feeResult.ok ? feeResult.value : undefined,
         note: form.note.trim() || undefined,
+        idempotencyKey: idempotencyKeyRef.current ?? (idempotencyKeyRef.current = crypto.randomUUID()),
       }
       if (asyncFinance) {
         setSubmitting(true)
@@ -167,6 +169,7 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
     }
 
     showToast(payingCard ? 'Card payment saved' : `${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
+    idempotencyKeyRef.current = null
     handleClose()
   }
 

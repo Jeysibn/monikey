@@ -13,7 +13,7 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: options.appOrigin })
   app.get('/investments', { preHandler: requireAuth }, async (request) => {
     const [trades, dividends] = await Promise.all([
-      options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
+      options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id }, include: { instrument: { include: { quoteSnapshots: { orderBy: { fetchedAt: 'desc' }, take: 1 } } } }, orderBy: { occurredOn: 'desc' } }),
       options.prisma.dividend.findMany({ where: { userId: request.user!.id }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
     ])
     const byInstrument = new Map<string, { instrument: typeof trades[number]['instrument']; units: number; costBasisMinor: number; latestPriceMinor: number }>()
@@ -22,10 +22,10 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       const units = Number(trade.units)
       if (trade.type === 'buy') { current.costBasisMinor += units * Number(trade.priceMinor); current.units += units }
       else { const average = current.units > 0 ? current.costBasisMinor / current.units : 0; current.costBasisMinor = Math.max(0, current.costBasisMinor - average * units); current.units -= units }
-      current.latestPriceMinor = Number(trade.priceMinor)
+      current.latestPriceMinor = trade.instrument.quoteSnapshots[0] ? Number(trade.instrument.quoteSnapshots[0].priceMinor) : Number(trade.priceMinor)
       byInstrument.set(trade.instrumentId, current)
     }
-    return { holdings: Array.from(byInstrument.values()).filter((holding) => holding.units > 0).map((holding) => ({ instrumentId: holding.instrument.id, ticker: holding.instrument.ticker, name: holding.instrument.name, assetClass: holding.instrument.assetClass, sector: holding.instrument.sector, units: holding.units, costBasisMinor: holding.costBasisMinor, averageCostMinor: holding.units > 0 ? holding.costBasisMinor / holding.units : 0, latestPriceMinor: holding.latestPriceMinor })), trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
+    return { holdings: Array.from(byInstrument.values()).filter((holding) => holding.units > 0).map((holding) => ({ instrumentId: holding.instrument.id, ticker: holding.instrument.ticker, name: holding.instrument.name, assetClass: holding.instrument.assetClass, sector: holding.instrument.sector, units: holding.units, costBasisMinor: holding.costBasisMinor, averageCostMinor: holding.units > 0 ? holding.costBasisMinor / holding.units : 0, latestPriceMinor: holding.latestPriceMinor, quoteSource: holding.instrument.quoteSnapshots[0]?.source ?? 'trade', quoteFetchedAt: holding.instrument.quoteSnapshots[0]?.fetchedAt.toISOString() ?? null, quoteStale: holding.instrument.quoteSnapshots[0] ? Date.now() - holding.instrument.quoteSnapshots[0].fetchedAt.getTime() > 24 * 60 * 60 * 1000 : true })), trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
   })
   app.post('/investments/trades', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const input = tradeSchema.parse(request.body)

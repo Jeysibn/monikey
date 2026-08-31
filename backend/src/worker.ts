@@ -4,7 +4,7 @@ import { buildLoggerOptions } from './config/logger.js'
 import { getPrismaClient, disconnectPrisma, pingDatabase } from './db/client.js'
 import { createLedgerModule } from './modules/ledger/ledger.module.js'
 import { processDueRecurringItems } from './modules/recurring/recurring.worker.js'
-import { enqueueDueBillNotifications } from './modules/notifications/outbox.js'
+import { enqueueDueBillNotifications, enqueueWeeklySummaryNotifications } from './modules/notifications/outbox.js'
 import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
 
@@ -23,6 +23,7 @@ async function main(): Promise<void> {
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
     await enqueueDueBillNotifications(prisma, todayIso)
+    if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
     await deliverNotificationOutbox(prisma, emailProvider)
     const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')

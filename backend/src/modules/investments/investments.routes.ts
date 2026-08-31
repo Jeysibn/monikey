@@ -16,7 +16,16 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
       options.prisma.dividend.findMany({ where: { userId: request.user!.id }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
     ])
-    return { trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
+    const byInstrument = new Map<string, { instrument: typeof trades[number]['instrument']; units: number; costBasisMinor: number; latestPriceMinor: number }>()
+    for (const trade of [...trades].sort((a, b) => a.occurredOn.getTime() - b.occurredOn.getTime())) {
+      const current = byInstrument.get(trade.instrumentId) ?? { instrument: trade.instrument, units: 0, costBasisMinor: 0, latestPriceMinor: Number(trade.priceMinor) }
+      const units = Number(trade.units)
+      if (trade.type === 'buy') { current.costBasisMinor += units * Number(trade.priceMinor); current.units += units }
+      else { const average = current.units > 0 ? current.costBasisMinor / current.units : 0; current.costBasisMinor = Math.max(0, current.costBasisMinor - average * units); current.units -= units }
+      current.latestPriceMinor = Number(trade.priceMinor)
+      byInstrument.set(trade.instrumentId, current)
+    }
+    return { holdings: Array.from(byInstrument.values()).filter((holding) => holding.units > 0).map((holding) => ({ instrumentId: holding.instrument.id, ticker: holding.instrument.ticker, name: holding.instrument.name, assetClass: holding.instrument.assetClass, sector: holding.instrument.sector, units: holding.units, costBasisMinor: holding.costBasisMinor, averageCostMinor: holding.units > 0 ? holding.costBasisMinor / holding.units : 0, latestPriceMinor: holding.latestPriceMinor })), trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
   })
   app.post('/investments/trades', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const input = tradeSchema.parse(request.body)

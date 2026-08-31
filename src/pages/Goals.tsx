@@ -7,6 +7,7 @@ import { formatMoney } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { formatGoalDate, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import { FinanceValidationError } from '../domain/financeRules'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Goals.css'
 
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
@@ -22,10 +23,12 @@ type FundsField = (typeof FUNDS_FIELDS)[number]
 
 function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const cashAccounts = finance.state.accounts.filter((a) => a.classification === 'asset')
   const [amount, setAmount] = useState('')
   const [sourceAccountId, setSourceAccountId] = useState(cashAccounts[0]?.id ?? '')
   const { errors, field, errorId, fail } = useFieldErrors<FundsField>(FUNDS_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
 
   // TR-004: the ceiling shown to the user is the smaller of what the source
   // account actually holds and what the goal still needs — derived by the
@@ -33,7 +36,7 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
   // never offer an amount the repository would reject.
   const maxFundable = finance.maxFundableAmount(goalId, sourceAccountId)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!sourceAccountId) {
       fail({ sourceAccountId: 'Select an account to fund this goal from.' })
@@ -53,11 +56,18 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
       return
     }
     try {
-      finance.addGoalFunds(goalId, sourceAccountId, result.value)
+      setSubmitting(true)
+      if (asyncFinance) {
+        await asyncFinance.addGoalFunds(goalId, sourceAccountId, result.value, finance.todayIso)
+      } else {
+        finance.addGoalFunds(goalId, sourceAccountId, result.value)
+      }
       onClose()
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field === 'sourceAccountId' ? 'sourceAccountId' : 'amount'
       fail({ [at]: err instanceof Error ? err.message : 'Could not add funds.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -104,11 +114,11 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
         selected account.
       </p>
       <div className="add-funds-actions">
-        <button type="button" className="btn btn--ghost btn--compact" onClick={onClose}>
+        <button type="button" className="btn btn--ghost btn--compact" onClick={onClose} disabled={submitting}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary btn--compact">
-          Add
+        <button type="submit" className="btn btn--primary btn--compact" disabled={submitting}>
+          {submitting ? 'Adding…' : 'Add'}
         </button>
       </div>
     </form>
@@ -120,13 +130,15 @@ type GoalField = (typeof GOAL_FIELDS)[number]
 
 function CreateGoalForm({ onClose }: { onClose: () => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const [name, setName] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [monthlyContribution, setMonthlyContribution] = useState('')
   const { errors, field, errorId, fail } = useFieldErrors<GoalField>(GOAL_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
       fail({ name: 'Goal name is required.' })
@@ -169,11 +181,19 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
       monthly = monthlyResult.value
     }
     try {
-      finance.createGoal({ name: name.trim(), targetAmount: targetResult.value, targetDate, monthlyContribution: monthly })
+      setSubmitting(true)
+      const input = { name: name.trim(), targetAmount: targetResult.value, targetDate, monthlyContribution: monthly }
+      if (asyncFinance) {
+        await asyncFinance.createGoal(input)
+      } else {
+        finance.createGoal(input)
+      }
       onClose()
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as GoalField) : 'name'
       fail({ [at]: err instanceof Error ? err.message : 'Could not create goal.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -248,11 +268,11 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
         A planned contribution is a target pace, not an automatic transfer — you still add funds yourself.
       </p>
       <div className="new-category-actions">
-        <button type="button" className="btn btn--ghost" onClick={onClose}>
+        <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary">
-          Create goal
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Creating…' : 'Create goal'}
         </button>
       </div>
     </form>

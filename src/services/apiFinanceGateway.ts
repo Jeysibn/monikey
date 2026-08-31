@@ -30,6 +30,7 @@ export interface FinanceGateway {
   addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal>
   createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod>
   setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
+  addBudgetCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
 }
 
 const minor = (value: number) => value / 100
@@ -88,6 +89,10 @@ export class ApiFinanceGateway implements FinanceGateway {
   async setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory> {
     const result = await this.request<{ allocatedMinor: number }>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100) }) })
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: 0 }
+  }
+
+  async addBudgetCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
+    return this.request('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
   }
 
   private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined })

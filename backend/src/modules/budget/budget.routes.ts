@@ -6,10 +6,16 @@ import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 
 const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: z.number().int().nonnegative().default(0) })
 const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: z.number().int().nonnegative() })
+const categorySchema = z.object({ name: z.string().trim().min(1).max(100), color: z.string().trim().min(1).max(64), budgetable: z.boolean().default(true), allowsIncome: z.boolean().default(false), allowsExpense: z.boolean().default(true) })
 
 export async function budgetRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string }) {
   const { prisma, appOrigin } = options
   app.addHook('preHandler', authGuard({ prisma }))
+  app.post('/categories', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+    const input = categorySchema.parse(request.body)
+    const category = await prisma.category.create({ data: { userId: request.user!.id, ...input } })
+    return reply.code(201).send(category)
+  })
   app.get('/budgets', async (request) => prisma.budgetPeriod.findMany({ where: { userId: request.user!.id }, include: { allocations: true }, orderBy: { periodStart: 'desc' } }))
   app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
     const input = periodSchema.parse(request.body)

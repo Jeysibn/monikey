@@ -6,6 +6,7 @@ import { formatMoney } from '../utils/currency'
 import { formatDueDateLabel } from '../utils/date'
 import { parseMoneyInput } from '../utils/money'
 import { FinanceValidationError } from '../domain/financeRules'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import type { AccountType } from '../domain/finance'
 import './Accounts.css'
 
@@ -28,12 +29,14 @@ type AccountField = (typeof ACCOUNT_FIELDS)[number]
 
 function AddAccountForm({ section, onClose }: { section: AccountSection; onClose: () => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const [name, setName] = useState('')
   const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(SECTION_TYPES[section][0])
   const [balance, setBalance] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail } = useFieldErrors<AccountField>(ACCOUNT_FIELDS)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
       fail({ name: 'Account name is required.' })
@@ -49,11 +52,15 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
       return
     }
     try {
-      finance.addManualAccount({ name: name.trim(), type, balance: result.value })
+      setSubmitting(true)
+      if (asyncFinance) await asyncFinance.addManualAccount({ name: name.trim(), type, balance: result.value })
+      else finance.addManualAccount({ name: name.trim(), type, balance: result.value })
       onClose()
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as AccountField) : 'name'
       fail({ [at]: err instanceof Error ? err.message : 'Could not add account.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -105,8 +112,8 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary">
-          Add account
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Saving…' : 'Add account'}
         </button>
       </div>
     </form>
@@ -118,6 +125,7 @@ type CardField = (typeof CARD_FIELDS)[number]
 
 function AddCardForm({ onClose }: { onClose: () => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const [name, setName] = useState('')
   const [lastFour, setLastFour] = useState('')
   const [network, setNetwork] = useState<'visa' | 'mastercard'>('visa')
@@ -128,9 +136,10 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
   // commitments instead of being stored as `dueDate: 'Not set'`/`minPayment: 0`.
   const [dueDate, setDueDate] = useState('')
   const [minPayment, setMinPayment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail } = useFieldErrors<CardField>(CARD_FIELDS)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
       fail({ name: 'Card name is required.' })
@@ -171,7 +180,7 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
       // The credit-limit and due-date rules live in the repository
       // (domain/financeRules.ts, TR-002) — this form only surfaces whatever
       // it rejects on the field that caused it.
-      finance.addManualCreditCard({
+      const input = {
         name: name.trim(),
         lastFour,
         network,
@@ -179,11 +188,16 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
         balance: balanceResult.value,
         dueDate,
         minPayment: minResult.value,
-      })
+      }
+      setSubmitting(true)
+      if (asyncFinance) await asyncFinance.addManualCreditCard(input)
+      else finance.addManualCreditCard(input)
       onClose()
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as CardField) : 'name'
       fail({ [at]: err instanceof Error ? err.message : 'Could not add card.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -298,8 +312,8 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
         </button>
-        <button type="submit" className="btn btn--primary">
-          Add card
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Saving…' : 'Add card'}
         </button>
       </div>
     </form>

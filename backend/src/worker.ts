@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   await pingDatabase(prisma)
   const ledger = createLedgerModule(prisma)
   const emailProvider = createEmailProvider(env)
-  const quoteProvider = createQuoteProvider(env)
+  const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger })
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
     await enqueueDueBillNotifications(prisma, todayIso)

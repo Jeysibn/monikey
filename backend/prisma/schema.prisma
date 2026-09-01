@@ -502,3 +502,21 @@ model BudgetAllocation {
   @@unique([budgetPeriodId, categoryId])
   @@map("budget_allocations")
 }
+
+// Plan §18: local quota budget for outbound market-data providers. One row
+// per (provider, period) — `period` is a caller-defined identifier (e.g. an
+// ISO date "2026-09-01" for Alpha Vantage's daily cap, or an ISO month
+// "2026-09" for CoinGecko's monthly cap) so the same table serves both
+// cadences without a schema change. Atomic upsert-increment via the unique
+// constraint below; never a read-then-write race (QA Attempt 1, Defects 3/4).
+model ExternalApiUsage {
+  id         String   @id @default(uuid()) @db.Uuid
+  provider   String
+  period     String
+  operation  String
+  callCount  Int      @default(0) @map("call_count")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([provider, period, operation])
+  @@map("external_api_usage")
+}

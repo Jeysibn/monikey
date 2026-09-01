@@ -35,6 +35,10 @@ const envSchema = z.object({
   COINGECKO_API_KEY: z.string().optional(),
   ALPHA_VANTAGE_URL: z.string().url().default('https://www.alphavantage.co/query'),
   COINGECKO_URL: z.string().url().default('https://api.coingecko.com/api/v3/simple/price'),
+  // Plan §18 local quota budgets, enforced in quotes.ts before a live
+  // provider call — never rely on the vendor's own free-tier limit alone.
+  ALPHA_VANTAGE_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(20),
+  COINGECKO_MAX_CALLS_PER_MONTH: z.coerce.number().int().positive().default(9000),
   EMAIL_PROVIDER: z.enum(['mailpit', 'resend', 'stub']).default('mailpit'),
   MAILPIT_URL: z.string().url().default('http://mailpit:8025/api/v1/send'),
   RESEND_API_KEY: z.string().optional(),

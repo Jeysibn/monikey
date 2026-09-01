@@ -67,6 +67,77 @@ export class CoinGeckoQuoteProvider implements QuoteProvider {
   }
 }
 
+/** Minimal shape needed to read/increment the usage-tracking table (Prisma.PrismaClient satisfies this). */
+export interface UsageTrackingClient {
+  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>
+}
+
+/**
+ * Atomically increments `external_api_usage.call_count` for
+ * (provider, period, operation) unless it is already at `maxCalls`, in a
+ * single conditional upsert — no read-then-write race window. Returns
+ * whether the call was allowed (and thus counted).
+ */
+export async function tryConsumeApiQuota(
+  prisma: UsageTrackingClient,
+  provider: string,
+  period: string,
+  operation: string,
+  maxCalls: number,
+): Promise<boolean> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ call_count: number }>>(
+    `INSERT INTO external_api_usage (id, provider, period, operation, call_count, updated_at)
+     VALUES (gen_random_uuid(), $1, $2, $3, 1, now())
+     ON CONFLICT (provider, period, operation)
+     DO UPDATE SET call_count = external_api_usage.call_count + 1, updated_at = now()
+     WHERE external_api_usage.call_count < $4
+     RETURNING call_count`,
+    provider,
+    period,
+    operation,
+    maxCalls,
+  )
+  return rows.length > 0
+}
+
+/** Daily period key (UTC) for Alpha Vantage's per-day cap. */
+export function dailyPeriod(now = new Date()): string {
+  return now.toISOString().slice(0, 10)
+}
+
+/** Monthly period key (UTC) for CoinGecko's per-month cap. */
+export function monthlyPeriod(now = new Date()): string {
+  return now.toISOString().slice(0, 7)
+}
+
+/**
+ * Wraps a live provider with the plan §18 local quota budget: before
+ * delegating, atomically claims one call against today's/this month's usage
+ * row; if the budget is exhausted it logs a warning and returns an empty
+ * quote map instead of calling the provider (never throws — a quote-refresh
+ * outage must not crash the worker). Never constructed for the stub path.
+ */
+export class QuotaGatedQuoteProvider implements QuoteProvider {
+  constructor(
+    private readonly inner: QuoteProvider,
+    private readonly prisma: UsageTrackingClient,
+    private readonly providerName: string,
+    private readonly period: () => string,
+    private readonly maxCalls: number,
+    private readonly logger: { warn: (obj: unknown, msg?: string) => void } = console,
+  ) {}
+
+  async getQuotes(tickers: string[]): Promise<Map<string, QuoteValue>> {
+    if (tickers.length === 0) return new Map()
+    const allowed = await tryConsumeApiQuota(this.prisma, this.providerName, this.period(), 'get_quotes', this.maxCalls)
+    if (!allowed) {
+      this.logger.warn({ provider: this.providerName, period: this.period(), maxCalls: this.maxCalls }, 'external API quota exhausted; skipping live quote call')
+      return new Map()
+    }
+    return this.inner.getQuotes(tickers)
+  }
+}
+
 export class CompositeQuoteProvider implements QuoteProvider {
   constructor(private readonly providers: QuoteProvider[]) {}
 
@@ -88,12 +159,23 @@ export function createQuoteProvider(config: {
   COINGECKO_API_KEY?: string
   ALPHA_VANTAGE_URL?: string
   COINGECKO_URL?: string
-}, fetcher: QuoteFetcher = fetch): QuoteProvider {
+  ALPHA_VANTAGE_MAX_CALLS_PER_DAY?: number
+  COINGECKO_MAX_CALLS_PER_MONTH?: number
+}, fetcher: QuoteFetcher = fetch, deps?: { prisma?: UsageTrackingClient; logger?: { warn: (obj: unknown, msg?: string) => void } }): QuoteProvider {
+  // Stub mode must never touch the usage table or the network — the `deps`
+  // argument (and thus the quota table) is intentionally unread on this path.
   if (config.QUOTE_PROVIDER !== 'live') return new StubQuoteProvider()
   const providers: QuoteProvider[] = []
-  if (config.ALPHA_VANTAGE_API_KEY)
-    providers.push(new AlphaVantageQuoteProvider(config.ALPHA_VANTAGE_API_KEY, config.ALPHA_VANTAGE_URL, fetcher))
-  providers.push(new CoinGeckoQuoteProvider(config.COINGECKO_API_KEY, config.COINGECKO_URL, fetcher))
+  if (config.ALPHA_VANTAGE_API_KEY) {
+    let alphaVantage: QuoteProvider = new AlphaVantageQuoteProvider(config.ALPHA_VANTAGE_API_KEY, config.ALPHA_VANTAGE_URL, fetcher)
+    if (deps?.prisma)
+      alphaVantage = new QuotaGatedQuoteProvider(alphaVantage, deps.prisma, 'alpha_vantage', dailyPeriod, config.ALPHA_VANTAGE_MAX_CALLS_PER_DAY ?? 20, deps.logger)
+    providers.push(alphaVantage)
+  }
+  let coinGecko: QuoteProvider = new CoinGeckoQuoteProvider(config.COINGECKO_API_KEY, config.COINGECKO_URL, fetcher)
+  if (deps?.prisma)
+    coinGecko = new QuotaGatedQuoteProvider(coinGecko, deps.prisma, 'coingecko', monthlyPeriod, config.COINGECKO_MAX_CALLS_PER_MONTH ?? 9000, deps.logger)
+  providers.push(coinGecko)
   return new CompositeQuoteProvider(providers)
 }
 

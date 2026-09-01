@@ -14,8 +14,8 @@ import type { Logger } from 'pino'
 import type { AiProvider } from '../../integrations/interfaces/aiProvider.js'
 import { buildPrivacySafeFinancialContext } from './contextBuilder.js'
 import { tryConsumeApiQuota, dailyPeriod, type QuotaTrackingClient } from '../../integrations/quota/quota.js'
-import type { MonthSummaryInsight, BudgetAnalysis, TransactionCategorization } from './schemas.js'
-import { monthSummaryInsightSchema, budgetAnalysisSchema, transactionCategorizationSchema, parseAndValidateInsight } from './schemas.js'
+import type { MonthSummaryInsight, BudgetAnalysis, SpendingTrends, TransactionCategorization } from './schemas.js'
+import { monthSummaryInsightSchema, budgetAnalysisSchema, spendingTrendsSchema, transactionCategorizationSchema, parseAndValidateInsight } from './schemas.js'
 
 export interface InsightsServiceConfig {
   aiProvider: AiProvider
@@ -178,6 +178,69 @@ Respond in JSON format matching this structure:
       return validatedInsight
     } catch (error) {
       this.logger.error({ userId, error }, 'Failed to analyze budget')
+      throw error
+    }
+  }
+
+  /**
+   * Explains aggregate spending direction without granting the provider any
+   * mutation capability. Like the other insight methods, this sends only the
+   * privacy-safe context and validates the provider response before return.
+   */
+  async analyzeSpendingTrends(
+    userId: string,
+    userPreferences: { externalAiEnabled: boolean; detailedAiContextEnabled: boolean },
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<SpendingTrends> {
+    if (!userPreferences.externalAiEnabled) {
+      throw new Error('AI insights are disabled. Enable via settings to use this feature.')
+    }
+
+    const quotaAllowed = await tryConsumeApiQuota(
+      this.prisma as unknown as QuotaTrackingClient,
+      'gemini',
+      dailyPeriod(),
+      'spending_trends',
+      this.maxCallsPerDay,
+    )
+    if (!quotaAllowed) {
+      throw new Error('Daily AI insight limit reached. Please try again tomorrow.')
+    }
+
+    const context = await buildPrivacySafeFinancialContext(
+      userId,
+      this.prisma,
+      userPreferences.detailedAiContextEnabled,
+      periodStart,
+      periodEnd,
+    )
+    const prompt = `Based on the following aggregated spending data for ${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}, explain spending trends. This is read-only analysis; do not propose or perform account changes.
+
+${JSON.stringify(context, null, 2)}
+
+Respond in JSON format matching exactly:
+{
+  "trend": "increasing" | "decreasing" | "stable",
+  "trendDescription": "Concise explanation",
+  "highestSpendingCategory": "Category name or omitted",
+  "lowestSpendingCategory": "Category name or omitted",
+  "anomalies": ["unusual pattern"],
+  "insights": ["read-only observation"]
+}`
+
+    try {
+      const response = await this.aiProvider.completeStructured<SpendingTrends>({
+        prompt,
+        schema: spendingTrendsSchema,
+      })
+      const validatedInsight = parseAndValidateInsight(response.content, spendingTrendsSchema)
+      if (!validatedInsight) {
+        throw new Error('AI response validation failed')
+      }
+      return validatedInsight
+    } catch (error) {
+      this.logger.error({ userId, error }, 'Failed to analyze spending trends')
       throw error
     }
   }

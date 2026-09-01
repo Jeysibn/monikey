@@ -387,8 +387,8 @@ jobs:
           echo "Web server failed to start"
           exit 1
 
-      - name: Run Playwright tests
-        run: npm run test:e2e
+      - name: Run authenticated Compose Playwright tests
+        run: npm run test:e2e:backend
         env:
           PLAYWRIGHT_TEST_BASE_URL: http://localhost:8080
 

@@ -41,15 +41,6 @@ export class StubAiAdapter implements AiProvider {
         riskyCategories: [],
         recommendations: ['Maintain current spending patterns', 'Review entertainment category next month'],
       } as T
-    } else if (prompt.includes('categoriz') || prompt.includes('category')) {
-      // TransactionCategorization schema
-      stubContent = {
-        suggestedCategory: 'Food & Dining',
-        confidence: 0.85,
-        reasoning:
-          'The transaction description suggests a merchant in the food service industry. This is a stub response; configure GEMINI_API_KEY for live categorization.',
-        alternativeCategories: ['Groceries', 'Entertainment'],
-      } as T
     } else if (prompt.includes('trend')) {
       // SpendingTrends schema
       stubContent = {
@@ -60,6 +51,16 @@ export class StubAiAdapter implements AiProvider {
         lowestSpendingCategory: 'Entertainment',
         anomalies: [],
         insights: ['Spending is stable', 'No unusual patterns detected'],
+      } as T
+    } else if (prompt.includes('categoriz') || prompt.includes('category')) {
+      // TransactionCategorization schema. This branch comes after trends:
+      // trend schemas legitimately contain category fields too.
+      stubContent = {
+        suggestedCategory: 'Food & Dining',
+        confidence: 0.85,
+        reasoning:
+          'The transaction description suggests a merchant in the food service industry. This is a stub response; configure GEMINI_API_KEY for live categorization.',
+        alternativeCategories: ['Groceries', 'Entertainment'],
       } as T
     } else if (prompt.includes('goal')) {
       // GoalProgressAnalysis schema

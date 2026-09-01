@@ -92,13 +92,8 @@ export async function insightsRoutes(app: FastifyInstance, options: InsightsRout
           insight = await service.analyzeBudget(userId, prefs, periodStart, periodEnd)
           break
         case 'spending_trends':
-          // Future enhancement: implement trends analysis
-          return reply.code(501).send({
-            error: {
-              code: 'NOT_IMPLEMENTED',
-              message: 'Spending trends analysis coming soon.',
-            },
-          })
+          insight = await service.analyzeSpendingTrends(userId, prefs, periodStart, periodEnd)
+          break
         default:
           return reply.code(400).send({
             error: {

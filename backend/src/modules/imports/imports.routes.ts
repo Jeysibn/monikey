@@ -540,6 +540,7 @@ export async function createImportsRoutes(
 
         const errors: Array<{ row: number; error: string }> = []
         let addedCount = 0
+        let duplicateCount = 0
 
         // Process data rows
         for (let i = 1; i < lines.length; i++) {
@@ -589,25 +590,31 @@ export async function createImportsRoutes(
 
             addedCount++
           } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error)
-            // Skip DUPLICATE_IMPORT errors (already handled by addImportedTransaction)
-            if (msg.includes('already imported')) {
-              // Count as successful (duplicate will be silently ignored by dedup constraint)
-              addedCount++
+            if (error instanceof AppError && error.code === 'DUPLICATE_IMPORT') {
+              // The global `(provider, dedup_key)` constraint deliberately
+              // suppresses a replay. Do not claim that an unstaged row was
+              // added; expose it separately so callers can distinguish a
+              // successful new import from an idempotent duplicate upload.
+              duplicateCount++
             } else {
+              const msg = error instanceof Error ? error.message : String(error)
               errors.push({ row: i + 1, error: msg })
             }
           }
         }
 
-        return reply.code(201).send({
+        const allRowsWereDuplicates = addedCount === 0 && duplicateCount > 0 && errors.length === 0
+        return reply.code(allRowsWereDuplicates ? 200 : 201).send({
           batchId: batch.id,
           fileName,
           totalRows: lines.length - 1, // Exclude header
           addedCount,
+          duplicateCount,
           errors: errors.length > 0 ? errors : undefined,
-          status: 'reviewing',
-          message: `CSV import created with ${addedCount} transactions. Please review and commit.`,
+          status: allRowsWereDuplicates ? 'duplicate' : 'reviewing',
+          message: allRowsWereDuplicates
+            ? 'CSV upload contained only transactions that were already imported.'
+            : `CSV import created with ${addedCount} transactions${duplicateCount > 0 ? `; ${duplicateCount} duplicates skipped` : ''}. Please review and commit.`,
         })
       } catch (error) {
         app.log.error(`CSV upload error: ${error instanceof Error ? error.message : String(error)}`)

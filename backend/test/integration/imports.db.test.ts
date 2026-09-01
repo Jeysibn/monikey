@@ -607,9 +607,9 @@ describe('Imports Module - Phase 11', () => {
 
     it('successfully uploads and parses a CSV file with multipart/form-data', async () => {
       const csvContent = `date,amount,description,merchant
-2026-09-01,150.50,Coffee Shop,Cafe Noir
-2026-09-02,45.25,Lunch,Restaurant
-2026-09-03,999.99,Groceries,Supermarket`
+2026-09-01,150.50,Coffee Shop ${TEST_RUN_ID},Cafe Noir
+2026-09-02,45.25,Lunch ${TEST_RUN_ID},Restaurant
+2026-09-03,999.99,Groceries ${TEST_RUN_ID},Supermarket`
 
       // Create a form-data request with a file field
       const FormData = require('form-data')
@@ -660,6 +660,37 @@ describe('Imports Module - Phase 11', () => {
         expect(txns[0].amountMinor).toBe(15050n) // 150.50 -> 15050
         expect(txns[1].amountMinor).toBe(4525n)  // 45.25 -> 4525
         expect(txns[2].amountMinor).toBe(99999n) // 999.99 -> 99999
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('reports a replayed CSV truthfully without staging duplicate rows', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,19.99,Replay ${TEST_RUN_ID}`
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempFile = path.join(require('os').tmpdir(), `replay_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      const upload = async () => {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'replay.csv')
+        return app.inject({ method: 'POST', url: '/api/v1/imports/csv/upload', payload: form, headers: { ...form.getHeaders(), origin: APP_ORIGIN, cookie: sessionCookie } })
+      }
+
+      try {
+        const first = await upload()
+        expect(first.statusCode).toBe(201)
+        expect(first.json()).toMatchObject({ addedCount: 1, duplicateCount: 0, status: 'reviewing' })
+
+        const replay = await upload()
+        expect(replay.statusCode).toBe(200)
+        const result = replay.json()
+        expect(result).toMatchObject({ addedCount: 0, duplicateCount: 1, status: 'duplicate' })
+        const batch = await prisma.importBatch.findUnique({ where: { id: result.batchId }, include: { importedTransactions: true } })
+        expect(batch?.importedTransactions).toHaveLength(0)
       } finally {
         fs.unlinkSync(tempFile)
       }
@@ -790,7 +821,7 @@ describe('Imports Module - Phase 11', () => {
 
     it('correctly converts 19.99 to 1999 minor units', async () => {
       const csvContent = `date,amount,description
-2026-09-01,19.99,Test Transaction`
+2026-09-01,19.99,Test Transaction ${TEST_RUN_ID}`
 
       const FormData = require('form-data')
       const fs = require('fs')
@@ -830,7 +861,7 @@ describe('Imports Module - Phase 11', () => {
 
     it('correctly converts 8.20 to 820 minor units', async () => {
       const csvContent = `date,amount,description
-2026-09-01,8.20,Test Transaction`
+2026-09-01,8.20,Test Transaction ${TEST_RUN_ID}`
 
       const FormData = require('form-data')
       const fs = require('fs')
@@ -870,7 +901,7 @@ describe('Imports Module - Phase 11', () => {
 
     it('correctly converts 4.35 to 435 minor units', async () => {
       const csvContent = `date,amount,description
-2026-09-01,4.35,Test Transaction`
+2026-09-01,4.35,Test Transaction ${TEST_RUN_ID}`
 
       const FormData = require('form-data')
       const fs = require('fs')
@@ -910,7 +941,7 @@ describe('Imports Module - Phase 11', () => {
 
     it('correctly converts 0.29 to 29 minor units', async () => {
       const csvContent = `date,amount,description
-2026-09-01,0.29,Test Transaction`
+2026-09-01,0.29,Test Transaction ${TEST_RUN_ID}`
 
       const FormData = require('form-data')
       const fs = require('fs')
@@ -950,10 +981,10 @@ describe('Imports Module - Phase 11', () => {
 
     it('commits batch with correctly rounded amounts to ledger', async () => {
       const csvContent = `date,amount,description
-2026-09-01,19.99,Test 1
-2026-09-02,8.20,Test 2
-2026-09-03,4.35,Test 3
-2026-09-04,0.29,Test 4`
+2026-09-01,19.99,Test 1 ${TEST_RUN_ID}
+2026-09-02,8.20,Test 2 ${TEST_RUN_ID}
+2026-09-03,4.35,Test 3 ${TEST_RUN_ID}
+2026-09-04,0.29,Test 4 ${TEST_RUN_ID}`
 
       const FormData = require('form-data')
       const fs = require('fs')

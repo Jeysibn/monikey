@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:4173'
+const isExternalBaseUrl = !!process.env.PLAYWRIGHT_TEST_BASE_URL
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -7,7 +10,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: baseUrl,
     trace: 'on-first-retry',
   },
   // TR-007: the suite is self-building from a clean checkout. `vite preview`
@@ -28,9 +31,13 @@ export default defineConfig({
   // remove, so the build guarantee is unconditional rather than CI-only; a
   // port already in use now fails loudly via `--strictPort` instead.
   //
+  // When PLAYWRIGHT_TEST_BASE_URL is set (pointing to an external stack like
+  // the Docker Compose stack), skip spawning a local webServer since we want
+  // to test against that stack instead.
+  //
   // The longer timeout covers `tsc -b && vite build` plus preview startup on
   // a cold machine.
-  webServer: {
+  webServer: isExternalBaseUrl ? undefined : {
     command: 'npm run build && npm run preview',
     url: 'http://localhost:4173',
     reuseExistingServer: false,

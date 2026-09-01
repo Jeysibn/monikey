@@ -18,7 +18,7 @@ export interface SettingsGateway {
 export class ApiSettingsGateway implements SettingsGateway {
   private readonly baseUrl: string
   private readonly fetcher: typeof fetch
-  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = fetch) {
+  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args)) {
     this.baseUrl = baseUrl
     this.fetcher = fetcher
   }

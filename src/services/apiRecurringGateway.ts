@@ -13,7 +13,7 @@ export interface RecurringGateway {
 export class ApiRecurringGateway implements RecurringGateway {
   private readonly baseUrl: string
   private readonly fetcher: typeof fetch
-  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = fetch) { this.baseUrl = baseUrl; this.fetcher = fetcher }
+  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args)) { this.baseUrl = baseUrl; this.fetcher = fetcher }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...init.headers } })

@@ -2,10 +2,12 @@
 
 # ---- build: compile the existing Vite React SPA -----------------------
 FROM node:24-alpine AS build
+ARG VITE_FINANCE_BACKEND=false
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
+ENV VITE_FINANCE_BACKEND=${VITE_FINANCE_BACKEND}
 RUN npm run build
 
 # ---- runtime: Nginx serving the static build + /api proxy -------------

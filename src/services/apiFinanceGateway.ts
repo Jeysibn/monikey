@@ -18,7 +18,8 @@ type ApiAccount = {
 }
 type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: number; feeMinor: number; source: Transaction['source']; status: Transaction['status']; note: string | null }
 type ApiGoal = { id: string; name: string; targetMinor: number; currentMinor: number; targetDate: string; completedDate: string | null; monthlyContributionMinor: number | null; status: string; active: boolean }
-type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: number; allocations: Array<{ id: string; categoryId: string; allocatedMinor: number }> }
+type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: number; spentMinor: number }
+type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: number; allocations: ApiBudgetAllocation[] }
 type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: number; occurredOn: string; note: string | null }
 type ApiDividend = { id: string; ticker: string; amountMinor: number; occurredOn: string }
 type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: ApiDividend[] } }
@@ -71,7 +72,16 @@ export class ApiFinanceGateway implements FinanceGateway {
     const creditCards: CreditCard[] = financeState.accounts.filter((a) => a.classification === 'liability' && a.creditCardDetail).map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour ?? '', network: a.creditCardDetail!.network, balance: minor(a.currentBalanceMinor), limit: minor(a.creditCardDetail!.creditLimitMinor), dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(a.creditCardDetail!.dueDay).padStart(2, '0')}`, minPayment: minor(a.creditCardDetail!.minimumPaymentMinor), manual: a.manual }))
     const trades = bootstrap.investmentActivity?.trades ?? []
     const dividends = bootstrap.investmentActivity?.dividends ?? []
-    return { accounts, creditCards, categories: financeState.categories.map((c) => ({ id: c.id, name: c.name, color: c.color, budgetable: c.budgetable, transactionKinds: [ ...(c.allowsIncome ? ['income' as const] : []), ...(c.allowsExpense ? ['expense' as const] : []) ] })), transactions: financeState.transactions.map(this.mapTransaction), budgetCategories: [], totalBudgetAllocated: 0, goals: financeState.goals.map((g) => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as FinanceState['goals'][number]['status'], active: g.active })), attentionItems: [], portfolio: mapInvestmentHoldings(trades), investmentActivity: { trades: trades.map((trade) => ({ id: trade.id, ticker: trade.ticker, type: trade.type, units: trade.units, price: minor(trade.priceMinor), amount: trade.units * minor(trade.priceMinor), date: trade.occurredOn, note: trade.note ?? undefined })), dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.ticker, amount: minor(dividend.amountMinor), date: dividend.occurredOn })) }, budgetVsActual: [] }
+    // Budgets are not part of `/bootstrap` yet, so fetch the period list
+    // separately and use the most recent period (periods are returned newest
+    // first) as the "current" budget. `spentMinor` is computed server-side
+    // from qualifying cleared transactions (see budget.routes.ts) — the
+    // frontend never recomputes it locally.
+    const budgetPeriods = await this.request<ApiBudgetPeriod[]>('/budgets', { signal }).catch(() => [] as ApiBudgetPeriod[])
+    const currentPeriod = budgetPeriods[0]
+    const budgetCategories: BudgetCategory[] = currentPeriod ? currentPeriod.allocations.map((a) => ({ id: a.categoryId, allocated: minor(a.allocatedMinor), spent: minor(a.spentMinor) })) : []
+    const totalBudgetAllocated = budgetCategories.reduce((sum, c) => sum + c.allocated, 0)
+    return { accounts, creditCards, categories: financeState.categories.map((c) => ({ id: c.id, name: c.name, color: c.color, budgetable: c.budgetable, transactionKinds: [ ...(c.allowsIncome ? ['income' as const] : []), ...(c.allowsExpense ? ['expense' as const] : []) ] })), transactions: financeState.transactions.map(this.mapTransaction), budgetCategories, totalBudgetAllocated, goals: financeState.goals.map((g) => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as FinanceState['goals'][number]['status'], active: g.active })), attentionItems: [], portfolio: mapInvestmentHoldings(trades), investmentActivity: { trades: trades.map((trade) => ({ id: trade.id, ticker: trade.ticker, type: trade.type, units: trade.units, price: minor(trade.priceMinor), amount: trade.units * minor(trade.priceMinor), date: trade.occurredOn, note: trade.note ?? undefined })), dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.ticker, amount: minor(dividend.amountMinor), date: dividend.occurredOn })) }, budgetVsActual: [] }
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
@@ -108,8 +118,8 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory> {
-    const result = await this.request<{ allocatedMinor: number }>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100) }) })
-    return { id: categoryId, allocated: minor(result.allocatedMinor), spent: 0 }
+    const result = await this.request<ApiBudgetAllocation>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100) }) })
+    return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 
   async addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }> {

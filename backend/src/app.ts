@@ -23,6 +23,7 @@ import { goalsRoutes } from './modules/goals/goals.routes.js'
 import { budgetRoutes } from './modules/budget/budget.routes.js'
 import { recurringRoutes } from './modules/recurring/recurring.routes.js'
 import { investmentsRoutes } from './modules/investments/investments.routes.js'
+import { reportsRoutes } from './modules/reports/reports.routes.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -146,6 +147,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
       await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
       await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
+      await v1.register(reportsRoutes, { prisma })
     },
     { prefix: '/api/v1' },
   )

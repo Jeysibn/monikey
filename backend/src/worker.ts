@@ -8,6 +8,7 @@ import { enqueueDueBillNotifications, enqueueWeeklySummaryNotifications } from '
 import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
 import { createQuoteProvider, refreshQuoteSnapshots } from './modules/investments/quotes.js'
+import { generateDailySnapshots } from './modules/reports/snapshots.worker.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
   const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger })
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
+    const today = new Date(todayIso)
     await enqueueDueBillNotifications(prisma, todayIso)
     if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
     await deliverNotificationOutbox(prisma, emailProvider)
@@ -37,6 +39,14 @@ async function main(): Promise<void> {
         // allow recurring payments and notification delivery to complete.
         logger.warn({ err }, 'investment quote refresh skipped')
       }
+    }
+    try {
+      const generated = await generateDailySnapshots(prisma, today)
+      if (generated > 0) logger.info({ generated, todayIso }, 'generated daily finance snapshots')
+    } catch (err) {
+      // Snapshot generation failures are non-critical: reports fall back to
+      // computing from ledger history if snapshots are unavailable.
+      logger.warn({ err }, 'daily snapshot generation skipped')
     }
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
     if (failed > 0) logger.warn({ failed, todayIso }, 'some recurring items failed and were paused')

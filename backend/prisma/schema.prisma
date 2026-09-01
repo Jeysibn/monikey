@@ -520,3 +520,22 @@ model ExternalApiUsage {
   @@unique([provider, period, operation])
   @@map("external_api_usage")
 }
+
+// Phase 7: Daily finance snapshots for fast historical report generation.
+// Materialized denormalized state: assets, liabilities, net worth, card debt as of snapshot_date.
+// Built daily by a worker job; rebuildable from ledger history.
+// Not authoritative — derived from transactions and market snapshots.
+model DailyFinanceSnapshot {
+  userId           String   @map("user_id") @db.Uuid
+  snapshotDate     DateTime @map("snapshot_date") @db.Date
+  assetTotalMinor  BigInt   @default(0) @map("asset_total_minor")
+  liabilityTotalMinor BigInt @default(0) @map("liability_total_minor")
+  netWorthMinor    BigInt   @default(0) @map("net_worth_minor")
+  cardDebtMinor    BigInt   @default(0) @map("card_debt_minor")
+  baseCurrency     String   @default("PHP") @map("base_currency") @db.Char(3)
+  generatedAt      DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+
+  @@id([userId, snapshotDate], map: "daily_finance_snapshots_pkey")
+  @@index([userId, snapshotDate(sort: Desc)])
+  @@map("daily_finance_snapshots")
+}

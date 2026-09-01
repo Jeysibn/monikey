@@ -59,6 +59,16 @@ const envSchema = z.object({
   OBJECT_STORE: z.enum(['filesystem']).default('filesystem'),
   RECEIPT_STORAGE_PATH: z.string().min(1).default('/data/receipts'),
 
+  // Phase 10: AI provider configuration.
+  // AI is disabled by default (AI_PROVIDER=stub) until user opts in via settings.
+  AI_PROVIDER: z.enum(['stub', 'gemini']).default('stub'),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash').optional(),
+  // Plan §18 local quota budgets for Gemini. Free tier provides ~60 RPM and token limits.
+  // Conservative defaults leave headroom for retries without exhausting quota.
+  GEMINI_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(50),
+  GEMINI_MAX_CALLS_PER_MONTH: z.coerce.number().int().positive().default(1000),
+
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   ALLOW_TEST_CLOCK: booleanFromString.default(false),

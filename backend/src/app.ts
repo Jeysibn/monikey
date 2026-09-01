@@ -25,6 +25,9 @@ import { recurringRoutes } from './modules/recurring/recurring.routes.js'
 import { investmentsRoutes } from './modules/investments/investments.routes.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { createReceiptsModule } from './modules/receipts/receipts.module.js'
+import { insightsRoutes } from './modules/insights/insights.routes.js'
+import type { AiProvider } from './integrations/interfaces/aiProvider.js'
+import { createStubAiAdapter, createGeminiAdapter } from './integrations/adapters/gemini/index.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -131,6 +134,16 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
 
   registerErrorHandler(app)
 
+  // Create AI provider based on configuration
+  const aiProvider: AiProvider =
+    env.AI_PROVIDER === 'gemini' && env.GEMINI_API_KEY && env.GEMINI_MODEL
+      ? createGeminiAdapter({
+          apiKey: env.GEMINI_API_KEY,
+          model: env.GEMINI_MODEL,
+          logger: app.log as any, // Fastify logger is compatible with pino Logger interface
+        })
+      : createStubAiAdapter()
+
   await app.register(
     async (v1) => {
       await v1.register(healthRoutes, { prisma })
@@ -151,6 +164,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
       await v1.register(async (app) => receipts.registerRoutes(app, env.APP_ORIGIN))
       await v1.register(reportsRoutes, { prisma, prefix: '/reports' })
+      await v1.register(insightsRoutes, {
+        prisma,
+        aiProvider,
+        maxCallsPerDay: env.GEMINI_MAX_CALLS_PER_DAY,
+        maxCallsPerMonth: env.GEMINI_MAX_CALLS_PER_MONTH,
+        appOrigin: env.APP_ORIGIN,
+      })
     },
     { prefix: '/api/v1' },
   )

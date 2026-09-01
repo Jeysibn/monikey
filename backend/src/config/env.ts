@@ -69,6 +69,18 @@ const envSchema = z.object({
   GEMINI_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(50),
   GEMINI_MAX_CALLS_PER_MONTH: z.coerce.number().int().positive().default(1000),
 
+  // Phase 11: Plaid Sandbox and manual import configuration.
+  // Plaid is sandbox-only by default; production Philippine bank sync is out of scope.
+  // BANK_PROVIDER can be 'stub' (deterministic, no network calls) or 'plaid_sandbox' (Plaid test environment).
+  BANK_PROVIDER: z.enum(['stub', 'plaid_sandbox']).default('stub'),
+  PLAID_ENV: z.enum(['sandbox', 'development', 'production']).default('sandbox'),
+  PLAID_CLIENT_ID: z.string().optional(),
+  PLAID_SECRET: z.string().optional(),
+  PLAID_WEBHOOK_SECRET: z.string().optional(), // For verifying Plaid webhook signatures
+  // Import batch limits to prevent runaway processing
+  IMPORT_MAX_TRANSACTIONS_PER_BATCH: z.coerce.number().int().positive().default(10000),
+  IMPORT_MAX_CSV_FILESIZE_BYTES: z.coerce.number().int().positive().default(5242880), // 5 MB default
+
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   ALLOW_TEST_CLOCK: booleanFromString.default(false),

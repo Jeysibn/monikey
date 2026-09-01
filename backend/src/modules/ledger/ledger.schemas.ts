@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const accountTypeSchema = z.enum(['checking', 'savings', 'ewallet', 'cash', 'credit_card']);
 
 export const transactionTypeSchema = z.enum(['income', 'expense', 'transfer']);
-export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring']);
+export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring', 'import']);
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);
 
 export const postTransactionSchema = z.object({
@@ -45,7 +45,7 @@ export interface TransactionView {
   amountMinor: number;
   feeMinor: number;
   currencyCode: string;
-  source: 'manual' | 'ocr' | 'recurring';
+  source: 'manual' | 'ocr' | 'recurring' | 'import';
   status: 'cleared' | 'pending';
   note: string | null;
   idempotencyKey: string | null;

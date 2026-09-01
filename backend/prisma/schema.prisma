@@ -76,6 +76,9 @@ model User {
   investmentTrades   InvestmentTrade[]
   dividends          Dividend[]
   receipts           Receipt[]
+  plaidItems         PlaidItem[]
+  plaidLinkTokens    PlaidLinkToken[]
+  importBatches      ImportBatch[]
 
   @@map("users")
 }
@@ -206,6 +209,7 @@ enum TransactionSource {
   manual
   ocr
   recurring
+  import
 
   @@map("transaction_source")
 }
@@ -261,6 +265,7 @@ model Transaction {
   balanceEffects      TransactionBalanceEffect[]
   contributions       GoalContribution[]
   receipt             Receipt?               @relation("ReceiptTransaction")
+  posting             Posting?               @relation("PostingTransaction")
 
   @@index([userId, occurredOn])
   @@index([userId, categoryId, occurredOn])
@@ -590,4 +595,117 @@ model Receipt {
   @@index([userId, createdAt])
   @@index([status])
   @@map("receipts")
+}
+
+// Phase 11: Plaid Sandbox integration.
+// Stores encrypted Plaid access tokens and link session metadata per user.
+// Only used for Plaid Sandbox; production Philippine bank sync is out of scope for Phase 11.
+model PlaidItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  itemId          String   @map("item_id") // Plaid item ID
+  institutionName String?  @map("institution_name")
+  accountIds      String[] @map("account_ids") // JSON array of Plaid account IDs
+  // Access token is encrypted at rest using a KDF derived from user ID + server key
+  encryptedAccessToken String @map("encrypted_access_token")
+  lastSyncedAt    DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  status          String   @default("active") // active, revoked, error
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importBatches ImportBatch[]
+
+  @@unique([userId, itemId])
+  @@index([userId, createdAt])
+  @@map("plaid_items")
+}
+
+// Phase 11: Plaid Link token exchange (temporary).
+// Short-lived Plaid link tokens that are exchanged for access tokens.
+// Cleaned up after exchange or on expiration.
+model PlaidLinkToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  linkToken   String   @unique @map("link_token")
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("plaid_link_tokens")
+}
+
+// Phase 11: Import batch (staging area).
+// Represents a single import session (Plaid sync or CSV file upload).
+// Imported transactions land as draft rows; user reviews/matches before commit.
+model ImportBatch {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  importSourceId  String?  @map("import_source_id") // FK to PlaidItem.id if from Plaid, or null for manual CSV
+  importSourceType String  @map("import_source_type") // "plaid_sandbox" or "csv_manual"
+  status          String   @default("reviewing") // reviewing, committed, archived, failed
+  matchedAccountId String? @map("matched_account_id") @db.Uuid // which account to post to after review
+  totalCount      Int      @default(0) @map("total_count") // count of importedTransactions in this batch
+  committedCount  Int      @default(0) @map("committed_count") // count that have been posted
+  errorCount      Int      @default(0) @map("error_count")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  committedAt     DateTime? @map("committed_at") @db.Timestamptz(6)
+
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidItem         PlaidItem?           @relation(fields: [importSourceId], references: [id], onDelete: SetNull)
+  importedTransactions ImportedTransaction[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, matchedAccountId])
+  @@map("import_batches")
+}
+
+// Phase 11: Imported transaction (draft row).
+// A single transaction imported from Plaid or CSV, waiting for user review.
+// Has a stable dedup key (provider transaction ID or CSV row hash) with unique constraint.
+// Only posted to ledger after explicit user commit of the batch.
+model ImportedTransaction {
+  id                String   @id @default(uuid()) @db.Uuid
+  importBatchId     String   @map("import_batch_id") @db.Uuid
+  dedupKey          String   @map("dedup_key") // e.g., Plaid transaction ID or hash of date+amount+desc
+  provider          String   // "plaid_sandbox" or "csv"
+  providerTransactionId String? @map("provider_transaction_id") // Plaid txn ID or CSV row reference
+  occurredOn        DateTime @map("occurred_on") @db.Date
+  title             String
+  description       String?
+  amountMinor       BigInt   @map("amount_minor")
+  currencyCode      String   @default("PHP") @map("currency_code") @db.Char(3)
+  merchantName      String?  @map("merchant_name")
+  status            String   @default("pending_review") // pending_review, validated, rejected, posted
+  validationErrors  String[] @map("validation_errors") // JSON array of error strings
+  posting Posting?  @relation("ImportedTransactionPosting")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@unique([importBatchId, dedupKey])
+  @@index([importBatchId, status])
+  @@index([provider, dedupKey]) // Global dedup check
+  @@map("imported_transactions")
+}
+
+// Phase 11: Link between ImportedTransaction and committed Transaction.
+// Once a user confirms and commits an ImportedTransaction, a real Transaction
+// is posted through LedgerModule, and Posting records that relationship.
+model Posting {
+  id                    String   @id @default(uuid()) @db.Uuid
+  importedTransactionId String   @unique @map("imported_transaction_id") @db.Uuid
+  transactionId         String   @unique @map("transaction_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  importedTransaction ImportedTransaction @relation("ImportedTransactionPosting", fields: [importedTransactionId], references: [id], onDelete: Cascade)
+  transaction         Transaction         @relation("PostingTransaction", fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("postings")
 }

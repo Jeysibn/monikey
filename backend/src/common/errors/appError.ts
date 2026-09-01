@@ -52,6 +52,12 @@ export type AppErrorCode =
   | 'STORAGE_NOT_FOUND'
   | 'INVALID_STORAGE_KEY'
   | 'INVALID_REQUEST'
+  // Phase 11: Imports (Plaid Sandbox + manual CSV)
+  | 'DUPLICATE_IMPORT'
+  | 'INVALID_STATE'
+  | 'INVALID_TOKEN'
+  | 'PLAID_UNAVAILABLE'
+  | 'PLAID_EXCHANGE_FAILED'
 
 /**
  * Thrown by domain/application code to signal a business-rule or client

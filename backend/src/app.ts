@@ -28,6 +28,10 @@ import { createReceiptsModule } from './modules/receipts/receipts.module.js'
 import { insightsRoutes } from './modules/insights/insights.routes.js'
 import type { AiProvider } from './integrations/interfaces/aiProvider.js'
 import { createStubAiAdapter, createGeminiAdapter } from './integrations/adapters/gemini/index.js'
+import type { BankAggregationProvider } from './integrations/interfaces/bankDataProvider.js'
+import { createStubBankProvider } from './integrations/adapters/stubs/index.js'
+import { createPlaidSandboxProvider } from './integrations/adapters/plaid-sandbox/index.js'
+import { createImportsModule } from './modules/imports/imports.module.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -144,6 +148,12 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         })
       : createStubAiAdapter()
 
+  // Create bank data provider based on configuration
+  const bankProvider: BankAggregationProvider =
+    env.BANK_PROVIDER === 'plaid_sandbox' && env.PLAID_CLIENT_ID && env.PLAID_SECRET
+      ? createPlaidSandboxProvider(env.PLAID_CLIENT_ID, env.PLAID_SECRET, env.PLAID_WEBHOOK_SECRET)
+      : createStubBankProvider()
+
   await app.register(
     async (v1) => {
       await v1.register(healthRoutes, { prisma })
@@ -154,6 +164,12 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       const accounts = createAccountsModule(prisma)
       const bootstrap = createBootstrapModule(prisma, ledger.service, accounts.service)
       const receipts = createReceiptsModule(prisma, env, ledger.service)
+      const imports = createImportsModule({
+        prisma,
+        ledgerService: ledger.service,
+        bankProvider,
+        appOrigin: env.APP_ORIGIN,
+      })
 
       await v1.register(ledger.registerRoutes)
       await v1.register(accounts.registerRoutes)
@@ -171,6 +187,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         maxCallsPerMonth: env.GEMINI_MAX_CALLS_PER_MONTH,
         appOrigin: env.APP_ORIGIN,
       })
+      await v1.register(imports.registerRoutes, { prefix: '/imports' })
     },
     { prefix: '/api/v1' },
   )

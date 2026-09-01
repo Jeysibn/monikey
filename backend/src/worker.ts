@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     await enqueueDueBillNotifications(prisma, todayIso)
     if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
     await deliverNotificationOutbox(prisma, emailProvider)
-    const processed = await processDueRecurringItems(prisma, ledger.service, todayIso)
+    const { processed, failed } = await processDueRecurringItems(prisma, ledger.service, todayIso, logger)
     if (env.QUOTE_PROVIDER === 'live') {
       try {
         const refreshed = await refreshQuoteSnapshots(prisma, quoteProvider)
@@ -39,6 +39,7 @@ async function main(): Promise<void> {
       }
     }
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
+    if (failed > 0) logger.warn({ failed, todayIso }, 'some recurring items failed and were paused')
   }
   await runRecurring()
   logger.info('worker connected to database; recurring due-job runner registered')

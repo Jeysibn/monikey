@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { Prisma } from '@prisma/client'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
@@ -16,16 +17,28 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id }, include: { instrument: { include: { quoteSnapshots: { orderBy: { fetchedAt: 'desc' }, take: 1 } } } }, orderBy: { occurredOn: 'desc' } }),
       options.prisma.dividend.findMany({ where: { userId: request.user!.id }, include: { instrument: true }, orderBy: { occurredOn: 'desc' } }),
     ])
-    const byInstrument = new Map<string, { instrument: typeof trades[number]['instrument']; units: number; costBasisMinor: number; latestPriceMinor: number }>()
+    // Decimal.js (Prisma.Decimal) arithmetic throughout — never route
+    // cost-basis/units through a lossy Number division/multiplication
+    // chain. `Number(...)` only happens at the final response-serialization
+    // boundary below (QA Attempt 1, Defects 1 & 2).
+    const byInstrument = new Map<string, { instrument: typeof trades[number]['instrument']; units: Prisma.Decimal; costBasisMinor: Prisma.Decimal; latestPriceMinor: Prisma.Decimal }>()
     for (const trade of [...trades].sort((a, b) => a.occurredOn.getTime() - b.occurredOn.getTime())) {
-      const current = byInstrument.get(trade.instrumentId) ?? { instrument: trade.instrument, units: 0, costBasisMinor: 0, latestPriceMinor: Number(trade.priceMinor) }
-      const units = Number(trade.units)
-      if (trade.type === 'buy') { current.costBasisMinor += units * Number(trade.priceMinor); current.units += units }
-      else { const average = current.units > 0 ? current.costBasisMinor / current.units : 0; current.costBasisMinor = Math.max(0, current.costBasisMinor - average * units); current.units -= units }
-      current.latestPriceMinor = trade.instrument.quoteSnapshots[0] ? Number(trade.instrument.quoteSnapshots[0].priceMinor) : Number(trade.priceMinor)
+      const current = byInstrument.get(trade.instrumentId) ?? { instrument: trade.instrument, units: new Prisma.Decimal(0), costBasisMinor: new Prisma.Decimal(0), latestPriceMinor: new Prisma.Decimal(trade.priceMinor.toString()) }
+      const units = new Prisma.Decimal(trade.units.toString())
+      const priceMinor = new Prisma.Decimal(trade.priceMinor.toString())
+      if (trade.type === 'buy') {
+        current.costBasisMinor = current.costBasisMinor.plus(units.times(priceMinor))
+        current.units = current.units.plus(units)
+      } else {
+        const average = current.units.greaterThan(0) ? current.costBasisMinor.dividedBy(current.units) : new Prisma.Decimal(0)
+        const removed = average.times(units)
+        current.costBasisMinor = Prisma.Decimal.max(0, current.costBasisMinor.minus(removed))
+        current.units = current.units.minus(units)
+      }
+      current.latestPriceMinor = trade.instrument.quoteSnapshots[0] ? new Prisma.Decimal(trade.instrument.quoteSnapshots[0].priceMinor.toString()) : priceMinor
       byInstrument.set(trade.instrumentId, current)
     }
-    return { holdings: Array.from(byInstrument.values()).filter((holding) => holding.units > 0).map((holding) => ({ instrumentId: holding.instrument.id, ticker: holding.instrument.ticker, name: holding.instrument.name, assetClass: holding.instrument.assetClass, sector: holding.instrument.sector, units: holding.units, costBasisMinor: holding.costBasisMinor, averageCostMinor: holding.units > 0 ? holding.costBasisMinor / holding.units : 0, latestPriceMinor: holding.latestPriceMinor, quoteSource: holding.instrument.quoteSnapshots[0]?.source ?? 'trade', quoteFetchedAt: holding.instrument.quoteSnapshots[0]?.fetchedAt.toISOString() ?? null, quoteStale: holding.instrument.quoteSnapshots[0] ? Date.now() - holding.instrument.quoteSnapshots[0].fetchedAt.getTime() > 24 * 60 * 60 * 1000 : true })), trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
+    return { holdings: Array.from(byInstrument.values()).filter((holding) => holding.units.greaterThan(0)).map((holding) => ({ instrumentId: holding.instrument.id, ticker: holding.instrument.ticker, name: holding.instrument.name, assetClass: holding.instrument.assetClass, sector: holding.instrument.sector, units: holding.units.toNumber(), costBasisMinor: holding.costBasisMinor.round().toNumber(), averageCostMinor: holding.units.greaterThan(0) ? holding.costBasisMinor.dividedBy(holding.units).round().toNumber() : 0, latestPriceMinor: holding.latestPriceMinor.toNumber(), quoteSource: holding.instrument.quoteSnapshots[0]?.source ?? 'trade', quoteFetchedAt: holding.instrument.quoteSnapshots[0]?.fetchedAt.toISOString() ?? null, quoteStale: holding.instrument.quoteSnapshots[0] ? Date.now() - holding.instrument.quoteSnapshots[0].fetchedAt.getTime() > 24 * 60 * 60 * 1000 : true })), trades: trades.map((trade) => ({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })), dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })) }
   })
   app.post('/investments/trades', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const input = tradeSchema.parse(request.body)
@@ -34,9 +47,12 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     if (existing) return reply.code(200).send({ ...existing, units: Number(existing.units), priceMinor: Number(existing.priceMinor), occurredOn: existing.occurredOn.toISOString().slice(0, 10) })
     const instrument = await options.prisma.instrument.upsert({ where: { userId_ticker: { userId, ticker: input.ticker } }, create: { userId, ticker: input.ticker, name: input.name, assetClass: input.assetClass, sector: input.sector }, update: { name: input.name, assetClass: input.assetClass, sector: input.sector } })
     const previous = await options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: instrument.id }, select: { type: true, units: true } })
-    const heldUnits = previous.reduce((sum, trade) => sum + (trade.type === 'buy' ? Number(trade.units) : -Number(trade.units)), 0)
-    if (input.type === 'sell' && input.units > heldUnits) return reply.code(422).send({ error: { code: 'INVESTMENT_OVERSELL', message: 'Sell quantity exceeds current units.', field: 'units', requestId: request.id } })
-    const cashAmount = Math.round(input.units * input.priceMinor)
+    const heldUnits = previous.reduce((sum, trade) => sum.plus(trade.type === 'buy' ? new Prisma.Decimal(trade.units.toString()) : new Prisma.Decimal(trade.units.toString()).negated()), new Prisma.Decimal(0))
+    const inputUnits = new Prisma.Decimal(input.units.toString())
+    if (input.type === 'sell' && inputUnits.greaterThan(heldUnits)) return reply.code(422).send({ error: { code: 'INVESTMENT_OVERSELL', message: 'Sell quantity exceeds current units.', field: 'units', requestId: request.id } })
+    // Decimal multiplication before the single final rounding — never a
+    // Number*Number chain (QA Attempt 1, Defect 2).
+    const cashAmount = inputUnits.times(input.priceMinor).round().toNumber()
     const ledgerInput = input.cashAccountId ? { type: input.type === 'buy' ? 'expense' as const : 'income' as const, title: `${input.type === 'buy' ? 'Investment buy' : 'Investment sell'} · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: input.type === 'buy' ? input.cashAccountId : null, toAccountId: input.type === 'sell' ? input.cashAccountId : null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: cashAmount, feeMinor: 0, currencyCode: 'PHP', source: 'manual' as const, status: 'cleared' as const, note: input.note ?? null, idempotencyKey: input.idempotencyKey ?? null } : null
     const createTrade = async (tx: any) => tx.investmentTrade.create({ data: { userId, instrumentId: instrument.id, type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), cashAccountId: input.cashAccountId ?? null, note: input.note ?? null, idempotencyKey: input.idempotencyKey ?? null }, include: { instrument: true } })
     const trade = ledgerInput ? await options.ledgerService.postTransactionWithCallback(userId, ledgerInput, async (tx) => createTrade(tx)) : await createTrade(options.prisma)

@@ -230,10 +230,11 @@ export async function createImportsRoutes(
     Body: z.infer<typeof commitBatchSchema>
   }>(
     '/batches/:batchId/commit',
-    { schema: { params: batchIdParamSchema }, preHandler: requireOrigin },
+    { preHandler: requireOrigin },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
-      const { batchId } = (request.params as any) as { batchId: string }
+      // D8: Validate UUID path parameter
+      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
       const input = commitBatchSchema.parse(request.body)
 
       const result = await importsService.commitImportBatch(batchId, userId, input)

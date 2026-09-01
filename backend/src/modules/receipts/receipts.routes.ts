@@ -75,10 +75,10 @@ export async function receiptsRoutes(
    */
   app.get<{ Params: { id: string } }>(
     '/receipts/:id',
-    { schema: { params: receiptIdParamSchema } },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
-      const receiptId = request.params.id
+      // D8: Validate UUID path parameter
+      const { id: receiptId } = receiptIdParamSchema.parse(request.params)
 
       const receipt = await receiptsService.getReceipt(receiptId, userId)
 
@@ -107,10 +107,11 @@ export async function receiptsRoutes(
    */
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/process',
-    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
+    { preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
-      const receiptId = request.params.id
+      // D8: Validate UUID path parameter
+      const { id: receiptId } = receiptIdParamSchema.parse(request.params)
 
       const result = await receiptsService.processReceipt({
         receiptId,
@@ -143,10 +144,11 @@ export async function receiptsRoutes(
 
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/commit',
-    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
+    { preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
-      const receiptId = request.params.id
+      // D8: Validate UUID path parameter
+      const { id: receiptId } = receiptIdParamSchema.parse(request.params)
 
       const body = commitSchema.parse(request.body)
 
@@ -198,10 +200,11 @@ export async function receiptsRoutes(
    */
   app.delete<{ Params: { id: string } }>(
     '/receipts/:id',
-    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
+    { preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
-      const receiptId = request.params.id
+      // D8: Validate UUID path parameter
+      const { id: receiptId } = receiptIdParamSchema.parse(request.params)
 
       await receiptsService.deleteReceipt(receiptId, userId)
 

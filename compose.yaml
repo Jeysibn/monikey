@@ -43,6 +43,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - receipt_data:/data
     healthcheck:
       test: ["CMD", "node", "./scripts/healthcheck.mjs"]
       interval: 10s
@@ -59,6 +61,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - receipt_data:/data
     # The backend image's Dockerfile HEALTHCHECK probes an HTTP endpoint that
     # only the api process serves; the worker has no HTTP surface, so disable
     # the inherited healthcheck here rather than report a perpetually
@@ -89,3 +93,4 @@ services:
 
 volumes:
   postgres_data:
+  receipt_data:

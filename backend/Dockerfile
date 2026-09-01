@@ -33,6 +33,13 @@ COPY prisma ./prisma
 COPY scripts ./scripts
 
 RUN chown -R monikey:monikey /app
+
+# Create /data directory with proper permissions for receipt storage.
+# The filesystem object store adapter (src/integrations/adapters/filesystem-object-store)
+# needs to create subdirectories at runtime; this directory will be mounted as a Docker
+# volume in compose.yaml for persistence across container restarts.
+RUN mkdir -p /data && chown -R monikey:monikey /data
+
 USER monikey
 
 EXPOSE 3000

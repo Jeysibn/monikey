@@ -33,6 +33,25 @@ export type AppErrorCode =
   // this envelope already understands rather than falling through to a
   // generic 500.
   | 'RATE_LIMITED'
+  // Phase 9: Receipt OCR
+  | 'INVALID_RECEIPT_TYPE'
+  | 'RECEIPT_TOO_LARGE'
+  | 'INVALID_RECEIPT_FORMAT'
+  | 'RECEIPT_NOT_FOUND'
+  | 'RECEIPT_ALREADY_COMMITTED'
+  | 'RECEIPT_NOT_READY'
+  | 'RECEIPT_LINKED_TO_TRANSACTION'
+  | 'EXTERNAL_OCR_DISABLED'
+  | 'OCR_PROCESSING_FAILED'
+  | 'OCR_PROVIDER_ERROR'
+  | 'OCR_PROVIDER_TIMEOUT'
+  | 'OCR_NO_TEXT'
+  | 'STORAGE_WRITE_FAILED'
+  | 'STORAGE_READ_FAILED'
+  | 'STORAGE_DELETE_FAILED'
+  | 'STORAGE_NOT_FOUND'
+  | 'INVALID_STORAGE_KEY'
+  | 'INVALID_REQUEST'
 
 /**
  * Thrown by domain/application code to signal a business-rule or client
@@ -86,7 +105,29 @@ function defaultStatusForCode(code: AppErrorCode): number {
       return 422
     case 'EXTERNAL_PROVIDER_UNAVAILABLE':
     case 'EXTERNAL_PROVIDER_QUOTA_REACHED':
+    case 'OCR_PROVIDER_ERROR':
+    case 'OCR_PROVIDER_TIMEOUT':
       return 502
+    case 'INVALID_RECEIPT_TYPE':
+    case 'INVALID_RECEIPT_FORMAT':
+    case 'INVALID_REQUEST':
+    case 'OCR_NO_TEXT':
+      return 400
+    case 'RECEIPT_TOO_LARGE':
+      return 413
+    case 'RECEIPT_NOT_FOUND':
+    case 'STORAGE_NOT_FOUND':
+      return 404
+    case 'RECEIPT_ALREADY_COMMITTED':
+    case 'RECEIPT_NOT_READY':
+    case 'RECEIPT_LINKED_TO_TRANSACTION':
+    case 'EXTERNAL_OCR_DISABLED':
+    case 'INVALID_STORAGE_KEY':
+    case 'OCR_PROCESSING_FAILED':
+    case 'STORAGE_WRITE_FAILED':
+    case 'STORAGE_READ_FAILED':
+    case 'STORAGE_DELETE_FAILED':
+      return 422
     case 'INTERNAL_ERROR':
     default:
       return 500

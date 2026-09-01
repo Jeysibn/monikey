@@ -24,6 +24,7 @@ import { budgetRoutes } from './modules/budget/budget.routes.js'
 import { recurringRoutes } from './modules/recurring/recurring.routes.js'
 import { investmentsRoutes } from './modules/investments/investments.routes.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
+import { createReceiptsModule } from './modules/receipts/receipts.module.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -139,6 +140,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       const ledger = createLedgerModule(prisma)
       const accounts = createAccountsModule(prisma)
       const bootstrap = createBootstrapModule(prisma, ledger.service, accounts.service)
+      const receipts = createReceiptsModule(prisma, env, ledger.service)
 
       await v1.register(ledger.registerRoutes)
       await v1.register(accounts.registerRoutes)
@@ -147,6 +149,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
       await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
       await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
+      await v1.register(async (app) => receipts.registerRoutes(app, env.APP_ORIGIN))
       await v1.register(reportsRoutes, { prisma, prefix: '/reports' })
     },
     { prefix: '/api/v1' },

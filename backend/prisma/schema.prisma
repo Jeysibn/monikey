@@ -75,6 +75,7 @@ model User {
   instruments        Instrument[]
   investmentTrades   InvestmentTrade[]
   dividends          Dividend[]
+  receipts           Receipt[]
 
   @@map("users")
 }
@@ -259,6 +260,7 @@ model Transaction {
   reversingTransaction Transaction?          @relation("TransactionReversal")
   balanceEffects      TransactionBalanceEffect[]
   contributions       GoalContribution[]
+  receipt             Receipt?               @relation("ReceiptTransaction")
 
   @@index([userId, occurredOn])
   @@index([userId, categoryId, occurredOn])
@@ -558,4 +560,34 @@ model FxRateSnapshot {
   @@index([baseCurrency, quoteCurrency, rateDate(sort: Desc)])
   @@index([provider, rateDate(sort: Desc)])
   @@map("fx_rate_snapshots")
+}
+
+// Phase 9: Receipt OCR pipeline.
+// Stores receipt images and OCR extraction state. Receipt images are stored
+// via ObjectStore (filesystem/MinIO) with randomized keys; this table stores
+// metadata and OCR results. OCR extraction never directly posts transactions —
+// the user must review and confirm the parsed draft before it crosses
+// LedgerModule.
+model Receipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  storageKey      String   @map("storage_key")
+  originalFilename String  @map("original_filename")
+  mimeType        String   @map("mime_type")
+  sizeBytes       BigInt   @map("size_bytes")
+  sha256          String   @map("sha256") @db.Char(64)
+  status          String   @default("uploaded") // uploaded, processing, ready, failed, committed
+  ocrProvider     String?  @map("ocr_provider")
+  ocrText         String?  @map("ocr_text")
+  parsedPayload   Json?    @map("parsed_payload") // ReceiptDraft-like structure
+  transactionId   String?  @unique @map("transaction_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation("ReceiptTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("receipts")
 }

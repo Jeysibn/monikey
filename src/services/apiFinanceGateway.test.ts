@@ -15,7 +15,7 @@ describe('ApiFinanceGateway', () => {
       accounts: [account(), account({ id: 'card-1', classification: 'liability', accountType: 'credit_card', currentBalanceMinor: 146000, creditCardDetail: { network: 'visa', creditLimitMinor: 500000, dueDay: 15, minimumPaymentMinor: 7500 } })],
       transactions: [{ id: 'tx-1', type: 'expense', title: 'Cafe', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-29', occurredTime: '09:14:00', amountMinor: 640, feeMinor: 0, source: 'manual', status: 'cleared', note: null }],
       categories: [{ id: 'food', name: 'Food', color: 'teal', budgetable: true, allowsIncome: false, allowsExpense: true }], budgets: [], goals: [],
-    } }))
+    }, serverDate: '2026-08-29' }))
     const state = await new ApiFinanceGateway('/api/v1', fetcher).load()
     expect(state.accounts[0]).toMatchObject({ id: 'account-1', balance: 4120.5, type: 'checking' })
     expect(state.creditCards[0]).toMatchObject({ id: 'card-1', balance: 1460, limit: 5000, dueDate: '2026-08-15' })

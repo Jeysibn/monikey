@@ -9,9 +9,11 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { randomUUID } from 'node:crypto'
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { loadEnv } from '../../src/config/env.js'
+import { generateSessionToken, hashSessionToken } from '../../src/common/auth/sessionToken.js'
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
 const describeIfDb = databaseUrl ? describe : describe.skip
@@ -19,6 +21,7 @@ const describeIfDb = databaseUrl ? describe : describe.skip
 describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATION_ERROR', () => {
   let prisma: PrismaClient
   let app: any
+  let sessionCookie: string
 
   beforeAll(async () => {
     const env = loadEnv({
@@ -28,6 +31,11 @@ describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATIO
       APP_ORIGIN: 'http://localhost:8080',
     })
     prisma = new PrismaClient({ datasourceUrl: databaseUrl })
+    const userId = randomUUID()
+    const rawToken = generateSessionToken()
+    await prisma.user.create({ data: { id: userId, email: `${userId}@d8.test`, passwordHash: 'test', displayName: 'D8 Test' } })
+    await prisma.userSession.create({ data: { userId, tokenHash: hashSessionToken(rawToken), expiresAt: new Date(Date.now() + 60_000) } })
+    sessionCookie = `monikey_session=${rawToken}`
     app = await buildApp({ env, prisma })
   })
 
@@ -79,7 +87,7 @@ describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATIO
           const res = await app.inject({
             method: route.method,
             url: `/api/v1${urlPath}`,
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', cookie: sessionCookie, origin: 'http://localhost:8080' },
             payload: route.body,
           })
 
@@ -106,7 +114,7 @@ describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATIO
         const res = await app.inject({
           method: route.method,
           url: `/api/v1${urlPath}`,
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: sessionCookie, origin: 'http://localhost:8080' },
           payload: route.body,
         })
 

@@ -470,7 +470,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookieA },
+        headers: { cookie: sessionCookieA, origin: APP_ORIGIN },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -648,15 +648,15 @@ describe('Imports Module - Phase 11', () => {
         // Verify the batch was created
         const batch = await prisma.importBatch.findUnique({
           where: { id: result.batchId },
-          include: { transactions: true },
+          include: { importedTransactions: true },
         })
 
         expect(batch).toBeDefined()
-        expect(batch?.sourceType).toBe('csv_manual')
-        expect(batch?.transactions).toHaveLength(3)
+        expect(batch?.importSourceType).toBe('csv_manual')
+        expect(batch?.importedTransactions).toHaveLength(3)
 
         // Verify amounts are correct (D11 fix: verify rounding is correct)
-        const txns = batch!.transactions.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        const txns = batch!.importedTransactions.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
         expect(txns[0].amountMinor).toBe(15050n) // 150.50 -> 15050
         expect(txns[1].amountMinor).toBe(4525n)  // 45.25 -> 4525
         expect(txns[2].amountMinor).toBe(99999n) // 999.99 -> 99999
@@ -819,10 +819,10 @@ describe('Imports Module - Phase 11', () => {
 
         const batch = await prisma.importBatch.findUnique({
           where: { id: result.batchId },
-          include: { transactions: true },
+          include: { importedTransactions: true },
         })
 
-        expect(batch?.transactions[0].amountMinor).toBe(1999n)
+        expect(batch?.importedTransactions[0].amountMinor).toBe(1999n)
       } finally {
         fs.unlinkSync(tempFile)
       }
@@ -859,10 +859,10 @@ describe('Imports Module - Phase 11', () => {
 
         const batch = await prisma.importBatch.findUnique({
           where: { id: result.batchId },
-          include: { transactions: true },
+          include: { importedTransactions: true },
         })
 
-        expect(batch?.transactions[0].amountMinor).toBe(820n)
+        expect(batch?.importedTransactions[0].amountMinor).toBe(820n)
       } finally {
         fs.unlinkSync(tempFile)
       }
@@ -899,10 +899,10 @@ describe('Imports Module - Phase 11', () => {
 
         const batch = await prisma.importBatch.findUnique({
           where: { id: result.batchId },
-          include: { transactions: true },
+          include: { importedTransactions: true },
         })
 
-        expect(batch?.transactions[0].amountMinor).toBe(435n)
+        expect(batch?.importedTransactions[0].amountMinor).toBe(435n)
       } finally {
         fs.unlinkSync(tempFile)
       }
@@ -939,10 +939,10 @@ describe('Imports Module - Phase 11', () => {
 
         const batch = await prisma.importBatch.findUnique({
           where: { id: result.batchId },
-          include: { transactions: true },
+          include: { importedTransactions: true },
         })
 
-        expect(batch?.transactions[0].amountMinor).toBe(29n)
+        expect(batch?.importedTransactions[0].amountMinor).toBe(29n)
       } finally {
         fs.unlinkSync(tempFile)
       }

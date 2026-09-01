@@ -93,10 +93,12 @@ function defaultStatusForCode(code: AppErrorCode): number {
     case 'UNKNOWN_GOAL':
       return 404
     case 'IDEMPOTENCY_CONFLICT':
+    case 'DUPLICATE_IMPORT':
       return 409
     case 'RATE_LIMITED':
       return 429
     case 'VALIDATION_ERROR':
+    case 'INVALID_STATE':
     case 'ASSET_OVERDRAFT':
     case 'CREDIT_LIMIT_EXCEEDED':
     case 'CARD_PAYMENT_EXCEEDS_OWED':

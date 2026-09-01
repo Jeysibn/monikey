@@ -22,7 +22,7 @@ type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: num
 type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: number; allocations: ApiBudgetAllocation[] }
 type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: number; occurredOn: string; note: string | null }
 type ApiDividend = { id: string; ticker: string; amountMinor: number; occurredOn: string }
-type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: ApiDividend[] } }
+type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: ApiDividend[] }; serverDate?: string }
 
 export interface FinanceGateway {
   load(signal?: AbortSignal): Promise<FinanceState>
@@ -69,7 +69,9 @@ export class ApiFinanceGateway implements FinanceGateway {
     const bootstrap = await this.request<Bootstrap>('/bootstrap', { signal })
     const { financeState } = bootstrap
     const accounts: Account[] = financeState.accounts.filter((a) => a.classification === 'asset').map((a) => ({ id: a.id, name: a.name, institution: a.institution ?? undefined, type: a.accountType, classification: a.classification, balance: minor(a.currentBalanceMinor), lastFour: a.lastFour ?? undefined, syncStatus: a.syncStatus, manual: a.manual }))
-    const creditCards: CreditCard[] = financeState.accounts.filter((a) => a.classification === 'liability' && a.creditCardDetail).map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour ?? '', network: a.creditCardDetail!.network, balance: minor(a.currentBalanceMinor), limit: minor(a.creditCardDetail!.creditLimitMinor), dueDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(a.creditCardDetail!.dueDay).padStart(2, '0')}`, minPayment: minor(a.creditCardDetail!.minimumPaymentMinor), manual: a.manual }))
+    const serverDate = bootstrap.serverDate && /^\d{4}-\d{2}-\d{2}$/.test(bootstrap.serverDate) ? bootstrap.serverDate : new Date().toISOString().slice(0, 10)
+    const dueDatePrefix = serverDate.slice(0, 7)
+    const creditCards: CreditCard[] = financeState.accounts.filter((a) => a.classification === 'liability' && a.creditCardDetail).map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour ?? '', network: a.creditCardDetail!.network, balance: minor(a.currentBalanceMinor), limit: minor(a.creditCardDetail!.creditLimitMinor), dueDate: `${dueDatePrefix}-${String(a.creditCardDetail!.dueDay).padStart(2, '0')}`, minPayment: minor(a.creditCardDetail!.minimumPaymentMinor), manual: a.manual }))
     const trades = bootstrap.investmentActivity?.trades ?? []
     const dividends = bootstrap.investmentActivity?.dividends ?? []
     // Budgets are not part of `/bootstrap` yet, so fetch the period list

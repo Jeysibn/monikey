@@ -138,12 +138,10 @@ export class ImportsService {
     } catch (error: any) {
       // Check if this is a unique constraint violation on (provider, dedup_key)
       if (
-        error?.code === 'P2002' &&
-        error?.meta?.target &&
-        Array.isArray(error.meta.target) &&
-        error.meta.target.length === 2 &&
-        error.meta.target.includes('provider') &&
-        error.meta.target.includes('dedup_key')
+        // This create has no other expected uniqueness failure: either the
+        // batch-local or global provider/dedup key constraint identifies a
+        // replay. Prisma reports these targets with version-dependent names.
+        error?.code === 'P2002'
       ) {
         throw new AppError('DUPLICATE_IMPORT', 'This transaction was already imported', { statusCode: 409 })
       }
@@ -198,7 +196,9 @@ export class ImportsService {
     const batch = await this.getImportBatch(batchId, userId)
 
     if (batch.status === 'committed') {
-      throw new AppError('INVALID_STATE', 'Batch already committed', { statusCode: 400 })
+      // A retry after a client timeout must replay the durable result as a
+      // successful no-op rather than turn a safe retry into a client error.
+      return { committedCount: batch.committedCount, errors: [] }
     }
 
     if (!batch.matchedAccountId && !input.matchedAccountId) {

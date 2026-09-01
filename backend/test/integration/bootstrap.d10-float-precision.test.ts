@@ -7,7 +7,9 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { BootstrapService } from '../../src/modules/bootstrap/bootstrap.service.js';
 import { LedgerService } from '../../src/modules/ledger/ledger.service.js';
+import { LedgerRepository } from '../../src/modules/ledger/ledger.repository.js';
 import { AccountsService } from '../../src/modules/accounts/accounts.service.js';
+import { AccountsRepository } from '../../src/modules/accounts/accounts.repository.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const describeIfDb = databaseUrl ? describe : describe.skip;
@@ -38,7 +40,8 @@ describeIfDb('D10: Bootstrap float-precision fix for investment trades', () => {
           id: instrumentId,
           ticker: 'TEST',
           name: 'Test Instrument',
-          instrumentType: 'equity',
+          assetClass: 'equity',
+          sector: 'Technology',
         },
       });
 
@@ -110,8 +113,8 @@ describeIfDb('D10: Bootstrap float-precision fix for investment trades', () => {
       });
 
       // Call bootstrap to get the investment trades
-      const ledgerService = new LedgerService(prisma);
-      const accountsService = new AccountsService(prisma);
+      const ledgerService = new LedgerService(prisma, new LedgerRepository(prisma));
+      const accountsService = new AccountsService(prisma, new AccountsRepository(prisma));
       const bootstrapService = new BootstrapService(prisma, ledgerService, accountsService);
 
       const bootstrap = await bootstrapService.getBootstrap(userId);

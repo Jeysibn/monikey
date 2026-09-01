@@ -4,6 +4,7 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 RUN npm ci
 
 # ---- build: compile TypeScript + generate Prisma client --------------
@@ -22,6 +23,7 @@ WORKDIR /app
 RUN addgroup -S monikey && adduser -S monikey -G monikey
 
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist

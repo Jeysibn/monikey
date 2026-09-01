@@ -3,6 +3,7 @@ import { useAsyncFinance } from '../state/asyncFinanceContext'
 import { FinanceApiError } from '../services/apiFinanceGateway'
 import { authenticate, logout as logoutRequest, type AuthMode } from '../services/apiAuth'
 import { BackendAuthContext } from './BackendAuthContext'
+import './BackendFinanceGate.css'
 
 function AuthScreen() {
   const { retry } = useAsyncFinance()
@@ -30,21 +31,21 @@ function AuthScreen() {
   }
 
   return (
-    <main className="app-loading" aria-labelledby="auth-title">
+    <main className="auth-gate-page" aria-labelledby="auth-title">
       <section className="auth-gate">
-        <p className="eyebrow">Monikey</p>
-        <h1 id="auth-title">{mode === 'register' ? 'Create your account' : 'Welcome back'}</h1>
-        <p>{mode === 'register' ? 'Start securely syncing your finances in Monikey.' : 'Sign in to load your finances.'}</p>
-        <div role="group" aria-label="Authentication mode">
-          <button type="button" aria-pressed={mode === 'register'} onClick={() => { setMode('register'); setError(null) }}>Register</button>
-          <button type="button" aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(null) }}>Sign in</button>
+        <p className="eyebrow auth-gate__brand">Monikey</p>
+        <h1 className="auth-gate__title" id="auth-title">{mode === 'register' ? 'Create your account' : 'Welcome back'}</h1>
+        <p className="auth-gate__intro">{mode === 'register' ? 'Start securely syncing your finances in Monikey.' : 'Sign in to load your finances.'}</p>
+        <div className="auth-gate__modes" role="group" aria-label="Authentication mode">
+          <button className="auth-gate__mode" type="button" aria-pressed={mode === 'register'} onClick={() => { setMode('register'); setError(null) }}>Register</button>
+          <button className="auth-gate__mode" type="button" aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(null) }}>Sign in</button>
         </div>
-        <form onSubmit={submit}>
-          {mode === 'register' && <label>Display name<input name="displayName" autoComplete="name" required maxLength={120} /></label>}
-          <label>Email<input name="email" type="email" autoComplete="email" required /></label>
-          <label>Password<input name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={8} required /></label>
-          {error && <p role="alert">{error}</p>}
-          <button type="submit" disabled={pending}>{pending ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
+        <form className="auth-gate__form" onSubmit={submit}>
+          {mode === 'register' && <label className="auth-gate__field">Display name<input className="auth-gate__input" name="displayName" autoComplete="name" required maxLength={120} /></label>}
+          <label className="auth-gate__field">Email<input className="auth-gate__input" name="email" type="email" autoComplete="email" required /></label>
+          <label className="auth-gate__field">Password<input className="auth-gate__input" name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={8} required /></label>
+          {error && <p className="auth-gate__error" role="alert">{error}</p>}
+          <button className="btn btn--primary auth-gate__submit" type="submit" disabled={pending}>{pending ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
         </form>
       </section>
     </main>

@@ -23,9 +23,11 @@ export async function goalsRoutes(app: FastifyInstance, options: { prisma: Prism
     return reply.code(201).send({ ...goal, targetMinor: Number(goal.targetMinor), currentMinor: Number(goal.currentMinor), monthlyContributionMinor: goal.monthlyContributionMinor == null ? null : Number(goal.monthlyContributionMinor) })
   })
 
-  app.post<{ Params: { id: string } }>('/goals/:id/fund', { schema: { params: goalIdParamSchema }, preHandler: requireOrigin }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/goals/:id/fund', { preHandler: requireOrigin }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = goalIdParamSchema.parse(request.params)
     const input = fundGoalSchema.parse(request.body)
-    const result = await ledgerService.postTransaction(request.user!.id, { type: 'transfer', title: 'Goal funding', categoryId: null, goalId: request.params.id, fromAccountId: input.sourceAccountId, toAccountId: null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared', note: null, idempotencyKey: input.idempotencyKey })
+    const result = await ledgerService.postTransaction(request.user!.id, { type: 'transfer', title: 'Goal funding', categoryId: null, goalId: id, fromAccountId: input.sourceAccountId, toAccountId: null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared', note: null, idempotencyKey: input.idempotencyKey })
     return reply.code(201).send(result)
   })
 }

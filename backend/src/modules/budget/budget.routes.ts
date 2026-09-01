@@ -76,9 +76,11 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC } }, create: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC, incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
     return reply.code(201).send(await attachSpentMinor(prisma, request.user!.id, period))
   })
-  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { schema: { params: budgetIdParamSchema }, preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = budgetIdParamSchema.parse(request.params)
     const input = allocationSchema.parse(request.body)
-    const period = await prisma.budgetPeriod.findFirst({ where: { id: request.params.id, userId: request.user!.id } })
+    const period = await prisma.budgetPeriod.findFirst({ where: { id, userId: request.user!.id } })
     if (!period) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Budget period not found.', requestId: request.id } })
 
     // Verify the category exists and belongs to the user or is a system category

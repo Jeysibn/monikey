@@ -142,10 +142,10 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string } }>(
     '/batches/:batchId',
-    { schema: { params: batchIdParamSchema } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
-      const { batchId } = (request.params as any) as { batchId: string }
+      // D8: Validate UUID path parameter
+      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
 
       const batch = await importsService.getImportBatch(batchId, userId)
       return reply.send(batch)
@@ -161,10 +161,11 @@ export async function createImportsRoutes(
     Body: z.infer<typeof addImportedTransactionSchema>
   }>(
     '/batches/:batchId/transactions',
-    { schema: { params: batchIdParamSchema }, preHandler: requireOrigin },
+    { preHandler: requireOrigin },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
-      const { batchId } = (request.params as any) as { batchId: string }
+      // D8: Validate UUID path parameter
+      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
       const input = addImportedTransactionSchema.parse(request.body)
 
       const txn = await importsService.addImportedTransaction(batchId, userId, {
@@ -192,10 +193,10 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
     '/batches/:batchId/transactions',
-    { schema: { params: batchIdParamSchema } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
-      const { batchId } = (request.params as any) as { batchId: string }
+      // D8: Validate UUID path parameter
+      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
       const status = ((request.query as any).status as string | undefined) || undefined
       const limit = Math.min(parseInt((request.query as any).limit as string) || 100, 1000)
       const offset = Math.max(0, parseInt((request.query as any).offset as string) || 0)

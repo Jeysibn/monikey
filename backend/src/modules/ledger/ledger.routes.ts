@@ -67,9 +67,10 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   // GET /transactions/:id
   f.get<{ Params: { id: string } }>(
     '/transactions/:id',
-    { schema: { params: transactionIdParamSchema } },
     async (req, reply) => {
-      const transaction = await service.getTransaction(req.user!.id, req.params.id);
+      // D8: Validate UUID path parameter
+      const { id } = transactionIdParamSchema.parse(req.params);
+      const transaction = await service.getTransaction(req.user!.id, id);
       if (!transaction) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Transaction not found.', requestId: req.id } });
       }
@@ -81,11 +82,12 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   f.post<{ Params: { id: string }; Body: ReverseTransactionInput }>(
     '/transactions/:id/reverse',
     {
-      schema: { params: transactionIdParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req, reply) => {
-      const result = await service.reverseTransaction(req.user!.id, req.params.id, reverseTransactionSchema.parse(req.body));
+      // D8: Validate UUID path parameter
+      const { id } = transactionIdParamSchema.parse(req.params);
+      const result = await service.reverseTransaction(req.user!.id, id, reverseTransactionSchema.parse(req.body));
       return reply.code(201).send(result);
     }
   );

@@ -34,15 +34,19 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const item = await options.prisma.recurringItem.create({ data: { userId: request.user!.id, merchant: input.merchant, amountMinor: BigInt(input.amountMinor), frequency: input.frequency, nextDueDate: new Date(`${input.nextDueDate}T00:00:00Z`), accountId: input.accountId, categoryId: input.categoryId, autopay: input.autopay } })
     return reply.code(201).send(view(item))
   })
-  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { schema: { params: recurringIdParamSchema }, preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = recurringIdParamSchema.parse(request.params)
     const input = statusSchema.parse(request.body)
-    const item = await options.prisma.recurringItem.updateMany({ where: { id: request.params.id, userId: request.user!.id }, data: { status: input.status } })
+    const item = await options.prisma.recurringItem.updateMany({ where: { id, userId: request.user!.id }, data: { status: input.status } })
     if (item.count === 0) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Recurring item not found.', requestId: request.id } })
-    const updated = await options.prisma.recurringItem.findFirstOrThrow({ where: { id: request.params.id, userId: request.user!.id } })
+    const updated = await options.prisma.recurringItem.findFirstOrThrow({ where: { id, userId: request.user!.id } })
     return view(updated)
   })
-  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { schema: { params: recurringIdParamSchema }, preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
-    const item = await options.prisma.recurringItem.findFirst({ where: { id: request.params.id, userId: request.user!.id, status: 'active' } })
+  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = recurringIdParamSchema.parse(request.params)
+    const item = await options.prisma.recurringItem.findFirst({ where: { id, userId: request.user!.id, status: 'active' } })
     if (!item) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Active recurring item not found.', requestId: request.id } })
     const idempotencyKey = `recurring:${item.id}:${item.nextDueDate.toISOString().slice(0, 10)}`
     await options.ledgerService.postTransaction(request.user!.id, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: item.nextDueDate.toISOString().slice(0, 10), occurredTime: null, amountMinor: Number(item.amountMinor), feeMinor: 0, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })

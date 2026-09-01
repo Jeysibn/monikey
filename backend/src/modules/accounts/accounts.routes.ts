@@ -54,11 +54,12 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
   f.patch<{ Params: { id: string }; Body: UpdateAccountInput }>(
     '/accounts/:id',
     {
-      schema: { params: idParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req) => {
-      const account = await service.updateAccount(req.user!.id, req.params.id, updateAccountSchema.parse(req.body));
+      // D8: Validate UUID path parameter
+      const { id } = idParamSchema.parse(req.params);
+      const account = await service.updateAccount(req.user!.id, id, updateAccountSchema.parse(req.body));
       return account;
     }
   );
@@ -67,11 +68,12 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
   f.post<{ Params: { id: string } }>(
     '/accounts/:id/archive',
     {
-      schema: { params: idParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req, reply) => {
-      await service.archiveAccount(req.user!.id, req.params.id);
+      // D8: Validate UUID path parameter
+      const { id } = idParamSchema.parse(req.params);
+      await service.archiveAccount(req.user!.id, id);
       return reply.code(204).send();
     }
   );

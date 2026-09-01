@@ -20,6 +20,16 @@ import { StubBankProvider } from '../../src/integrations/adapters/stubs/index.js
 import { generateSessionToken, hashSessionToken } from '../../src/common/auth/sessionToken.js'
 
 const SESSION_COOKIE_NAME = 'monikey_session'
+const APP_ORIGIN = 'http://localhost:8080'
+const TEST_RUN_ID = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+/**
+ * Generate a unique dedup key for this test run to avoid UNIQUE constraint violations
+ * across multiple test runs using the same hardcoded keys.
+ */
+function makeUniqueDedupKey(key: string): string {
+  return `${TEST_RUN_ID}_${key}`
+}
 
 /**
  * Helper to create a real session for a test user and return the cookie string
@@ -48,7 +58,14 @@ describe('Imports Module - Phase 11', () => {
   let env: any
 
   beforeAll(async () => {
-    env = loadEnv()
+    const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
+    env = loadEnv({
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+      APP_ORIGIN,
+      NODE_ENV: 'test',
+      LOG_LEVEL: 'silent',
+    })
     prisma = createPrismaClient(env.DATABASE_URL)
 
     app = await buildApp({
@@ -103,6 +120,7 @@ describe('Imports Module - Phase 11', () => {
           sourceType: 'csv_manual',
         },
         headers: {
+          origin: APP_ORIGIN,
           cookie: sessionCookie,
         },
       })
@@ -123,6 +141,7 @@ describe('Imports Module - Phase 11', () => {
           sourceType: 'csv_manual',
         },
         headers: {
+          origin: APP_ORIGIN,
           cookie: sessionCookie,
         },
       })
@@ -134,7 +153,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'csv_row_1',
+          dedupKey: makeUniqueDedupKey('csv_row_1'),
           provider: 'csv',
           title: 'Coffee Shop',
           amountMinor: 15050, // PHP 150.50
@@ -143,6 +162,7 @@ describe('Imports Module - Phase 11', () => {
           merchantName: 'Cafe Noir',
         },
         headers: {
+          origin: APP_ORIGIN,
           cookie: sessionCookie,
         },
       })
@@ -194,7 +214,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -204,13 +224,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'same_dedup_key',
+          dedupKey: makeUniqueDedupKey('same_dedup_key'),
           provider: 'csv',
           title: 'Transaction 1',
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txn1.statusCode).toBe(201)
@@ -220,13 +240,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'same_dedup_key',
+          dedupKey: makeUniqueDedupKey('same_dedup_key'),
           provider: 'csv',
           title: 'Transaction 2',
           amountMinor: 60000,
           occurredOn: '2026-09-02',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txn2.statusCode).toBe(409)
@@ -238,7 +258,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
       const batch1 = JSON.parse(batch1Res.body)
 
@@ -246,7 +266,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
       const batch2 = JSON.parse(batch2Res.body)
 
@@ -255,13 +275,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch1.id}/transactions`,
         payload: {
-          dedupKey: 'global_dedup_key',
+          dedupKey: makeUniqueDedupKey('global_dedup_key'),
           provider: 'csv',
           title: 'Transaction',
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txn1.statusCode).toBe(201)
@@ -271,13 +291,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch2.id}/transactions`,
         payload: {
-          dedupKey: 'global_dedup_key',
+          dedupKey: makeUniqueDedupKey('global_dedup_key'),
           provider: 'csv',
           title: 'Same Transaction Again',
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txn2.statusCode).toBe(409)
@@ -323,7 +343,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -333,13 +353,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'expense_1',
+          dedupKey: makeUniqueDedupKey('expense_1'),
           provider: 'csv',
           title: 'Grocery Store',
           amountMinor: 150000, // PHP 1,500
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txnRes.statusCode).toBe(201)
@@ -351,7 +371,7 @@ describe('Imports Module - Phase 11', () => {
         payload: {
           matchedAccountId: accountId,
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(commitRes.statusCode).toBe(200)
@@ -376,7 +396,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -385,13 +405,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'expense_idempotent',
+          dedupKey: makeUniqueDedupKey('expense_idempotent'),
           provider: 'csv',
           title: 'Expense',
           amountMinor: 100000,
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       // Commit once
@@ -399,7 +419,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/commit`,
         payload: { matchedAccountId: accountId },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(commit1.statusCode).toBe(200)
@@ -409,7 +429,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/commit`,
         payload: { matchedAccountId: accountId },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(commit2.statusCode).toBe(200)
@@ -513,7 +533,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -522,13 +542,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'negative',
+          dedupKey: makeUniqueDedupKey('negative'),
           provider: 'csv',
           title: 'Bad Amount',
           amountMinor: -50000,
           occurredOn: '2026-09-01',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       // Should be rejected (400) or have validation errors
@@ -545,7 +565,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -554,13 +574,13 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/transactions`,
         payload: {
-          dedupKey: 'bad_date',
+          dedupKey: makeUniqueDedupKey('bad_date'),
           provider: 'csv',
           title: 'Transaction',
           amountMinor: 50000,
           occurredOn: 'not-a-date',
         },
-        headers: { cookie: sessionCookie },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
       })
 
       expect(txnRes.statusCode).toBe(400) // Zod validation should fail

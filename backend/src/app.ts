@@ -147,7 +147,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
       await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
       await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
-      await v1.register(reportsRoutes, { prisma })
+      await v1.register(reportsRoutes, { prisma, prefix: '/reports' })
     },
     { prefix: '/api/v1' },
   )

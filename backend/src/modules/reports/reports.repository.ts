@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 export interface ReportSummary {
   income: number
@@ -82,6 +83,8 @@ export async function computeReportSummary(
   periodEnd: Date,
   _userTimezone: string
 ): Promise<ReportSummary> {
+  // userTimezone is used indirectly: period boundaries are calculated in the caller
+  // using the user's timezone before being passed to this function.
   // Sum all cleared income transactions in the period
   const incomeSum = await prisma.transaction.aggregate({
     _sum: { amountMinor: true },
@@ -367,17 +370,23 @@ export async function computeInvestmentsReport(
   }
 
   // Group by instrument to compute holdings
-  const holdingsByInstrument = new Map<string, { units: number; costBasis: number }>()
+  // Decimal.js (Prisma.Decimal) arithmetic throughout — never route
+  // cost-basis/units through a lossy Number division/multiplication
+  // chain. `Number(...)` only happens at the final response-serialization
+  // boundary below (Defect 3).
+  const holdingsByInstrument = new Map<string, { units: Prisma.Decimal; costBasisMinor: Prisma.Decimal }>()
 
   trades.forEach((t) => {
     const key = t.instrumentId
-    const existing = holdingsByInstrument.get(key) ?? { units: 0, costBasis: 0 }
+    const existing = holdingsByInstrument.get(key) ?? { units: new Prisma.Decimal(0), costBasisMinor: new Prisma.Decimal(0) }
+    const units = new Prisma.Decimal(t.units.toString())
+    const priceMinor = new Prisma.Decimal(t.priceMinor.toString())
     if (t.type === 'buy') {
-      existing.units += Number(t.units)
-      existing.costBasis += Number(t.priceMinor) * Number(t.units)
+      existing.units = existing.units.plus(units)
+      existing.costBasisMinor = existing.costBasisMinor.plus(units.times(priceMinor))
     } else {
-      existing.units -= Number(t.units)
-      existing.costBasis -= Number(t.priceMinor) * Number(t.units)
+      existing.units = existing.units.minus(units)
+      existing.costBasisMinor = existing.costBasisMinor.minus(units.times(priceMinor))
     }
     holdingsByInstrument.set(key, existing)
   })
@@ -386,7 +395,7 @@ export async function computeInvestmentsReport(
   const reports: InvestmentReport[] = []
   for (const [instrumentId, holding] of holdingsByInstrument.entries()) {
     const instrument = trades.find((t) => t.instrumentId === instrumentId)?.instrument
-    if (!instrument || holding.units <= 0) continue
+    if (!instrument || holding.units.lessThanOrEqualTo(0)) continue
 
     const quote = await prisma.quoteSnapshot.findFirst({
       where: { instrumentId },
@@ -394,22 +403,23 @@ export async function computeInvestmentsReport(
     })
 
     if (quote) {
-      const currentPrice = Number(quote.priceMinor)
-      const marketValue = currentPrice * holding.units
-      const costPerUnit = holding.costBasis / holding.units
-      const gainLoss = marketValue - holding.costBasis
-      const gainLossPercent = costPerUnit > 0 ? (gainLoss / holding.costBasis) * 100 : 0
+      const currentPriceMinor = new Prisma.Decimal(quote.priceMinor.toString())
+      const marketValueMinor = currentPriceMinor.times(holding.units)
+      const costPerUnitMinor = holding.units.greaterThan(0) ? holding.costBasisMinor.dividedBy(holding.units) : new Prisma.Decimal(0)
+      const gainLossMinor = marketValueMinor.minus(holding.costBasisMinor)
+      const gainLossPercent = costPerUnitMinor.greaterThan(0) ? gainLossMinor.dividedBy(holding.costBasisMinor).times(100) : new Prisma.Decimal(0)
 
+      // Number conversion only at response serialization boundary
       reports.push({
         instrumentId,
         ticker: instrument.ticker,
         name: instrument.name,
-        units: holding.units,
-        currentPrice,
-        marketValue,
-        costBasis: holding.costBasis,
-        gainLoss,
-        gainLossPercent: Math.round(gainLossPercent * 100) / 100,
+        units: holding.units.toNumber(),
+        currentPrice: currentPriceMinor.toNumber(),
+        marketValue: marketValueMinor.toNumber(),
+        costBasis: holding.costBasisMinor.toNumber(),
+        gainLoss: gainLossMinor.toNumber(),
+        gainLossPercent: Math.round(gainLossPercent.toNumber() * 100) / 100,
       })
     }
   }

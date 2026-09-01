@@ -9,6 +9,8 @@ import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
 import { createQuoteProvider, refreshQuoteSnapshots } from './modules/investments/quotes.js'
 import { generateDailySnapshots } from './modules/reports/snapshots.worker.js'
+import { createFxModule } from './modules/fx/fx.module.js'
+import { createFxRatesProvider } from './integrations/adapters/frankfurter/index.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -23,6 +25,8 @@ async function main(): Promise<void> {
   const ledger = createLedgerModule(prisma)
   const emailProvider = createEmailProvider(env)
   const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger })
+  const fxProvider = createFxRatesProvider(env, fetch, { prisma, logger })
+  const fxService = createFxModule(prisma, fxProvider, logger)
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
     const today = new Date(todayIso)
@@ -38,6 +42,16 @@ async function main(): Promise<void> {
         // Market-data outages are non-critical: retain the last snapshot and
         // allow recurring payments and notification delivery to complete.
         logger.warn({ err }, 'investment quote refresh skipped')
+      }
+    }
+    // Phase 8: FX rate refresh for active currencies
+    if (env.FX_PROVIDER === 'frankfurter') {
+      try {
+        const refreshed = await fxService.refreshRatesForActiveCurrencies(today)
+        if (refreshed > 0) logger.info({ refreshed }, 'refreshed FX rates for active currencies')
+      } catch (err) {
+        // FX outages are non-critical: reports fall back to cached rates marked stale.
+        logger.warn({ err }, 'FX rate refresh skipped')
       }
     }
     try {

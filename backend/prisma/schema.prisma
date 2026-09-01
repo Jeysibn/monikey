@@ -539,3 +539,23 @@ model DailyFinanceSnapshot {
   @@index([userId, snapshotDate(sort: Desc)])
   @@map("daily_finance_snapshots")
 }
+
+// Phase 8: FX rate snapshots for multi-currency support.
+// Persists historical FX rates by (base, quote, date, provider).
+// Never overwrite historical rates — future queries for past dates will use the cached rate from that date.
+// Daily worker refreshes rates only for currencies actually in use by any user.
+// If provider is unavailable, return the most recently cached rate with isStale: true.
+model FxRateSnapshot {
+  baseCurrency   String   @map("base_currency") @db.Char(3)
+  quoteCurrency  String   @map("quote_currency") @db.Char(3)
+  rate           Decimal  @db.Decimal(20, 10)
+  provider       String   @db.VarChar(50)
+  rateDate       DateTime @map("rate_date") @db.Date
+  fetchedAt      DateTime @map("fetched_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([baseCurrency, quoteCurrency, rateDate, provider], map: "fx_rate_snapshots_unique_idx")
+  @@index([baseCurrency, quoteCurrency, rateDate(sort: Desc)])
+  @@index([provider, rateDate(sort: Desc)])
+  @@map("fx_rate_snapshots")
+}

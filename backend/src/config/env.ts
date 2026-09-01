@@ -39,6 +39,9 @@ const envSchema = z.object({
   // provider call — never rely on the vendor's own free-tier limit alone.
   ALPHA_VANTAGE_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(20),
   COINGECKO_MAX_CALLS_PER_MONTH: z.coerce.number().int().positive().default(9000),
+  FX_PROVIDER: z.enum(['stub', 'frankfurter']).default('stub'),
+  FRANKFURTER_BASE_URL: z.string().url().default('https://api.frankfurter.dev'),
+  FRANKFURTER_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(100),
   EMAIL_PROVIDER: z.enum(['mailpit', 'resend', 'stub']).default('mailpit'),
   MAILPIT_URL: z.string().url().default('http://mailpit:8025/api/v1/send'),
   RESEND_API_KEY: z.string().optional(),

@@ -1024,7 +1024,10 @@ describe('Imports Module - Phase 11', () => {
         // Verify transactions were committed with correct amounts
         const transactions = await prisma.transaction.findMany({
           where: { userId, source: 'import' },
-          orderBy: { createdAt: 'asc' },
+          // Imported rows are committed in one transaction, so createdAt can
+          // tie at PostgreSQL timestamp precision. Assert the CSV's actual
+          // business ordering rather than relying on an unstable tie-break.
+          orderBy: { occurredOn: 'asc' },
         })
 
         expect(transactions).toHaveLength(4)

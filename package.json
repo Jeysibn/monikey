@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:e2e:mock": "playwright test --grep-invert @backend-compose",
     "test:e2e:backend": "playwright test --grep @backend-compose",
+    "test:backend:compose": "bash scripts/test-compose-backend-regression.sh",
     "test": "vitest run",
     "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
     "test:e2e:install": "playwright install --with-deps chromium"

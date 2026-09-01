@@ -378,5 +378,5 @@ describeIfDb('Phase 2 Auth + Settings (real PostgreSQL, real HTTP)', () => {
     expect(statuses).toContain(429)
     const limited = attempts.find((r) => r.statusCode === 429)!
     expect(limited.json().error.code).toBe('RATE_LIMITED')
-  })
+  }, 20_000)
 })

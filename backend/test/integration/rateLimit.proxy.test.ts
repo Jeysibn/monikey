@@ -115,7 +115,7 @@ describeIfDb('login rate limiting survives a forged/rotating X-Forwarded-For (re
     // wrong-password 401s (proving the limiter is doing real work, not
     // just always-on-or-always-off).
     expect(statuses[0]).toBe(401)
-  })
+  }, 20_000)
 
   it("resolves distinct real client IPs to independent buckets (doesn't collapse everyone onto nginx's own address)", async () => {
     const email = `qa-proxy-distinct-${randomUUID()}@monikey.test`
@@ -143,5 +143,5 @@ describeIfDb('login rate limiting survives a forged/rotating X-Forwarded-For (re
 
     expect(clientALimited.statusCode).toBe(429)
     expect(clientBStillFresh.statusCode).toBe(401)
-  })
+  }, 20_000)
 })

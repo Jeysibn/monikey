@@ -22,11 +22,16 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
+import { createReadStream } from 'fs'
+import { pipeline } from 'stream/promises'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
 import { ImportsService } from './imports.service.js'
+import type { Env } from '../../config/env.js'
 import type { BankAggregationProvider } from '../../integrations/interfaces/bankDataProvider.js'
+import { AppError } from '../../common/errors/appError.js'
+import { createHash } from 'crypto'
 
 const createImportBatchSchema = z.object({
   sourceType: z.enum(['plaid_sandbox', 'csv_manual']),
@@ -60,11 +65,12 @@ export async function createImportsRoutes(
     prisma: PrismaClient
     ledgerService: LedgerService
     bankProvider: BankAggregationProvider
+    env: Env
     appOrigin: string
   }
 ) {
-  const { prisma, ledgerService, bankProvider, appOrigin } = options
-  const importsService = new ImportsService(prisma, ledgerService)
+  const { prisma, ledgerService, bankProvider, env, appOrigin } = options
+  const importsService = new ImportsService(prisma, ledgerService, env)
 
   const requireAuth = authGuard({ prisma })
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: appOrigin })
@@ -169,8 +175,7 @@ export async function createImportsRoutes(
       const limit = Math.min(parseInt((request.query as any).limit as string) || 100, 1000)
       const offset = Math.max(0, parseInt((request.query as any).offset as string) || 0)
 
-      const service = new ImportsService(prisma, ledgerService)
-      const txns = await service.repo.listImportedTransactions(batchId, userId, { status, limit, offset })
+      const txns = await importsService.repo.listImportedTransactions(batchId, userId, { status, limit, offset })
 
       if (txns === null) {
         return reply.code(404).send({
@@ -315,7 +320,7 @@ export async function createImportsRoutes(
   /**
    * POST /imports/plaid/webhook
    * Handle Plaid webhook events
-   * TODO: Implement webhook processing (sync transactions, update status, etc.)
+   * Processes TRANSACTIONS_UPDATED and ITEM_ERROR webhooks
    */
   app.post(
     '/plaid/webhook',
@@ -333,10 +338,405 @@ export async function createImportsRoutes(
         })
       }
 
-      // TODO: Process webhook (sync new transactions, handle item updates, etc.)
-      return reply.code(200).send({ ok: true })
+      try {
+        const payload = request.body as any
+        const webhookType = payload.webhook_type as string | undefined
+        const itemId = payload.item_id as string | undefined
+
+        if (!itemId) {
+          return reply.code(400).send({
+            error: {
+              code: 'INVALID_PAYLOAD',
+              message: 'Missing item_id in webhook payload',
+            },
+          })
+        }
+
+        // Handle TRANSACTIONS_UPDATED webhook
+        if (webhookType === 'TRANSACTIONS_UPDATED') {
+          try {
+            // Get the Plaid item to find the user and access token
+            const plaidItem = await importsService.repo.getPlaidItemByItemId(itemId)
+            if (!plaidItem) {
+              // Item not found in our database; silently succeed (best practice for webhooks)
+              return reply.code(200).send({ ok: true })
+            }
+
+            // Decrypt access token
+            const accessToken = await importsService.getDecryptedAccessToken(plaidItem.id, plaidItem.userId)
+
+            // Sync transactions from provider
+            const syncResult = await bankProvider.sync(plaidItem.userId, accessToken)
+
+            // Create import batch for this sync
+            const batch = await importsService.createImportBatch(
+              plaidItem.userId,
+              'plaid_sandbox',
+              plaidItem.id
+            )
+
+            // Add each synced transaction to the batch
+            for (const txn of syncResult.transactions || []) {
+              try {
+                await importsService.addImportedTransaction(batch.id, plaidItem.userId, {
+                  dedupKey: txn.plaidTransactionId || `${txn.date}-${txn.name}-${txn.amount}`,
+                  provider: 'plaid_sandbox',
+                  providerTransactionId: txn.plaidTransactionId,
+                  title: txn.name || 'Transaction',
+                  description: txn.merchantName ? `${txn.merchantName}` : undefined,
+                  amountMinor: BigInt(Math.abs(Math.floor((txn.amount || 0) * 100))),
+                  occurredOn: new Date(`${txn.date}T00:00:00Z`),
+                  currencyCode: 'PHP', // Plaid Sandbox is PHP-only for Phase 11
+                  merchantName: txn.merchantName,
+                })
+              } catch (e) {
+                // Log error but continue processing other transactions
+                app.log.warn(`Failed to add transaction from webhook: ${e instanceof Error ? e.message : String(e)}`)
+              }
+            }
+
+            // Update Plaid item sync timestamp
+            await importsService.repo.updatePlaidItem(plaidItem.id, {
+              lastSyncedAt: new Date(),
+            })
+
+            return reply.code(200).send({ ok: true })
+          } catch (error) {
+            app.log.error(`Webhook processing failed for TRANSACTIONS_UPDATED: ${error instanceof Error ? error.message : String(error)}`)
+            // Still return 200 to prevent Plaid from retrying indefinitely
+            return reply.code(200).send({ ok: true })
+          }
+        }
+
+        // Handle ITEM_ERROR webhook
+        if (webhookType === 'ITEM_ERROR') {
+          try {
+            const errorCode = payload.error?.error_code as string | undefined
+            const errorMessage = payload.error?.error_message as string | undefined
+
+            const plaidItem = await importsService.repo.getPlaidItemByItemId(itemId)
+            if (plaidItem) {
+              await importsService.repo.updatePlaidItem(plaidItem.id, {
+                status: 'error',
+                errorMessage: errorMessage || errorCode || 'Unknown error',
+              })
+            }
+
+            return reply.code(200).send({ ok: true })
+          } catch (error) {
+            app.log.error(`Webhook processing failed for ITEM_ERROR: ${error instanceof Error ? error.message : String(error)}`)
+            return reply.code(200).send({ ok: true })
+          }
+        }
+
+        // Unknown webhook type; silently succeed
+        return reply.code(200).send({ ok: true })
+      } catch (error) {
+        // Always return 200 for webhook success to prevent retries
+        app.log.error(`Webhook handler exception: ${error instanceof Error ? error.message : String(error)}`)
+        return reply.code(200).send({ ok: true })
+      }
     }
   )
+
+  /**
+   * POST /imports/csv/upload
+   * Upload and parse a CSV file for manual transaction import
+   * Accepts multipart/form-data with a 'file' field (boundary in Content-Type header)
+   * Creates an import batch and adds imported transactions for each row
+   */
+  app.post(
+    '/csv/upload',
+    { preHandler: requireOrigin },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id
+      const contentType = request.headers['content-type'] as string | undefined
+
+      if (!contentType || !contentType.includes('multipart/form-data')) {
+        return reply.code(400).send({
+          error: {
+            code: 'INVALID_CONTENT_TYPE',
+            message: 'Expected multipart/form-data content type',
+          },
+        })
+      }
+
+      try {
+        // Parse boundary from Content-Type header
+        const boundaryMatch = contentType.match(/boundary=([^;\s]+)/)
+        if (!boundaryMatch) {
+          return reply.code(400).send({
+            error: {
+              code: 'INVALID_BOUNDARY',
+              message: 'Missing boundary in multipart/form-data',
+            },
+          })
+        }
+
+        const boundary = boundaryMatch[1]!.replace(/"/g, '')
+
+        // Collect request body
+        let rawBody = ''
+        for await (const chunk of request.raw) {
+          rawBody += chunk.toString()
+        }
+
+        // Parse multipart body to extract file
+        const { fileBuffer, fileName } = extractFileFromMultipart(rawBody, boundary)
+
+        if (!fileBuffer) {
+          return reply.code(400).send({
+            error: {
+              code: 'MISSING_FILE',
+              message: 'No file uploaded in "file" field',
+            },
+          })
+        }
+
+        if (fileBuffer.length > env.IMPORT_MAX_CSV_FILESIZE_BYTES) {
+          return reply.code(413).send({
+            error: {
+              code: 'FILE_TOO_LARGE',
+              message: `File exceeds maximum size of ${env.IMPORT_MAX_CSV_FILESIZE_BYTES} bytes`,
+            },
+          })
+        }
+
+        // Parse CSV content
+        const csvContent = fileBuffer.toString('utf8')
+        const lines = csvContent.trim().split('\n')
+
+        if (lines.length < 2) {
+          return reply.code(400).send({
+            error: {
+              code: 'INVALID_CSV',
+              message: 'CSV must contain at least a header row and one data row',
+            },
+          })
+        }
+
+        // Parse header (first line)
+        const headerLine = lines[0]!
+        const headers = parseCSVLine(headerLine)
+        const headerMap = new Map(headers.map((h, i) => [h.toLowerCase(), i]))
+
+        // Validate required columns
+        const requiredColumns = ['date', 'amount', 'description']
+        for (const col of requiredColumns) {
+          if (!headerMap.has(col)) {
+            return reply.code(400).send({
+              error: {
+                code: 'MISSING_COLUMNS',
+                message: `CSV must contain columns: ${requiredColumns.join(', ')}`,
+              },
+            })
+          }
+        }
+
+        // Create import batch
+        const batch = await importsService.createImportBatch(userId, 'csv_manual')
+
+        const errors: Array<{ row: number; error: string }> = []
+        let addedCount = 0
+
+        // Process data rows
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i]!.trim().length === 0) continue // Skip empty lines
+
+          try {
+            const fields = parseCSVLine(lines[i]!)
+            const date = fields[headerMap.get('date') || 0] || ''
+            const amountStr = fields[headerMap.get('amount') || 0] || ''
+            const description = fields[headerMap.get('description') || 0] || ''
+            const merchant = fields[headerMap.get('merchant') || 0]
+
+            // Validate date
+            const dateObj = parseDate(date)
+            if (isNaN(dateObj.getTime())) {
+              errors.push({ row: i + 1, error: 'Invalid date format' })
+              continue
+            }
+
+            // Validate amount
+            const amountMinor = parseAmount(amountStr)
+            if (amountMinor <= 0) {
+              errors.push({ row: i + 1, error: 'Amount must be positive' })
+              continue
+            }
+
+            if (!description || description.trim().length === 0) {
+              errors.push({ row: i + 1, error: 'Description is required' })
+              continue
+            }
+
+            // Create dedup key based on content
+            const dedupKey = createHash('sha256')
+              .update(`${date}|${amountStr}|${description}`)
+              .digest('hex')
+
+            // Add transaction to batch
+            await importsService.addImportedTransaction(batch.id, userId, {
+              dedupKey,
+              provider: 'csv_manual',
+              title: description.substring(0, 255),
+              amountMinor,
+              occurredOn: dateObj,
+              currencyCode: 'PHP',
+              merchantName: merchant,
+            })
+
+            addedCount++
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error)
+            // Skip DUPLICATE_IMPORT errors (already handled by addImportedTransaction)
+            if (msg.includes('already imported')) {
+              // Count as successful (duplicate will be silently ignored by dedup constraint)
+              addedCount++
+            } else {
+              errors.push({ row: i + 1, error: msg })
+            }
+          }
+        }
+
+        return reply.code(201).send({
+          batchId: batch.id,
+          fileName,
+          totalRows: lines.length - 1, // Exclude header
+          addedCount,
+          errors: errors.length > 0 ? errors : undefined,
+          status: 'reviewing',
+          message: `CSV import created with ${addedCount} transactions. Please review and commit.`,
+        })
+      } catch (error) {
+        app.log.error(`CSV upload error: ${error instanceof Error ? error.message : String(error)}`)
+        return reply.code(500).send({
+          error: {
+            code: 'UPLOAD_FAILED',
+            message: 'Failed to process CSV upload',
+          },
+        })
+      }
+    }
+  )
+}
+
+/**
+ * Parse a single CSV line, respecting quoted fields and escaped quotes.
+ * Simple implementation: handles "field" and field, doesn't handle escaped quotes edge cases.
+ */
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+
+    if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
+      fields.push(current.trim().replace(/^"|"$/g, ''))
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  fields.push(current.trim().replace(/^"|"$/g, ''))
+  return fields
+}
+
+/**
+ * Parse a date string in formats: YYYY-MM-DD, MM/DD/YYYY, or DD/MM/YYYY (inferred).
+ */
+function parseDate(dateStr: string): Date {
+  const cleaned = dateStr.trim()
+
+  // Try YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    return new Date(`${cleaned}T00:00:00Z`)
+  }
+
+  // Try MM/DD/YYYY or DD/MM/YYYY
+  const parts = cleaned.split('/')
+  if (parts.length === 3) {
+    const [p0, p1, p2] = parts
+    if (parseInt(p0!) > 12) {
+      // Assume DD/MM/YYYY
+      return new Date(`${p2!}-${p1!}-${p0!}T00:00:00Z`)
+    } else {
+      // Assume MM/DD/YYYY
+      return new Date(`${p2!}-${p0!}-${p1!}T00:00:00Z`)
+    }
+  }
+
+  // Invalid format
+  return new Date(NaN)
+}
+
+/**
+ * Parse an amount string (e.g., "123.45" or "123,45") into minor units (cents).
+ * Returns 0 if parsing fails.
+ */
+function parseAmount(amountStr: string): bigint {
+  if (!amountStr) return 0n
+
+  // Remove whitespace and common currency symbols
+  let cleaned = amountStr.trim().replace(/[$€¥₱\s]/g, '')
+
+  // Handle comma as decimal separator (e.g., European format)
+  if (cleaned.includes(',') && !cleaned.includes('.')) {
+    cleaned = cleaned.replace(',', '.')
+  }
+
+  // Remove any remaining commas (thousands separator)
+  cleaned = cleaned.replace(/,/g, '')
+
+  try {
+    const num = parseFloat(cleaned)
+    if (isNaN(num) || num <= 0) return 0n
+    // Convert to minor units (PHP centavos)
+    return BigInt(Math.floor(num * 100))
+  } catch {
+    return 0n
+  }
+}
+
+/**
+ * Extract file content from a multipart/form-data body.
+ * Simple implementation that finds the 'file' field and extracts its binary content.
+ * Returns {fileBuffer, fileName} if found, {fileBuffer: null, fileName: undefined} otherwise.
+ */
+function extractFileFromMultipart(
+  body: string,
+  boundary: string
+): { fileBuffer: Buffer | null; fileName: string | undefined } {
+  // Split by boundary
+  const parts = body.split(`--${boundary}`)
+
+  for (const part of parts) {
+    // Look for Content-Disposition header indicating file field
+    if (part.includes('Content-Disposition:') && part.includes('name="file"')) {
+      // Extract filename if present
+      const filenameMatch = part.match(/filename="([^"]*)"/)
+      const fileName = filenameMatch ? filenameMatch[1] : undefined
+
+      // Find the end of headers (double CRLF)
+      const headerEnd = part.indexOf('\r\n\r\n')
+      if (headerEnd === -1) continue
+
+      // Extract content after headers
+      let content = part.substring(headerEnd + 4)
+
+      // Remove trailing boundary markers and whitespace
+      content = content.replace(/--$/, '').trim()
+
+      // Convert to Buffer
+      return { fileBuffer: Buffer.from(content, 'binary'), fileName }
+    }
+  }
+
+  return { fileBuffer: null, fileName: undefined }
 }
 
 export async function registerImportsRoutes(app: FastifyInstance, options: any) {

@@ -77,6 +77,11 @@ const envSchema = z.object({
   PLAID_CLIENT_ID: z.string().optional(),
   PLAID_SECRET: z.string().optional(),
   PLAID_WEBHOOK_SECRET: z.string().optional(), // For verifying Plaid webhook signatures
+  // Encryption secret for protecting third-party API credentials at rest.
+  // IMPORTANT: Must be a strong random value, never committed to version control, never logged.
+  // Generate with: `openssl rand -hex 32` (produces 64-char hex string for 256-bit key).
+  // Used to derive keys via PBKDF2 (user_id + ENCRYPTION_SECRET) for AES-256-GCM encryption.
+  ENCRYPTION_SECRET: z.string().min(32, 'ENCRYPTION_SECRET must be at least 32 characters (generate with `openssl rand -hex 32`)').optional(),
   // Import batch limits to prevent runaway processing
   IMPORT_MAX_TRANSACTIONS_PER_BATCH: z.coerce.number().int().positive().default(10000),
   IMPORT_MAX_CSV_FILESIZE_BYTES: z.coerce.number().int().positive().default(5242880), // 5 MB default

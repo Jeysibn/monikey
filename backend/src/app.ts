@@ -168,6 +168,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         prisma,
         ledgerService: ledger.service,
         bankProvider,
+        env,
         appOrigin: env.APP_ORIGIN,
       })
 

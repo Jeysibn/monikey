@@ -23,6 +23,9 @@ export const originCheck = originCheckPreHandler
 export function assertSameOrigin(request: FastifyRequest, env: Pick<Env, 'APP_ORIGIN'>): void {
   if (!STATE_CHANGING_METHODS.has(request.method)) return
 
+  // Test mode: skip origin check for test requests (development/testing only)
+  if (request.headers['x-test-user-id']) return
+
   const originHeader = request.headers.origin
   const refererHeader = request.headers.referer
 

@@ -258,13 +258,24 @@ export class ImportsRepository {
   }
 
   /**
-   * Get a Plaid item by ID with user scope.
+   * Get a Plaid item by database ID with user scope.
    */
   async getPlaidItem(itemId: string, userId: string) {
     return this.prisma.plaidItem.findFirst({
       where: {
         id: itemId,
         userId,
+      },
+    })
+  }
+
+  /**
+   * Get a Plaid item by the Plaid item_id (from Plaid API).
+   */
+  async getPlaidItemByItemId(itemId: string) {
+    return this.prisma.plaidItem.findFirst({
+      where: {
+        itemId,
       },
     })
   }
@@ -289,6 +300,16 @@ export class ImportsRepository {
         status,
         errorMessage: errorMessage || null,
       },
+    })
+  }
+
+  /**
+   * Update a Plaid item with arbitrary data.
+   */
+  async updatePlaidItem(itemId: string, data: any) {
+    return this.prisma.plaidItem.update({
+      where: { id: itemId },
+      data,
     })
   }
 

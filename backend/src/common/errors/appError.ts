@@ -58,6 +58,8 @@ export type AppErrorCode =
   | 'INVALID_TOKEN'
   | 'PLAID_UNAVAILABLE'
   | 'PLAID_EXCHANGE_FAILED'
+  | 'ENCRYPTION_NOT_CONFIGURED'
+  | 'DECRYPTION_FAILED'
 
 /**
  * Thrown by domain/application code to signal a business-rule or client
@@ -113,6 +115,8 @@ function defaultStatusForCode(code: AppErrorCode): number {
     case 'EXTERNAL_PROVIDER_QUOTA_REACHED':
     case 'OCR_PROVIDER_ERROR':
     case 'OCR_PROVIDER_TIMEOUT':
+    case 'ENCRYPTION_NOT_CONFIGURED':
+    case 'DECRYPTION_FAILED':
       return 502
     case 'INVALID_RECEIPT_TYPE':
     case 'INVALID_RECEIPT_FORMAT':

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
+import { useBackendAuthOptional } from './BackendAuthContext'
 import './AppShell.css'
 
 const NAV_ITEMS = [
@@ -218,6 +219,7 @@ function MobileNav() {
 }
 
 export function AppShell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction?: () => void }) {
+  const backendAuth = useBackendAuthOptional()
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -240,6 +242,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
           <MoreMenu />
         </nav>
         <div className="topbar-right">
+          {backendAuth && <button type="button" className="btn btn--ghost btn--compact" onClick={() => void backendAuth.logout()}>Sign out</button>}
           <NotificationBell />
           {onAddTransaction && (
             <button type="button" className="btn btn--primary btn--compact" onClick={onAddTransaction}>

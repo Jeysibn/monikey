@@ -3,19 +3,18 @@ import { expect, test } from '@playwright/test'
 const origin = process.env.PLAYWRIGHT_TEST_BASE_URL ?? 'http://localhost:8080'
 
 test.describe('Authenticated Compose backend flow @backend-compose', () => {
-  test('registers an isolated user, loads API-backed state, and posts an expense through the SPA', async ({ page }) => {
+  test('registers through the first-visit SPA gate, posts an expense, and can sign out and sign in', async ({ page }) => {
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const email = `playwright-compose-${unique}@monikey.test`
     const headers = { Origin: origin }
 
-    // BrowserContext.request shares its cookie jar with the page. Registering
-    // here proves the real session route/cookie path before the SPA asks for
-    // bootstrap; no test-only database seeding is used.
-    const register = await page.request.post('/api/v1/auth/register', {
-      headers,
-      data: { email, password: 'compose-e2e-password', displayName: 'Compose E2E User' },
-    })
-    expect(register.status()).toBe(201)
+    await page.goto('/transactions')
+    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible()
+    await page.getByLabel('Display name').fill('Compose E2E User')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill('compose-e2e-password')
+    await page.getByRole('button', { name: 'Create account', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
 
     const accountResponse = await page.request.post('/api/v1/accounts', {
       headers,
@@ -36,9 +35,10 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
     const expenseCategory = state.financeState.categories.find((category) => category.allowsExpense)
     expect(expenseCategory).toBeTruthy()
 
-    await page.goto('/transactions')
+    // The account was created through the public API to keep this flow focused
+    // on the browser-auth gate; reload the SPA so its bootstrap snapshot includes it.
+    await page.reload()
     await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
-
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await expect(page.getByLabel('Account', { exact: false }).getByRole('option', { name: 'Compose E2E Checking ••4242' })).toBeAttached()
     await page.getByLabel('Amount').fill('12.34')
@@ -54,5 +54,13 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
     expect(transactions.status()).toBe(200)
     const body = await transactions.json() as { items: Array<{ title: string; amountMinor: number }> }
     expect(body.items).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Compose API expense', amountMinor: 1234 })]))
+
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible()
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill('compose-e2e-password')
+    await page.locator('form').getByRole('button', { name: 'Sign in', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
   })
 })

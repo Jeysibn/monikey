@@ -17,6 +17,30 @@ import { buildApp } from '../../src/app.js'
 import { loadEnv } from '../../src/config/env.js'
 import { createPrismaClient } from '../../src/db/client.js'
 import { StubBankProvider } from '../../src/integrations/adapters/stubs/index.js'
+import { generateSessionToken, hashSessionToken } from '../../src/common/auth/sessionToken.js'
+
+const SESSION_COOKIE_NAME = 'monikey_session'
+
+/**
+ * Helper to create a real session for a test user and return the cookie string
+ * to use in subsequent test requests. This ensures tests use the same auth
+ * pattern as the production code (session cookie validation), not a header bypass.
+ */
+async function createTestSessionCookie(prisma: PrismaClient, userId: string): Promise<string> {
+  const rawToken = generateSessionToken()
+  const tokenHash = hashSessionToken(rawToken)
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+  await prisma.userSession.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt,
+    },
+  })
+
+  return `${SESSION_COOKIE_NAME}=${rawToken}`
+}
 
 describe('Imports Module - Phase 11', () => {
   let app: any
@@ -40,6 +64,7 @@ describe('Imports Module - Phase 11', () => {
 
   describe('Import batch lifecycle', () => {
     let userId: string
+    let sessionCookie: string
 
     beforeEach(async () => {
       // Create a test user
@@ -51,6 +76,9 @@ describe('Imports Module - Phase 11', () => {
         },
       })
       userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
 
       // Create a test account to import into
       await prisma.financialAccount.create({
@@ -75,7 +103,7 @@ describe('Imports Module - Phase 11', () => {
           sourceType: 'csv_manual',
         },
         headers: {
-          'x-test-user-id': userId,
+          cookie: sessionCookie,
         },
       })
 
@@ -95,7 +123,7 @@ describe('Imports Module - Phase 11', () => {
           sourceType: 'csv_manual',
         },
         headers: {
-          'x-test-user-id': userId,
+          cookie: sessionCookie,
         },
       })
 
@@ -115,7 +143,7 @@ describe('Imports Module - Phase 11', () => {
           merchantName: 'Cafe Noir',
         },
         headers: {
-          'x-test-user-id': userId,
+          cookie: sessionCookie,
         },
       })
 
@@ -130,6 +158,7 @@ describe('Imports Module - Phase 11', () => {
   describe('Deduplication', () => {
     let userId: string
     let accountId: string
+    let sessionCookie: string
 
     beforeEach(async () => {
       // Create user and account
@@ -141,6 +170,9 @@ describe('Imports Module - Phase 11', () => {
         },
       })
       userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
 
       const account = await prisma.financialAccount.create({
         data: {
@@ -162,7 +194,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -178,7 +210,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txn1.statusCode).toBe(201)
@@ -194,7 +226,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 60000,
           occurredOn: '2026-09-02',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txn2.statusCode).toBe(409)
@@ -206,7 +238,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
       const batch1 = JSON.parse(batch1Res.body)
 
@@ -214,7 +246,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
       const batch2 = JSON.parse(batch2Res.body)
 
@@ -229,7 +261,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txn1.statusCode).toBe(201)
@@ -245,7 +277,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 50000,
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txn2.statusCode).toBe(409)
@@ -255,6 +287,7 @@ describe('Imports Module - Phase 11', () => {
   describe('Commit to ledger', () => {
     let userId: string
     let accountId: string
+    let sessionCookie: string
 
     beforeEach(async () => {
       const user = await prisma.user.create({
@@ -265,6 +298,9 @@ describe('Imports Module - Phase 11', () => {
         },
       })
       userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
 
       const account = await prisma.financialAccount.create({
         data: {
@@ -287,7 +323,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -303,7 +339,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 150000, // PHP 1,500
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txnRes.statusCode).toBe(201)
@@ -315,7 +351,7 @@ describe('Imports Module - Phase 11', () => {
         payload: {
           matchedAccountId: accountId,
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(commitRes.statusCode).toBe(200)
@@ -340,7 +376,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -355,7 +391,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 100000,
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       // Commit once
@@ -363,7 +399,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/commit`,
         payload: { matchedAccountId: accountId },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(commit1.statusCode).toBe(200)
@@ -373,7 +409,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: `/api/v1/imports/batches/${batch.id}/commit`,
         payload: { matchedAccountId: accountId },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(commit2.statusCode).toBe(200)
@@ -405,12 +441,16 @@ describe('Imports Module - Phase 11', () => {
         },
       })
 
+      // Create real sessions for both users
+      const sessionCookieA = await createTestSessionCookie(prisma, userA.id)
+      const sessionCookieB = await createTestSessionCookie(prisma, userB.id)
+
       // User A creates batch
       const batchRes = await app.inject({
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userA.id },
+        headers: { cookie: sessionCookieA },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -419,7 +459,7 @@ describe('Imports Module - Phase 11', () => {
       const accessRes = await app.inject({
         method: 'GET',
         url: `/api/v1/imports/batches/${batch.id}`,
-        headers: { 'x-test-user-id': userB.id },
+        headers: { cookie: sessionCookieB },
       })
 
       expect(accessRes.statusCode).toBe(404)
@@ -452,6 +492,7 @@ describe('Imports Module - Phase 11', () => {
 
   describe('Validation', () => {
     let userId: string
+    let sessionCookie: string
 
     beforeEach(async () => {
       const user = await prisma.user.create({
@@ -462,6 +503,9 @@ describe('Imports Module - Phase 11', () => {
         },
       })
       userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
     })
 
     it('rejects negative amount', async () => {
@@ -469,7 +513,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -484,7 +528,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: -50000,
           occurredOn: '2026-09-01',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       // Should be rejected (400) or have validation errors
@@ -501,7 +545,7 @@ describe('Imports Module - Phase 11', () => {
         method: 'POST',
         url: '/api/v1/imports/batches',
         payload: { sourceType: 'csv_manual' },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       const batch = JSON.parse(batchRes.body)
@@ -516,7 +560,7 @@ describe('Imports Module - Phase 11', () => {
           amountMinor: 50000,
           occurredOn: 'not-a-date',
         },
-        headers: { 'x-test-user-id': userId },
+        headers: { cookie: sessionCookie },
       })
 
       expect(txnRes.statusCode).toBe(400) // Zod validation should fail

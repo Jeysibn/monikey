@@ -26,6 +26,15 @@ function baseUser() {
 }
 
 describe('resolveSession', () => {
+  it('SECURITY: rejects requests with only x-test-user-id header (no session cookie)', async () => {
+    // This test ensures the critical vulnerability from commit 20946fa is NOT present:
+    // previously, the authGuard would accept x-test-user-id header without a real session.
+    // This test verifies that header is now completely ignored.
+    const prisma = fakePrisma(undefined) // No matching session in DB
+    const result = await resolveSession(prisma, undefined, () => FIXED_NOW)
+    expect(result).toBeUndefined() // Must reject, not accept based on header
+  })
+
   it('returns undefined when the cookie is missing', async () => {
     const prisma = fakePrisma(undefined)
     await expect(resolveSession(prisma, undefined, () => FIXED_NOW)).resolves.toBeUndefined()

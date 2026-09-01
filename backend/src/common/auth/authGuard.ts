@@ -77,26 +77,8 @@ export interface AuthGuardOptions {
  */
 export function authGuard(opts: AuthGuardOptions) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
-    // Test mode: allow direct user ID via header (development/testing only)
-    const testUserId = request.headers['x-test-user-id'] as string | undefined
-    if (testUserId) {
-      const user = await opts.prisma.user.findUnique({
-        where: { id: testUserId },
-      })
-      if (user) {
-        request.user = {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          timezone: user.timezone,
-          baseCurrency: user.baseCurrency,
-        }
-        request.sessionId = 'test-session'
-        return
-      }
-    }
-
-    // Normal mode: resolve session from cookie
+    // Resolve session from cookie only. No client-supplied user ID headers
+    // are consulted — the only input is the HttpOnly session cookie (plan §16.2).
     const rawToken = request.cookies[SESSION_COOKIE_NAME]
     const resolved = await resolveSession(opts.prisma, rawToken, opts.clock)
     if (!resolved) {

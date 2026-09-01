@@ -9,6 +9,9 @@ const frequency = z.enum(['weekly', 'monthly', 'yearly'])
 const createSchema = z.object({ merchant: z.string().trim().min(1).max(160), amountMinor: z.number().int().positive(), frequency, nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), accountId: z.string().uuid(), categoryId: z.string().uuid(), autopay: z.boolean().default(false) })
 const statusSchema = z.object({ status: z.enum(['active', 'paused']) })
 
+// UUID validation for path parameters (D8: malformed UUID handling)
+const recurringIdParamSchema = z.object({ id: z.string().uuid('Invalid recurring item ID format') })
+
 function view(item: any) {
   return { id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }
 }
@@ -31,14 +34,14 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const item = await options.prisma.recurringItem.create({ data: { userId: request.user!.id, merchant: input.merchant, amountMinor: BigInt(input.amountMinor), frequency: input.frequency, nextDueDate: new Date(`${input.nextDueDate}T00:00:00Z`), accountId: input.accountId, categoryId: input.categoryId, autopay: input.autopay } })
     return reply.code(201).send(view(item))
   })
-  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { schema: { params: recurringIdParamSchema }, preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const input = statusSchema.parse(request.body)
     const item = await options.prisma.recurringItem.updateMany({ where: { id: request.params.id, userId: request.user!.id }, data: { status: input.status } })
     if (item.count === 0) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Recurring item not found.', requestId: request.id } })
     const updated = await options.prisma.recurringItem.findFirstOrThrow({ where: { id: request.params.id, userId: request.user!.id } })
     return view(updated)
   })
-  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { schema: { params: recurringIdParamSchema }, preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const item = await options.prisma.recurringItem.findFirst({ where: { id: request.params.id, userId: request.user!.id, status: 'active' } })
     if (!item) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Active recurring item not found.', requestId: request.id } })
     const idempotencyKey = `recurring:${item.id}:${item.nextDueDate.toISOString().slice(0, 10)}`

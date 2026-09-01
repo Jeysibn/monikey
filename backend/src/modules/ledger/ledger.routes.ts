@@ -1,11 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { authGuard } from '../../common/auth/authGuard.js';
 import { originCheckPreHandler } from '../../common/auth/originCheck.js';
 import type { PrismaClient } from '@prisma/client';
 import { LedgerService } from './ledger.service.js';
 import { postTransactionSchema, reverseTransactionSchema } from './ledger.schemas.js';
 import type { PostTransactionInput, ReverseTransactionInput } from './ledger.schemas.js';
+
+// UUID validation for path parameters (D8: malformed UUID handling)
+const transactionIdParamSchema = z.object({ id: z.string().uuid('Invalid transaction ID format') });
 
 export async function ledgerRoutes(fastify: FastifyInstance, options: { service: LedgerService; prisma: PrismaClient }) {
   const { service, prisma } = options;
@@ -63,6 +67,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   // GET /transactions/:id
   f.get<{ Params: { id: string } }>(
     '/transactions/:id',
+    { schema: { params: transactionIdParamSchema } },
     async (req, reply) => {
       const transaction = await service.getTransaction(req.user!.id, req.params.id);
       if (!transaction) {
@@ -76,6 +81,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   f.post<{ Params: { id: string }; Body: ReverseTransactionInput }>(
     '/transactions/:id/reverse',
     {
+      schema: { params: transactionIdParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req, reply) => {

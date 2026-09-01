@@ -1,11 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { authGuard } from '../../common/auth/authGuard.js';
 import { originCheckPreHandler } from '../../common/auth/originCheck.js';
 import type { PrismaClient } from '@prisma/client';
 import { AccountsService } from './accounts.service.js';
 import { createAccountSchema, createCreditCardSchema, updateAccountSchema } from './accounts.schemas.js';
 import type { CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js';
+
+// UUID validation for path parameters (D8: malformed UUID handling)
+const idParamSchema = z.object({ id: z.string().uuid('Invalid account ID format') });
 
 export async function accountsRoutes(fastify: FastifyInstance, options: { service: AccountsService; prisma: PrismaClient }) {
   const { service, prisma } = options;
@@ -50,6 +54,7 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
   f.patch<{ Params: { id: string }; Body: UpdateAccountInput }>(
     '/accounts/:id',
     {
+      schema: { params: idParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req) => {
@@ -62,6 +67,7 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
   f.post<{ Params: { id: string } }>(
     '/accounts/:id/archive',
     {
+      schema: { params: idParamSchema },
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
     },
     async (req, reply) => {

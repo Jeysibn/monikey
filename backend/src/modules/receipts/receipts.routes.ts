@@ -17,6 +17,9 @@ import type { OcrProvider } from '../../integrations/interfaces/ocrProvider.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
 import { ReceiptsService } from './receipts.service.js'
 
+// UUID validation for path parameters (D8: malformed UUID handling)
+const receiptIdParamSchema = z.object({ id: z.string().uuid('Invalid receipt ID format') })
+
 export interface ReceiptsRoutesOptions {
   prisma: PrismaClient
   objectStore: ObjectStore
@@ -72,6 +75,7 @@ export async function receiptsRoutes(
    */
   app.get<{ Params: { id: string } }>(
     '/receipts/:id',
+    { schema: { params: receiptIdParamSchema } },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
       const receiptId = request.params.id
@@ -103,7 +107,7 @@ export async function receiptsRoutes(
    */
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/process',
-    { preHandler: requireOrigin },
+    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
       const receiptId = request.params.id
@@ -139,7 +143,7 @@ export async function receiptsRoutes(
 
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/commit',
-    { preHandler: requireOrigin },
+    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       const receiptId = request.params.id
@@ -194,7 +198,7 @@ export async function receiptsRoutes(
    */
   app.delete<{ Params: { id: string } }>(
     '/receipts/:id',
-    { preHandler: requireOrigin },
+    { schema: { params: receiptIdParamSchema }, preHandler: requireOrigin },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       const receiptId = request.params.id

@@ -3,10 +3,14 @@ import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
+import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
 
 const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: z.number().int().nonnegative().default(0) })
 const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: z.number().int().nonnegative() })
 const categorySchema = z.object({ name: z.string().trim().min(1).max(100), color: z.string().trim().min(1).max(64), budgetable: z.boolean().default(true), allowsIncome: z.boolean().default(false), allowsExpense: z.boolean().default(true) })
+
+// UUID validation for path parameters (D8: malformed UUID handling)
+const budgetIdParamSchema = z.object({ id: z.string().uuid('Invalid budget ID format') })
 
 type PeriodWithAllocations = { id: string; userId: string; periodStart: Date; periodEnd: Date; incomePoolMinor: bigint; createdAt: Date; updatedAt: Date; allocations: Array<{ id: string; budgetPeriodId: string; categoryId: string; allocatedMinor: bigint; createdAt: Date; updatedAt: Date }> }
 
@@ -58,13 +62,29 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
   })
   app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
     const input = periodSchema.parse(request.body)
-    const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: new Date(`${input.periodStart}T00:00:00Z`), periodEnd: new Date(`${input.periodEnd}T00:00:00Z`) } }, create: { userId: request.user!.id, periodStart: new Date(`${input.periodStart}T00:00:00Z`), periodEnd: new Date(`${input.periodEnd}T00:00:00Z`), incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
+    const userTimezone = request.user!.timezone
+
+    // Parse period dates from local dates to UTC using user's timezone
+    // Period start: YYYY-MM-DD at 00:00:00 local → UTC
+    const [startYear, startMonth, startDay] = input.periodStart.split('-').map(Number) as [number, number, number]
+    const periodStartUTC = getUTCDateForLocalDateTime(startYear, startMonth, startDay, 0, 0, 0, userTimezone)
+
+    // Period end: YYYY-MM-DD at 00:00:00 local → UTC
+    const [endYear, endMonth, endDay] = input.periodEnd.split('-').map(Number) as [number, number, number]
+    const periodEndUTC = getUTCDateForLocalDateTime(endYear, endMonth, endDay, 0, 0, 0, userTimezone)
+
+    const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC } }, create: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC, incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
     return reply.code(201).send(await attachSpentMinor(prisma, request.user!.id, period))
   })
-  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { schema: { params: budgetIdParamSchema }, preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
     const input = allocationSchema.parse(request.body)
     const period = await prisma.budgetPeriod.findFirst({ where: { id: request.params.id, userId: request.user!.id } })
     if (!period) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Budget period not found.', requestId: request.id } })
+
+    // Verify the category exists and belongs to the user or is a system category
+    const category = await prisma.category.findFirst({ where: { id: input.categoryId, OR: [{ userId: request.user!.id }, { userId: null }] } })
+    if (!category) return reply.code(422).send({ error: { code: 'UNKNOWN_CATEGORY', message: 'Category not found.', field: 'categoryId', requestId: request.id } })
+
     const allocation = await prisma.budgetAllocation.upsert({ where: { budgetPeriodId_categoryId: { budgetPeriodId: period.id, categoryId: input.categoryId } }, create: { budgetPeriodId: period.id, categoryId: input.categoryId, allocatedMinor: BigInt(input.allocatedMinor) }, update: { allocatedMinor: BigInt(input.allocatedMinor) } })
     const summary = await attachSpentMinor(prisma, request.user!.id, { ...period, allocations: [allocation] })
     return reply.code(201).send(summary.allocations[0])

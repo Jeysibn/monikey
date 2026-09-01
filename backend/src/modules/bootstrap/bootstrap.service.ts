@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { LedgerService } from '../ledger/ledger.service.js';
 import { AccountsService } from '../accounts/accounts.service.js';
 import type { AccountView } from '../accounts/accounts.schemas.js';
@@ -152,7 +152,23 @@ export class BootstrapService {
       },
       recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       investmentActivity: {
-        trades: investmentTrades.map((trade) => ({ id: trade.id, ticker: trade.instrument.ticker, type: trade.type, units: Number(trade.units), priceMinor: Number(trade.priceMinor), amountMinor: Number(trade.units) * Number(trade.priceMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10), note: trade.note ?? null })),
+        trades: investmentTrades.map((trade) => {
+          // D10: Use Prisma.Decimal for money multiplication, not Number
+          // to preserve precision and avoid floating-point artifacts.
+          const units = new Prisma.Decimal(trade.units.toString());
+          const priceMinor = new Prisma.Decimal(trade.priceMinor.toString());
+          const amountMinor = units.times(priceMinor);
+          return {
+            id: trade.id,
+            ticker: trade.instrument.ticker,
+            type: trade.type,
+            units: Number(trade.units),
+            priceMinor: Number(trade.priceMinor),
+            amountMinor: amountMinor.toNumber(),
+            occurredOn: trade.occurredOn.toISOString().slice(0, 10),
+            note: trade.note ?? null,
+          };
+        }),
         dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.instrument.ticker, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10), note: dividend.note ?? null })),
       },
       settings: {

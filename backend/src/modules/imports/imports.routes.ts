@@ -33,10 +33,33 @@ import type { BankAggregationProvider } from '../../integrations/interfaces/bank
 import { AppError } from '../../common/errors/appError.js'
 import { createHash } from 'crypto'
 
+/**
+ * Convert a decimal amount (e.g., 19.99) to minor units (1999) using safe string parsing
+ * to avoid floating-point precision errors. This handles cases like:
+ * - 19.99 * 100 = 1998.9999... which would floor to 1998 (wrong)
+ * - Using string parsing gives exactly 1999 (correct)
+ */
+function decimalToMinorUnits(amount: number): bigint {
+  if (amount <= 0 || isNaN(amount)) return 0n
+
+  // Convert to string and split on decimal point
+  const parts = amount.toString().split('.')
+  const wholePart = parts[0] || '0'
+  const decimalPart = parts[1] || '00'
+
+  // Pad or truncate decimal part to exactly 2 digits
+  const centsPart = (decimalPart + '00').substring(0, 2)
+
+  return BigInt(wholePart + centsPart)
+}
+
 const createImportBatchSchema = z.object({
   sourceType: z.enum(['plaid_sandbox', 'csv_manual']),
   plaidItemId: z.string().uuid().optional(),
 })
+
+// UUID validation for path parameters (D8: malformed UUID handling)
+const batchIdParamSchema = z.object({ batchId: z.string().uuid('Invalid batch ID format') })
 
 const addImportedTransactionSchema = z.object({
   dedupKey: z.string().min(1),
@@ -119,6 +142,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string } }>(
     '/batches/:batchId',
+    { schema: { params: batchIdParamSchema } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const { batchId } = (request.params as any) as { batchId: string }
@@ -137,7 +161,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof addImportedTransactionSchema>
   }>(
     '/batches/:batchId/transactions',
-    { preHandler: requireOrigin },
+    { schema: { params: batchIdParamSchema }, preHandler: requireOrigin },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const { batchId } = (request.params as any) as { batchId: string }
@@ -168,6 +192,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
     '/batches/:batchId/transactions',
+    { schema: { params: batchIdParamSchema } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const { batchId } = (request.params as any) as { batchId: string }
@@ -204,7 +229,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof commitBatchSchema>
   }>(
     '/batches/:batchId/commit',
-    { preHandler: requireOrigin },
+    { schema: { params: batchIdParamSchema }, preHandler: requireOrigin },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const { batchId } = (request.params as any) as { batchId: string }
@@ -384,7 +409,7 @@ export async function createImportsRoutes(
                   providerTransactionId: txn.plaidTransactionId,
                   title: txn.name || 'Transaction',
                   description: txn.merchantName ? `${txn.merchantName}` : undefined,
-                  amountMinor: BigInt(Math.abs(Math.floor((txn.amount || 0) * 100))),
+                  amountMinor: decimalToMinorUnits(Math.abs(txn.amount || 0)),
                   occurredOn: new Date(`${txn.date}T00:00:00Z`),
                   currencyCode: 'PHP', // Plaid Sandbox is PHP-only for Phase 11
                   merchantName: txn.merchantName,
@@ -442,7 +467,7 @@ export async function createImportsRoutes(
   /**
    * POST /imports/csv/upload
    * Upload and parse a CSV file for manual transaction import
-   * Accepts multipart/form-data with a 'file' field (boundary in Content-Type header)
+   * Accepts multipart/form-data with a 'file' field
    * Creates an import batch and adds imported transactions for each row
    */
   app.post(
@@ -450,48 +475,23 @@ export async function createImportsRoutes(
     { preHandler: requireOrigin },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
-      const contentType = request.headers['content-type'] as string | undefined
-
-      if (!contentType || !contentType.includes('multipart/form-data')) {
-        return reply.code(400).send({
-          error: {
-            code: 'INVALID_CONTENT_TYPE',
-            message: 'Expected multipart/form-data content type',
-          },
-        })
-      }
 
       try {
-        // Parse boundary from Content-Type header
-        const boundaryMatch = contentType.match(/boundary=([^;\s]+)/)
-        if (!boundaryMatch) {
-          return reply.code(400).send({
-            error: {
-              code: 'INVALID_BOUNDARY',
-              message: 'Missing boundary in multipart/form-data',
-            },
-          })
-        }
+        // Use @fastify/multipart to extract file
+        const data = await request.file()
 
-        const boundary = boundaryMatch[1]!.replace(/"/g, '')
-
-        // Collect request body
-        let rawBody = ''
-        for await (const chunk of request.raw) {
-          rawBody += chunk.toString()
-        }
-
-        // Parse multipart body to extract file
-        const { fileBuffer, fileName } = extractFileFromMultipart(rawBody, boundary)
-
-        if (!fileBuffer) {
+        if (!data) {
           return reply.code(400).send({
             error: {
               code: 'MISSING_FILE',
-              message: 'No file uploaded in "file" field',
+              message: 'No file uploaded',
             },
           })
         }
+
+        // Read file content
+        const fileBuffer = await data.toBuffer()
+        const fileName = data.filename
 
         if (fileBuffer.length > env.IMPORT_MAX_CSV_FILESIZE_BYTES) {
           return reply.code(413).send({
@@ -676,6 +676,7 @@ function parseDate(dateStr: string): Date {
 
 /**
  * Parse an amount string (e.g., "123.45" or "123,45") into minor units (cents).
+ * Handles various currency formats and uses safe conversion.
  * Returns 0 if parsing fails.
  */
 function parseAmount(amountStr: string): bigint {
@@ -695,48 +696,10 @@ function parseAmount(amountStr: string): bigint {
   try {
     const num = parseFloat(cleaned)
     if (isNaN(num) || num <= 0) return 0n
-    // Convert to minor units (PHP centavos)
-    return BigInt(Math.floor(num * 100))
+    return decimalToMinorUnits(num)
   } catch {
     return 0n
   }
-}
-
-/**
- * Extract file content from a multipart/form-data body.
- * Simple implementation that finds the 'file' field and extracts its binary content.
- * Returns {fileBuffer, fileName} if found, {fileBuffer: null, fileName: undefined} otherwise.
- */
-function extractFileFromMultipart(
-  body: string,
-  boundary: string
-): { fileBuffer: Buffer | null; fileName: string | undefined } {
-  // Split by boundary
-  const parts = body.split(`--${boundary}`)
-
-  for (const part of parts) {
-    // Look for Content-Disposition header indicating file field
-    if (part.includes('Content-Disposition:') && part.includes('name="file"')) {
-      // Extract filename if present
-      const filenameMatch = part.match(/filename="([^"]*)"/)
-      const fileName = filenameMatch ? filenameMatch[1] : undefined
-
-      // Find the end of headers (double CRLF)
-      const headerEnd = part.indexOf('\r\n\r\n')
-      if (headerEnd === -1) continue
-
-      // Extract content after headers
-      let content = part.substring(headerEnd + 4)
-
-      // Remove trailing boundary markers and whitespace
-      content = content.replace(/--$/, '').trim()
-
-      // Convert to Buffer
-      return { fileBuffer: Buffer.from(content, 'binary'), fileName }
-    }
-  }
-
-  return { fileBuffer: null, fileName: undefined }
 }
 
 export async function registerImportsRoutes(app: FastifyInstance, options: any) {

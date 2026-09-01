@@ -459,6 +459,70 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
     }
   })
 
+  it('computes budget performance with timezone-converted month-exact boundaries (D4 regression)', async () => {
+    // D4: Regression test for UTC-vs-timezone offset bug.
+    // Budget created for Sept 2026 in Asia/Manila (UTC+8) should be found
+    // when querying for the exact same local month boundaries.
+    const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
+    const userId = await makeUser(prisma, 'reports-budget-tz', 'Asia/Manila')
+    try {
+      const accountId = await makeAccount(prisma, userId, 'Test Account', 'asset', 500000)
+      const foodCategoryId = await makeCategory(prisma, userId, 'Food')
+
+      // In Asia/Manila (UTC+8):
+      // Local Sept 1, 00:00 = Aug 31, 16:00 UTC
+      // Local Oct 1, 00:00 = Sept 30, 16:00 UTC
+      // So budget must be stored with these UTC boundaries
+      const localSeptStart = new Date('2026-09-01T00:00:00Z') // This is treated as local Sept 1, but stored as UTC
+      const localOctStart = new Date('2026-10-01T00:00:00Z')  // This is treated as local Oct 1, but stored as UTC
+
+      // Actually, the budget should be stored in UTC based on the local dates
+      // Since the POST endpoint now converts local dates to UTC, we need to compute
+      // what the UTC boundaries should be for a Sept 2026 budget in Asia/Manila
+      // Local Sept 1 00:00 in Manila = UTC Aug 31 16:00
+      // Local Oct 1 00:00 in Manila = UTC Sept 30 16:00
+      const periodStartUTC = new Date('2026-08-31T16:00:00Z')
+      const periodEndUTC = new Date('2026-09-30T16:00:00Z')
+
+      // Create budget period directly with correct UTC boundaries
+      const period = await prisma.budgetPeriod.create({
+        data: {
+          userId,
+          periodStart: periodStartUTC,
+          periodEnd: periodEndUTC,
+          incomePoolMinor: 0,
+        },
+      })
+
+      await prisma.budgetAllocation.create({
+        data: {
+          budgetPeriodId: period.id,
+          categoryId: foodCategoryId,
+          allocatedMinor: 150000n,
+        },
+      })
+
+      // Post expense during Sept (UTC times within the budget period)
+      await postTransaction(prisma, userId, 'expense', 'Groceries', 100000, new Date('2026-09-10T12:00:00Z'), accountId, null, foodCategoryId)
+
+      // Query using the same local boundaries that were converted to UTC above
+      // This mimics what the GET /reports/budget-performance endpoint does
+      const performance = await computeBudgetPerformance(prisma, userId, periodStartUTC, periodEndUTC)
+
+      expect(performance).not.toBeNull()
+      expect(performance!.categories).toHaveLength(1)
+
+      const food = performance!.categories.find((c) => c.categoryId === foodCategoryId)
+      expect(food?.allocated).toBe(150000)
+      expect(food?.spent).toBe(100000)
+      expect(food?.remaining).toBe(50000)
+      expect(food?.utilization).toBe(67)
+    } finally {
+      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
+      await prisma.$disconnect()
+    }
+  })
+
   it('computes goals report with progress', async () => {
     const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
     const userId = await makeUser(prisma, 'reports-goals')

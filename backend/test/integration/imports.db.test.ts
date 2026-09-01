@@ -586,4 +586,424 @@ describe('Imports Module - Phase 11', () => {
       expect(txnRes.statusCode).toBe(400) // Zod validation should fail
     })
   })
+
+  describe('CSV Upload - D5: Multipart/Form-Data Upload', () => {
+    let userId: string
+    let sessionCookie: string
+
+    beforeEach(async () => {
+      const user = await prisma.user.create({
+        data: {
+          email: `test-csv-upload-${Date.now()}@example.com`,
+          passwordHash: 'hashed',
+          displayName: 'CSV Upload Tester',
+        },
+      })
+      userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
+    })
+
+    it('successfully uploads and parses a CSV file with multipart/form-data', async () => {
+      const csvContent = `date,amount,description,merchant
+2026-09-01,150.50,Coffee Shop,Cafe Noir
+2026-09-02,45.25,Lunch,Restaurant
+2026-09-03,999.99,Groceries,Supermarket`
+
+      // Create a form-data request with a file field
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+
+      // Write CSV to a temporary file
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(201)
+        const result = JSON.parse(response.body)
+        expect(result.batchId).toBeDefined()
+        expect(result.fileName).toBe('transactions.csv')
+        expect(result.addedCount).toBe(3)
+        expect(result.totalRows).toBe(3)
+        expect(result.status).toBe('reviewing')
+        expect(result.errors).toBeUndefined()
+
+        // Verify the batch was created
+        const batch = await prisma.importBatch.findUnique({
+          where: { id: result.batchId },
+          include: { transactions: true },
+        })
+
+        expect(batch).toBeDefined()
+        expect(batch?.sourceType).toBe('csv_manual')
+        expect(batch?.transactions).toHaveLength(3)
+
+        // Verify amounts are correct (D11 fix: verify rounding is correct)
+        const txns = batch!.transactions.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        expect(txns[0].amountMinor).toBe(15050n) // 150.50 -> 15050
+        expect(txns[1].amountMinor).toBe(4525n)  // 45.25 -> 4525
+        expect(txns[2].amountMinor).toBe(99999n) // 999.99 -> 99999
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('rejects request without file field', async () => {
+      const FormData = require('form-data')
+
+      const form = new FormData()
+      // Don't append any file
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/imports/csv/upload',
+        payload: form,
+        headers: {
+          ...form.getHeaders(),
+          origin: APP_ORIGIN,
+          cookie: sessionCookie,
+        },
+      })
+
+      expect(response.statusCode).toBe(400)
+      const result = JSON.parse(response.body)
+      expect(result.error.code).toBe('MISSING_FILE')
+    })
+
+    it('rejects CSV without required columns', async () => {
+      const csvContent = `date,amount
+2026-09-01,150.50`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(400)
+        const result = JSON.parse(response.body)
+        expect(result.error.code).toBe('MISSING_COLUMNS')
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('rejects CSV with only header row', async () => {
+      const csvContent = `date,amount,description`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(400)
+        const result = JSON.parse(response.body)
+        expect(result.error.code).toBe('INVALID_CSV')
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+  })
+
+  describe('Rounding Fix - D11: Decimal to Minor Units Conversion', () => {
+    let userId: string
+    let accountId: string
+    let sessionCookie: string
+
+    beforeEach(async () => {
+      const user = await prisma.user.create({
+        data: {
+          email: `test-rounding-${Date.now()}@example.com`,
+          passwordHash: 'hashed',
+          displayName: 'Rounding Tester',
+        },
+      })
+      userId = user.id
+
+      // Create a real session for this user
+      sessionCookie = await createTestSessionCookie(prisma, userId)
+
+      const account = await prisma.financialAccount.create({
+        data: {
+          userId,
+          name: 'Test Account',
+          accountType: 'checking',
+          classification: 'asset',
+          currencyCode: 'PHP',
+          openingBalanceMinor: 500000n,
+          currentBalanceMinor: 500000n,
+          manual: true,
+        },
+      })
+      accountId = account.id
+    })
+
+    it('correctly converts 19.99 to 1999 minor units', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,19.99,Test Transaction`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(201)
+        const result = JSON.parse(response.body)
+
+        const batch = await prisma.importBatch.findUnique({
+          where: { id: result.batchId },
+          include: { transactions: true },
+        })
+
+        expect(batch?.transactions[0].amountMinor).toBe(1999n)
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('correctly converts 8.20 to 820 minor units', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,8.20,Test Transaction`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(201)
+        const result = JSON.parse(response.body)
+
+        const batch = await prisma.importBatch.findUnique({
+          where: { id: result.batchId },
+          include: { transactions: true },
+        })
+
+        expect(batch?.transactions[0].amountMinor).toBe(820n)
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('correctly converts 4.35 to 435 minor units', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,4.35,Test Transaction`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(201)
+        const result = JSON.parse(response.body)
+
+        const batch = await prisma.importBatch.findUnique({
+          where: { id: result.batchId },
+          include: { transactions: true },
+        })
+
+        expect(batch?.transactions[0].amountMinor).toBe(435n)
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('correctly converts 0.29 to 29 minor units', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,0.29,Test Transaction`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(response.statusCode).toBe(201)
+        const result = JSON.parse(response.body)
+
+        const batch = await prisma.importBatch.findUnique({
+          where: { id: result.batchId },
+          include: { transactions: true },
+        })
+
+        expect(batch?.transactions[0].amountMinor).toBe(29n)
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+
+    it('commits batch with correctly rounded amounts to ledger', async () => {
+      const csvContent = `date,amount,description
+2026-09-01,19.99,Test 1
+2026-09-02,8.20,Test 2
+2026-09-03,4.35,Test 3
+2026-09-04,0.29,Test 4`
+
+      const FormData = require('form-data')
+      const fs = require('fs')
+      const path = require('path')
+      const tempDir = require('os').tmpdir()
+      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      fs.writeFileSync(tempFile, csvContent)
+
+      try {
+        const form = new FormData()
+        form.append('file', fs.createReadStream(tempFile), 'transactions.csv')
+
+        const uploadRes = await app.inject({
+          method: 'POST',
+          url: '/api/v1/imports/csv/upload',
+          payload: form,
+          headers: {
+            ...form.getHeaders(),
+            origin: APP_ORIGIN,
+            cookie: sessionCookie,
+          },
+        })
+
+        expect(uploadRes.statusCode).toBe(201)
+        const uploadResult = JSON.parse(uploadRes.body)
+
+        // Commit the batch
+        const commitRes = await app.inject({
+          method: 'POST',
+          url: `/api/v1/imports/batches/${uploadResult.batchId}/commit`,
+          payload: { matchedAccountId: accountId },
+          headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+        })
+
+        expect(commitRes.statusCode).toBe(200)
+
+        // Verify transactions were committed with correct amounts
+        const transactions = await prisma.transaction.findMany({
+          where: { userId, source: 'import' },
+          orderBy: { createdAt: 'asc' },
+        })
+
+        expect(transactions).toHaveLength(4)
+        expect(transactions[0].amountMinor).toBe(1999n)
+        expect(transactions[1].amountMinor).toBe(820n)
+        expect(transactions[2].amountMinor).toBe(435n)
+        expect(transactions[3].amountMinor).toBe(29n)
+      } finally {
+        fs.unlinkSync(tempFile)
+      }
+    })
+  })
 })

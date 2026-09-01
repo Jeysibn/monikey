@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit'
 import sensible from '@fastify/sensible'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import multipart from '@fastify/multipart'
 import type { PrismaClient } from '@prisma/client'
 import type { Env } from './config/env.js'
 import { buildLoggerOptions } from './config/logger.js'
@@ -104,6 +105,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     credentials: true,
   })
   await app.register(cookie)
+  await app.register(multipart, {
+    limits: {
+      fileSize: env.IMPORT_MAX_CSV_FILESIZE_BYTES,
+    },
+  })
   // `global: false`: login/register rate limits are applied per-route via
   // `config.rateLimit` in auth.routes.ts, not to every endpoint — see the
   // comment there for the reasoning and the plan §16.1 requirement.

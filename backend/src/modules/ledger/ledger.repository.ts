@@ -117,7 +117,7 @@ export class LedgerRepository {
     }
 
     // Validate invariants
-    this.validateInvariants(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor);
+    this.validateInvariants(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor, Boolean(goalId));
 
     // Create transaction
     const transaction = await tx.transaction.create({
@@ -142,7 +142,7 @@ export class LedgerRepository {
     });
 
     // Calculate balance effects
-    const balanceEffects = this.calculateBalanceEffects(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor);
+    const balanceEffects = this.calculateBalanceEffects(type, accountMap, fromAccountId ?? null, toAccountId ?? null, amountMinor, feeMinor, Boolean(goalId));
 
     // Insert balance effects and update account balances
     for (const effect of balanceEffects) {
@@ -283,10 +283,11 @@ export class LedgerRepository {
         data: { currentMinor: { decrement: original.amountMinor } },
       });
 
-      // TODO(Phase 3+): Add goal_contributions table and migration
-      // await tx.goalContribution.deleteMany({
-      //   where: { transactionId: original.id },
-      // });
+      // Remove the contribution record tied to the now-reversed transaction so
+      // it does not remain as an orphaned reference to a reversed transaction.
+      await tx.goalContribution.deleteMany({
+        where: { transactionId: original.id },
+      });
     }
 
     return {
@@ -302,7 +303,8 @@ export class LedgerRepository {
     fromAccountId: string | null,
     toAccountId: string | null,
     amountMinor: number,
-    feeMinor: number
+    feeMinor: number,
+    isGoalFunding = false
   ): void {
     const totalAmount = amountMinor + feeMinor;
 
@@ -330,6 +332,19 @@ export class LedgerRepository {
         break;
       }
       case 'transfer': {
+        if (isGoalFunding && !toAccountId) {
+          // Goal funding is a transfer from an asset account to a goal, which is
+          // not a `financial_accounts` row — there is no destination account to
+          // validate or credit here (goal crediting/limits are handled by the
+          // caller after this check passes).
+          if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Goal funding requires fromAccountId.', { field: 'fromAccountId' });
+          const fromAcc = accountMap.get(fromAccountId)!;
+          if (fromAcc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Goal funding must come from an asset account.', { field: 'fromAccountId' });
+          if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
+            throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
+          }
+          break;
+        }
         if (!fromAccountId || !toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer requires fromAccountId and toAccountId.', { field: 'fromAccountId' });
         if (fromAccountId === toAccountId) throw new AppError('TRANSFER_SAME_ACCOUNT', 'Transfer cannot use the same source and destination.', { field: 'fromAccountId' });
         const fromAcc = accountMap.get(fromAccountId)!;
@@ -369,7 +384,8 @@ export class LedgerRepository {
     fromAccountId: string | null,
     toAccountId: string | null,
     amountMinor: number,
-    feeMinor: number
+    feeMinor: number,
+    isGoalFunding = false
   ): Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: number; balanceAfterMinor: number }> {
     const effects: Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: number; balanceAfterMinor: number }> = [];
 
@@ -393,6 +409,19 @@ export class LedgerRepository {
         break;
       }
       case 'transfer': {
+        if (isGoalFunding && !toAccountId) {
+          // Goal funding: debit the source account only. The goal itself is
+          // credited separately (it is not a `financial_accounts` row), so
+          // there is no destination balance effect here.
+          const fromAcc = accountMap.get(fromAccountId!)!;
+          const totalAmount = amountMinor + feeMinor;
+          const fromNewBalance = Number(fromAcc.currentBalanceMinor) - totalAmount;
+          effects.push({ accountId: fromAccountId!, role: 'source', deltaMinor: -amountMinor, balanceAfterMinor: fromNewBalance });
+          if (feeMinor > 0) {
+            effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: fromNewBalance });
+          }
+          break;
+        }
         const fromAcc = accountMap.get(fromAccountId!)!;
         const toAcc = accountMap.get(toAccountId!)!;
         const totalAmount = amountMinor + feeMinor;

@@ -79,16 +79,24 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     const category = await prisma.category.findFirst({ where: { id, userId: request.user!.id } })
     if (!category) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Category not found.', requestId: request.id } })
 
-    // Delete the category. Transactions with this category will have their categoryId set to NULL
-    // by the database's FOREIGN KEY ON DELETE SET NULL constraint if defined, or will remain
-    // referencing the deleted category if not (caller is responsible for handling this).
+    // Deleting a category is expected to remove it outright, so its budget
+    // allocations (onDelete: Restrict — an allocation can't outlive its
+    // category) are cleared first in the same transaction. Transactions with
+    // this category will have their categoryId set to NULL by the database's
+    // FOREIGN KEY ON DELETE SET NULL constraint if defined, or will remain
+    // referencing the deleted category if not (caller is responsible for
+    // handling this).
     try {
-      await prisma.category.delete({ where: { id } })
+      await prisma.$transaction([
+        prisma.budgetAllocation.deleteMany({ where: { categoryId: id } }),
+        prisma.category.delete({ where: { id } }),
+      ])
     } catch (error) {
-      // Category still has budget allocations referencing it (onDelete: Restrict) — surface
-      // as a client error instead of a raw 500 from an uncaught FK-constraint violation.
-      // Postgres reports this RESTRICT violation as SQLSTATE 23001, which the query engine
-      // surfaces to Prisma as an *Unknown* request error (no P-code), not P2003.
+      // Should no longer happen now that allocations are cleared up-front,
+      // but keep the guard in case another FK surfaces the same way.
+      // Postgres reports a RESTRICT violation as SQLSTATE 23001, which the
+      // query engine surfaces to Prisma as an *Unknown* request error (no
+      // P-code), not P2003.
       const isRestrictViolation =
         (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') ||
         (error instanceof Prisma.PrismaClientUnknownRequestError && error.message.includes('23001'))

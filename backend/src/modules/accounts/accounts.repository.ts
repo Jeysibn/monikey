@@ -122,18 +122,10 @@ export class AccountsRepository {
     if (!account) throw new AppError('UNKNOWN_ACCOUNT', 'Account not found.', { field: 'id' });
     if (account.archivedAt) throw new AppError('ACCOUNT_ARCHIVED', 'Account already archived.', { field: 'id' });
 
-    // Check if account has non-zero balance
-    if (account.currentBalanceMinor !== 0n) {
-      throw new AppError('ACCOUNT_NOT_EMPTY', 'Cannot archive account with non-zero balance.', { field: 'id' });
-    }
-
-    // Check for credit card details
-    if (account.accountType === 'credit_card') {
-      const detail = await tx.creditCardDetail.findUnique({ where: { accountId: id } });
-      if (detail) {
-        throw new AppError('CATEGORY_NOT_ALLOWED', 'Must remove credit card details before archiving.', { field: 'id' });
-      }
-    }
+    // Archiving just hides the account from active views — it keeps its
+    // balance and transaction history intact, so a non-zero balance (or a
+    // credit card's detail row, which every credit card always has) is not a
+    // reason to block it.
 
     await tx.financialAccount.update({
       where: { id },

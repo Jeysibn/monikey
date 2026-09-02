@@ -22,13 +22,29 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
   const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>('all')
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  // A "deleted" transaction isn't hard-removed on the backend — it's reversed
+  // by creating a compensating entry that nets it to zero (audit trail). Hide
+  // both the now-reversed original and its compensating entry from the
+  // active list so a delete reads as "gone", not as a duplicated row.
+  const reversalPairIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const t of transactions) {
+      if (t.reversedTransactionId) {
+        ids.add(t.id)
+        ids.add(t.reversedTransactionId)
+      }
+    }
+    return ids
+  }, [transactions])
+
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
+      if (reversalPairIds.has(t.id)) return false
       if (typeFilter !== 'all' && t.type !== typeFilter) return false
       if (search && !finance.transactionMatchesSearch(t, search)) return false
       return true
     })
-  }, [transactions, search, typeFilter, finance])
+  }, [transactions, search, typeFilter, finance, reversalPairIds])
 
   const handleEdit = (transaction: typeof transactions[0]) => {
     if (onEditTransaction) {

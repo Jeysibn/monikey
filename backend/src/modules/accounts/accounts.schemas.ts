@@ -26,6 +26,11 @@ export const updateAccountSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   institution: z.string().max(100).nullable().optional(),
   lastFour: z.string().length(4).nullable().optional(),
+  // Manual balance correction (e.g. reconciling with a real-world statement).
+  // This overwrites the stored balance directly rather than posting a
+  // transaction — appropriate for manual accounts, which have no external
+  // sync to reconcile against.
+  currentBalanceMinor: z.number().int().optional(),
 });
 
 export interface AccountView {

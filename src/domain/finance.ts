@@ -63,6 +63,14 @@ export interface Transaction {
   source: TransactionSource
   status: TransactionStatus
   note?: string
+  /**
+   * Set once this transaction has been reversed (accounting-style "delete"):
+   * points at the compensating transaction created to offset it. Consumers
+   * should hide both this transaction and the one it points to from active
+   * lists — the pair together nets to zero and represents a deleted entry,
+   * not two live transactions.
+   */
+  reversedTransactionId?: string
 }
 
 export interface Category {
@@ -247,9 +255,13 @@ export interface UpdateAccountInput {
   name?: string
   institution?: string | null
   lastFour?: string | null
+  /** Manual balance correction, in major currency units (e.g. pesos). */
+  balance?: number
 }
 
 export interface UpdateCreditCardInput {
   name?: string
   lastFour?: string
+  /** Manual balance correction, in major currency units (e.g. pesos). */
+  balance?: number
 }

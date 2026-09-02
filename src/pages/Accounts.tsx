@@ -35,9 +35,9 @@ function AddAccountForm({ section, onClose, editingId }: { section: AccountSecti
   const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(
     (editingAccount?.type as Exclude<AccountType, 'credit_card'> | undefined) ?? SECTION_TYPES[section][0],
   )
-  // Editing only changes name/type — the starting balance is a one-time input
-  // at creation, not an editable field (balances move via transactions).
-  const [balance, setBalance] = useState('')
+  // In create mode this is the one-time starting balance; in edit mode it's a
+  // manual balance correction (e.g. reconciling with a real-world statement).
+  const [balance, setBalance] = useState(editingAccount ? String(editingAccount.balance) : '')
   const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail } = useFieldErrors<AccountField>(ACCOUNT_FIELDS)
 
@@ -50,13 +50,20 @@ function AddAccountForm({ section, onClose, editingId }: { section: AccountSecti
     if (editingAccount) {
       // Edit mode is backend-only — see AddAccountForm's edit affordance is
       // only ever shown when `asyncFinance` is available (mirrors Goals.tsx).
-      // The backend's PATCH /accounts/:id only accepts name/institution/
-      // lastFour (UpdateAccountInput) — type isn't editable once an account
-      // exists, so only the name changes here.
+      // Type isn't editable once an account exists, but name and balance are.
       if (!asyncFinance) return
+      let balanceValue: number | undefined
+      if (balance.trim()) {
+        const result = parseMoneyInput(balance)
+        if (!result.ok) {
+          fail({ balance: result.error })
+          return
+        }
+        balanceValue = result.value
+      }
       try {
         setSubmitting(true)
-        await asyncFinance.updateAccount(editingAccount.id, { name: name.trim() })
+        await asyncFinance.updateAccount(editingAccount.id, { name: name.trim(), balance: balanceValue })
         onClose()
       } catch (err) {
         fail({ name: err instanceof Error ? err.message : 'Could not update account.' })
@@ -117,24 +124,22 @@ function AddAccountForm({ section, onClose, editingId }: { section: AccountSecti
           </select>
         </label>
       )}
-      {!editingAccount && (
-        <label className="new-category-field">
-          <span className="tx-label">Starting balance</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            className="tx-input"
-            value={balance}
-            placeholder="0.00"
-            {...field('balance', (e) => setBalance(e.target.value))}
-          />
-          {errors.balance && (
-            <p className="tx-error" role="alert" id={errorId('balance')}>
-              {errors.balance}
-            </p>
-          )}
-        </label>
-      )}
+      <label className="new-category-field">
+        <span className="tx-label">{editingAccount ? 'Balance' : 'Starting balance'}</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={balance}
+          placeholder="0.00"
+          {...field('balance', (e) => setBalance(e.target.value))}
+        />
+        {errors.balance && (
+          <p className="tx-error" role="alert" id={errorId('balance')}>
+            {errors.balance}
+          </p>
+        )}
+      </label>
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
@@ -158,7 +163,7 @@ function AddCardForm({ onClose, editingId }: { onClose: () => void; editingId?: 
   const [lastFour, setLastFour] = useState(editingCard?.lastFour ?? '')
   const [network, setNetwork] = useState<'visa' | 'mastercard'>((editingCard?.network as 'visa' | 'mastercard') ?? 'visa')
   const [limit, setLimit] = useState(editingCard ? String(editingCard.limit) : '')
-  const [balance, setBalance] = useState('')
+  const [balance, setBalance] = useState(editingCard ? String(editingCard.balance) : '')
   // TR-003: a card carries a real due date and minimum payment from the
   // moment it is created, so it can contribute to Money Position's upcoming
   // commitments instead of being stored as `dueDate: 'Not set'`/`minPayment: 0`.
@@ -179,13 +184,21 @@ function AddCardForm({ onClose, editingId }: { onClose: () => void; editingId?: 
     }
     if (editingCard) {
       // Edit mode is backend-only, mirroring AddAccountForm and Goals.tsx.
-      // The backend's PATCH /accounts/:id only accepts name/institution/
-      // lastFour (UpdateAccountInput) — network, limit, due date, and minimum
-      // payment aren't editable once a card exists.
+      // Network, limit, due date, and minimum payment aren't editable once a
+      // card exists, but name, last four, and balance are.
       if (!asyncFinance) return
+      let balanceValue: number | undefined
+      if (balance.trim()) {
+        const result = parseMoneyInput(balance)
+        if (!result.ok) {
+          fail({ balance: result.error })
+          return
+        }
+        balanceValue = result.value
+      }
       try {
         setSubmitting(true)
-        await asyncFinance.updateCreditCard(editingCard.id, { name: name.trim(), lastFour })
+        await asyncFinance.updateCreditCard(editingCard.id, { name: name.trim(), lastFour, balance: balanceValue })
         onClose()
       } catch (err) {
         fail({ name: err instanceof Error ? err.message : 'Could not update card.' })
@@ -281,6 +294,22 @@ function AddCardForm({ onClose, editingId }: { onClose: () => void; editingId?: 
           </p>
         )}
       </label>
+      <label className="new-category-field">
+        <span className="tx-label">{editingCard ? 'Current balance' : 'Current balance (optional)'}</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className="tx-input"
+          value={balance}
+          placeholder="0.00"
+          {...field('balance', (e) => setBalance(e.target.value))}
+        />
+        {errors.balance && (
+          <p className="tx-error" role="alert" id={errorId('balance')}>
+            {errors.balance}
+          </p>
+        )}
+      </label>
       {!editingCard && (
         <>
           <label className="new-category-field">
@@ -303,22 +332,6 @@ function AddCardForm({ onClose, editingId }: { onClose: () => void; editingId?: 
             {errors.limit && (
               <p className="tx-error" role="alert" id={errorId('limit')}>
                 {errors.limit}
-              </p>
-            )}
-          </label>
-          <label className="new-category-field">
-            <span className="tx-label">Current balance (optional)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              className="tx-input"
-              value={balance}
-              placeholder="0.00"
-              {...field('balance', (e) => setBalance(e.target.value))}
-            />
-            {errors.balance && (
-              <p className="tx-error" role="alert" id={errorId('balance')}>
-                {errors.balance}
               </p>
             )}
           </label>
@@ -404,12 +417,20 @@ export function Accounts() {
   async function handleArchiveAccount(id: string, name: string) {
     if (!asyncFinance) return
     if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
-    await asyncFinance.archiveAccount(id)
+    try {
+      await asyncFinance.archiveAccount(id)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not archive account.')
+    }
   }
   async function handleArchiveCard(id: string, name: string) {
     if (!asyncFinance) return
     if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
-    await asyncFinance.archiveCreditCard(id)
+    try {
+      await asyncFinance.archiveCreditCard(id)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not archive card.')
+    }
   }
 
   return (

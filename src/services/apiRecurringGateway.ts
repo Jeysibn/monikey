@@ -23,7 +23,7 @@ export class ApiRecurringGateway implements RecurringGateway {
       const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
       throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? `Monikey API request failed: ${response.status}`, payload?.error?.field)
     }
-    return response.json() as Promise<T>
+    return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
   }
 
   async load(): Promise<RecurringItem[]> { return (await this.request<{ items: ApiRecurringItem[] }>('/recurring')).items.map(this.map) }

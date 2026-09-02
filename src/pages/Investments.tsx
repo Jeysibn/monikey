@@ -30,7 +30,10 @@ function LogTransactionForm({
   onLog: (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void | Promise<void>
   onClose: () => void
 }) {
-  const [ticker, setTicker] = useState(tickers[0] ?? '')
+  const NEW_TICKER_VALUE = '__new__'
+  const [ticker, setTicker] = useState(tickers[0] ?? NEW_TICKER_VALUE)
+  const [tickerMode, setTickerMode] = useState<'existing' | 'new'>(tickers.length > 0 ? 'existing' : 'new')
+  const [newTicker, setNewTicker] = useState('')
   const [type, setType] = useState<InvestmentTransactionType>('buy')
   const [units, setUnits] = useState('')
   const [price, setPrice] = useState('')
@@ -42,12 +45,11 @@ function LogTransactionForm({
   const { errors, field, errorId, fail } = useFieldErrors<TxField>(TX_FIELDS)
   const [submitting, setSubmitting] = useState(false)
 
-  // Check if the entered ticker is new (not in the existing tickers list)
-  const isNewTicker = ticker.trim() !== '' && !tickers.includes(ticker.trim())
+  const isNewTicker = tickerMode === 'new'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const trimmedTicker = ticker.trim()
+    const trimmedTicker = (isNewTicker ? newTicker : ticker).trim()
     if (!trimmedTicker) {
       fail({ ticker: 'Enter a ticker.' })
       return
@@ -122,20 +124,31 @@ function LogTransactionForm({
       <div className="log-tx-row">
         <label className="new-category-field">
           <span className="tx-label">Ticker</span>
-          <input
-            type="text"
+          <select
             className="tx-input"
-            placeholder="e.g. AAPL"
-            value={ticker}
-            list="ticker-list"
+            value={tickerMode === 'new' ? NEW_TICKER_VALUE : ticker}
             autoFocus
-            {...field('ticker', (e) => setTicker(e.target.value))}
-          />
-          <datalist id="ticker-list">
+            {...field('ticker', (e) => {
+              if (e.target.value === NEW_TICKER_VALUE) { setTickerMode('new'); return }
+              setTickerMode('existing')
+              setTicker(e.target.value)
+            })}
+          >
             {tickers.map((t) => (
-              <option key={t} value={t} />
+              <option key={t} value={t}>{t}</option>
             ))}
-          </datalist>
+            <option value={NEW_TICKER_VALUE}>+ New ticker…</option>
+          </select>
+          {tickerMode === 'new' && (
+            <input
+              type="text"
+              className="tx-input"
+              placeholder="e.g. AAPL"
+              value={newTicker}
+              style={{ marginTop: '0.5rem' }}
+              onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+            />
+          )}
           {errors.ticker && (
             <p className="tx-error" role="alert" id={errorId('ticker')}>
               {errors.ticker}

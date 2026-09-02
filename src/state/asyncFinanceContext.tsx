@@ -163,7 +163,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     return result
   }, [stableGateway])
   const updateCategory = useCallback(async (categoryId: string, updates: { name?: string; allocated?: number }) => {
-    const result = await stableGateway.updateCategory(categoryId, { name: updates.name })
+    const result = await stableGateway.updateCategory(categoryId, { name: updates.name, allocated: updates.allocated })
     const refreshed = await stableGateway.load()
     const newAllocated = updates.allocated ?? (state?.budgetCategories.find((bc) => bc.id === categoryId)?.allocated ?? 0)
     setState((current) => refreshed ?? (current ? { ...current, categories: current.categories.map((c) => c.id === categoryId ? { ...c, name: result.name } : c), budgetCategories: current.budgetCategories.map((bc) => bc.id === categoryId ? { ...bc, allocated: newAllocated } : bc) } : current))

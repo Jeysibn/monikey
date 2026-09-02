@@ -11,7 +11,7 @@
 }
 .budget-row {
   display: grid;
-  grid-template-columns: 1fr 108px 92px;
+  grid-template-columns: 1fr 108px 92px auto;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
@@ -19,6 +19,13 @@
 }
 .budget-row:first-of-type {
   border-top: none;
+}
+.budget-row-actions {
+  display: flex;
+  gap: 6px;
+}
+.budget-row-actions .btn {
+  white-space: nowrap;
 }
 .budget-row-mid {
   min-width: 0;
@@ -119,6 +126,12 @@
   }
   .budget-amt {
     text-align: left;
+  }
+  .budget-row-actions {
+    flex-direction: row;
+  }
+  .budget-row-actions .btn {
+    flex: 1;
   }
 }
 

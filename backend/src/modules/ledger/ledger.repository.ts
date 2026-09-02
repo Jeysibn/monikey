@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import type { TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page, PostTransactionInput } from './ledger.schemas.js';
+import type { TransactionView, PostTransactionResult, ReverseTransactionResult, UpdateTransactionResult, TransactionQuery, Page, PostTransactionInput, UpdateTransactionInput } from './ledger.schemas.js';
 import { AppError } from '../../common/errors/appError.js';
 
 type BalanceEffectRole = 'source' | 'destination' | 'expense' | 'income' | 'card_charge' | 'card_payment' | 'fee';
@@ -294,6 +294,118 @@ export class LedgerRepository {
       reversedTransaction: this.mapTransaction(original),
       compensatingTransaction: this.mapTransaction(compensating),
       balanceEffects: compensatingEffects,
+    };
+  }
+
+  async updateTransaction(
+    tx: PrismaTx,
+    userId: string,
+    transactionId: string,
+    input: UpdateTransactionInput
+  ): Promise<UpdateTransactionResult> {
+    const original = await tx.transaction.findFirst({
+      where: { id: transactionId, userId },
+      include: { balanceEffects: true },
+    });
+
+    if (!original) {
+      throw new AppError('UNKNOWN_TRANSACTION', 'Transaction not found.', { field: 'id' });
+    }
+    if (original.reversedTransactionId) {
+      throw new AppError('ALREADY_REVERSED', 'Cannot update a reversed transaction.', { field: 'id' });
+    }
+
+    // Lock affected accounts
+    const accountIds = new Set(original.balanceEffects.map(e => e.accountId));
+    const sortedAccountIds = Array.from(accountIds).sort();
+    if (sortedAccountIds.length > 0) {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM financial_accounts WHERE user_id = ${userId}::uuid AND id IN (${Prisma.join(sortedAccountIds.map((id) => Prisma.sql`${id}::uuid`))}) FOR UPDATE`);
+    }
+    const accounts = await Promise.all(
+      Array.from(accountIds).map(id =>
+        tx.financialAccount.findUnique({ where: { id }, include: { creditCardDetail: true } })
+      )
+    );
+    const accountMap = new Map(accounts.filter(Boolean).map(a => [a!.id, a!]));
+
+    // Reverse original balance effects
+    for (const effect of original.balanceEffects) {
+      const account = accountMap.get(effect.accountId)!;
+      const delta = -Number(effect.deltaMinor);
+      const newBalance = Number(account.currentBalanceMinor) + delta;
+
+      await tx.transactionBalanceEffect.deleteMany({
+        where: { transactionId: original.id },
+      });
+
+      await tx.financialAccount.update({
+        where: { id: effect.accountId },
+        data: { currentBalanceMinor: BigInt(newBalance) },
+      });
+      accountMap.set(effect.accountId, { ...account, currentBalanceMinor: BigInt(newBalance) });
+    }
+
+    // Prepare updated values (use original if not provided in input)
+    const updatedTitle = input.title ?? original.title;
+    const updatedAmount = input.amountMinor ?? Number(original.amountMinor);
+    const updatedFee = input.feeMinor ?? Number(original.feeMinor);
+    const updatedCategoryId = input.categoryId !== undefined ? input.categoryId : original.categoryId;
+    const updatedOccurredOn = input.occurredOn ? new Date(input.occurredOn) : original.occurredOn;
+    const updatedOccurredTime = input.occurredTime ? new Date(`1970-01-01T${input.occurredTime}Z`) : original.occurredTime;
+    const updatedStatus = input.status ?? original.status;
+    const updatedNote = input.note !== undefined ? input.note : original.note;
+
+    // Calculate new balance effects
+    const newBalanceEffects = this.calculateBalanceEffects(
+      original.type,
+      accountMap,
+      original.fromAccountId ?? null,
+      original.toAccountId ?? null,
+      updatedAmount,
+      updatedFee,
+      Boolean(original.goalId)
+    );
+
+    // Update the transaction
+    await tx.transaction.update({
+      where: { id: original.id },
+      data: {
+        title: updatedTitle,
+        categoryId: updatedCategoryId,
+        occurredOn: updatedOccurredOn,
+        occurredTime: updatedOccurredTime,
+        amountMinor: BigInt(updatedAmount),
+        feeMinor: BigInt(updatedFee),
+        status: updatedStatus,
+        note: updatedNote,
+      },
+    });
+
+    // Insert new balance effects and update account balances
+    for (const effect of newBalanceEffects) {
+      await tx.transactionBalanceEffect.create({
+        data: {
+          transactionId: original.id,
+          accountId: effect.accountId,
+          role: effect.role,
+          deltaMinor: BigInt(effect.deltaMinor),
+          balanceAfterMinor: BigInt(effect.balanceAfterMinor),
+        },
+      });
+
+      await tx.financialAccount.update({
+        where: { id: effect.accountId },
+        data: { currentBalanceMinor: BigInt(effect.balanceAfterMinor) },
+      });
+    }
+
+    const updatedTransaction = await tx.transaction.findUnique({
+      where: { id: original.id },
+    });
+
+    return {
+      transaction: this.mapTransaction(updatedTransaction!),
+      balanceEffects: newBalanceEffects,
     };
   }
 

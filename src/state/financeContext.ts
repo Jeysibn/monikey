@@ -24,9 +24,13 @@ export interface FinanceContextValue {
    */
   todayIso: string
   addTransaction: (input: AddTransactionInput) => Transaction | Promise<Transaction>
+  updateTransaction: (transactionId: string, input: Partial<AddTransactionInput>) => Transaction | Promise<Transaction>
+  reverseTransaction: (transactionId: string) => Transaction | Promise<Transaction>
   addManualAccount: (input: AddManualAccountInput) => Account | Promise<Account>
   addManualCreditCard: (input: AddManualCreditCardInput) => CreditCard | Promise<CreditCard>
   addBudgetCategory: (input: AddBudgetCategoryInput) => BudgetCategory | Promise<BudgetCategory>
+  updateCategory: (categoryId: string, updates: { name?: string; allocated?: number }) => BudgetCategory | Promise<BudgetCategory>
+  deleteCategory: (categoryId: string) => void | Promise<void>
   createGoal: (input: CreateGoalInput) => Goal | Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal | Promise<Goal>
 }

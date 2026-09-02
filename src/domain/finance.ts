@@ -235,3 +235,21 @@ export interface CreateGoalInput {
   targetDate: string
   monthlyContribution?: number
 }
+
+export interface UpdateGoalInput {
+  name?: string
+  targetAmount?: number
+  targetDate?: string
+  monthlyContribution?: number | null
+}
+
+export interface UpdateAccountInput {
+  name?: string
+  institution?: string | null
+  lastFour?: string | null
+}
+
+export interface UpdateCreditCardInput {
+  name?: string
+  lastFour?: string
+}

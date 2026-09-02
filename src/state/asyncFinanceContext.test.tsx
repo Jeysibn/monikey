@@ -7,7 +7,27 @@ import { AsyncFinanceProvider, useAsyncFinance } from './asyncFinanceContext'
 
 const state: FinanceState = { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] }
 const transaction: Transaction = { id: 'tx-1', type: 'income', title: 'Pay', date: '2026-08-31', amount: 10, source: 'manual', status: 'cleared' }
-const gateway = (load: FinanceGateway['load']): FinanceGateway => ({ load, addTransaction: vi.fn().mockResolvedValue(transaction), addManualAccount: vi.fn(), addManualCreditCard: vi.fn(), createGoal: vi.fn(), addGoalFunds: vi.fn(), createBudgetPeriod: vi.fn(), setBudgetAllocation: vi.fn().mockResolvedValue({ id: 'food', allocated: 100, spent: 0 }), addBudgetCategory: vi.fn() })
+const gateway = (load: FinanceGateway['load']): FinanceGateway => ({
+  load,
+  addTransaction: vi.fn().mockResolvedValue(transaction),
+  updateTransaction: vi.fn(),
+  reverseTransaction: vi.fn(),
+  addManualAccount: vi.fn(),
+  addManualCreditCard: vi.fn(),
+  updateAccount: vi.fn(),
+  updateCreditCard: vi.fn(),
+  archiveAccount: vi.fn(),
+  archiveCreditCard: vi.fn(),
+  createGoal: vi.fn(),
+  addGoalFunds: vi.fn(),
+  updateGoal: vi.fn(),
+  deleteGoal: vi.fn(),
+  createBudgetPeriod: vi.fn(),
+  setBudgetAllocation: vi.fn().mockResolvedValue({ id: 'food', allocated: 100, spent: 0 }),
+  addBudgetCategory: vi.fn(),
+  updateCategory: vi.fn(),
+  deleteCategory: vi.fn(),
+})
 const wrapper = (value: FinanceGateway) => ({ children }: { children: ReactNode }) => <AsyncFinanceProvider gateway={value}>{children}</AsyncFinanceProvider>
 
 describe('AsyncFinanceProvider', () => {

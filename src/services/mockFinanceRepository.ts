@@ -263,6 +263,33 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
       }
     },
 
+    updateCategory(state, categoryId, updates) {
+      const categoryIndex = state.categories.findIndex((c) => c.id === categoryId)
+      if (categoryIndex === -1) throw new Error(`Category ${categoryId} not found`)
+
+      const updatedCategory = { ...state.categories[categoryIndex], ...updates }
+      const categories = [...state.categories]
+      categories[categoryIndex] = updatedCategory
+
+      const budgetCategoryIndex = state.budgetCategories.findIndex((bc) => bc.id === categoryId)
+      let budgetCategories = state.budgetCategories
+      if (budgetCategoryIndex !== -1 && updates.allocated !== undefined) {
+        budgetCategories = [...state.budgetCategories]
+        budgetCategories[budgetCategoryIndex] = { ...budgetCategories[budgetCategoryIndex], allocated: updates.allocated }
+      }
+
+      return {
+        state: { ...state, categories, budgetCategories },
+        category: budgetCategories[budgetCategoryIndex] || state.budgetCategories[budgetCategoryIndex],
+      }
+    },
+
+    deleteCategory(state, categoryId) {
+      const categories = state.categories.filter((c) => c.id !== categoryId)
+      const budgetCategories = state.budgetCategories.filter((bc) => bc.id !== categoryId)
+      return { ...state, categories, budgetCategories }
+    },
+
     createGoal(state, input) {
       validateCreateGoal(input, clock.todayIso())
       const goal: Goal = {
@@ -314,6 +341,147 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
       return {
         state: { ...state, accounts, goals, transactions: [transaction, ...state.transactions] },
         goal: updatedGoal,
+      }
+    },
+
+    updateGoal(state, goalId, input) {
+      const goal = state.goals.find((g) => g.id === goalId)
+      if (!goal) throw new Error('Goal not found.')
+
+      const updated: Goal = {
+        ...goal,
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.targetAmount !== undefined && { targetAmount: input.targetAmount }),
+        ...(input.targetDate !== undefined && { targetDate: input.targetDate }),
+        ...(input.monthlyContribution !== undefined && { monthlyContribution: input.monthlyContribution ?? undefined }),
+      }
+
+      return {
+        state: { ...state, goals: state.goals.map((g) => (g.id === goalId ? updated : g)) },
+        goal: updated,
+      }
+    },
+
+    deleteGoal(state, goalId) {
+      return {
+        ...state,
+        goals: state.goals.filter((g) => g.id !== goalId),
+      }
+    },
+
+    updateAccount(state, accountId, input) {
+      const account = state.accounts.find((a) => a.id === accountId)
+      if (!account) throw new Error('Account not found.')
+
+      const updated: Account = {
+        ...account,
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.institution !== undefined && { institution: input.institution ?? undefined }),
+        ...(input.lastFour !== undefined && { lastFour: input.lastFour ?? undefined }),
+      }
+      return {
+        state: { ...state, accounts: state.accounts.map((a) => (a.id === accountId ? updated : a)) },
+        account: updated,
+      }
+    },
+
+    updateCreditCard(state, cardId, input) {
+      const card = state.creditCards.find((c) => c.id === cardId)
+      if (!card) throw new Error('Credit card not found.')
+
+      const updated: CreditCard = { ...card, ...input }
+      return {
+        state: { ...state, creditCards: state.creditCards.map((c) => (c.id === cardId ? updated : c)) },
+        card: updated,
+      }
+    },
+
+    archiveAccount(state, accountId) {
+      return {
+        ...state,
+        accounts: state.accounts.filter((a) => a.id !== accountId),
+      }
+    },
+
+    archiveCreditCard(state, cardId) {
+      return {
+        ...state,
+        creditCards: state.creditCards.filter((c) => c.id !== cardId),
+      }
+    },
+
+    updateTransaction(state, transactionId, input) {
+      const transaction = state.transactions.find((t) => t.id === transactionId)
+      if (!transaction) {
+        throw new Error('Transaction not found.')
+      }
+
+      const updatedTransaction: Transaction = {
+        ...transaction,
+        ...(input.title !== undefined && { title: input.title.trim() }),
+        ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
+        ...(input.date !== undefined && { date: input.date }),
+        ...(input.time !== undefined && { time: input.time || undefined }),
+        ...(input.amount !== undefined && input.type === transaction.type && { amount: input.type === 'transfer' ? input.amount : input.type === 'income' ? input.amount : -input.amount }),
+        ...(input.fee !== undefined && { fee: input.fee && input.fee > 0 ? input.fee : undefined }),
+        ...(input.note !== undefined && { note: input.note }),
+      }
+
+      const transactions = state.transactions.map((t) => (t.id === transactionId ? updatedTransaction : t))
+
+      return {
+        state: { ...state, transactions },
+        transaction: updatedTransaction,
+      }
+    },
+
+    reverseTransaction(state, transactionId) {
+      const transaction = state.transactions.find((t) => t.id === transactionId)
+      if (!transaction) {
+        throw new Error('Transaction not found.')
+      }
+
+      const isTransfer = transaction.type === 'transfer'
+      const reversalAmount = isTransfer ? transaction.amount : transaction.type === 'income' ? transaction.amount : -transaction.amount
+      const compensatingTransaction: Transaction = {
+        id: nextId('tx'),
+        type: transaction.type,
+        title: `Reversal: ${transaction.title}`,
+        categoryId: transaction.categoryId,
+        accountId: transaction.accountId,
+        fromAccountId: transaction.fromAccountId,
+        toAccountId: transaction.toAccountId,
+        date: clock.todayIso(),
+        amount: -reversalAmount,
+        fee: transaction.fee,
+        source: 'manual',
+        status: 'cleared',
+        note: `Reversal of transaction ${transaction.id}`,
+      }
+
+      let accounts = state.accounts
+      let creditCards = state.creditCards
+      const reverseAccountDelta = (id: string | undefined, delta: number) => {
+        if (!id) return
+        accounts = accounts.map((a) => (a.id === id ? { ...a, balance: a.balance - delta } : a))
+        creditCards = creditCards.map((c) => (c.id === id ? { ...c, balance: c.balance + delta } : c))
+      }
+
+      if (isTransfer) {
+        reverseAccountDelta(transaction.fromAccountId, reversalAmount + (transaction.fee ?? 0))
+        reverseAccountDelta(transaction.toAccountId, reversalAmount)
+      } else {
+        reverseAccountDelta(transaction.accountId, reversalAmount)
+      }
+
+      return {
+        state: {
+          ...state,
+          transactions: [compensatingTransaction, ...state.transactions],
+          accounts,
+          creditCards,
+        },
+        reversedTransaction: transaction,
       }
     },
   }

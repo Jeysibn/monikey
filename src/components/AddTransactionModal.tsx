@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { showToast } from '../hooks/toastBus'
-import type { TransactionType } from '../domain/finance'
+import type { Transaction, TransactionType } from '../domain/finance'
 import { FinanceValidationError } from '../domain/financeRules'
 import { categoriesForTransactionType } from '../state/financeSelectors'
 import { parseMoneyInput } from '../utils/money'
@@ -38,14 +38,32 @@ function emptyFormState(defaultDate: string) {
   }
 }
 
-export function AddTransactionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddTransactionModal({ open, onClose, editingTransaction }: { open: boolean; onClose: () => void; editingTransaction?: Transaction }) {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const triggerFocusRef = useRef<Element | null>(null)
   const idempotencyKeyRef = useRef<string | null>(null)
-  const [form, setForm] = useState(() => emptyFormState(finance.todayIso))
+  const [form, setForm] = useState(() => {
+    if (editingTransaction) {
+      return {
+        tab: editingTransaction.type as TxTab,
+        amount: Math.abs(editingTransaction.amount).toString(),
+        title: editingTransaction.title || '',
+        categoryId: editingTransaction.categoryId || '',
+        accountId: editingTransaction.accountId || '',
+        fromAccountId: editingTransaction.fromAccountId || '',
+        toAccountId: editingTransaction.toAccountId || '',
+        fee: editingTransaction.fee ? editingTransaction.fee.toString() : '',
+        date: editingTransaction.date,
+        time: editingTransaction.time || '',
+        note: editingTransaction.note || '',
+        receiptName: '',
+      }
+    }
+    return emptyFormState(finance.todayIso)
+  })
   const [submitting, setSubmitting] = useState(false)
   // TR-009 / FINDING-010: the same shared hook the page forms use, rather
   // than a second hand-rolled copy of the accessibility contract.
@@ -56,14 +74,31 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
     if (!dialog) return
     if (open && !dialog.open) {
       triggerFocusRef.current = document.activeElement
-      setForm(emptyFormState(finance.todayIso))
+      if (editingTransaction) {
+        setForm({
+          tab: editingTransaction.type as TxTab,
+          amount: Math.abs(editingTransaction.amount).toString(),
+          title: editingTransaction.title || '',
+          categoryId: editingTransaction.categoryId || '',
+          accountId: editingTransaction.accountId || '',
+          fromAccountId: editingTransaction.fromAccountId || '',
+          toAccountId: editingTransaction.toAccountId || '',
+          fee: editingTransaction.fee ? editingTransaction.fee.toString() : '',
+          date: editingTransaction.date,
+          time: editingTransaction.time || '',
+          note: editingTransaction.note || '',
+          receiptName: '',
+        })
+      } else {
+        setForm(emptyFormState(finance.todayIso))
+      }
       clear()
       dialog.showModal()
     }
     if (!open && dialog.open) {
       dialog.close()
     }
-  }, [open, finance.todayIso, clear])
+  }, [open, editingTransaction, finance.todayIso, clear])
 
   function handleClose() {
     onClose()
@@ -149,13 +184,26 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
         amount: amountResult.value,
         fee: feeResult && feeResult.ok ? feeResult.value : undefined,
         note: form.note.trim() || undefined,
-        idempotencyKey: idempotencyKeyRef.current ?? (idempotencyKeyRef.current = crypto.randomUUID()),
+        idempotencyKey: editingTransaction ? undefined : (idempotencyKeyRef.current ?? (idempotencyKeyRef.current = crypto.randomUUID())),
       }
-      if (asyncFinance) {
-        setSubmitting(true)
-        await asyncFinance.addTransaction(input)
+
+      if (editingTransaction) {
+        if (asyncFinance) {
+          setSubmitting(true)
+          await asyncFinance.updateTransaction(editingTransaction.id, input)
+        } else {
+          finance.updateTransaction(editingTransaction.id, input)
+        }
+        showToast('Transaction updated')
       } else {
-        finance.addTransaction(input)
+        if (asyncFinance) {
+          setSubmitting(true)
+          await asyncFinance.addTransaction(input)
+        } else {
+          finance.addTransaction(input)
+        }
+        showToast(payingCard ? 'Card payment saved' : `${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
+        idempotencyKeyRef.current = null
       }
     } catch (err) {
       // The repository owns the finance invariants (TR-002); this places
@@ -168,8 +216,6 @@ export function AddTransactionModal({ open, onClose }: { open: boolean; onClose:
       setSubmitting(false)
     }
 
-    showToast(payingCard ? 'Card payment saved' : `${form.tab[0].toUpperCase()}${form.tab.slice(1)} saved`)
-    idempotencyKeyRef.current = null
     handleClose()
   }
 

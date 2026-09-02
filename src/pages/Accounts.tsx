@@ -27,11 +27,16 @@ const SECTION_TYPE_LABELS: Record<Exclude<AccountType, 'credit_card'>, string> =
 const ACCOUNT_FIELDS = ['name', 'type', 'balance'] as const
 type AccountField = (typeof ACCOUNT_FIELDS)[number]
 
-function AddAccountForm({ section, onClose }: { section: AccountSection; onClose: () => void }) {
+function AddAccountForm({ section, onClose, editingId }: { section: AccountSection; onClose: () => void; editingId?: string }) {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
-  const [name, setName] = useState('')
-  const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(SECTION_TYPES[section][0])
+  const editingAccount = editingId ? finance.state.accounts.find((a) => a.id === editingId) : undefined
+  const [name, setName] = useState(editingAccount?.name ?? '')
+  const [type, setType] = useState<Exclude<AccountType, 'credit_card'>>(
+    (editingAccount?.type as Exclude<AccountType, 'credit_card'> | undefined) ?? SECTION_TYPES[section][0],
+  )
+  // Editing only changes name/type — the starting balance is a one-time input
+  // at creation, not an editable field (balances move via transactions).
   const [balance, setBalance] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail } = useFieldErrors<AccountField>(ACCOUNT_FIELDS)
@@ -40,6 +45,24 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
     e.preventDefault()
     if (!name.trim()) {
       fail({ name: 'Account name is required.' })
+      return
+    }
+    if (editingAccount) {
+      // Edit mode is backend-only — see AddAccountForm's edit affordance is
+      // only ever shown when `asyncFinance` is available (mirrors Goals.tsx).
+      // The backend's PATCH /accounts/:id only accepts name/institution/
+      // lastFour (UpdateAccountInput) — type isn't editable once an account
+      // exists, so only the name changes here.
+      if (!asyncFinance) return
+      try {
+        setSubmitting(true)
+        await asyncFinance.updateAccount(editingAccount.id, { name: name.trim() })
+        onClose()
+      } catch (err) {
+        fail({ name: err instanceof Error ? err.message : 'Could not update account.' })
+      } finally {
+        setSubmitting(false)
+      }
       return
     }
     if (!balance.trim()) {
@@ -82,38 +105,42 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
           </p>
         )}
       </label>
-      <label className="new-category-field">
-        <span className="tx-label">Type</span>
-        <select className="tx-input" value={type} {...field('type', (e) => setType(e.target.value as typeof type))}>
-          {SECTION_TYPES[section].map((t) => (
-            <option key={t} value={t}>
-              {SECTION_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="new-category-field">
-        <span className="tx-label">Starting balance</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          className="tx-input"
-          value={balance}
-          placeholder="0.00"
-          {...field('balance', (e) => setBalance(e.target.value))}
-        />
-        {errors.balance && (
-          <p className="tx-error" role="alert" id={errorId('balance')}>
-            {errors.balance}
-          </p>
-        )}
-      </label>
+      {!editingAccount && (
+        <label className="new-category-field">
+          <span className="tx-label">Type</span>
+          <select className="tx-input" value={type} {...field('type', (e) => setType(e.target.value as typeof type))}>
+            {SECTION_TYPES[section].map((t) => (
+              <option key={t} value={t}>
+                {SECTION_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!editingAccount && (
+        <label className="new-category-field">
+          <span className="tx-label">Starting balance</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            className="tx-input"
+            value={balance}
+            placeholder="0.00"
+            {...field('balance', (e) => setBalance(e.target.value))}
+          />
+          {errors.balance && (
+            <p className="tx-error" role="alert" id={errorId('balance')}>
+              {errors.balance}
+            </p>
+          )}
+        </label>
+      )}
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
         </button>
         <button type="submit" className="btn btn--primary" disabled={submitting}>
-          {submitting ? 'Saving…' : 'Add account'}
+          {submitting ? 'Saving…' : editingAccount ? 'Save changes' : 'Add account'}
         </button>
       </div>
     </form>
@@ -123,19 +150,20 @@ function AddAccountForm({ section, onClose }: { section: AccountSection; onClose
 const CARD_FIELDS = ['name', 'lastFour', 'network', 'limit', 'balance', 'dueDate', 'minPayment'] as const
 type CardField = (typeof CARD_FIELDS)[number]
 
-function AddCardForm({ onClose }: { onClose: () => void }) {
+function AddCardForm({ onClose, editingId }: { onClose: () => void; editingId?: string }) {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
-  const [name, setName] = useState('')
-  const [lastFour, setLastFour] = useState('')
-  const [network, setNetwork] = useState<'visa' | 'mastercard'>('visa')
-  const [limit, setLimit] = useState('')
+  const editingCard = editingId ? finance.state.creditCards.find((c) => c.id === editingId) : undefined
+  const [name, setName] = useState(editingCard?.name ?? '')
+  const [lastFour, setLastFour] = useState(editingCard?.lastFour ?? '')
+  const [network, setNetwork] = useState<'visa' | 'mastercard'>((editingCard?.network as 'visa' | 'mastercard') ?? 'visa')
+  const [limit, setLimit] = useState(editingCard ? String(editingCard.limit) : '')
   const [balance, setBalance] = useState('')
   // TR-003: a card carries a real due date and minimum payment from the
   // moment it is created, so it can contribute to Money Position's upcoming
   // commitments instead of being stored as `dueDate: 'Not set'`/`minPayment: 0`.
-  const [dueDate, setDueDate] = useState('')
-  const [minPayment, setMinPayment] = useState('')
+  const [dueDate, setDueDate] = useState(editingCard?.dueDate ?? '')
+  const [minPayment, setMinPayment] = useState(editingCard ? String(editingCard.minPayment) : '')
   const [submitting, setSubmitting] = useState(false)
   const { errors, field, errorId, fail } = useFieldErrors<CardField>(CARD_FIELDS)
 
@@ -147,6 +175,23 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
     }
     if (!/^\d{4}$/.test(lastFour)) {
       fail({ lastFour: 'Enter the last 4 digits of the card.' })
+      return
+    }
+    if (editingCard) {
+      // Edit mode is backend-only, mirroring AddAccountForm and Goals.tsx.
+      // The backend's PATCH /accounts/:id only accepts name/institution/
+      // lastFour (UpdateAccountInput) — network, limit, due date, and minimum
+      // payment aren't editable once a card exists.
+      if (!asyncFinance) return
+      try {
+        setSubmitting(true)
+        await asyncFinance.updateCreditCard(editingCard.id, { name: name.trim(), lastFour })
+        onClose()
+      } catch (err) {
+        fail({ name: err instanceof Error ? err.message : 'Could not update card.' })
+      } finally {
+        setSubmitting(false)
+      }
       return
     }
     if (!limit.trim()) {
@@ -162,11 +207,6 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
       fail({ limit: 'Enter a credit limit greater than zero.' })
       return
     }
-    const balanceResult = balance.trim() ? parseMoneyInput(balance) : { ok: true as const, value: 0 }
-    if (!balanceResult.ok) {
-      fail({ balance: balanceResult.error })
-      return
-    }
     if (!dueDate) {
       fail({ dueDate: 'Enter a payment due date.' })
       return
@@ -174,6 +214,11 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
     const minResult = minPayment.trim() ? parseMoneyInput(minPayment) : { ok: true as const, value: 0 }
     if (!minResult.ok) {
       fail({ minPayment: minResult.error })
+      return
+    }
+    const balanceResult = balance.trim() ? parseMoneyInput(balance) : { ok: true as const, value: 0 }
+    if (!balanceResult.ok) {
+      fail({ balance: balanceResult.error })
       return
     }
     try {
@@ -236,84 +281,94 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
           </p>
         )}
       </label>
-      <label className="new-category-field">
-        <span className="tx-label">Network</span>
-        <select className="tx-input" value={network} {...field('network', (e) => setNetwork(e.target.value as typeof network))}>
-          <option value="visa">Visa</option>
-          <option value="mastercard">Mastercard</option>
-        </select>
-      </label>
-      <label className="new-category-field">
-        <span className="tx-label">Credit limit</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          className="tx-input"
-          value={limit}
-          placeholder="0.00"
-          {...field('limit', (e) => setLimit(e.target.value))}
-        />
-        {errors.limit && (
-          <p className="tx-error" role="alert" id={errorId('limit')}>
-            {errors.limit}
+      {!editingCard && (
+        <>
+          <label className="new-category-field">
+            <span className="tx-label">Network</span>
+            <select className="tx-input" value={network} {...field('network', (e) => setNetwork(e.target.value as typeof network))}>
+              <option value="visa">Visa</option>
+              <option value="mastercard">Mastercard</option>
+            </select>
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Credit limit</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              className="tx-input"
+              value={limit}
+              placeholder="0.00"
+              {...field('limit', (e) => setLimit(e.target.value))}
+            />
+            {errors.limit && (
+              <p className="tx-error" role="alert" id={errorId('limit')}>
+                {errors.limit}
+              </p>
+            )}
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Current balance (optional)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              className="tx-input"
+              value={balance}
+              placeholder="0.00"
+              {...field('balance', (e) => setBalance(e.target.value))}
+            />
+            {errors.balance && (
+              <p className="tx-error" role="alert" id={errorId('balance')}>
+                {errors.balance}
+              </p>
+            )}
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Payment due date</span>
+            {/* FINDING-009: a due date already in the past can never fall inside
+                the 30-day commitment horizon, so the card would silently never
+                count. The domain rejects it; `min` stops it being offered. */}
+            <input
+              type="date"
+              className="tx-input"
+              min={finance.todayIso}
+              value={dueDate}
+              {...field('dueDate', (e) => setDueDate(e.target.value))}
+            />
+            {errors.dueDate && (
+              <p className="tx-error" role="alert" id={errorId('dueDate')}>
+                {errors.dueDate}
+              </p>
+            )}
+          </label>
+          <label className="new-category-field">
+            {/* Blank means zero, so it is labeled optional like its sibling. */}
+            <span className="tx-label">Minimum payment (optional)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              className="tx-input"
+              value={minPayment}
+              placeholder="0.00"
+              {...field('minPayment', (e) => setMinPayment(e.target.value))}
+            />
+            {errors.minPayment && (
+              <p className="tx-error" role="alert" id={errorId('minPayment')}>
+                {errors.minPayment}
+              </p>
+            )}
+          </label>
+          <p className="form-help">
+            The due date and minimum payment are what let this card appear in your money position’s upcoming commitments — minimums due
+            within the next 30 days are counted.
           </p>
-        )}
-      </label>
-      <label className="new-category-field">
-        <span className="tx-label">Current balance (optional)</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          className="tx-input"
-          value={balance}
-          placeholder="0.00"
-          {...field('balance', (e) => setBalance(e.target.value))}
-        />
-        {errors.balance && (
-          <p className="tx-error" role="alert" id={errorId('balance')}>
-            {errors.balance}
-          </p>
-        )}
-      </label>
-      <label className="new-category-field">
-        <span className="tx-label">Payment due date</span>
-        {/* FINDING-009: a due date already in the past can never fall inside
-            the 30-day commitment horizon, so the card would silently never
-            count. The domain rejects it; `min` stops it being offered. */}
-        <input type="date" className="tx-input" min={finance.todayIso} value={dueDate} {...field('dueDate', (e) => setDueDate(e.target.value))} />
-        {errors.dueDate && (
-          <p className="tx-error" role="alert" id={errorId('dueDate')}>
-            {errors.dueDate}
-          </p>
-        )}
-      </label>
-      <label className="new-category-field">
-        {/* Blank means zero, so it is labeled optional like its sibling. */}
-        <span className="tx-label">Minimum payment (optional)</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          className="tx-input"
-          value={minPayment}
-          placeholder="0.00"
-          {...field('minPayment', (e) => setMinPayment(e.target.value))}
-        />
-        {errors.minPayment && (
-          <p className="tx-error" role="alert" id={errorId('minPayment')}>
-            {errors.minPayment}
-          </p>
-        )}
-      </label>
-      <p className="form-help">
-        The due date and minimum payment are what let this card appear in your money position’s upcoming commitments — minimums due within
-        the next 30 days are counted.
-      </p>
+        </>
+      )}
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           Cancel
         </button>
         <button type="submit" className="btn btn--primary" disabled={submitting}>
-          {submitting ? 'Saving…' : 'Add card'}
+          {submitting ? 'Saving…' : editingCard ? 'Save changes' : 'Add card'}
         </button>
       </div>
     </form>
@@ -322,9 +377,12 @@ function AddCardForm({ onClose }: { onClose: () => void }) {
 
 export function Accounts() {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const { accounts, creditCards } = finance.state
   const [addingAccount, setAddingAccount] = useState<'bank' | 'wallet' | null>(null)
   const [addingCard, setAddingCard] = useState(false)
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [editingCardId, setEditingCardId] = useState<string | null>(null)
   const bankFormId = useId()
   const walletFormId = useId()
 
@@ -332,6 +390,27 @@ export function Accounts() {
   const wallets = accounts.filter((a) => a.type === 'ewallet' || a.type === 'cash')
   const bankTotal = banks.reduce((s, a) => s + a.balance, 0)
   const walletTotal = wallets.reduce((s, a) => s + a.balance, 0)
+
+  // Edit/archive are backend-only (see AddAccountForm/AddCardForm) — mirrors
+  // the async-mode-only gate established by Goals.tsx.
+  function handleEditAccount(id: string) {
+    setAddingAccount(null)
+    setEditingAccountId((current) => (current === id ? null : id))
+  }
+  function handleEditCard(id: string) {
+    setAddingCard(false)
+    setEditingCardId((current) => (current === id ? null : id))
+  }
+  async function handleArchiveAccount(id: string, name: string) {
+    if (!asyncFinance) return
+    if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
+    await asyncFinance.archiveAccount(id)
+  }
+  async function handleArchiveCard(id: string, name: string) {
+    if (!asyncFinance) return
+    if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
+    await asyncFinance.archiveCreditCard(id)
+  }
 
   return (
     <div>
@@ -389,26 +468,39 @@ export function Accounts() {
               </div>
             )}
             {banks.map((a) => (
-              <div className="account-row" key={a.id}>
-                <div>
-                  <div className="acct-name">
-                    {a.name}
-                    {a.lastFour ? ` ••${a.lastFour}` : ''}
+              <div key={a.id}>
+                <div className="account-row">
+                  <div>
+                    <div className="acct-name">
+                      {a.name}
+                      {a.lastFour ? ` ••${a.lastFour}` : ''}
+                    </div>
+                    <div className="acct-meta">
+                      {a.institution ? `${a.institution} · ` : ''}
+                      {a.syncStatus}
+                    </div>
                   </div>
-                  <div className="acct-meta">
-                    {a.institution ? `${a.institution} · ` : ''}
-                    {a.syncStatus}
+                  <div className="acct-amt">
+                    <div className="num">{formatMoney(a.balance)}</div>
+                    {typeof a.monthlyChangePct === 'number' && (
+                      <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                        {a.monthlyChangePct >= 0 ? '+' : ''}
+                        {a.monthlyChangePct}%
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="acct-amt">
-                  <div className="num">{formatMoney(a.balance)}</div>
-                  {typeof a.monthlyChangePct === 'number' && (
-                    <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                      {a.monthlyChangePct >= 0 ? '+' : ''}
-                      {a.monthlyChangePct}%
+                  {asyncFinance && (
+                    <div className="rec-row-actions">
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleArchiveAccount(a.id, a.name)}>
+                        Archive
+                      </button>
                     </div>
                   )}
                 </div>
+                {editingAccountId === a.id && <AddAccountForm section="bank" editingId={a.id} onClose={() => setEditingAccountId(null)} />}
               </div>
             ))}
           </Card>
@@ -432,20 +524,33 @@ export function Accounts() {
               </div>
             )}
             {wallets.map((a) => (
-              <div className="account-row" key={a.id}>
-                <div>
-                  <div className="acct-name">{a.name}</div>
-                  <div className="acct-meta">{a.syncStatus}</div>
-                </div>
-                <div className="acct-amt">
-                  <div className="num">{formatMoney(a.balance)}</div>
-                  {typeof a.monthlyChangePct === 'number' && (
-                    <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                      {a.monthlyChangePct >= 0 ? '+' : ''}
-                      {a.monthlyChangePct}%
+              <div key={a.id}>
+                <div className="account-row">
+                  <div>
+                    <div className="acct-name">{a.name}</div>
+                    <div className="acct-meta">{a.syncStatus}</div>
+                  </div>
+                  <div className="acct-amt">
+                    <div className="num">{formatMoney(a.balance)}</div>
+                    {typeof a.monthlyChangePct === 'number' && (
+                      <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                        {a.monthlyChangePct >= 0 ? '+' : ''}
+                        {a.monthlyChangePct}%
+                      </div>
+                    )}
+                  </div>
+                  {asyncFinance && (
+                    <div className="rec-row-actions">
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleArchiveAccount(a.id, a.name)}>
+                        Archive
+                      </button>
                     </div>
                   )}
                 </div>
+                {editingAccountId === a.id && <AddAccountForm section="wallet" editingId={a.id} onClose={() => setEditingAccountId(null)} />}
               </div>
             ))}
           </Card>
@@ -459,21 +564,34 @@ export function Accounts() {
             </div>
             {addingCard && <AddCardForm onClose={() => setAddingCard(false)} />}
             {creditCards.map((c) => (
-              <div className="account-row" key={c.id}>
-                <div>
-                  <div className="acct-name">
-                    {c.name} ••{c.lastFour}
+              <div key={c.id}>
+                <div className="account-row">
+                  <div>
+                    <div className="acct-name">
+                      {c.name} ••{c.lastFour}
+                    </div>
+                    <div className="acct-meta">
+                      Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
+                    </div>
                   </div>
-                  <div className="acct-meta">
-                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
+                  <div className="acct-amt">
+                    <div className="num" style={{ color: 'var(--amber)' }}>
+                      {formatMoney(c.balance)}
+                    </div>
+                    <div className="acct-meta">of {formatMoney(c.limit, { withCents: false })}</div>
                   </div>
+                  {asyncFinance && (
+                    <div className="rec-row-actions">
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditCard(c.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleArchiveCard(c.id, c.name)}>
+                        Archive
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="acct-amt">
-                  <div className="num" style={{ color: 'var(--amber)' }}>
-                    {formatMoney(c.balance)}
-                  </div>
-                  <div className="acct-meta">of {formatMoney(c.limit, { withCents: false })}</div>
-                </div>
+                {editingCardId === c.id && <AddCardForm editingId={c.id} onClose={() => setEditingCardId(null)} />}
               </div>
             ))}
           </Card>

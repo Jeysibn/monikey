@@ -26,7 +26,7 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
   const asyncFinance = useAsyncFinanceOptional()
   const cashAccounts = finance.state.accounts.filter((a) => a.classification === 'asset')
   const [amount, setAmount] = useState('')
-  const [sourceAccountId, setSourceAccountId] = useState(cashAccounts[0]?.id ?? '')
+  const [sourceAccountId, setSourceAccountId] = useState(cashAccounts[0]?.id || '')
   const { errors, field, errorId, fail } = useFieldErrors<FundsField>(FUNDS_FIELDS)
   const [submitting, setSubmitting] = useState(false)
 
@@ -110,7 +110,7 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
         )}
       </label>
       <p className="form-help">
-        Up to {formatMoney(maxFundable)} — the smaller of this account’s balance and what the goal still needs. The money moves out of the
+        Up to {formatMoney(maxFundable)} — the smaller of this account's balance and what the goal still needs. The money moves out of the
         selected account.
       </p>
       <div className="add-funds-actions">
@@ -128,13 +128,13 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
 const GOAL_FIELDS = ['name', 'targetAmount', 'targetDate', 'monthlyContribution'] as const
 type GoalField = (typeof GOAL_FIELDS)[number]
 
-function CreateGoalForm({ onClose }: { onClose: () => void }) {
+function CreateGoalForm({ onClose, editingGoal }: { onClose: () => void; editingGoal?: { id: string; name: string; targetAmount: number; targetDate: string; monthlyContribution?: number } }) {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
-  const [name, setName] = useState('')
-  const [targetAmount, setTargetAmount] = useState('')
-  const [targetDate, setTargetDate] = useState('')
-  const [monthlyContribution, setMonthlyContribution] = useState('')
+  const [name, setName] = useState(editingGoal?.name || '')
+  const [targetAmount, setTargetAmount] = useState(editingGoal?.targetAmount ? String(editingGoal.targetAmount) : '')
+  const [targetDate, setTargetDate] = useState(editingGoal?.targetDate || '')
+  const [monthlyContribution, setMonthlyContribution] = useState(editingGoal?.monthlyContribution ? String(editingGoal.monthlyContribution) : '')
   const { errors, field, errorId, fail } = useFieldErrors<GoalField>(GOAL_FIELDS)
   const [submitting, setSubmitting] = useState(false)
 
@@ -168,7 +168,7 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
     // TR-001: "in the past" is measured against the one application clock,
     // the same one the repository validates against.
     if (isIsoDateBefore(targetDate, finance.todayIso)) {
-      fail({ targetDate: 'Target date can’t be in the past.' })
+      fail({ targetDate: 'Target date can\'t be in the past.' })
       return
     }
     let monthly: number | undefined
@@ -183,15 +183,20 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
     try {
       setSubmitting(true)
       const input = { name: name.trim(), targetAmount: targetResult.value, targetDate, monthlyContribution: monthly }
-      if (asyncFinance) {
+      if (editingGoal && asyncFinance) {
+        await asyncFinance.updateGoal(editingGoal.id, input)
+      } else if (asyncFinance) {
         await asyncFinance.createGoal(input)
+      } else if (editingGoal) {
+        // Sync path - not implemented for edit
+        throw new Error('Edit not supported in sync mode')
       } else {
         finance.createGoal(input)
       }
       onClose()
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as GoalField) : 'name'
-      fail({ [at]: err instanceof Error ? err.message : 'Could not create goal.' })
+      fail({ [at]: err instanceof Error ? err.message : editingGoal ? 'Could not update goal.' : 'Could not create goal.' })
     } finally {
       setSubmitting(false)
     }
@@ -272,7 +277,13 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
           Cancel
         </button>
         <button type="submit" className="btn btn--primary" disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create goal'}
+          {editingGoal
+            ? submitting
+              ? 'Updating…'
+              : 'Update goal'
+            : submitting
+              ? 'Creating…'
+              : 'Create goal'}
         </button>
       </div>
     </form>
@@ -281,8 +292,24 @@ function CreateGoalForm({ onClose }: { onClose: () => void }) {
 
 export function Goals() {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const [addFundsFor, setAddFundsFor] = useState<string | null>(null)
   const [creatingGoal, setCreatingGoal] = useState(false)
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null)
+
+  const handleDeleteGoal = async (goalId: string) => {
+    if (!window.confirm('Are you sure you want to delete this goal? This action cannot be undone.')) return
+    if (!asyncFinance) return
+    try {
+      setDeletingGoalId(goalId)
+      await asyncFinance.deleteGoal(goalId)
+    } catch (err) {
+      console.error('Failed to delete goal:', err)
+    } finally {
+      setDeletingGoalId(null)
+    }
+  }
 
   return (
     <div>
@@ -321,41 +348,79 @@ export function Goals() {
           const pct = finance.goalProgressPct(g)
           const rawPct = finance.goalRawProgressPct(g)
           const status = STATUS_LABEL[g.status]
+          const isEditingThisGoal = editingGoalId === g.id
           return (
             <Card className="goal-card" key={g.id}>
-              <div className="goal-top">
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
-                  <div className="goal-meta">Target · {formatGoalDate(g.targetDate)}</div>
-                </div>
-              </div>
-              <div className="goal-nums">
-                <span className="num" style={{ fontSize: 16, fontWeight: 700 }}>
-                  {formatMoney(g.currentAmount, { withCents: false })}
-                </span>
-                <span className="faint">of {formatMoney(g.targetAmount, { withCents: false })}</span>
-              </div>
-              <ProgressBar
-                pct={pct}
-                color={status.tone === 'warn' ? 'var(--amber)' : 'var(--cyan)'}
-                label={`${g.name} goal progress`}
-                valueText={`${rawPct}%`}
-              />
-              <div className={`goal-status goal-status--${status.tone}`}>
-                {rawPct}% · {status.label}
-              </div>
-              {g.requiredContribution && (
-                <div className="goal-required">Need ~{formatMoney(g.requiredContribution, { withCents: false })}/mo to reach this goal on time</div>
+              {!isEditingThisGoal && (
+                <>
+                  <div className="goal-top">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
+                      <div className="goal-meta">Target · {formatGoalDate(g.targetDate)}</div>
+                    </div>
+                    {asyncFinance && (
+                      <div className="goal-actions" style={{ display: 'flex', gap: '0.25rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--compact"
+                          onClick={() => setEditingGoalId(g.id)}
+                          title="Edit goal"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--compact"
+                          onClick={() => void handleDeleteGoal(g.id)}
+                          disabled={deletingGoalId === g.id}
+                          title="Delete goal"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="goal-nums">
+                    <span className="num" style={{ fontSize: 16, fontWeight: 700 }}>
+                      {formatMoney(g.currentAmount, { withCents: false })}
+                    </span>
+                    <span className="faint">of {formatMoney(g.targetAmount, { withCents: false })}</span>
+                  </div>
+                  <ProgressBar
+                    pct={pct}
+                    color={status.tone === 'warn' ? 'var(--amber)' : 'var(--cyan)'}
+                    label={`${g.name} goal progress`}
+                    valueText={`${rawPct}%`}
+                  />
+                  <div className={`goal-status goal-status--${status.tone}`}>
+                    {rawPct}% · {status.label}
+                  </div>
+                  {g.requiredContribution && (
+                    <div className="goal-required">Need ~{formatMoney(g.requiredContribution, { withCents: false })}/mo to reach this goal on time</div>
+                  )}
+                  <div className="goal-foot">
+                    <span className="goal-meta">Monthly plan {formatMoney(g.monthlyContribution || 0, { withCents: false })}/mo</span>
+                    {addFundsFor === g.id ? null : (
+                      <button type="button" className="pill" onClick={() => setAddFundsFor(g.id)}>
+                        + Add funds
+                      </button>
+                    )}
+                  </div>
+                  {addFundsFor === g.id && <AddFundsForm goalId={g.id} onClose={() => setAddFundsFor(null)} />}
+                </>
               )}
-              <div className="goal-foot">
-                <span className="goal-meta">Monthly plan {formatMoney(g.monthlyContribution ?? 0, { withCents: false })}/mo</span>
-                {addFundsFor === g.id ? null : (
-                  <button type="button" className="pill" onClick={() => setAddFundsFor(g.id)}>
-                    + Add funds
-                  </button>
-                )}
-              </div>
-              {addFundsFor === g.id && <AddFundsForm goalId={g.id} onClose={() => setAddFundsFor(null)} />}
+              {isEditingThisGoal && (
+                <CreateGoalForm
+                  onClose={() => setEditingGoalId(null)}
+                  editingGoal={{
+                    id: g.id,
+                    name: g.name,
+                    targetAmount: g.targetAmount,
+                    targetDate: g.targetDate,
+                    monthlyContribution: g.monthlyContribution,
+                  }}
+                />
+              )}
             </Card>
           )
         })}
@@ -391,7 +456,7 @@ export function Goals() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
               <div className="goal-meta">
-                Reached {formatGoalDate(g.completedDate ?? g.targetDate)} · {finance.goalRawProgressPct(g)}% of{' '}
+                Reached {formatGoalDate(g.completedDate || g.targetDate)} · {finance.goalRawProgressPct(g)}% of{' '}
                 {formatMoney(g.targetAmount, { withCents: false })}
               </div>
             </div>

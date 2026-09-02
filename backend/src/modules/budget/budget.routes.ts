@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
@@ -8,9 +9,11 @@ import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
 const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: z.number().int().nonnegative().default(0) })
 const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: z.number().int().nonnegative() })
 const categorySchema = z.object({ name: z.string().trim().min(1).max(100), color: z.string().trim().min(1).max(64), budgetable: z.boolean().default(true), allowsIncome: z.boolean().default(false), allowsExpense: z.boolean().default(true) })
+const updateCategorySchema = z.object({ name: z.string().trim().min(1).max(100).optional(), color: z.string().trim().min(1).max(64).optional() })
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const budgetIdParamSchema = z.object({ id: z.string().uuid('Invalid budget ID format') })
+const categoryIdParamSchema = z.object({ id: z.string().uuid('Invalid category ID format') })
 
 type PeriodWithAllocations = { id: string; userId: string; periodStart: Date; periodEnd: Date; incomePoolMinor: bigint; createdAt: Date; updatedAt: Date; allocations: Array<{ id: string; budgetPeriodId: string; categoryId: string; allocatedMinor: bigint; createdAt: Date; updatedAt: Date }> }
 
@@ -55,6 +58,46 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     const input = categorySchema.parse(request.body)
     const category = await prisma.category.create({ data: { userId: request.user!.id, ...input } })
     return reply.code(201).send(category)
+  })
+  app.patch<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = categoryIdParamSchema.parse(request.params)
+    const input = updateCategorySchema.parse(request.body)
+
+    // Verify the category exists and belongs to the user
+    const category = await prisma.category.findFirst({ where: { id, userId: request.user!.id } })
+    if (!category) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Category not found.', requestId: request.id } })
+
+    const updated = await prisma.category.update({ where: { id }, data: input })
+    return reply.send(updated)
+  })
+  app.delete<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = categoryIdParamSchema.parse(request.params)
+
+    // Verify the category exists and belongs to the user
+    const category = await prisma.category.findFirst({ where: { id, userId: request.user!.id } })
+    if (!category) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Category not found.', requestId: request.id } })
+
+    // Delete the category. Transactions with this category will have their categoryId set to NULL
+    // by the database's FOREIGN KEY ON DELETE SET NULL constraint if defined, or will remain
+    // referencing the deleted category if not (caller is responsible for handling this).
+    try {
+      await prisma.category.delete({ where: { id } })
+    } catch (error) {
+      // Category still has budget allocations referencing it (onDelete: Restrict) — surface
+      // as a client error instead of a raw 500 from an uncaught FK-constraint violation.
+      // Postgres reports this RESTRICT violation as SQLSTATE 23001, which the query engine
+      // surfaces to Prisma as an *Unknown* request error (no P-code), not P2003.
+      const isRestrictViolation =
+        (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') ||
+        (error instanceof Prisma.PrismaClientUnknownRequestError && error.message.includes('23001'))
+      if (isRestrictViolation) {
+        return reply.code(409).send({ error: { code: 'CATEGORY_IN_USE', message: 'Cannot delete a category that still has budget allocations. Remove its allocations first.', requestId: request.id } })
+      }
+      throw error
+    }
+    return reply.code(204).send()
   })
   app.get('/budgets', async (request) => {
     const periods = await prisma.budgetPeriod.findMany({ where: { userId: request.user!.id }, include: { allocations: true }, orderBy: { periodStart: 'desc' } })

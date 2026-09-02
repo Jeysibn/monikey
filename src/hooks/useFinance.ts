@@ -59,9 +59,13 @@ export function useFinance() {
     state,
     ...derived,
     addTransaction: ctx.addTransaction,
+    updateTransaction: ctx.updateTransaction,
+    reverseTransaction: ctx.reverseTransaction,
     addManualAccount: ctx.addManualAccount,
     addManualCreditCard: ctx.addManualCreditCard,
     addBudgetCategory: ctx.addBudgetCategory,
+    updateCategory: ctx.updateCategory,
+    deleteCategory: ctx.deleteCategory,
     createGoal: ctx.createGoal,
     addGoalFunds: ctx.addGoalFunds,
     // Pass-through helpers that need extra args, kept as selectors rather

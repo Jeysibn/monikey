@@ -61,6 +61,24 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
     [store, activeRepository],
   )
 
+  const updateTransaction = useCallback(
+    (transactionId: string, input: Partial<AddTransactionInput>) =>
+      store.run((s) => {
+        const { state: next, transaction } = activeRepository.updateTransaction(s, transactionId, input)
+        return { state: next, result: transaction }
+      }),
+    [store, activeRepository],
+  )
+
+  const reverseTransaction = useCallback(
+    (transactionId: string) =>
+      store.run((s) => {
+        const { state: next, reversedTransaction } = activeRepository.reverseTransaction(s, transactionId)
+        return { state: next, result: reversedTransaction }
+      }),
+    [store, activeRepository],
+  )
+
   const addManualAccount = useCallback(
     (input: AddManualAccountInput) =>
       store.run((s) => {
@@ -85,6 +103,21 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
         const { state: next, category } = activeRepository.addBudgetCategory(s, input)
         return { state: next, result: category }
       }),
+    [store, activeRepository],
+  )
+
+  const updateCategory = useCallback(
+    (categoryId: string, updates: { name?: string; allocated?: number }) =>
+      store.run((s) => {
+        const { state: next, category } = activeRepository.updateCategory(s, categoryId, updates)
+        return { state: next, result: category }
+      }),
+    [store, activeRepository],
+  )
+
+  const deleteCategory = useCallback(
+    (categoryId: string) =>
+      store.run((s) => ({ state: activeRepository.deleteCategory(s, categoryId), result: undefined })),
     [store, activeRepository],
   )
 
@@ -113,13 +146,30 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
       state,
       todayIso: clock.todayIso(),
       addTransaction,
+      updateTransaction,
+      reverseTransaction,
       addManualAccount,
       addManualCreditCard,
       addBudgetCategory,
+      updateCategory,
+      deleteCategory,
       createGoal,
       addGoalFunds,
     }),
-    [state, clock, addTransaction, addManualAccount, addManualCreditCard, addBudgetCategory, createGoal, addGoalFunds],
+    [
+      state,
+      clock,
+      addTransaction,
+      updateTransaction,
+      reverseTransaction,
+      addManualAccount,
+      addManualCreditCard,
+      addBudgetCategory,
+      updateCategory,
+      deleteCategory,
+      createGoal,
+      addGoalFunds,
+    ],
   )
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>

@@ -7,7 +7,27 @@ import { FinanceApiError } from '../services/apiFinanceGateway'
 import { BackendFinanceGate } from './BackendFinanceGate'
 
 const financeState = { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] }
-const gateway = (load: FinanceGateway['load']): FinanceGateway => ({ load, addTransaction: vi.fn(), addManualAccount: vi.fn(), addManualCreditCard: vi.fn(), createGoal: vi.fn(), addGoalFunds: vi.fn(), createBudgetPeriod: vi.fn(), setBudgetAllocation: vi.fn(), addBudgetCategory: vi.fn() })
+const gateway = (load: FinanceGateway['load']): FinanceGateway => ({
+  load,
+  addTransaction: vi.fn(),
+  updateTransaction: vi.fn(),
+  reverseTransaction: vi.fn(),
+  addManualAccount: vi.fn(),
+  addManualCreditCard: vi.fn(),
+  updateAccount: vi.fn(),
+  updateCreditCard: vi.fn(),
+  archiveAccount: vi.fn(),
+  archiveCreditCard: vi.fn(),
+  createGoal: vi.fn(),
+  addGoalFunds: vi.fn(),
+  updateGoal: vi.fn(),
+  deleteGoal: vi.fn(),
+  createBudgetPeriod: vi.fn(),
+  setBudgetAllocation: vi.fn(),
+  addBudgetCategory: vi.fn(),
+  updateCategory: vi.fn(),
+  deleteCategory: vi.fn(),
+})
 const wrapper = (value: FinanceGateway) => ({ children }: { children: ReactNode }) => <AsyncFinanceProvider gateway={value}><BackendFinanceGate>{children}</BackendFinanceGate></AsyncFinanceProvider>
 
 describe('BackendFinanceGate', () => {

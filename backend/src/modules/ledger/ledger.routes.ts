@@ -5,8 +5,8 @@ import { authGuard } from '../../common/auth/authGuard.js';
 import { originCheckPreHandler } from '../../common/auth/originCheck.js';
 import type { PrismaClient } from '@prisma/client';
 import { LedgerService } from './ledger.service.js';
-import { postTransactionSchema, reverseTransactionSchema } from './ledger.schemas.js';
-import type { PostTransactionInput, ReverseTransactionInput } from './ledger.schemas.js';
+import { postTransactionSchema, reverseTransactionSchema, updateTransactionSchema } from './ledger.schemas.js';
+import type { PostTransactionInput, ReverseTransactionInput, UpdateTransactionInput } from './ledger.schemas.js';
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const transactionIdParamSchema = z.object({ id: z.string().uuid('Invalid transaction ID format') });
@@ -89,6 +89,34 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
       const { id } = transactionIdParamSchema.parse(req.params);
       const result = await service.reverseTransaction(req.user!.id, id, reverseTransactionSchema.parse(req.body));
       return reply.code(201).send(result);
+    }
+  );
+
+  // PATCH /transactions/:id
+  f.patch<{ Params: { id: string }; Body: UpdateTransactionInput }>(
+    '/transactions/:id',
+    {
+      preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+    },
+    async (req, reply) => {
+      // D8: Validate UUID path parameter
+      const { id } = transactionIdParamSchema.parse(req.params);
+      const result = await service.updateTransaction(req.user!.id, id, updateTransactionSchema.parse(req.body));
+      return reply.code(200).send(result);
+    }
+  );
+
+  // DELETE /transactions/:id (uses reversal pattern to maintain audit trail)
+  f.delete<{ Params: { id: string } }>(
+    '/transactions/:id',
+    {
+      preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+    },
+    async (req, reply) => {
+      // D8: Validate UUID path parameter
+      const { id } = transactionIdParamSchema.parse(req.params);
+      const result = await service.reverseTransaction(req.user!.id, id, {});
+      return reply.code(200).send(result);
     }
   );
 }

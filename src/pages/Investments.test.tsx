@@ -23,7 +23,7 @@ describe('Investments page', () => {
     expect(screen.getByRole('heading', { name: 'Investments' })).toBeDefined()
     expect(screen.getByText('Portfolio Value')).toBeDefined()
     expect(screen.getByText('Total Gain/Loss')).toBeDefined()
-    expect(screen.getByText('Today’s Change')).toBeDefined()
+    expect(screen.getByText('Today\'s Change')).toBeDefined()
     expect(screen.getByText('Asset Allocation')).toBeDefined()
     expect(screen.getByText('Holdings')).toBeDefined()
     expect(screen.getByText('Investment Transactions')).toBeDefined()

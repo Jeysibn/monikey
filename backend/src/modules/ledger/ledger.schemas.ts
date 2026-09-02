@@ -28,8 +28,20 @@ export const reverseTransactionSchema = z.object({
   idempotencyKey: z.string().max(128).nullable().optional(),
 });
 
+export const updateTransactionSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  occurredTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  amountMinor: z.number().int().positive().optional(),
+  feeMinor: z.number().int().nonnegative().optional(),
+  status: transactionStatusSchema.optional(),
+  note: z.string().nullable().optional(),
+});
+
 export type PostTransactionInput = z.infer<typeof postTransactionSchema>;
 export type ReverseTransactionInput = z.infer<typeof reverseTransactionSchema>;
+export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 
 export interface TransactionView {
   id: string;
@@ -67,6 +79,16 @@ export interface PostTransactionResult {
 export interface ReverseTransactionResult {
   reversedTransaction: TransactionView;
   compensatingTransaction: TransactionView;
+  balanceEffects: Array<{
+    accountId: string;
+    role: string;
+    deltaMinor: number;
+    balanceAfterMinor: number;
+  }>;
+}
+
+export interface UpdateTransactionResult {
+  transaction: TransactionView;
   balanceEffects: Array<{
     accountId: string;
     role: string;

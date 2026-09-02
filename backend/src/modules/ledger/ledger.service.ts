@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { LedgerRepository } from './ledger.repository.js';
-import type { PostTransactionInput, ReverseTransactionInput, TransactionView, PostTransactionResult, ReverseTransactionResult, TransactionQuery, Page } from './ledger.schemas.js';
+import type { PostTransactionInput, ReverseTransactionInput, UpdateTransactionInput, TransactionView, PostTransactionResult, ReverseTransactionResult, UpdateTransactionResult, TransactionQuery, Page } from './ledger.schemas.js';
 
 export class LedgerService {
   constructor(private prisma: PrismaClient, private repo: LedgerRepository) {}
@@ -22,6 +22,12 @@ export class LedgerService {
   async reverseTransaction(userId: string, transactionId: string, input: ReverseTransactionInput): Promise<ReverseTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
       return this.repo.reverseTransaction(tx as any, userId, transactionId, input.idempotencyKey ?? undefined);
+    });
+  }
+
+  async updateTransaction(userId: string, transactionId: string, input: UpdateTransactionInput): Promise<UpdateTransactionResult> {
+    return this.prisma.$transaction(async (tx) => {
+      return this.repo.updateTransaction(tx as any, userId, transactionId, input);
     });
   }
 

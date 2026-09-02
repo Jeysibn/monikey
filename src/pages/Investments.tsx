@@ -14,8 +14,10 @@ import './Investments.css'
 
 const TX_TYPE_LABEL: Record<InvestmentTransactionType, string> = { buy: 'Buy', sell: 'Sell' }
 
-const TX_FIELDS = ['ticker', 'units', 'price', 'date'] as const
+const TX_FIELDS = ['ticker', 'name', 'sector', 'assetClass', 'units', 'price', 'date'] as const
 type TxField = (typeof TX_FIELDS)[number]
+
+const ASSET_CLASS_OPTIONS = ['equity', 'etf', 'crypto', 'reit', 'bond'] as const
 
 function LogTransactionForm({
   tickers,
@@ -25,7 +27,7 @@ function LogTransactionForm({
 }: {
   tickers: string[]
   todayIso: string
-  onLog: (input: { ticker: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void | Promise<void>
+  onLog: (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void | Promise<void>
   onClose: () => void
 }) {
   const [ticker, setTicker] = useState(tickers[0] ?? '')
@@ -34,14 +36,32 @@ function LogTransactionForm({
   const [price, setPrice] = useState('')
   const [date, setDate] = useState(todayIso)
   const [note, setNote] = useState('')
+  const [name, setName] = useState('')
+  const [sector, setSector] = useState('Other')
+  const [assetClass, setAssetClass] = useState<'equity' | 'etf' | 'crypto' | 'reit' | 'bond'>('equity')
   const { errors, field, errorId, fail } = useFieldErrors<TxField>(TX_FIELDS)
   const [submitting, setSubmitting] = useState(false)
 
+  // Check if the entered ticker is new (not in the existing tickers list)
+  const isNewTicker = ticker.trim() !== '' && !tickers.includes(ticker.trim())
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!ticker) {
-      fail({ ticker: 'Select a ticker.' })
+    const trimmedTicker = ticker.trim()
+    if (!trimmedTicker) {
+      fail({ ticker: 'Enter a ticker.' })
       return
+    }
+    // For new tickers, validate the additional required fields
+    if (isNewTicker) {
+      if (!name.trim()) {
+        fail({ name: 'Enter the instrument name.' })
+        return
+      }
+      if (!sector.trim()) {
+        fail({ sector: 'Select a sector.' })
+        return
+      }
     }
     if (!units.trim()) {
       fail({ units: 'Enter the number of units.' })
@@ -78,12 +98,18 @@ function LogTransactionForm({
       return
     }
     if (isIsoDateBefore(todayIso, date)) {
-      fail({ date: 'Date can’t be in the future.' })
+      fail({ date: 'Date cannot be in the future.' })
       return
     }
     try {
       setSubmitting(true)
-      const pending = onLog({ ticker, type, units: unitsResult.value, price: priceResult.value, date, note: note.trim() || undefined })
+      const input: Parameters<typeof onLog>[0] = { ticker: trimmedTicker, type, units: unitsResult.value, price: priceResult.value, date, note: note.trim() || undefined }
+      if (isNewTicker) {
+        input.name = name.trim()
+        input.sector = sector.trim()
+        input.assetClass = assetClass
+      }
+      const pending = onLog(input)
       if (pending) await pending
       onClose()
     } catch (err) {
@@ -96,13 +122,20 @@ function LogTransactionForm({
       <div className="log-tx-row">
         <label className="new-category-field">
           <span className="tx-label">Ticker</span>
-          <select className="tx-input" value={ticker} aria-label="Ticker" {...field('ticker', (e) => setTicker(e.target.value))}>
+          <input
+            type="text"
+            className="tx-input"
+            placeholder="e.g. AAPL"
+            value={ticker}
+            list="ticker-list"
+            autoFocus
+            {...field('ticker', (e) => setTicker(e.target.value))}
+          />
+          <datalist id="ticker-list">
             {tickers.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
+              <option key={t} value={t} />
             ))}
-          </select>
+          </datalist>
           {errors.ticker && (
             <p className="tx-error" role="alert" id={errorId('ticker')}>
               {errors.ticker}
@@ -126,6 +159,60 @@ function LogTransactionForm({
           </div>
         </div>
       </div>
+      {isNewTicker && (
+        <div className="log-tx-row">
+          <label className="new-category-field">
+            <span className="tx-label">Name</span>
+            <input
+              type="text"
+              className="tx-input"
+              placeholder="e.g. Apple Inc."
+              value={name}
+              {...field('name', (e) => setName(e.target.value))}
+            />
+            {errors.name && (
+              <p className="tx-error" role="alert" id={errorId('name')}>
+                {errors.name}
+              </p>
+            )}
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Sector</span>
+            <input
+              type="text"
+              className="tx-input"
+              placeholder="e.g. Technology"
+              value={sector}
+              {...field('sector', (e) => setSector(e.target.value))}
+            />
+            {errors.sector && (
+              <p className="tx-error" role="alert" id={errorId('sector')}>
+                {errors.sector}
+              </p>
+            )}
+          </label>
+        </div>
+      )}
+      {isNewTicker && (
+        <div className="log-tx-row">
+          <label className="new-category-field">
+            <span className="tx-label">Asset Class</span>
+            <select className="tx-input" value={assetClass} {...field('assetClass', (e) => setAssetClass(e.target.value as typeof assetClass))}>
+              {ASSET_CLASS_OPTIONS.map((ac) => (
+                <option key={ac} value={ac}>
+                  {ac.charAt(0).toUpperCase() + ac.slice(1)}
+                </option>
+              ))}
+            </select>
+            {errors.assetClass && (
+              <p className="tx-error" role="alert" id={errorId('assetClass')}>
+                {errors.assetClass}
+              </p>
+            )}
+          </label>
+          <div />
+        </div>
+      )}
       <div className="log-tx-row">
         <label className="new-category-field">
           <span className="tx-label">Units</span>
@@ -175,7 +262,7 @@ function LogTransactionForm({
           <input type="text" className="tx-input" placeholder="e.g. Rebalance" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
-      <p className="form-help">This logs the trade to your activity feed only — it does not change the sample holding units or price shown above.</p>
+      <p className="form-help">This logs the trade to your activity feed only - it does not change the sample holding units or price shown above.</p>
       <div className="new-category-actions">
         <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
           Cancel
@@ -193,10 +280,11 @@ export function Investments() {
   const inv = useInvestments()
   const asyncFinance = useAsyncFinanceOptional()
   const [logOpen, setLogOpen] = useState(false)
-  const handleLog = (input: { ticker: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
+  const handleLog = (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.logTransaction(input); return }
     const holding = inv.holdings.find((item) => item.ticker === input.ticker)
-    return asyncFinance.addInvestmentTrade({ ...input, name: holding?.name ?? input.ticker, assetClass: holding?.assetClass ?? 'equity', sector: holding?.sector ?? 'Other' })
+    const assetClass = (input.assetClass ?? holding?.assetClass ?? 'equity') as 'equity' | 'etf' | 'crypto' | 'reit' | 'bond'
+    return asyncFinance.addInvestmentTrade({ ...input, name: input.name ?? holding?.name ?? input.ticker, assetClass, sector: input.sector ?? holding?.sector ?? 'Other' })
   }
 
   const perfLabels = inv.performanceHistory.map((_, i) => (i === inv.performanceHistory.length - 1 ? 'Today' : `T-${inv.performanceHistory.length - 1 - i}`))
@@ -222,7 +310,7 @@ export function Investments() {
           </div>
         </Card>
         <Card>
-          <div className="eyebrow">Today’s Change</div>
+          <div className="eyebrow">Today's Change</div>
           <div className={`num kpi-val ${inv.todaysChange >= 0 ? 'inv-pos' : 'inv-neg'}`}>{formatMoney(inv.todaysChange)}</div>
           <div className={inv.todaysChange >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
             {inv.todaysChange >= 0 ? '+' : ''}
@@ -445,7 +533,7 @@ export function Investments() {
         <CardTitle action={<span className="faint">Aggregate value, last {inv.performanceHistory.length} sessions</span>}>Performance History</CardTitle>
         <div className="inv-perf-line">
           {inv.performanceHistory.length === 0 ? (
-            <p className="faint">No performance history yet — add a position to start tracking it.</p>
+            <p className="faint">No performance history yet - add a position to start tracking it.</p>
           ) : (
             <Sparkline
               values={inv.performanceHistory}

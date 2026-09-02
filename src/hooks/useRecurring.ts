@@ -108,5 +108,13 @@ export function useRecurring() {
     return item
   }, [])
 
-  return { items, pauseItem, resumeItem, markAsPaid, addItem }
+  const editItem = useCallback((id: string, input: Partial<AddRecurringItemInput>) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...input } : item)))
+  }, [])
+
+  const deleteItem = useCallback((id: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== id))
+  }, [])
+
+  return { items, pauseItem, resumeItem, markAsPaid, addItem, editItem, deleteItem }
 }

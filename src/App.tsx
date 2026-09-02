@@ -12,15 +12,32 @@ import { Investments } from './pages/Investments'
 import { Recurring } from './pages/Recurring'
 import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
+import type { Transaction } from './domain/finance'
 
 export default function App() {
   const [addTxOpen, setAddTxOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+
+  const handleOpenAddTransaction = () => {
+    setEditingTransaction(null)
+    setAddTxOpen(true)
+  }
+
+  const handleEditTransaction = (tx: Transaction) => {
+    setEditingTransaction(tx)
+    setAddTxOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setEditingTransaction(null)
+    setAddTxOpen(false)
+  }
 
   return (
-    <AppShell onAddTransaction={() => setAddTxOpen(true)}>
+    <AppShell onAddTransaction={handleOpenAddTransaction}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/transactions" element={<Transactions onAddTransaction={() => setAddTxOpen(true)} />} />
+        <Route path="/transactions" element={<Transactions onAddTransaction={handleOpenAddTransaction} onEditTransaction={handleEditTransaction} />} />
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/budget" element={<Budget />} />
         <Route path="/goals" element={<Goals />} />
@@ -29,7 +46,7 @@ export default function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
-      <AddTransactionModal open={addTxOpen} onClose={() => setAddTxOpen(false)} />
+      <AddTransactionModal open={addTxOpen} onClose={handleCloseModal} editingTransaction={editingTransaction ?? undefined} />
       <Toast />
     </AppShell>
   )

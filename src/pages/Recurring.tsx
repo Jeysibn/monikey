@@ -75,17 +75,46 @@ function PlusIcon() {
   )
 }
 
+function EditIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 17.25V21h3.75L17.81 9.94M21 7L9.94 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function DeleteIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3m-7 0h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 const ITEM_FIELDS = ['merchant', 'amount', 'nextDueDate', 'accountId', 'categoryId'] as const
 type ItemField = (typeof ITEM_FIELDS)[number]
 
 function AddRecurringItemForm({
   todayIso,
   onAdd,
+  onEdit,
   onClose,
+  editingItem,
 }: {
   todayIso: string
   onAdd: (input: AddRecurringItemInput) => void | Promise<void>
+  onEdit?: (input: Partial<AddRecurringItemInput>) => void | Promise<void>
   onClose: () => void
+  editingItem?: {
+    id: string
+    merchant: string
+    amount: number
+    frequency: RecurringFrequency
+    nextDueDate: string
+    accountId: string
+    categoryId: string
+    autopay: boolean
+  }
 }) {
   const finance = useFinance()
   const linkedAccountOptions = [...finance.state.accounts, ...finance.state.creditCards].map((a) => ({
@@ -94,13 +123,13 @@ function AddRecurringItemForm({
   }))
   const budgetableCategories = finance.state.categories.filter((c) => c.transactionKinds.includes('expense'))
 
-  const [merchant, setMerchant] = useState('')
-  const [amount, setAmount] = useState('')
-  const [frequency, setFrequency] = useState<RecurringFrequency>('monthly')
-  const [nextDueDate, setNextDueDate] = useState('')
-  const [accountId, setAccountId] = useState(linkedAccountOptions[0]?.id ?? '')
-  const [categoryId, setCategoryId] = useState(budgetableCategories[0]?.id ?? '')
-  const [autopay, setAutopay] = useState(false)
+  const [merchant, setMerchant] = useState(editingItem?.merchant ?? '')
+  const [amount, setAmount] = useState(editingItem ? String(editingItem.amount) : '')
+  const [frequency, setFrequency] = useState<RecurringFrequency>(editingItem?.frequency ?? 'monthly')
+  const [nextDueDate, setNextDueDate] = useState(editingItem?.nextDueDate ?? '')
+  const [accountId, setAccountId] = useState(editingItem?.accountId ?? linkedAccountOptions[0]?.id ?? '')
+  const [categoryId, setCategoryId] = useState(editingItem?.categoryId ?? budgetableCategories[0]?.id ?? '')
+  const [autopay, setAutopay] = useState(editingItem?.autopay ?? false)
   const { errors, field, errorId, fail, clear } = useFieldErrors<ItemField>(ITEM_FIELDS)
   const [submitting, setSubmitting] = useState(false)
 
@@ -146,8 +175,13 @@ function AddRecurringItemForm({
     }
     try {
       setSubmitting(true)
-      const pending = onAdd({ merchant: trimmedMerchant, amount: amountResult.value, frequency, nextDueDate, accountId, categoryId, autopay })
-      if (pending) await pending
+      if (editingItem && onEdit) {
+        const pending = onEdit({ merchant: trimmedMerchant, amount: amountResult.value, frequency, nextDueDate, accountId, categoryId, autopay })
+        if (pending) await pending
+      } else {
+        const pending = onAdd({ merchant: trimmedMerchant, amount: amountResult.value, frequency, nextDueDate, accountId, categoryId, autopay })
+        if (pending) await pending
+      }
       setMerchant('')
       setAmount('')
       setFrequency('monthly')
@@ -156,7 +190,7 @@ function AddRecurringItemForm({
       clear()
       onClose()
     } catch (err) {
-      fail({ merchant: err instanceof Error ? err.message : 'Could not save recurring item.' })
+      fail({ merchant: err instanceof Error ? err.message : `Could not ${editingItem ? 'update' : 'save'} recurring item.` })
     } finally {
       setSubmitting(false)
     }
@@ -279,7 +313,7 @@ function AddRecurringItemForm({
           Cancel
         </button>
         <button type="submit" className="btn btn--primary" disabled={submitting}>
-          {submitting ? 'Saving…' : 'Add recurring item'}
+          {submitting ? (editingItem ? 'Updating…' : 'Saving…') : (editingItem ? 'Update recurring item' : 'Add recurring item')}
         </button>
       </div>
     </form>
@@ -292,14 +326,35 @@ export function Recurring() {
   const localRecurring = useRecurring()
   const items = asyncFinance ? asyncFinance.recurringItems : localRecurring.items
   const [formOpen, setFormOpen] = useState(false)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const todayIso = finance.todayIso
 
+  const editingItem = editingItemId ? items.find((item) => item.id === editingItemId) : undefined
+
   const handleAdd = (input: AddRecurringItemInput) => {
     setActionError(null)
+    setEditingItemId(null)
     if (asyncFinance) return asyncFinance.addRecurringItem(input).then(() => undefined)
     localRecurring.addItem(input)
+  }
+  const handleEdit = (input: Partial<AddRecurringItemInput>) => {
+    if (!editingItemId) return
+    setActionError(null)
+    if (asyncFinance) return asyncFinance.editRecurringItem(editingItemId, input).then(() => undefined)
+    localRecurring.editItem(editingItemId, input)
+  }
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this recurring item?')) return
+    setBusyId(id)
+    setActionError(null)
+    try {
+      if (asyncFinance) await asyncFinance.deleteRecurringItem(id)
+      else localRecurring.deleteItem(id)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete recurring item.')
+    } finally { setBusyId(null) }
   }
   const handleStatus = async (id: string, status: 'active' | 'paused') => {
     setBusyId(id)
@@ -377,7 +432,7 @@ export function Recurring() {
         {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
         {formOpen && (
-          <AddRecurringItemForm todayIso={todayIso} onAdd={handleAdd} onClose={() => setFormOpen(false)} />
+          <AddRecurringItemForm todayIso={todayIso} onAdd={handleAdd} onEdit={handleEdit} onClose={() => { setFormOpen(false); setEditingItemId(null) }} editingItem={editingItem} />
         )}
 
         {rows.length === 0 ? (
@@ -432,6 +487,22 @@ export function Recurring() {
                     onClick={() => void handlePaid(item.id)}
                   >
                     <CheckIcon /> Mark as paid
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--compact"
+                    disabled={busyId === item.id}
+                    onClick={() => { setEditingItemId(item.id); setFormOpen(true) }}
+                  >
+                    <EditIcon /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--compact"
+                    disabled={busyId === item.id}
+                    onClick={() => void handleDelete(item.id)}
+                  >
+                    <DeleteIcon /> Delete
                   </button>
                 </div>
               </li>

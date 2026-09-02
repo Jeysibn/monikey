@@ -31,6 +31,9 @@ import type {
   FinanceState,
   Goal,
   Transaction,
+  UpdateAccountInput,
+  UpdateCreditCardInput,
+  UpdateGoalInput,
 } from '../domain/finance'
 
 export interface FinanceRepository {
@@ -39,6 +42,8 @@ export interface FinanceRepository {
   addManualAccount(state: FinanceState, input: AddManualAccountInput): { state: FinanceState; account: Account }
   addManualCreditCard(state: FinanceState, input: AddManualCreditCardInput): { state: FinanceState; creditCard: CreditCard }
   addBudgetCategory(state: FinanceState, input: AddBudgetCategoryInput): { state: FinanceState; category: BudgetCategory }
+  updateCategory(state: FinanceState, categoryId: string, updates: { name?: string; allocated?: number }): { state: FinanceState; category: BudgetCategory }
+  deleteCategory(state: FinanceState, categoryId: string): FinanceState
   createGoal(state: FinanceState, input: CreateGoalInput): { state: FinanceState; goal: Goal }
   /**
    * "Funded savings" model (see `Goal` in `domain/finance.ts`): funding a
@@ -52,4 +57,12 @@ export interface FinanceRepository {
    * `maxFundableAmount(state, goalId, sourceAccountId)`.
    */
   addGoalFunds(state: FinanceState, goalId: string, sourceAccountId: string, amount: number): { state: FinanceState; goal: Goal }
+  updateGoal(state: FinanceState, goalId: string, input: UpdateGoalInput): { state: FinanceState; goal: Goal }
+  deleteGoal(state: FinanceState, goalId: string): FinanceState
+  updateAccount(state: FinanceState, accountId: string, input: UpdateAccountInput): { state: FinanceState; account: Account }
+  updateCreditCard(state: FinanceState, cardId: string, input: UpdateCreditCardInput): { state: FinanceState; card: CreditCard }
+  archiveAccount(state: FinanceState, accountId: string): FinanceState
+  archiveCreditCard(state: FinanceState, cardId: string): FinanceState
+  updateTransaction(state: FinanceState, transactionId: string, input: Partial<AddTransactionInput>): { state: FinanceState; transaction: Transaction }
+  reverseTransaction(state: FinanceState, transactionId: string): { state: FinanceState; reversedTransaction: Transaction }
 }

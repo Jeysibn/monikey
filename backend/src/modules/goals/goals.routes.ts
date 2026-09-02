@@ -1,29 +1,46 @@
-import type { FastifyInstance } from 'fastify'
-import type { PrismaClient } from '@prisma/client'
+import { FastifyInstance } from 'fastify'
+import { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
+import type { PrismaClient } from '@prisma/client'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
-import { LedgerService } from '../ledger/ledger.service.js'
-
-const createGoalSchema = z.object({ name: z.string().trim().min(1).max(100), targetMinor: z.number().int().positive(), targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), monthlyContributionMinor: z.number().int().positive().nullable().optional(), currencyCode: z.string().length(3).default('PHP') })
-const fundGoalSchema = z.object({ sourceAccountId: z.string().uuid(), amountMinor: z.number().int().positive(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), idempotencyKey: z.string().max(128).nullable().optional() })
+import type { LedgerService } from '../ledger/ledger.service.js'
+import type { GoalsService } from './goals.service.js'
+import { createGoalSchema, updateGoalSchema, fundGoalSchema } from './goals.schemas.js'
+import type { CreateGoalInput, UpdateGoalInput, FundGoalInput } from './goals.schemas.js'
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const goalIdParamSchema = z.object({ id: z.string().uuid('Invalid goal ID format') })
 
-export async function goalsRoutes(app: FastifyInstance, options: { prisma: PrismaClient; ledgerService: LedgerService; appOrigin: string }) {
-  const { prisma, ledgerService, appOrigin } = options
+export async function goalsRoutes(fastify: FastifyInstance, options: { service: GoalsService; ledgerService: LedgerService; prisma: PrismaClient; appOrigin: string }) {
+  const { service, ledgerService, prisma, appOrigin } = options
+  const f = fastify.withTypeProvider<ZodTypeProvider>()
   const requireAuth = authGuard({ prisma })
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: appOrigin })
-  app.addHook('preHandler', requireAuth)
+  f.addHook('preHandler', requireAuth)
 
-  app.post('/goals', { preHandler: requireOrigin }, async (request, reply) => {
+  f.post<{ Body: CreateGoalInput }>('/goals', { preHandler: requireOrigin }, async (request, reply) => {
     const input = createGoalSchema.parse(request.body)
-    const goal = await prisma.goal.create({ data: { userId: request.user!.id, name: input.name, targetMinor: BigInt(input.targetMinor), currencyCode: input.currencyCode, targetDate: new Date(`${input.targetDate}T00:00:00Z`), monthlyContributionMinor: input.monthlyContributionMinor == null ? null : BigInt(input.monthlyContributionMinor), status: 'just_started', active: true } })
-    return reply.code(201).send({ ...goal, targetMinor: Number(goal.targetMinor), currentMinor: Number(goal.currentMinor), monthlyContributionMinor: goal.monthlyContributionMinor == null ? null : Number(goal.monthlyContributionMinor) })
+    const goal = await service.createGoal(request.user!.id, input)
+    return reply.code(201).send({ ...goal, targetMinor: goal.targetMinor, currentMinor: goal.currentMinor, monthlyContributionMinor: goal.monthlyContributionMinor })
   })
 
-  app.post<{ Params: { id: string } }>('/goals/:id/fund', { preHandler: requireOrigin }, async (request, reply) => {
+  f.patch<{ Params: { id: string }; Body: UpdateGoalInput }>('/goals/:id', { preHandler: requireOrigin }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = goalIdParamSchema.parse(request.params)
+    const input = updateGoalSchema.parse(request.body)
+    const goal = await service.updateGoal(request.user!.id, id, input)
+    return reply.code(200).send({ ...goal, targetMinor: goal.targetMinor, currentMinor: goal.currentMinor, monthlyContributionMinor: goal.monthlyContributionMinor })
+  })
+
+  f.delete<{ Params: { id: string } }>('/goals/:id', { preHandler: requireOrigin }, async (request, reply) => {
+    // D8: Validate UUID path parameter
+    const { id } = goalIdParamSchema.parse(request.params)
+    await service.deleteGoal(request.user!.id, id)
+    return reply.code(204).send()
+  })
+
+  f.post<{ Params: { id: string }; Body: FundGoalInput }>('/goals/:id/fund', { preHandler: requireOrigin }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = goalIdParamSchema.parse(request.params)
     const input = fundGoalSchema.parse(request.body)

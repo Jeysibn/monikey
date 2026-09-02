@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { formatMoney } from '../utils/currency'
 import { formatDateLabel, formatTimeLabel } from '../utils/date'
-import type { TransactionType } from '../domain/finance'
+import type { TransactionType, Transaction } from '../domain/finance'
 import './Transactions.css'
 
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -13,11 +14,13 @@ const TYPE_LABEL: Record<TransactionType, string> = {
   transfer: 'Transfer',
 }
 
-export function Transactions({ onAddTransaction }: { onAddTransaction: () => void }) {
+export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTransaction: () => void; onEditTransaction?: (tx: Transaction) => void }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const { transactions } = finance.state
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>('all')
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
@@ -26,6 +29,31 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
       return true
     })
   }, [transactions, search, typeFilter, finance])
+
+  const handleEdit = (transaction: typeof transactions[0]) => {
+    if (onEditTransaction) {
+      onEditTransaction(transaction)
+    }
+  }
+
+  const handleDelete = async (transactionId: string) => {
+    if (!window.confirm('Are you sure you want to delete this transaction? This action creates a reversal entry for audit purposes.')) {
+      return
+    }
+    setBusyId(transactionId)
+    try {
+      if (asyncFinance) {
+        await asyncFinance.reverseTransaction(transactionId)
+      } else {
+        finance.reverseTransaction(transactionId)
+      }
+    } catch (err) {
+      console.error('Failed to delete transaction:', err)
+      window.alert('Failed to delete transaction. Please try again.')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   return (
     <div className="transactions-page">
@@ -117,6 +145,7 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                 Amount
               </span>
               <span role="columnheader">Status</span>
+              <span role="columnheader" className="tx-col-center">Actions</span>
             </div>
             {filtered.map((t) => (
               <div className="tx-grid-row" role="row" key={t.id}>
@@ -163,6 +192,34 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
                 </span>
                 <span role="cell">
                   <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
+                </span>
+                <span role="cell" className="tx-col-center">
+                  <div className="rec-row-actions">
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--compact"
+                      disabled={busyId === t.id}
+                      onClick={() => handleEdit(t)}
+                      title="Edit transaction"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M3 17.25V21h3.75L17.81 9.94m-4.75-4.75L19.5 3.5c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41L14.5 10.94" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--compact"
+                      disabled={busyId === t.id}
+                      onClick={() => handleDelete(t.id)}
+                      title="Delete transaction"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
+                      </svg>
+                      Delete
+                    </button>
+                  </div>
                 </span>
               </div>
             ))}
@@ -213,6 +270,32 @@ export function Transactions({ onAddTransaction }: { onAddTransaction: () => voi
               <div className="tx-acct">
                 <span className="tx-acct-dot" style={{ background: finance.transactionAccountDotColor(t) }} />
                 <span className="faint">{finance.transactionAccountLabel(t)}</span>
+              </div>
+              <div className="rec-row-actions" style={{ marginTop: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--compact"
+                  disabled={busyId === t.id}
+                  onClick={() => handleEdit(t)}
+                  title="Edit transaction"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M3 17.25V21h3.75L17.81 9.94m-4.75-4.75L19.5 3.5c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41L14.5 10.94" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--compact"
+                  disabled={busyId === t.id}
+                  onClick={() => handleDelete(t.id)}
+                  title="Delete transaction"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
+                  </svg>
+                  Delete
+                </button>
               </div>
             </li>
           ))}

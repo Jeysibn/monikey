@@ -9,6 +9,9 @@ import type {
   CreditCard,
   FinanceState,
   Transaction,
+  UpdateAccountInput,
+  UpdateCreditCardInput,
+  UpdateGoalInput,
 } from '../domain/finance'
 
 type ApiAccount = {
@@ -27,13 +30,23 @@ type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTran
 export interface FinanceGateway {
   load(signal?: AbortSignal): Promise<FinanceState>
   addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction>
+  updateTransaction(transactionId: string, input: Partial<AddTransactionInput>, signal?: AbortSignal): Promise<Transaction>
+  reverseTransaction(transactionId: string, signal?: AbortSignal): Promise<Transaction>
   addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account>
   addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard>
+  updateAccount(accountId: string, input: UpdateAccountInput, signal?: AbortSignal): Promise<Account>
+  updateCreditCard(cardId: string, input: UpdateCreditCardInput, signal?: AbortSignal): Promise<CreditCard>
+  archiveAccount(accountId: string, signal?: AbortSignal): Promise<void>
+  archiveCreditCard(cardId: string, signal?: AbortSignal): Promise<void>
   createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal>
   addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal>
+  updateGoal(goalId: string, input: UpdateGoalInput, signal?: AbortSignal): Promise<Goal>
+  deleteGoal(goalId: string, signal?: AbortSignal): Promise<void>
   createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod>
   setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
   addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }>
+  updateCategory(categoryId: string, input: { name?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  deleteCategory(categoryId: string, signal?: AbortSignal): Promise<void>
 }
 
 export class FinanceApiError extends Error {
@@ -57,7 +70,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args)) { this.baseUrl = baseUrl; this.fetcher = fetcher }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...init.headers } })
+    const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { ...(init.body !== undefined && { 'Content-Type': 'application/json' }), ...init.headers } })
     if (!response.ok) {
       const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
       throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? `Monikey API request failed: ${response.status}`, payload?.error?.field)
@@ -91,6 +104,25 @@ export class ApiFinanceGateway implements FinanceGateway {
     return this.mapTransaction(result.transaction)
   }
 
+  async updateTransaction(transactionId: string, input: Partial<AddTransactionInput>, signal?: AbortSignal): Promise<Transaction> {
+    const updatePayload: Record<string, any> = {}
+    if (input.title !== undefined) updatePayload.title = input.title
+    if (input.categoryId !== undefined) updatePayload.categoryId = input.categoryId
+    if (input.date !== undefined) updatePayload.occurredOn = input.date
+    if (input.time !== undefined) updatePayload.occurredTime = input.time ?? null
+    if (input.amount !== undefined) updatePayload.amountMinor = Math.round(input.amount * 100)
+    if (input.fee !== undefined) updatePayload.feeMinor = Math.round((input.fee ?? 0) * 100)
+    if (input.note !== undefined) updatePayload.note = input.note
+
+    const result = await this.request<{ transaction: ApiTransaction }>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
+    return this.mapTransaction(result.transaction)
+  }
+
+  async reverseTransaction(transactionId: string, signal?: AbortSignal): Promise<Transaction> {
+    const result = await this.request<{ reversedTransaction: ApiTransaction }>(`/transactions/${transactionId}`, { method: 'DELETE', signal })
+    return this.mapTransaction(result.reversedTransaction)
+  }
+
   async addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account> {
     const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify({ name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100), lastFour: input.lastFour ?? null }) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
@@ -100,6 +132,25 @@ export class ApiFinanceGateway implements FinanceGateway {
     const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify({ name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100), creditLimitMinor: Math.round(input.limit * 100), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100) }) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
+  }
+
+  async updateAccount(accountId: string, input: UpdateAccountInput, signal?: AbortSignal): Promise<Account> {
+    const account = await this.request<ApiAccount>(`/accounts/${accountId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
+    return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
+  }
+
+  async updateCreditCard(cardId: string, input: UpdateCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
+    const account = await this.request<ApiAccount>(`/accounts/${cardId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
+    const detail = account.creditCardDetail!
+    return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: `${new Date().toISOString().slice(0, 7)}-${String(detail.dueDay).padStart(2, '0')}`, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
+  }
+
+  async archiveAccount(accountId: string, signal?: AbortSignal): Promise<void> {
+    await this.request<void>(`/accounts/${accountId}/archive`, { method: 'POST', signal })
+  }
+
+  async archiveCreditCard(cardId: string, signal?: AbortSignal): Promise<void> {
+    await this.request<void>(`/accounts/${cardId}/archive`, { method: 'POST', signal })
   }
 
   async createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal> {
@@ -113,6 +164,21 @@ export class ApiFinanceGateway implements FinanceGateway {
     const goal = state.goals.find((candidate) => candidate.id === goalId)
     if (!goal) throw new Error('Goal was not returned after funding')
     return goal
+  }
+
+  async updateGoal(goalId: string, input: UpdateGoalInput, signal?: AbortSignal): Promise<Goal> {
+    const updatePayload: Record<string, any> = {}
+    if (input.name !== undefined) updatePayload.name = input.name
+    if (input.targetAmount !== undefined) updatePayload.targetMinor = Math.round(input.targetAmount * 100)
+    if (input.targetDate !== undefined) updatePayload.targetDate = input.targetDate
+    if (input.monthlyContribution !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContribution == null ? null : Math.round(input.monthlyContribution * 100)
+
+    const goal = await this.request<ApiGoal>(`/goals/${goalId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
+    return this.mapGoal(goal)
+  }
+
+  async deleteGoal(goalId: string, signal?: AbortSignal): Promise<void> {
+    await this.request<void>(`/goals/${goalId}`, { method: 'DELETE', signal })
   }
 
   async createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod> {
@@ -132,6 +198,14 @@ export class ApiFinanceGateway implements FinanceGateway {
     const period = await this.createBudgetPeriod(start, end, 0, signal)
     await this.setBudgetAllocation(period.id, category.id, input.allocated, signal)
     return { ...category, allocated: input.allocated }
+  }
+
+  async updateCategory(categoryId: string, input: { name?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
+    return this.request<{ id: string; name: string; color: string }>(`/categories/${categoryId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
+  }
+
+  async deleteCategory(categoryId: string, signal?: AbortSignal): Promise<void> {
+    await this.request<void>(`/categories/${categoryId}`, { method: 'DELETE', signal })
   }
 
   private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined })

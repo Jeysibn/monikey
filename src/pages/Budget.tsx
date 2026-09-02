@@ -21,7 +21,12 @@ export function Budget() {
   const [name, setName] = useState('')
   const [allocated, setAllocated] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editAllocated, setEditAllocated] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
   const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
+  const { errors: editErrors, field: editField, errorId: editErrorId, fail: editFail, clear: editClear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
 
   const overNames = budgetCategories
     .filter((c) => finance.budgetStatus(c.allocated, c.spent) === 'over_budget')
@@ -66,6 +71,70 @@ export function Budget() {
     setAllocated('')
     clear()
     setFormOpen(false)
+  }
+
+  function startEdit(categoryId: string) {
+    const category = categories.find((c) => c.id === categoryId)
+    const budgetCategory = budgetCategories.find((bc) => bc.id === categoryId)
+    if (category && budgetCategory) {
+      setEditingId(categoryId)
+      setEditName(category.name)
+      setEditAllocated(formatMoney(budgetCategory.allocated, { withCents: false }).replace(/[^\d.]/g, ''))
+      editClear()
+    }
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditName('')
+    setEditAllocated('')
+    editClear()
+  }
+
+  async function handleEditSubmit(e: React.FormEvent, categoryId: string) {
+    e.preventDefault()
+    const trimmedName = editName.trim()
+    if (!trimmedName) {
+      editFail({ name: 'Category name is required.' })
+      return
+    }
+    if (!editAllocated.trim()) {
+      editFail({ allocated: 'Enter a budget amount greater than zero.' })
+      return
+    }
+    const result = parseMoneyInput(editAllocated)
+    if (!result.ok) {
+      editFail({ allocated: result.error })
+      return
+    }
+    if (result.value <= 0) {
+      editFail({ allocated: 'Enter a budget amount greater than zero.' })
+      return
+    }
+    try {
+      setEditSubmitting(true)
+      if (asyncFinance) await asyncFinance.updateCategory(categoryId, { name: trimmedName, allocated: result.value })
+      else finance.updateCategory(categoryId, { name: trimmedName, allocated: result.value })
+    } catch (err) {
+      const at = err instanceof FinanceValidationError && err.field ? (err.field as CategoryField) : 'allocated'
+      editFail({ [at]: err instanceof Error ? err.message : 'Could not update category.' })
+      return
+    } finally {
+      setEditSubmitting(false)
+    }
+    cancelEdit()
+  }
+
+  async function handleDelete(categoryId: string) {
+    if (!window.confirm('Are you sure you want to delete this category? Transactions assigned to it will be uncategorized.')) {
+      return
+    }
+    try {
+      if (asyncFinance) await asyncFinance.deleteCategory(categoryId)
+      else finance.deleteCategory(categoryId)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not delete category.')
+    }
   }
 
   return (
@@ -161,33 +230,90 @@ export function Budget() {
               diff < 0
                 ? `${rawPct}% used, ${formatMoney(Math.abs(diff), { withCents: false })} over budget`
                 : `${rawPct}% used, ${formatMoney(diff, { withCents: false })} left`
+            const isEditing = editingId === c.id
             return (
-              <div className="budget-row" key={c.id}>
-                <div className="budget-row-mid">
-                  <div className="budget-row-top">
-                    <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
-                    <span className="budget-meta">
-                      {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
-                    </span>
-                  </div>
-                  <ProgressBar
-                    pct={rawPct}
-                    color={status === 'over_budget' ? 'var(--red)' : status === 'near_limit' ? 'var(--amber)' : 'var(--cyan)'}
-                    label={`${category?.name ?? c.id} budget used`}
-                    valueText={valueText}
-                  />
-                  {c.forecast && (
-                    <div className="budget-forecast">
-                      Forecast {formatMoney(c.forecast, { withCents: false })} · projected{' '}
-                      {formatMoney(Math.abs(c.forecast - c.allocated), { withCents: false })}{' '}
-                      {c.forecast > c.allocated ? 'over' : 'under'}
+              <div key={c.id}>
+                {isEditing ? (
+                  <form className="new-category-form" onSubmit={(e) => void handleEditSubmit(e, c.id)} noValidate>
+                    <label className="new-category-field">
+                      <span className="tx-label">Category name</span>
+                      <input
+                        type="text"
+                        className="tx-input"
+                        value={editName}
+                        placeholder="e.g. Entertainment"
+                        aria-label="Category name"
+                        {...editField('name', (e) => setEditName(e.target.value))}
+                      />
+                      {editErrors.name && (
+                        <p className="tx-error" role="alert" id={editErrorId('name')}>
+                          {editErrors.name}
+                        </p>
+                      )}
+                    </label>
+                    <label className="new-category-field">
+                      <span className="tx-label">Monthly budget</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="tx-input"
+                        value={editAllocated}
+                        placeholder="0.00"
+                        aria-label="Monthly budget"
+                        {...editField('allocated', (e) => setEditAllocated(e.target.value))}
+                      />
+                      {editErrors.allocated && (
+                        <p className="tx-error" role="alert" id={editErrorId('allocated')}>
+                          {editErrors.allocated}
+                        </p>
+                      )}
+                    </label>
+                    <div className="new-category-actions">
+                      <button type="button" className="btn btn--ghost" onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn--primary" disabled={editSubmitting || asyncFinance?.status === 'loading'}>
+                        {editSubmitting ? 'Saving…' : 'Save changes'}
+                      </button>
                     </div>
-                  )}
-                </div>
-                <StatusBadge status={status} />
-                <div className={`num budget-amt ${diff < 0 ? 'budget-amt--over' : ''}`}>
-                  {diff < 0 ? `${formatMoney(Math.abs(diff), { withCents: false })} over` : `${formatMoney(diff, { withCents: false })} left`}
-                </div>
+                  </form>
+                ) : (
+                  <div className="budget-row">
+                    <div className="budget-row-mid">
+                      <div className="budget-row-top">
+                        <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
+                        <span className="budget-meta">
+                          {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
+                        </span>
+                      </div>
+                      <ProgressBar
+                        pct={rawPct}
+                        color={status === 'over_budget' ? 'var(--red)' : status === 'near_limit' ? 'var(--amber)' : 'var(--cyan)'}
+                        label={`${category?.name ?? c.id} budget used`}
+                        valueText={valueText}
+                      />
+                      {c.forecast && (
+                        <div className="budget-forecast">
+                          Forecast {formatMoney(c.forecast, { withCents: false })} · projected{' '}
+                          {formatMoney(Math.abs(c.forecast - c.allocated), { withCents: false })}{' '}
+                          {c.forecast > c.allocated ? 'over' : 'under'}
+                        </div>
+                      )}
+                    </div>
+                    <StatusBadge status={status} />
+                    <div className={`num budget-amt ${diff < 0 ? 'budget-amt--over' : ''}`}>
+                      {diff < 0 ? `${formatMoney(Math.abs(diff), { withCents: false })} over` : `${formatMoney(diff, { withCents: false })} left`}
+                    </div>
+                    <div className="budget-row-actions">
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => startEdit(c.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="btn btn--ghost btn--compact" onClick={() => void handleDelete(c.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

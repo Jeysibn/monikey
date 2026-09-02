@@ -26,6 +26,8 @@ test-results
 playwright-report
 blob-report
 playwright/.cache
+.playwright-cli/
+output/playwright/
 
 # Claude Code local state — not shared project config
 .claude/

@@ -199,6 +199,24 @@
   font-weight: 700;
   white-space: nowrap;
 }
+.inv-tx-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.inv-tx-actions .btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .inv-tx-row {
+    flex-wrap: wrap;
+  }
+  .inv-tx-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 
 .inv-div-row {
   display: grid;

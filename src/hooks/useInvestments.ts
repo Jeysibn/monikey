@@ -6,6 +6,7 @@ import type {
   EnrichedHolding,
   HoldingDetail,
   InvestmentTransaction,
+  InvestmentTransactionType,
   LogInvestmentTransactionInput,
 } from '../domain/investments'
 
@@ -56,6 +57,8 @@ export function useInvestments() {
   const holdings = finance.state.portfolio
 
   const [loggedTransactions, setLoggedTransactions] = useState<InvestmentTransaction[]>([])
+  const [deletedTransactionIds, setDeletedTransactionIds] = useState<Set<string>>(new Set())
+  const [transactionEdits, setTransactionEdits] = useState<Map<string, Partial<InvestmentTransaction>>>(new Map())
   const nextSeq = useRef(0)
 
   const enrichedHoldings: EnrichedHolding[] = useMemo(() => {
@@ -135,8 +138,15 @@ export function useInvestments() {
   }, [enrichedHoldings])
 
   const transactions = useMemo(
-    () => [...(finance.state.investmentActivity?.trades ?? SEED_TRANSACTIONS), ...loggedTransactions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [finance.state.investmentActivity, loggedTransactions],
+    () =>
+      [...(finance.state.investmentActivity?.trades ?? SEED_TRANSACTIONS), ...loggedTransactions]
+        .filter((t) => !deletedTransactionIds.has(t.id))
+        .map((t) => {
+          const edit = transactionEdits.get(t.id)
+          return edit ? { ...t, ...edit, amount: (edit.units ?? t.units) * (edit.price ?? t.price) } : t
+        })
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [finance.state.investmentActivity, loggedTransactions, deletedTransactionIds, transactionEdits],
   )
 
   const dividends = finance.state.investmentActivity?.dividends ?? SEED_DIVIDENDS
@@ -169,6 +179,17 @@ export function useInvestments() {
     ])
   }, [])
 
+  // Edits/deletes work for both seeded and manually-logged rows here — mock
+  // mode has no server to reconcile against, so this is purely local
+  // overlay state, same pattern as `loggedTransactions` above.
+  const editTransaction = useCallback((id: string, patch: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }): void => {
+    setTransactionEdits((current) => new Map(current).set(id, patch))
+  }, [])
+
+  const deleteTransaction = useCallback((id: string): void => {
+    setDeletedTransactionIds((current) => new Set(current).add(id))
+  }, [])
+
   return {
     holdings: enrichedHoldings,
     tickers,
@@ -183,5 +204,7 @@ export function useInvestments() {
     dividends,
     totalDividends,
     logTransaction,
+    editTransaction,
+    deleteTransaction,
   }
 }

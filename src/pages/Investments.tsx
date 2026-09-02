@@ -288,16 +288,125 @@ function LogTransactionForm({
   )
 }
 
+const EDIT_TX_FIELDS = ['units', 'price', 'date'] as const
+type EditTxField = (typeof EDIT_TX_FIELDS)[number]
+
+function EditTransactionForm({
+  transaction,
+  todayIso,
+  onSave,
+  onClose,
+}: {
+  transaction: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }
+  todayIso: string
+  onSave: (input: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => void | Promise<void>
+  onClose: () => void
+}) {
+  const [type, setType] = useState<InvestmentTransactionType>(transaction.type)
+  const [units, setUnits] = useState(String(transaction.units))
+  const [price, setPrice] = useState(String(transaction.price))
+  const [date, setDate] = useState(transaction.date)
+  const [note, setNote] = useState(transaction.note ?? '')
+  const { errors, field, errorId, fail } = useFieldErrors<EditTxField>(EDIT_TX_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!units.trim()) { fail({ units: 'Enter the number of units.' }); return }
+    const unitsResult = parseMoneyInput(units)
+    if (!unitsResult.ok) { fail({ units: unitsResult.error }); return }
+    if (unitsResult.value <= 0) { fail({ units: 'Enter a number of units greater than zero.' }); return }
+    if (!price.trim()) { fail({ price: 'Enter the price per unit.' }); return }
+    const priceResult = parseMoneyInput(price)
+    if (!priceResult.ok) { fail({ price: priceResult.error }); return }
+    if (priceResult.value <= 0) { fail({ price: 'Enter a price greater than zero.' }); return }
+    if (!date) { fail({ date: 'Date is required.' }); return }
+    if (!isValidIsoDate(date)) { fail({ date: 'Enter a real date.' }); return }
+    if (isIsoDateBefore(todayIso, date)) { fail({ date: 'Date cannot be in the future.' }); return }
+    try {
+      setSubmitting(true)
+      const pending = onSave({ type, units: unitsResult.value, price: priceResult.value, date, note: note.trim() || undefined })
+      if (pending) await pending
+      onClose()
+    } catch (err) {
+      fail({ units: err instanceof Error ? err.message : 'Could not update investment trade.' })
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <form className="log-tx-form" onSubmit={handleSubmit} noValidate>
+      <div className="log-tx-row">
+        <div className="new-category-field">
+          <span className="tx-label">Type</span>
+          <div className="log-tx-type" role="group" aria-label="Transaction type">
+            {(['buy', 'sell'] as InvestmentTransactionType[]).map((t) => (
+              <button key={t} type="button" aria-pressed={type === t} className={`pill${type === t ? ' pill--active' : ''}`} onClick={() => setType(t)}>
+                {TX_TYPE_LABEL[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="new-category-field">
+          <span className="tx-label">Units</span>
+          <input type="text" inputMode="decimal" className="tx-input" value={units} {...field('units', (e) => setUnits(e.target.value))} />
+          {errors.units && <p className="tx-error" role="alert" id={errorId('units')}>{errors.units}</p>}
+        </label>
+      </div>
+      <div className="log-tx-row">
+        <label className="new-category-field">
+          <span className="tx-label">Price per unit</span>
+          <input type="text" inputMode="decimal" className="tx-input" value={price} {...field('price', (e) => setPrice(e.target.value))} />
+          {errors.price && <p className="tx-error" role="alert" id={errorId('price')}>{errors.price}</p>}
+        </label>
+        <label className="new-category-field">
+          <span className="tx-label">Date</span>
+          <input type="date" className="tx-input" max={todayIso} value={date} {...field('date', (e) => setDate(e.target.value))} />
+          {errors.date && <p className="tx-error" role="alert" id={errorId('date')}>{errors.date}</p>}
+        </label>
+      </div>
+      <div className="log-tx-row">
+        <label className="new-category-field">
+          <span className="tx-label">Note (optional)</span>
+          <input type="text" className="tx-input" value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <div />
+      </div>
+      <div className="new-category-actions">
+        <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {submitting ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function Investments() {
   const finance = useFinance()
   const inv = useInvestments()
   const asyncFinance = useAsyncFinanceOptional()
   const [logOpen, setLogOpen] = useState(false)
+  const [editingTxId, setEditingTxId] = useState<string | null>(null)
   const handleLog = (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.logTransaction(input); return }
     const holding = inv.holdings.find((item) => item.ticker === input.ticker)
     const assetClass = (input.assetClass ?? holding?.assetClass ?? 'equity') as 'equity' | 'etf' | 'crypto' | 'reit' | 'bond'
     return asyncFinance.addInvestmentTrade({ ...input, name: input.name ?? holding?.name ?? input.ticker, assetClass, sector: input.sector ?? holding?.sector ?? 'Other' })
+  }
+  const handleEditTrade = (id: string, input: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
+    if (!asyncFinance) { inv.editTransaction(id, input); return }
+    return asyncFinance.updateInvestmentTrade(id, input)
+  }
+  const handleDeleteTrade = async (id: string) => {
+    if (!window.confirm('Delete this investment transaction? This cannot be undone.')) return
+    try {
+      if (!asyncFinance) { inv.deleteTransaction(id); return }
+      await asyncFinance.deleteInvestmentTrade(id)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not delete investment transaction.')
+    }
   }
 
   const perfLabels = inv.performanceHistory.map((_, i) => (i === inv.performanceHistory.length - 1 ? 'Today' : `T-${inv.performanceHistory.length - 1 - i}`))
@@ -501,21 +610,40 @@ export function Investments() {
             <LogTransactionForm tickers={inv.tickers} todayIso={finance.todayIso} onLog={handleLog} onClose={() => setLogOpen(false)} />
           )}
           <ul className="inv-tx-list">
-            {inv.transactions.map((t) => (
-              <li className="inv-tx-row" key={t.id}>
-                <Tag tone={t.type === 'buy' ? 'income' : 'transfer'}>{TX_TYPE_LABEL[t.type]}</Tag>
-                <div className="inv-tx-mid">
-                  <div style={{ fontWeight: 600 }}>
-                    {t.ticker} · {t.units} units @ {formatMoney(t.price)}
+            {inv.transactions.map((t) =>
+              editingTxId === t.id ? (
+                <li className="inv-tx-row" key={t.id} style={{ display: 'block' }}>
+                  <EditTransactionForm
+                    transaction={t}
+                    todayIso={finance.todayIso}
+                    onSave={(input) => handleEditTrade(t.id, input)}
+                    onClose={() => setEditingTxId(null)}
+                  />
+                </li>
+              ) : (
+                <li className="inv-tx-row" key={t.id}>
+                  <Tag tone={t.type === 'buy' ? 'income' : 'transfer'}>{TX_TYPE_LABEL[t.type]}</Tag>
+                  <div className="inv-tx-mid">
+                    <div style={{ fontWeight: 600 }}>
+                      {t.ticker} · {t.units} units @ {formatMoney(t.price)}
+                    </div>
+                    <div className="inv-meta">
+                      {formatDateLabel(t.date)}
+                      {t.note ? ` · ${t.note}` : ''}
+                    </div>
                   </div>
-                  <div className="inv-meta">
-                    {formatDateLabel(t.date)}
-                    {t.note ? ` · ${t.note}` : ''}
+                  <span className="num inv-tx-amt">{formatMoney(t.amount, { withCents: false })}</span>
+                  <div className="inv-tx-actions">
+                    <button type="button" className="btn btn--ghost btn--compact" onClick={() => setEditingTxId(t.id)}>
+                      Edit
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleDeleteTrade(t.id)}>
+                      Delete
+                    </button>
                   </div>
-                </div>
-                <span className="num inv-tx-amt">{formatMoney(t.amount, { withCents: false })}</span>
-              </li>
-            ))}
+                </li>
+              ),
+            )}
           </ul>
         </Card>
 

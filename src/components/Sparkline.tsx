@@ -10,12 +10,16 @@ interface SparklineProps {
 
 /** Builds a smoothed SVG path (quadratic curves through midpoints) for a series of values. */
 function buildPath(values: number[], width: number, height: number, pad = 3): { line: string; area: string } {
+  if (values.length === 0) {
+    const flatY = height / 2
+    return { line: `M0,${flatY} L${width},${flatY}`, area: `M0,${flatY} L${width},${flatY} L${width},${height} L0,${height} Z` }
+  }
   const min = Math.min(...values)
   const max = Math.max(...values)
   const range = max - min || 1
   const innerH = height - pad * 2
   const points = values.map((v, i) => ({
-    x: (i / (values.length - 1)) * width,
+    x: values.length === 1 ? width / 2 : (i / (values.length - 1)) * width,
     y: pad + innerH - ((v - min) / range) * innerH,
   }))
 

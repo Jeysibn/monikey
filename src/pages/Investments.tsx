@@ -444,14 +444,18 @@ export function Investments() {
       <Card className="inv-perf-card">
         <CardTitle action={<span className="faint">Aggregate value, last {inv.performanceHistory.length} sessions</span>}>Performance History</CardTitle>
         <div className="inv-perf-line">
-          <Sparkline
-            values={inv.performanceHistory}
-            width={700}
-            height={130}
-            strokeWidth={2.8}
-            color="var(--cyan)"
-            className="inv-perf-spark"
-          />
+          {inv.performanceHistory.length === 0 ? (
+            <p className="faint">No performance history yet — add a position to start tracking it.</p>
+          ) : (
+            <Sparkline
+              values={inv.performanceHistory}
+              width={700}
+              height={130}
+              strokeWidth={2.8}
+              color="var(--cyan)"
+              className="inv-perf-spark"
+            />
+          )}
           <div className="inv-perf-labels">
             {perfLabels.map((label, i) => (
               <span key={label + i} className={i === perfLabels.length - 1 ? 'num' : undefined}>

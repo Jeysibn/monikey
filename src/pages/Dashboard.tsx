@@ -11,6 +11,10 @@ import './Dashboard.css'
 
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
 const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
+// Label for the trailing bucket's total — the bucket that always ends today,
+// regardless of period — so the indicator stays meaningful when the user
+// switches away from Daily instead of disappearing (TR-005 companion fix).
+const PERIOD_SUFFIX: Record<ExpensesPeriod, string> = { daily: 'today', weekly: 'in the last 7 days', monthly: 'this month' }
 
 export function Dashboard() {
   const finance = useFinance()
@@ -26,6 +30,9 @@ export function Dashboard() {
   const expensesTitle = finance.expensesTrendTitle(period)
   const expensesRange = finance.expensesTrendRangeLabel(expensesByDay)
   const maxDay = Math.max(1, ...expensesByDay.map((d) => d.amount))
+  // The last bucket in every period always ends today, so its amount is the
+  // correct "so far" figure for whichever period is currently selected.
+  const latestBucketAmount = expensesByDay.length > 0 ? expensesByDay[expensesByDay.length - 1].amount : null
 
   return (
     <div className="dashboard">
@@ -98,9 +105,9 @@ export function Dashboard() {
                     </button>
                   ))}
                 </div>
-                {period === 'daily' && (
+                {latestBucketAmount !== null && (
                   <span className="num" style={{ fontSize: 14 }}>
-                    {formatMoney(finance.expensesToday, { withCents: false })} today
+                    {formatMoney(latestBucketAmount, { withCents: false })} {PERIOD_SUFFIX[period]}
                   </span>
                 )}
               </div>

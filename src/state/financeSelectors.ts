@@ -392,10 +392,16 @@ export function goalRawProgressPct(goal: Goal): number {
  */
 export const COMMITMENT_HORIZON_DAYS = 30
 
-/** The credit cards whose minimum payment falls inside the commitment horizon. */
+/**
+ * The credit cards whose minimum payment falls inside the commitment horizon.
+ * A card with no outstanding balance owes nothing, regardless of due date, so
+ * it contributes no real cash claim and is excluded here.
+ */
 export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): CreditCard[] {
   const horizonEnd = addDaysToIso(todayIso, COMMITMENT_HORIZON_DAYS)
-  return state.creditCards.filter((c) => isIsoDateWithinInclusive(c.dueDate, todayIso, horizonEnd))
+  return state.creditCards.filter(
+    (c) => c.balance > 0 && isIsoDateWithinInclusive(c.dueDate, todayIso, horizonEnd)
+  )
 }
 
 /**

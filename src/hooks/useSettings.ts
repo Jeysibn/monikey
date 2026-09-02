@@ -72,7 +72,12 @@ export function useSettings(gateway?: SettingsGateway) {
   useEffect(() => {
     if (!gateway) return
     let active = true
-    gateway.load().then((next) => { if (active) setSettings(next) }).catch(() => undefined)
+    gateway.load().then((next) => { if (active) setSettings(next) }).catch((err) => {
+      // Swallowing this used to mean a failed fetch left the page stuck on
+      // `DEFAULT_SETTINGS` (the fake "Jane Dela Cruz" profile) indefinitely,
+      // with nothing in the console to explain why. Surface it instead.
+      if (active) console.error('Failed to load settings from backend:', err)
+    })
     return () => { active = false }
   }, [gateway])
 

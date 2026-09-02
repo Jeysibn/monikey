@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardTitle } from '../components/Card'
 import { useFinance } from '../hooks/useFinance'
@@ -22,6 +22,17 @@ function ProfileSection({ settings, saveProfile }: Pick<UseSettingsResult, 'sett
   const [displayName, setDisplayName] = useState(settings.profile.displayName)
   const [email, setEmail] = useState(settings.profile.email)
   const { errors, field, errorId, fail, clear } = useFieldErrors<ProfileField>(PROFILE_FIELDS)
+
+  // `useState`'s initializer only runs once, at mount. In backend mode the
+  // real profile arrives asynchronously (after `ApiSettingsGateway.load()`
+  // resolves), well after this form has already mounted and seeded itself
+  // from the placeholder `DEFAULT_SETTINGS` — without this sync, the form
+  // stays stuck on the fake "Jane Dela Cruz" profile forever, even though
+  // `settings.profile` correctly updates underneath it.
+  useEffect(() => {
+    setDisplayName(settings.profile.displayName)
+    setEmail(settings.profile.email)
+  }, [settings.profile.displayName, settings.profile.email])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

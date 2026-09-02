@@ -383,12 +383,108 @@ function EditTransactionForm({
   )
 }
 
+const DIV_FIELDS = ['ticker', 'amount', 'date'] as const
+type DivField = (typeof DIV_FIELDS)[number]
+
+function LogDividendForm({
+  tickers,
+  todayIso,
+  onLog,
+  onClose,
+}: {
+  tickers: string[]
+  todayIso: string
+  onLog: (input: { ticker: string; amount: number; date: string; note?: string }) => void | Promise<void>
+  onClose: () => void
+}) {
+  const [ticker, setTicker] = useState(tickers[0] ?? '')
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(todayIso)
+  const [note, setNote] = useState('')
+  const { errors, field, errorId, fail } = useFieldErrors<DivField>(DIV_FIELDS)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!ticker.trim()) { fail({ ticker: 'Select a ticker.' }); return }
+    if (!amount.trim()) { fail({ amount: 'Enter the dividend amount.' }); return }
+    const amountResult = parseMoneyInput(amount)
+    if (!amountResult.ok) { fail({ amount: amountResult.error }); return }
+    if (amountResult.value <= 0) { fail({ amount: 'Enter an amount greater than zero.' }); return }
+    if (!date) { fail({ date: 'Date is required.' }); return }
+    if (!isValidIsoDate(date)) { fail({ date: 'Enter a real date.' }); return }
+    if (isIsoDateBefore(todayIso, date)) { fail({ date: 'Date cannot be in the future.' }); return }
+    try {
+      setSubmitting(true)
+      const pending = onLog({ ticker: ticker.trim(), amount: amountResult.value, date, note: note.trim() || undefined })
+      if (pending) await pending
+      onClose()
+    } catch (err) {
+      fail({ ticker: err instanceof Error ? err.message : 'Could not save dividend.' })
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <form className="log-tx-form" onSubmit={handleSubmit} noValidate>
+      <div className="log-tx-row">
+        <label className="new-category-field">
+          <span className="tx-label">Ticker</span>
+          <select className="tx-input" value={ticker} autoFocus {...field('ticker', (e) => setTicker(e.target.value))}>
+            {tickers.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          {errors.ticker && <p className="tx-error" role="alert" id={errorId('ticker')}>{errors.ticker}</p>}
+        </label>
+        <label className="new-category-field">
+          <span className="tx-label">Amount</span>
+          <input type="text" inputMode="decimal" className="tx-input" placeholder="0.00" value={amount} {...field('amount', (e) => setAmount(e.target.value))} />
+          {errors.amount && <p className="tx-error" role="alert" id={errorId('amount')}>{errors.amount}</p>}
+        </label>
+      </div>
+      <div className="log-tx-row">
+        <label className="new-category-field">
+          <span className="tx-label">Date</span>
+          <input type="date" className="tx-input" max={todayIso} value={date} {...field('date', (e) => setDate(e.target.value))} />
+          {errors.date && <p className="tx-error" role="alert" id={errorId('date')}>{errors.date}</p>}
+        </label>
+        <label className="new-category-field">
+          <span className="tx-label">Note (optional)</span>
+          <input type="text" className="tx-input" placeholder="e.g. Q3 payout" value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+      </div>
+      <div className="new-category-actions">
+        <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={submitting || tickers.length === 0}>
+          {submitting ? 'Saving…' : 'Log dividend'}
+        </button>
+      </div>
+      {tickers.length === 0 && <p className="form-help">Log a trade first — dividends must be recorded against a held ticker.</p>}
+    </form>
+  )
+}
+
 export function Investments() {
   const finance = useFinance()
   const inv = useInvestments()
   const asyncFinance = useAsyncFinanceOptional()
   const [logOpen, setLogOpen] = useState(false)
+  const [divLogOpen, setDivLogOpen] = useState(false)
   const [editingTxId, setEditingTxId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const handleRefreshQuotes = async () => {
+    if (!asyncFinance || refreshing) return
+    setRefreshing(true)
+    try {
+      await asyncFinance.refreshQuotes()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not refresh prices.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const handleLog = (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.logTransaction(input); return }
     const holding = inv.holdings.find((item) => item.ticker === input.ticker)
@@ -398,6 +494,10 @@ export function Investments() {
   const handleEditTrade = (id: string, input: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.editTransaction(id, input); return }
     return asyncFinance.updateInvestmentTrade(id, input)
+  }
+  const handleLogDividend = (input: { ticker: string; amount: number; date: string; note?: string }) => {
+    if (!asyncFinance) { inv.logDividend(input); return }
+    return asyncFinance.addInvestmentDividend({ ticker: input.ticker, amountMinor: Math.round(input.amount * 100), date: input.date, note: input.note })
   }
   const handleDeleteTrade = async (id: string) => {
     if (!window.confirm('Delete this investment transaction? This cannot be undone.')) return
@@ -415,6 +515,11 @@ export function Investments() {
     <div>
       <div className="page-head">
         <h1 className="page-title">Investments</h1>
+        {asyncFinance && (
+          <button type="button" className="btn btn--ghost btn--compact" onClick={handleRefreshQuotes} disabled={refreshing}>
+            {refreshing ? 'Refreshing…' : 'Refresh prices'}
+          </button>
+        )}
       </div>
 
       <div className="kpi-row">
@@ -650,10 +755,18 @@ export function Investments() {
         <Card>
           <div className="section-head">
             <span className="card-title-text">Dividends</span>
-            <span className="num" style={{ fontSize: 14 }}>
-              {formatMoney(inv.totalDividends, { withCents: false })}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span className="num" style={{ fontSize: 14 }}>
+                {formatMoney(inv.totalDividends, { withCents: false })}
+              </span>
+              <button type="button" className="add-link" aria-expanded={divLogOpen} onClick={() => setDivLogOpen((v) => !v)}>
+                + Log dividend
+              </button>
             </span>
           </div>
+          {divLogOpen && (
+            <LogDividendForm tickers={inv.tickers} todayIso={finance.todayIso} onLog={handleLogDividend} onClose={() => setDivLogOpen(false)} />
+          )}
           <ul className="inv-div-list">
             {inv.dividends.map((d) => (
               <li className="inv-div-row" key={d.id}>

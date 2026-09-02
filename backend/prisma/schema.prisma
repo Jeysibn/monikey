@@ -178,6 +178,7 @@ model FinancialAccount {
   goalContributions GoalContribution[]
   recurringItems RecurringItem[]
   investmentTrades InvestmentTrade[]
+  dividends      Dividend[]
 
   @@index([userId])
   @@map("financial_accounts")
@@ -404,14 +405,40 @@ enum InvestmentTradeType {
   @@map("investment_trade_type")
 }
 
+// Explicit market identity for an instrument. Stocks/ETFs/REITs behave like
+// equity-market instruments (Today's Change, previous close); crypto behaves
+// like a 24/7 market (24h Change). Bonds are manual/unsupported for quoting
+// initially. Do not infer this from the ticker string at read time — it is
+// persisted so quote routing never has to guess.
+enum InstrumentAssetType {
+  stock
+  etf
+  crypto
+  reit
+  bond
+
+  @@map("instrument_asset_type")
+}
+
 model Instrument {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String?  @map("user_id") @db.Uuid
   ticker      String
   name        String
   assetClass  String   @map("asset_class")
+  assetType   InstrumentAssetType? @map("asset_type")
   sector      String
   currencyCode String  @default("PHP") @map("currency_code") @db.Char(3)
+
+  // Equity/ETF/REIT market identity.
+  exchange       String? @map("exchange")
+  providerSymbol String? @map("provider_symbol")
+
+  // Crypto pair identity, e.g. baseAsset "BTC" / quoteAsset "USD".
+  baseAsset       String? @map("base_asset")
+  quoteAsset      String? @map("quote_asset")
+  providerAssetId String? @map("provider_asset_id")
+
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -432,8 +459,18 @@ model InvestmentTrade {
   type           InvestmentTradeType
   units          Decimal             @db.Decimal(30, 10)
   priceMinor     BigInt              @map("price_minor")
+  currencyCode   String              @default("PHP") @map("currency_code") @db.Char(3)
+  feeMinor       BigInt              @default(0) @map("fee_minor")
   occurredOn     DateTime            @map("occurred_on") @db.Date
   cashAccountId  String?             @map("cash_account_id") @db.Uuid
+
+  // Settlement amount actually moved on the linked cash account, in the
+  // account's own currency (may differ from trade currencyCode). Populated
+  // when a cash account is linked so FX at time of trade can be reconstructed.
+  settlementAmountMinor   BigInt?  @map("settlement_amount_minor")
+  settlementCurrencyCode  String?  @map("settlement_currency_code") @db.Char(3)
+  fxRateToBase            Decimal? @map("fx_rate_to_base") @db.Decimal(20, 10)
+
   note           String?
   idempotencyKey String?             @map("idempotency_key")
   createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -453,12 +490,16 @@ model Dividend {
   instrumentId String     @map("instrument_id") @db.Uuid
   amountMinor  BigInt     @map("amount_minor")
   occurredOn   DateTime   @map("occurred_on") @db.Date
+  cashAccountId  String?  @map("cash_account_id") @db.Uuid
+  idempotencyKey String?  @map("idempotency_key")
   note         String?
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  cashAccount FinancialAccount? @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, idempotencyKey])
   @@index([userId, instrumentId, occurredOn])
   @@map("dividends")
 }
@@ -470,6 +511,18 @@ model QuoteSnapshot {
   priceMinor   BigInt   @map("price_minor")
   currencyCode String   @default("PHP") @map("currency_code") @db.Char(3)
   fetchedAt    DateTime @map("fetched_at") @db.Timestamptz(6)
+
+  // Equity fields (stock/ETF/REIT). Null for crypto.
+  previousCloseMinor BigInt?  @map("previous_close_minor")
+  dayChangeMinor     BigInt?  @map("day_change_minor")
+  dayChangePct       Decimal? @map("day_change_pct") @db.Decimal(10, 4)
+
+  // Crypto fields (24/7 market). Null for equities.
+  change24hMinor BigInt?  @map("change_24h_minor")
+  change24hPct   Decimal? @map("change_24h_pct") @db.Decimal(10, 4)
+
+  marketTimestamp DateTime? @map("market_timestamp") @db.Timestamptz(6)
+
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)

@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useFinance } from './useFinance'
+import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import type {
   AllocationSlice,
+  AssetClass,
   Dividend,
   EnrichedHolding,
   HoldingDetail,
@@ -9,6 +11,7 @@ import type {
   InvestmentTransactionType,
   LogInvestmentTransactionInput,
 } from '../domain/investments'
+import type { PortfolioHolding } from '../services/apiInvestmentGateway'
 
 // Investment-specific mock detail keyed by ticker, layered on top of the
 // read-only `Holding[]` in `useFinance().state.portfolio` (ticker, name,
@@ -54,14 +57,61 @@ const ALLOCATION_COLORS = ['var(--cyan)', 'var(--teal)', 'var(--purple)', 'var(-
  */
 export function useInvestments() {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const holdings = finance.state.portfolio
+  // Authoritative backend portfolio (weighted-avg cost basis, realized/
+  // unrealized P&L, dividends, fees) — present whenever a real investment
+  // backend is configured. `null` in mock mode, where the client-side
+  // fallback below (mock detail + naive market-value math) still applies.
+  const portfolio = asyncFinance?.investmentPortfolio ?? null
 
   const [loggedTransactions, setLoggedTransactions] = useState<InvestmentTransaction[]>([])
   const [deletedTransactionIds, setDeletedTransactionIds] = useState<Set<string>>(new Set())
   const [transactionEdits, setTransactionEdits] = useState<Map<string, Partial<InvestmentTransaction>>>(new Map())
   const nextSeq = useRef(0)
 
-  const enrichedHoldings: EnrichedHolding[] = useMemo(() => {
+  const toEnrichedHolding = useCallback((h: PortfolioHolding): EnrichedHolding => {
+    const averageCost = h.averageCostMinor / 100
+    const costBasis = h.costBasisMinor / 100
+    // Only ever the backend's own quote — never fabricated from cost basis —
+    // so a holding with no cached quote falls back to its average cost only
+    // as a last-known reference price, not a claim of current market value.
+    const price = h.latestPriceMinor != null ? h.latestPriceMinor / 100 : averageCost
+    // Prefer the base-currency (portfolio display currency) figure — already
+    // FX-converted server-side — and fall back to the native-currency one
+    // only when conversion wasn't possible (h.baseValuationUnavailable) or
+    // no quote currency conversion was needed in the first place.
+    const marketValueSourceMinor = h.marketValueBaseMinor ?? h.marketValueMinor
+    const unrealizedPnlSourceMinor = h.unrealizedPnlBaseMinor ?? h.unrealizedPnlMinor
+    const marketValue = marketValueSourceMinor != null ? marketValueSourceMinor / 100 : h.units * price
+    const totalReturn = unrealizedPnlSourceMinor != null ? unrealizedPnlSourceMinor / 100 : marketValue - costBasis
+    return {
+      ticker: h.ticker,
+      name: h.name,
+      units: h.units,
+      price,
+      changePct: 0, // day-change is Phase 3 (quote-provider) work — never invented client-side
+      history: [price],
+      averageCost,
+      sector: h.sector,
+      assetClass: h.assetClass as AssetClass,
+      marketValue,
+      costBasis,
+      totalReturn,
+      totalReturnPct: costBasis > 0 ? (totalReturn / costBasis) * 100 : 0,
+      dailyReturn: 0,
+      allocationPct: 0, // filled in below once the portfolio total is known
+    }
+  }, [])
+
+  const backendHoldings: EnrichedHolding[] = useMemo(() => {
+    if (!portfolio) return []
+    const rows = portfolio.holdings.map(toEnrichedHolding)
+    const total = rows.reduce((sum, h) => sum + h.marketValue, 0) || 1
+    return rows.map((h) => ({ ...h, allocationPct: (h.marketValue / total) * 100 }))
+  }, [portfolio, toEnrichedHolding])
+
+  const mockHoldings: EnrichedHolding[] = useMemo(() => {
     const totalMarketValue = holdings.reduce((sum, h) => sum + h.price * h.units, 0) || 1
     return holdings.map((h) => {
       const detail = HOLDING_DETAILS[h.ticker] ?? { ...FALLBACK_DETAIL, ticker: h.ticker }
@@ -93,15 +143,33 @@ export function useInvestments() {
     })
   }, [holdings])
 
-  const portfolioValue = useMemo(() => enrichedHoldings.reduce((sum, h) => sum + h.marketValue, 0), [enrichedHoldings])
-  const totalCostBasis = useMemo(() => enrichedHoldings.reduce((sum, h) => sum + h.costBasis, 0), [enrichedHoldings])
-  const totalGainLoss = portfolioValue - totalCostBasis
+  const enrichedHoldings = portfolio ? backendHoldings : mockHoldings
+
+  // With a backend portfolio, value/cost basis/gain-loss come straight from
+  // the engine's summary rollup (which also folds in closed positions and
+  // dividends per plan §3) rather than being re-derived from the visible
+  // holdings rows.
+  const portfolioValue = useMemo(
+    () => portfolio ? portfolio.summary.portfolioValueMinor / 100 : enrichedHoldings.reduce((sum, h) => sum + h.marketValue, 0),
+    [portfolio, enrichedHoldings],
+  )
+  const totalCostBasis = useMemo(
+    () => portfolio ? portfolio.summary.remainingCostBasisMinor / 100 : enrichedHoldings.reduce((sum, h) => sum + h.costBasis, 0),
+    [portfolio, enrichedHoldings],
+  )
+  const totalGainLoss = portfolio ? portfolio.summary.unrealizedPnlMinor / 100 : portfolioValue - totalCostBasis
   const totalGainLossPct = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0
-  const todaysChange = useMemo(() => enrichedHoldings.reduce((sum, h) => sum + h.dailyReturn, 0), [enrichedHoldings])
+  // Day-change (todaysChange/Pct) requires a quote provider's prior-close
+  // field, which is Phase 3 work (see `QuoteSnapshot.previousCloseMinor` /
+  // `.change24hMinor` on the backend, not yet populated). Reporting 0 here
+  // rather than a client-derived guess is deliberate — see plan's ban on
+  // treating stock "Today's Change" and crypto "24h Change" as interchangeable.
+  const todaysChange = useMemo(() => portfolio ? 0 : enrichedHoldings.reduce((sum, h) => sum + h.dailyReturn, 0), [portfolio, enrichedHoldings])
   const todaysChangePct = useMemo(() => {
+    if (portfolio) return 0
     const previousTotal = enrichedHoldings.reduce((sum, h) => sum + (h.price / (1 + h.changePct / 100)) * h.units, 0)
     return previousTotal > 0 ? (todaysChange / previousTotal) * 100 : 0
-  }, [enrichedHoldings, todaysChange])
+  }, [portfolio, enrichedHoldings, todaysChange])
 
   const allocation: AllocationSlice[] = useMemo(() => {
     const bySector = new Map<string, number>()
@@ -137,19 +205,37 @@ export function useInvestments() {
     return points
   }, [enrichedHoldings])
 
+  // Backend trades carry the authoritative fee/idempotency-key fields the
+  // older `investmentActivity` bootstrap shape doesn't; prefer `portfolio`
+  // when it's loaded. Falls back to `investmentActivity`/seed data only when
+  // no investment backend is configured (mock mode).
+  const baseTransactions: InvestmentTransaction[] = useMemo(() => {
+    if (portfolio) return portfolio.trades.map((t) => ({ id: t.id, ticker: t.ticker, type: t.type, units: t.units, price: t.priceMinor / 100, amount: t.units * (t.priceMinor / 100), date: t.occurredOn, note: t.note ?? undefined }))
+    return finance.state.investmentActivity?.trades ?? SEED_TRANSACTIONS
+  }, [portfolio, finance.state.investmentActivity])
+
   const transactions = useMemo(
     () =>
-      [...(finance.state.investmentActivity?.trades ?? SEED_TRANSACTIONS), ...loggedTransactions]
+      [...baseTransactions, ...loggedTransactions]
         .filter((t) => !deletedTransactionIds.has(t.id))
         .map((t) => {
           const edit = transactionEdits.get(t.id)
           return edit ? { ...t, ...edit, amount: (edit.units ?? t.units) * (edit.price ?? t.price) } : t
         })
         .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [finance.state.investmentActivity, loggedTransactions, deletedTransactionIds, transactionEdits],
+    [baseTransactions, loggedTransactions, deletedTransactionIds, transactionEdits],
   )
 
-  const dividends = finance.state.investmentActivity?.dividends ?? SEED_DIVIDENDS
+  const [loggedDividends, setLoggedDividends] = useState<Dividend[]>([])
+
+  const dividends: Dividend[] = useMemo(() => {
+    if (portfolio) {
+      const tickerByInstrumentId = new Map<string, string>()
+      for (const h of [...portfolio.holdings, ...portfolio.closedPositions]) tickerByInstrumentId.set(h.instrumentId, h.ticker)
+      return portfolio.dividends.map((d) => ({ id: d.id, ticker: tickerByInstrumentId.get(d.instrumentId) ?? d.instrumentId, amount: d.amountMinor / 100, date: d.occurredOn }))
+    }
+    return [...loggedDividends, ...(finance.state.investmentActivity?.dividends ?? SEED_DIVIDENDS)]
+  }, [portfolio, finance.state.investmentActivity, loggedDividends])
   const totalDividends = useMemo(() => dividends.reduce((sum, d) => sum + d.amount, 0), [dividends])
 
   const tickers = useMemo(() => holdings.map((h) => h.ticker), [holdings])
@@ -190,6 +276,15 @@ export function useInvestments() {
     setDeletedTransactionIds((current) => new Set(current).add(id))
   }, [])
 
+  // Mock-mode-only local overlay, same pattern as `logTransaction`. When a
+  // real backend is configured, the page calls `asyncFinance.addInvestmentDividend`
+  // directly instead (see Investments.tsx) — this path never runs there.
+  const logDividend = useCallback((input: { ticker: string; amount: number; date: string }): void => {
+    nextSeq.current += 1
+    const seq = nextSeq.current
+    setLoggedDividends((current) => [{ id: `div-manual-${seq}`, ticker: input.ticker, amount: input.amount, date: input.date }, ...current])
+  }, [])
+
   return {
     holdings: enrichedHoldings,
     tickers,
@@ -204,6 +299,7 @@ export function useInvestments() {
     dividends,
     totalDividends,
     logTransaction,
+    logDividend,
     editTransaction,
     deleteTransaction,
   }

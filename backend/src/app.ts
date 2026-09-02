@@ -24,6 +24,9 @@ import { createGoalsModule } from './modules/goals/goals.module.js'
 import { budgetRoutes } from './modules/budget/budget.routes.js'
 import { recurringRoutes } from './modules/recurring/recurring.routes.js'
 import { investmentsRoutes } from './modules/investments/investments.routes.js'
+import { createQuoteProvider } from './modules/investments/quotes.js'
+import { createFxModule } from './modules/fx/fx.module.js'
+import { createFxRatesProvider } from './integrations/adapters/frankfurter/index.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { createReceiptsModule } from './modules/receipts/receipts.module.js'
 import { insightsRoutes } from './modules/insights/insights.routes.js'
@@ -185,7 +188,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register((app) => goals.registerRoutes(app, ledger.service, env.APP_ORIGIN))
       await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
       await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
-      await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
+      const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger: app.log as any })
+      const fxRatesProvider = createFxRatesProvider(env, fetch, { prisma, logger: app.log as any })
+      const fxService = createFxModule(prisma, fxRatesProvider, app.log as any)
+      await v1.register(investmentsRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service, quoteProvider, fxService })
       await v1.register(async (app) => receipts.registerRoutes(app, env.APP_ORIGIN))
       await v1.register(reportsRoutes, { prisma, prefix: '/reports' })
       await v1.register(insightsRoutes, {

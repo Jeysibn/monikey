@@ -4,7 +4,7 @@ import type { FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import type { RecurringGateway } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
-import type { InvestmentTradeInput, InvestmentTradeUpdateInput } from '../services/apiInvestmentGateway'
+import type { InvestmentTradeInput, InvestmentTradeUpdateInput, InvestmentDividendInput, Portfolio } from '../services/apiInvestmentGateway'
 import type { InvestmentGateway } from '../services/apiInvestmentGateway'
 import { ApiInvestmentGateway } from '../services/apiInvestmentGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
@@ -43,6 +43,17 @@ export interface AsyncFinanceContextValue {
   addInvestmentTrade: (input: InvestmentTradeInput) => Promise<void>
   updateInvestmentTrade: (id: string, input: InvestmentTradeUpdateInput) => Promise<void>
   deleteInvestmentTrade: (id: string) => Promise<void>
+  addInvestmentDividend: (input: InvestmentDividendInput) => Promise<void>
+  /** Asks the backend to fetch fresh market quotes for the user's
+   * instruments (subject to a server-side cooldown), then reloads the
+   * portfolio. Throws on a genuine failure; a 429 cooldown is swallowed by
+   * the gateway, so this always resolves once the backend has responded. */
+  refreshQuotes: () => Promise<void>
+  /** Authoritative backend-computed portfolio (weighted-avg cost basis,
+   * realized/unrealized P&L, dividends, fees) — `null` until loaded, or when
+   * no investment backend is configured (mock mode). This is the one place
+   * that carries real portfolio math; nothing here is recomputed on the client. */
+  investmentPortfolio: Portfolio | null
 }
 
 const AsyncFinanceContext = createContext<AsyncFinanceContextValue | null>(null)
@@ -62,6 +73,22 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   const [stableRecurringGateway] = useState(() => recurringGateway ?? (gateway ? undefined : new ApiRecurringGateway()))
   const [recurringItems, setRecurringItems] = useState<RecurringItem[]>([])
   const [stableInvestmentGateway] = useState<InvestmentGateway | undefined>(() => gateway ? undefined : new ApiInvestmentGateway())
+  const [investmentPortfolio, setInvestmentPortfolio] = useState<Portfolio | null>(null)
+
+  const reloadInvestmentPortfolio = useCallback(async () => {
+    if (!stableInvestmentGateway) return
+    try {
+      setInvestmentPortfolio(await stableInvestmentGateway.getPortfolio())
+    } catch {
+      // Leave the previous snapshot in place rather than clearing it on a
+      // transient failure — the finance-state `error`/`retry` path already
+      // surfaces load failures; this is a secondary, best-effort fetch.
+    }
+  }, [stableInvestmentGateway])
+
+  useEffect(() => {
+    reloadInvestmentPortfolio()
+  }, [reloadInvestmentPortfolio])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -227,21 +254,34 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableInvestmentGateway.addTrade(input)
     const refreshed = await stableGateway.load()
     if (refreshed) setState(refreshed)
-  }, [stableGateway, stableInvestmentGateway])
+    await reloadInvestmentPortfolio()
+  }, [stableGateway, stableInvestmentGateway, reloadInvestmentPortfolio])
   const updateInvestmentTrade = useCallback(async (id: string, input: InvestmentTradeUpdateInput) => {
     if (!stableInvestmentGateway) throw new Error('Investment backend is not configured')
     await stableInvestmentGateway.updateTrade(id, input)
     const refreshed = await stableGateway.load()
     if (refreshed) setState(refreshed)
-  }, [stableGateway, stableInvestmentGateway])
+    await reloadInvestmentPortfolio()
+  }, [stableGateway, stableInvestmentGateway, reloadInvestmentPortfolio])
   const deleteInvestmentTrade = useCallback(async (id: string) => {
     if (!stableInvestmentGateway) throw new Error('Investment backend is not configured')
     await stableInvestmentGateway.deleteTrade(id)
     const refreshed = await stableGateway.load()
     if (refreshed) setState(refreshed)
-  }, [stableGateway, stableInvestmentGateway])
+    await reloadInvestmentPortfolio()
+  }, [stableGateway, stableInvestmentGateway, reloadInvestmentPortfolio])
+  const addInvestmentDividend = useCallback(async (input: InvestmentDividendInput) => {
+    if (!stableInvestmentGateway) throw new Error('Investment backend is not configured')
+    await stableInvestmentGateway.addDividend(input)
+    await reloadInvestmentPortfolio()
+  }, [stableInvestmentGateway, reloadInvestmentPortfolio])
+  const refreshQuotes = useCallback(async () => {
+    if (!stableInvestmentGateway) throw new Error('Investment backend is not configured')
+    await stableInvestmentGateway.refreshQuotes()
+    await reloadInvestmentPortfolio()
+  }, [stableInvestmentGateway, reloadInvestmentPortfolio])
 
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addBudgetCategory, updateCategory, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem, addInvestmentTrade, updateInvestmentTrade, deleteInvestmentTrade }), [state, status, error, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addBudgetCategory, updateCategory, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem, addInvestmentTrade, updateInvestmentTrade, deleteInvestmentTrade])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addBudgetCategory, updateCategory, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem, addInvestmentTrade, updateInvestmentTrade, deleteInvestmentTrade, addInvestmentDividend, refreshQuotes, investmentPortfolio }), [state, status, error, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addBudgetCategory, updateCategory, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem, addInvestmentTrade, updateInvestmentTrade, deleteInvestmentTrade, addInvestmentDividend, refreshQuotes, investmentPortfolio])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     todayIso: new Date().toISOString().slice(0, 10),

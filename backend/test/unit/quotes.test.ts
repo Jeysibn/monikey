@@ -4,7 +4,7 @@ import {
   CoinGeckoQuoteProvider,
   createQuoteProvider,
   StubQuoteProvider,
-} from './quotes.js'
+} from '../../src/modules/investments/quotes.js'
 
 const response = (body: unknown, ok = true, status = 200) => ({ ok, status, json: async () => body }) as Response
 

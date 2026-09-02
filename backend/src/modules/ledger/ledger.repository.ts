@@ -444,20 +444,30 @@ export class LedgerRepository {
         break;
       }
       case 'transfer': {
-        if (isGoalFunding && !toAccountId) {
-          // Goal funding is a transfer from an asset account to a goal, which is
-          // not a `financial_accounts` row — there is no destination account to
-          // validate or credit here (goal crediting/limits are handled by the
-          // caller after this check passes).
-          if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Goal funding requires fromAccountId.', { field: 'fromAccountId' });
-          const fromAcc = accountMap.get(fromAccountId)!;
-          if (fromAcc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Goal funding must come from an asset account.', { field: 'fromAccountId' });
+        if (!fromAccountId && !toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer requires fromAccountId or toAccountId.', { field: 'fromAccountId' });
+        if (!toAccountId) {
+          // Debit-only half-transfer: the destination isn't a
+          // `financial_accounts` row. Used for goal funding (goalId set,
+          // credited separately by the caller) and for investment purchases
+          // (the destination is an InvestmentTrade/Instrument position,
+          // tracked outside the ledger — plan §14: buying an investment
+          // moves cash out but is not ordinary spending).
+          const fromAcc = accountMap.get(fromAccountId!)!;
+          if (fromAcc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer must come from an asset account.', { field: 'fromAccountId' });
           if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
             throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
           break;
         }
-        if (!fromAccountId || !toAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer requires fromAccountId and toAccountId.', { field: 'fromAccountId' });
+        if (!fromAccountId) {
+          // Credit-only half-transfer: the source isn't a
+          // `financial_accounts` row — used for investment sale proceeds
+          // landing in a cash account (plan §14: selling an investment is
+          // not ordinary income).
+          const toAcc = accountMap.get(toAccountId)!;
+          if (toAcc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer must go to an asset account.', { field: 'toAccountId' });
+          break;
+        }
         if (fromAccountId === toAccountId) throw new AppError('TRANSFER_SAME_ACCOUNT', 'Transfer cannot use the same source and destination.', { field: 'fromAccountId' });
         const fromAcc = accountMap.get(fromAccountId)!;
         const toAcc = accountMap.get(toAccountId)!;
@@ -521,10 +531,9 @@ export class LedgerRepository {
         break;
       }
       case 'transfer': {
-        if (isGoalFunding && !toAccountId) {
-          // Goal funding: debit the source account only. The goal itself is
-          // credited separately (it is not a `financial_accounts` row), so
-          // there is no destination balance effect here.
+        if (!toAccountId) {
+          // Debit-only half-transfer (goal funding or investment purchase):
+          // no destination `financial_accounts` row to credit here.
           const fromAcc = accountMap.get(fromAccountId!)!;
           const totalAmount = amountMinor + feeMinor;
           const fromNewBalance = Number(fromAcc.currentBalanceMinor) - totalAmount;
@@ -532,6 +541,14 @@ export class LedgerRepository {
           if (feeMinor > 0) {
             effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: fromNewBalance });
           }
+          break;
+        }
+        if (!fromAccountId) {
+          // Credit-only half-transfer (investment sale proceeds): no source
+          // `financial_accounts` row to debit here.
+          const toAcc = accountMap.get(toAccountId)!;
+          const toNewBalance = Number(toAcc.currentBalanceMinor) + amountMinor;
+          effects.push({ accountId: toAccountId, role: 'destination', deltaMinor: amountMinor, balanceAfterMinor: toNewBalance });
           break;
         }
         const fromAcc = accountMap.get(fromAccountId!)!;

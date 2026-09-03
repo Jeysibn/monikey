@@ -1,0 +1,64 @@
+name: Publish images
+
+# Builds and publishes the Monikey API/worker image (backend/Dockerfile) and
+# the web image (docker/Web.Dockerfile) to GHCR whenever CI has passed on
+# main. Images are tagged with the commit SHA so the homelab-gitops Argo
+# Application can pin an exact, immutable digest-equivalent tag rather than
+# tracking a mutable `latest`.
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-web
+
+jobs:
+  publish:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push api/worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Web.Dockerfile
+          push: true
+          build-args: |
+            VITE_FINANCE_BACKEND=true
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

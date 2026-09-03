@@ -172,7 +172,10 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     const input = tradeSchema.parse(request.body)
     const userId = request.user!.id
     const existing = input.idempotencyKey ? await options.prisma.investmentTrade.findFirst({ where: { userId, idempotencyKey: input.idempotencyKey }, include: { instrument: true } }) : null
-    if (existing) return reply.code(200).send({ ...existing, units: Number(existing.units), priceMinor: Number(existing.priceMinor), occurredOn: existing.occurredOn.toISOString().slice(0, 10) })
+    // feeMinor is a BigInt column — must be converted like units/priceMinor
+    // above, or a duplicate submission (the very case this branch exists to
+    // handle) 500s on JSON.stringify instead of returning the cached trade.
+    if (existing) return reply.code(200).send({ ...existing, units: Number(existing.units), priceMinor: Number(existing.priceMinor), feeMinor: Number(existing.feeMinor), occurredOn: existing.occurredOn.toISOString().slice(0, 10) })
     const instrument = await options.prisma.instrument.upsert({ where: { userId_ticker: { userId, ticker: input.ticker } }, create: { userId, ticker: input.ticker, name: input.name, assetClass: input.assetClass, assetType: toInstrumentAssetType(input.assetClass), sector: input.sector }, update: { name: input.name, assetClass: input.assetClass, assetType: toInstrumentAssetType(input.assetClass), sector: input.sector } })
     const previous = await options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: instrument.id }, select: { type: true, units: true } })
     const heldUnits = previous.reduce((sum, trade) => sum.plus(trade.type === 'buy' ? new Prisma.Decimal(trade.units.toString()) : new Prisma.Decimal(trade.units.toString()).negated()), new Prisma.Decimal(0))

@@ -305,3 +305,40 @@ jobs:
             echo "WARNING: Found potential secrets in configuration files"
           fi
           echo "Secret check complete"
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        frontend-lint-typecheck-build,
+        backend-tests,
+        backend-integration-tests,
+        docker-build-and-scan,
+        security-checks,
+      ]
+    if: always()
+    steps:
+      - name: Check CI Status
+        run: |
+          if [ "${{ needs.frontend-lint-typecheck-build.result }}" != "success" ]; then
+            echo "Frontend checks failed"
+            exit 1
+          fi
+          if [ "${{ needs.backend-tests.result }}" != "success" ]; then
+            echo "Backend tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.backend-integration-tests.result }}" != "success" ]; then
+            echo "Backend integration tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.docker-build-and-scan.result }}" != "success" ]; then
+            echo "Docker build/scan failed"
+            exit 1
+          fi
+          if [ "${{ needs.security-checks.result }}" != "success" ]; then
+            echo "Security checks failed"
+            exit 1
+          fi
+          echo "All CI checks passed!"

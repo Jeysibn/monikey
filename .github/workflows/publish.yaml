@@ -2,13 +2,14 @@ name: Publish images
 
 # Builds and publishes the Monikey API/worker image (backend/Dockerfile) and
 # the web image (docker/Web.Dockerfile) to GHCR whenever CI has passed on
-# main. Images are tagged with the commit SHA so the homelab-gitops Argo
-# Application can pin an exact, immutable digest-equivalent tag rather than
-# tracking a mutable `latest`.
+# main or feature/backend-implementation (the current active integration
+# branch, ahead of main until it's merged). Images are tagged with the
+# commit SHA so the homelab-gitops Argo Application can pin an exact,
+# immutable digest-equivalent tag rather than tracking a mutable `latest`.
 on:
   workflow_run:
     workflows: [CI]
-    branches: [main]
+    branches: [main, feature/backend-implementation]
     types: [completed]
 
 permissions:

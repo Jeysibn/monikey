@@ -55,6 +55,9 @@ export interface Quote {
   fetchedAt: Date
   /** Whether this quote is older than the asset-specific freshness TTL. Callers (the quote service) compute this — this module only threads it through to the response. */
   stale: boolean
+  /** Trailing-24h price move, in the same native currency as priceMinor. Null when the provider doesn't report it (e.g. equities via Alpha Vantage) — never fabricated as 0. Purely a passthrough field; the engine does no arithmetic with it. */
+  change24hMinor: DecimalValue | null
+  change24hPct: DecimalValue | null
 }
 
 export class InvestmentOversellError extends Error {

@@ -247,6 +247,128 @@ describeIfDb('Phase 6 Investments (real PostgreSQL, real HTTP)', () => {
     expect(usageRow.callCount).toBe(0)
   })
 
+  it('edits a non-cash-linked trade and re-validates the oversell guard against its siblings', async () => {
+    const { cookie, userId } = await registerUser('edit-trade')
+    await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'NFLX', name: 'Netflix', assetClass: 'equity', sector: 'Media', type: 'buy', units: 10, priceMinor: 40000, occurredOn: '2026-09-01' } })
+    const buy2 = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'NFLX', name: 'Netflix', assetClass: 'equity', sector: 'Media', type: 'buy', units: 2, priceMinor: 41000, occurredOn: '2026-09-02' } })
+    const tradeId = buy2.json().id as string
+
+    // Editing to a units value still covered by the other buy succeeds.
+    const edited = await app.inject({ method: 'PATCH', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie }, payload: { type: 'buy', units: 3, priceMinor: 42000, occurredOn: '2026-09-02' } })
+    expect(edited.statusCode).toBe(200)
+    expect(edited.json().units).toBe(3)
+
+    // Editing it into a sell larger than what the sibling buy alone holds is rejected.
+    const oversell = await app.inject({ method: 'PATCH', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie }, payload: { type: 'sell', units: 50, priceMinor: 42000, occurredOn: '2026-09-02' } })
+    expect(oversell.statusCode).toBe(422)
+    expect(oversell.json().error.code).toBe('INVESTMENT_OVERSELL')
+
+    // Not found / cross-user.
+    const notFound = await app.inject({ method: 'PATCH', url: '/api/v1/investments/trades/00000000-0000-0000-0000-000000000000', headers: { origin: APP_ORIGIN, cookie }, payload: { type: 'buy', units: 1, priceMinor: 1000, occurredOn: '2026-09-02' } })
+    expect(notFound.statusCode).toBe(404)
+    void userId
+  })
+
+  it('refuses to edit a cash-linked trade instead of letting the account balance drift (TRADE_HAS_LINKED_TRANSACTION)', async () => {
+    const { cookie, userId } = await registerUser('edit-cash-linked')
+    const cashAccountId = await makeCashAccount(userId, 100_000)
+    const created = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'ORCL', name: 'Oracle', assetClass: 'equity', sector: 'Tech', type: 'buy', units: 1, priceMinor: 10000, occurredOn: '2026-09-01', cashAccountId } })
+    const tradeId = created.json().id as string
+
+    const attempt = await app.inject({ method: 'PATCH', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie }, payload: { type: 'buy', units: 2, priceMinor: 10000, occurredOn: '2026-09-01' } })
+    expect(attempt.statusCode).toBe(409)
+    expect(attempt.json().error.code).toBe('TRADE_HAS_LINKED_TRANSACTION')
+  })
+
+  it('deletes a non-cash-linked trade outright', async () => {
+    const { cookie } = await registerUser('delete-trade')
+    const created = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'AMD', name: 'AMD', assetClass: 'equity', sector: 'Tech', type: 'buy', units: 1, priceMinor: 5000, occurredOn: '2026-09-01' } })
+    const tradeId = created.json().id as string
+
+    const deleted = await app.inject({ method: 'DELETE', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie } })
+    expect(deleted.statusCode).toBe(204)
+    expect(await prisma.investmentTrade.findUnique({ where: { id: tradeId } })).toBeNull()
+
+    const notFound = await app.inject({ method: 'DELETE', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie } })
+    expect(notFound.statusCode).toBe(404)
+  })
+
+  it('deletes a cash-linked trade and reverses its ledger transaction, restoring the account balance', async () => {
+    const { cookie, userId } = await registerUser('delete-cash-linked')
+    const cashAccountId = await makeCashAccount(userId, 100_000)
+    const created = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'INTC', name: 'Intel', assetClass: 'equity', sector: 'Tech', type: 'buy', units: 1, priceMinor: 20000, occurredOn: '2026-09-01', cashAccountId } })
+    const tradeId = created.json().id as string
+    expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: cashAccountId } })).currentBalanceMinor).toBe(80_000n)
+
+    const deleted = await app.inject({ method: 'DELETE', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie } })
+    expect(deleted.statusCode).toBe(204)
+    expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: cashAccountId } })).currentBalanceMinor).toBe(100_000n)
+  })
+
+  it('refuses to delete a cash-linked trade whose matching ledger transaction is already reversed (TRADE_CASH_LINK_UNRESOLVED)', async () => {
+    const { cookie, userId } = await registerUser('delete-unresolved')
+    const cashAccountId = await makeCashAccount(userId, 100_000)
+    const created = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'CSCO', name: 'Cisco', assetClass: 'equity', sector: 'Tech', type: 'buy', units: 1, priceMinor: 20000, occurredOn: '2026-09-01', cashAccountId } })
+    const tradeId = created.json().id as string
+    const trade = await prisma.investmentTrade.findUniqueOrThrow({ where: { id: tradeId } })
+    const linked = await prisma.transaction.findFirstOrThrow({ where: { userId, idempotencyKey: trade.idempotencyKey! } })
+    // Simulate the linked transaction having already been reversed
+    // out-of-band, so the trade's cash link can no longer be resolved.
+    await prisma.transaction.update({ where: { id: linked.id }, data: { reversedTransactionId: linked.id } })
+
+    const attempt = await app.inject({ method: 'DELETE', url: `/api/v1/investments/trades/${tradeId}`, headers: { origin: APP_ORIGIN, cookie } })
+    expect(attempt.statusCode).toBe(409)
+    expect(attempt.json().error.code).toBe('TRADE_CASH_LINK_UNRESOLVED')
+    // The trade itself must still exist — refused, not partially applied.
+    expect(await prisma.investmentTrade.findUnique({ where: { id: tradeId } })).not.toBeNull()
+  })
+
+  it('rejects logging a second trade under the same ticker with different instrument metadata (INSTRUMENT_METADATA_MISMATCH)', async () => {
+    const { cookie } = await registerUser('metadata-mismatch')
+    const first = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'GME', name: 'GameStop', assetClass: 'equity', sector: 'Retail', type: 'buy', units: 1, priceMinor: 2000, occurredOn: '2026-09-01' } })
+    expect(first.statusCode).toBe(201)
+
+    const mismatch = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'GME', name: 'GameStop Corp', assetClass: 'equity', sector: 'Retail', type: 'buy', units: 1, priceMinor: 2000, occurredOn: '2026-09-02' } })
+    expect(mismatch.statusCode).toBe(409)
+    expect(mismatch.json().error.code).toBe('INSTRUMENT_METADATA_MISMATCH')
+    expect(mismatch.json().error.field).toBe('ticker')
+
+    // Resubmitting with identical metadata still succeeds (not a false positive).
+    const same = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'GME', name: 'GameStop', assetClass: 'equity', sector: 'Retail', type: 'buy', units: 1, priceMinor: 2000, occurredOn: '2026-09-03' } })
+    expect(same.statusCode).toBe(201)
+  })
+
+  it('posts trade and dividend ledger transfers under the user\'s real base currency, not a hardcoded PHP', async () => {
+    const { cookie, userId } = await registerUser('base-currency')
+    // Registered users default to PHP; exercise a non-default base currency explicitly.
+    await prisma.user.update({ where: { id: userId }, data: { baseCurrency: 'USD' } })
+    const cashAccountId = await makeCashAccount(userId, 100_000)
+
+    const trade = await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'V', name: 'Visa', assetClass: 'equity', sector: 'Finance', type: 'buy', units: 1, priceMinor: 10000, occurredOn: '2026-09-01', cashAccountId } })
+    const tradeTx = await prisma.transaction.findFirstOrThrow({ where: { userId, idempotencyKey: trade.json().idempotencyKey } })
+    expect(tradeTx.currencyCode).toBe('USD')
+
+    const instrument = await prisma.instrument.findFirstOrThrow({ where: { userId, ticker: 'V' } })
+    await app.inject({ method: 'POST', url: '/api/v1/investments/dividends', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'V', amountMinor: 100, occurredOn: '2026-09-05', cashAccountId } })
+    const dividendTx = await prisma.transaction.findFirstOrThrow({ where: { userId, toAccountId: cashAccountId, amountMinor: 100n } })
+    expect(dividendTx.currencyCode).toBe('USD')
+    void instrument
+  })
+
+  it('manually refreshes quotes for only the caller\'s own instruments, honoring the cooldown window', async () => {
+    const { cookie } = await registerUser('refresh')
+    await app.inject({ method: 'POST', url: '/api/v1/investments/trades', headers: { origin: APP_ORIGIN, cookie }, payload: { ticker: 'PYPL', name: 'PayPal', assetClass: 'equity', sector: 'Fintech', type: 'buy', units: 1, priceMinor: 8000, occurredOn: '2026-09-01' } })
+
+    const first = await app.inject({ method: 'POST', url: '/api/v1/investments/quotes/refresh', headers: { origin: APP_ORIGIN, cookie } })
+    expect(first.statusCode).toBe(200)
+    expect(first.json().checked).toBeGreaterThanOrEqual(0)
+
+    // Immediately retrying is throttled by the manual-refresh cooldown.
+    const second = await app.inject({ method: 'POST', url: '/api/v1/investments/quotes/refresh', headers: { origin: APP_ORIGIN, cookie } })
+    expect(second.statusCode).toBe(429)
+    expect(second.json().error.code).toBe('QUOTE_REFRESH_COOLDOWN')
+  })
+
   it('stub provider mode never touches the usage table or the network', async () => {
     const provider = createQuoteProvider({ QUOTE_PROVIDER: 'stub' })
     const before = await prisma.externalApiUsage.count({ where: { provider: 'alpha_vantage' } })

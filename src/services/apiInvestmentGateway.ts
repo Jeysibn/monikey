@@ -47,6 +47,8 @@ export type PortfolioHolding = {
   dividendsReceivedMinor: number
   feesPaidMinor: number
   latestPriceMinor: number | null
+  /** `latestPriceMinor` converted to `Portfolio.baseCurrency`; null when nativeCurrencyCode === baseCurrency (no conversion needed) or no FX rate is available. Use this for display — latestPriceMinor is in nativeCurrencyCode, not necessarily base. */
+  latestPriceBaseMinor: number | null
   /** In the quote's native market currency (see `nativeCurrencyCode`), not necessarily the portfolio's base currency. */
   marketValueMinor: number | null
   unrealizedPnlMinor: number | null
@@ -55,6 +57,12 @@ export type PortfolioHolding = {
   /** Converted to `Portfolio.baseCurrency` using the FX subsystem; null when nativeCurrencyCode === baseCurrency (no conversion needed — see marketValueMinor) or when a rate isn't available. */
   marketValueBaseMinor: number | null
   unrealizedPnlBaseMinor: number | null
+  /** Trailing-24h price move as a percent (e.g. -3.42 for -3.42%) — currency-agnostic, no conversion needed. Null when the quote provider doesn't report one (equities, or no quote yet) — never a fabricated 0. */
+  change24hPct: number | null
+  /** Per-unit 24h price move, converted to base currency — same null semantics as latestPriceBaseMinor. */
+  change24hBaseMinor: number | null
+  /** `change24hBaseMinor * units` — this position's actual currency gain/loss over the last 24h. */
+  dailyChangeBaseMinor: number | null
   /** True when nativeCurrencyCode !== baseCurrency and no FX rate could be obtained — marketValueBaseMinor/unrealizedPnlBaseMinor are null; show the native figures with a warning rather than inventing a rate. */
   baseValuationUnavailable: boolean
   quoteSource: string
@@ -70,7 +78,11 @@ export type PortfolioSummary = {
   dividendsMinor: number
   feesMinor: number
   totalReturnMinor: number
-  totalReturnPct: number
+  /** Null when remainingCostBasisMinor is 0 (e.g. an entirely closed-out portfolio) — a %-return has no defined denominator there. */
+  totalReturnPct: number | null
+  /** Sum of every holding's `dailyChangeBaseMinor` that has one; null when none of them do (e.g. all-equity portfolio with no 24h data), never a fabricated 0. */
+  todaysChangeMinor: number | null
+  todaysChangePct: number | null
   /** True if any holding's base-currency valuation couldn't be computed (portfolioValueMinor/unrealizedPnlMinor fall back to native figures for those holdings). */
   baseValuationUnavailable: boolean
 }

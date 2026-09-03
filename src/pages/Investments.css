@@ -13,6 +13,35 @@
   color: var(--text-faint);
 }
 
+/* ---- Top Gainer / Top Loser callout --------------------------------------
+   Two-card row surfacing which holding moved most in the last 24h, same
+   pattern as Delta/CoinStats overview screens. */
+.inv-movers-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.inv-mover-card {
+  padding: 14px 16px;
+}
+.inv-mover-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.inv-mover-pct {
+  font-size: 18px;
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .inv-movers-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Asset Allocation --------------------------------------------------- */
 .inv-alloc-card {
   margin-bottom: 24px;
@@ -131,6 +160,33 @@
   }
 }
 
+/* ---- Closed Positions -----------------------------------------------------
+   A fully-exited holding's realized P&L, kept visible after it drops out of
+   the live Holdings table — see ClosedPosition in domain/investments.ts. */
+.inv-closed-card {
+  padding: 4px 4px;
+  margin-bottom: 24px;
+}
+.inv-closed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.inv-closed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.inv-closed-row:first-child {
+  border-top: none;
+}
+
 /* ---- Investment Transactions / Dividends --------------------------------- */
 .inv-split {
   display: grid;
@@ -163,6 +219,46 @@
 .log-tx-type {
   display: flex;
   gap: 6px;
+}
+
+.ticker-presets {
+  margin-top: 8px;
+}
+.ticker-presets-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.ticker-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ticker-preset {
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: oklch(24% 0.03 255 / 0.5);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+}
+.ticker-preset:hover {
+  border-color: var(--cyan);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.ticker-preset--active {
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px oklch(80% 0.13 210 / 0.16);
 }
 @media (max-width: 420px) {
   .log-tx-row {
@@ -279,4 +375,22 @@
   .inv-alloc-val {
     min-width: 76px;
   }
+}
+
+/* Shown when the portfolio backend is configured but its latest fetch
+   failed — see Investments.tsx's `inv.portfolioError`. Distinct from the
+   page's normal cards so a stale/estimated figure is never mistaken for a
+   live one. */
+.inv-portfolio-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  font-size: 13px;
+  color: var(--text);
 }

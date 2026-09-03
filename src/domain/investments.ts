@@ -54,6 +54,26 @@ export interface EnrichedHolding {
   allocationPct: number
 }
 
+/**
+ * A fully-exited position (units held = 0) with lifetime realized activity
+ * still worth showing — matches how portfolio trackers (Kraken Pro's
+ * "Position History", CoinStats' closed positions) keep a record of a
+ * closed trade's outcome separately from the live holdings table, rather
+ * than letting it vanish once the last unit is sold.
+ */
+export interface ClosedPosition {
+  ticker: string
+  name: string
+  sector: string
+  assetClass: AssetClass
+  /** Net profit/loss realized across this instrument's full trade history. */
+  realizedPnl: number
+  /** `realizedPnl / totalCostBasisEverAllocated * 100` — null when that's 0 (never bought, dividend-only). */
+  realizedPnlPct: number | null
+  dividendsReceived: number
+  feesPaid: number
+}
+
 /** One slice of the Asset Allocation breakdown (grouped by sector). */
 export interface AllocationSlice {
   sector: string

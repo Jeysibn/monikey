@@ -7,9 +7,6 @@ on:
     branches: [main, feature/backend-implementation, develop]
 
 env:
-  POSTGRES_DB: monikey
-  POSTGRES_USER: monikey
-  POSTGRES_PASSWORD: test-password
   DATABASE_URL: postgresql://monikey:test-password@localhost:5432/monikey
   NODE_ENV: production
   APP_ORIGIN: http://localhost:8080
@@ -30,60 +27,37 @@ env:
   ALLOW_TEST_CLOCK: true
 
 jobs:
-  frontend-lint-typecheck-build:
-    name: Frontend Lint, Typecheck, and Build
+  frontend:
+    name: Frontend (lint, typecheck, test, build)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --include=dev
-
-      - name: Lint frontend
-        run: npm run lint
-
-      - name: Typecheck frontend
-        run: npm run typecheck
-
-      - name: Build frontend
-        run: npm run build
-
-      - name: Run frontend unit tests
-        run: npm run test
+      - run: npm ci --include=dev
+      - run: npm run lint
+      - run: npm run typecheck
+      # NODE_ENV=production (job-level) strips React.act, which
+      # Testing Library/Vitest need — override to `test` for this step only.
+      - run: npm run test
         env:
-          # Overrides the job-level NODE_ENV=production (kept elsewhere so
-          # build/integration steps exercise real production behavior) —
-          # Vitest/Testing Library's React.act helper is stripped from
-          # React's production build, so under NODE_ENV=production it
-          # doesn't exist and every test using it throws "React.act is not
-          # a function".
           NODE_ENV: test
+      - run: npm run build
 
-      - name: Upload frontend build artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: frontend-dist
-          path: dist
-          retention-days: 1
-
-  backend-tests:
-    name: Backend Tests with PostgreSQL
+  backend:
+    name: Backend (lint, typecheck, test)
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: monikey
+          POSTGRES_USER: monikey
+          POSTGRES_PASSWORD: test-password
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -91,432 +65,26 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Install root dependencies
+      - working-directory: ./backend
         run: npm ci --include=dev
 
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: npm ci --include=dev
-
-      - name: Lint backend
-        working-directory: ./backend
+      - working-directory: ./backend
         run: npm run lint
 
-      - name: Typecheck backend
-        working-directory: ./backend
+      - working-directory: ./backend
         run: npm run typecheck
 
-      - name: Generate Prisma client
-        working-directory: ./backend
-        run: npx prisma generate
-
-      - name: Run Prisma migration from empty DB
-        working-directory: ./backend
+      - working-directory: ./backend
         run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
 
-      - name: Run backend unit tests
-        working-directory: ./backend
+      - working-directory: ./backend
         run: npm run test
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-  backend-integration-tests:
-    name: Backend Integration Tests with Live DB
-    runs-on: ubuntu-latest
-    needs: backend-tests
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install root dependencies
-        run: npm ci --include=dev
-
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: npm ci --include=dev
-
-      - name: Generate Prisma client
-        working-directory: ./backend
-        run: npx prisma generate
-
-      - name: Run Prisma migration for integration tests
-        working-directory: ./backend
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-      - name: Run integration tests
-        working-directory: ./backend
-        run: npm run test
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-  docker-build-and-scan:
-    name: Docker Build and Scan with Trivy
-    runs-on: ubuntu-latest
-    needs: backend-tests
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: false
-          load: true
-          tags: monikey-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Web.Dockerfile
-          push: false
-          load: true
-          tags: monikey-web:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Create Trivy output directory
-        run: mkdir -p trivy-results
-
-      - name: Run Trivy vulnerability scan - Backend
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: monikey-backend:latest
-          format: 'sarif'
-          output: 'trivy-results/trivy-backend.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Run Trivy vulnerability scan - Frontend
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: monikey-web:latest
-          format: 'sarif'
-          output: 'trivy-results/trivy-frontend.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      # Uploading the whole trivy-results/ directory in one step (both
-      # files sharing category: 'trivy') hit "The CodeQL Action does not
-      # support uploading multiple SARIF runs with the same category" —
-      # each file needs its own upload step with a distinct category.
-      - name: Upload backend Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results/trivy-backend.sarif'
-          category: 'trivy-backend'
-
-      - name: Upload frontend Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results/trivy-frontend.sarif'
-          category: 'trivy-frontend'
-
-  openapi-contract-check:
-    name: OpenAPI Contract Verification
-    runs-on: ubuntu-latest
-    needs: docker-build-and-scan
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Start services with docker compose
-        run: |
-          docker compose build --no-cache
-          docker compose up -d --wait
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          VITE_FINANCE_BACKEND: 'true'
-
-      - name: Wait for API to be ready
-        run: |
-          for i in {1..30}; do
-            if curl -s http://localhost:3000/health; then
-              echo "API is ready"
-              exit 0
-            fi
-            echo "Waiting for API... ($i/30)"
-            sleep 2
-          done
-          echo "API failed to start"
-          exit 1
-
-      - name: Fetch OpenAPI spec
-        run: |
-          curl -s http://localhost:3000/openapi.json > /tmp/openapi-spec.json
-          echo "OpenAPI spec fetched:"
-          head -50 /tmp/openapi-spec.json
-
-      - name: Compare with baseline (if exists)
-        run: |
-          if [ -f docs/openapi-baseline.json ]; then
-            # Simple diff check - full contract testing can be extended
-            SPEC_DIFF=$(diff docs/openapi-baseline.json /tmp/openapi-spec.json || true)
-            if [ -n "$SPEC_DIFF" ]; then
-              echo "WARNING: OpenAPI spec has changed from baseline"
-              echo "$SPEC_DIFF"
-            fi
-          else
-            echo "No baseline found, skipping contract check"
-            mkdir -p docs
-            cp /tmp/openapi-spec.json docs/openapi-baseline.json
-          fi
-
-      - name: Stop services
-        if: always()
-        run: docker compose down -v
-
-      - name: Upload OpenAPI spec as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: openapi-spec
-          path: /tmp/openapi-spec.json
-          retention-days: 30
-
-  playwright-e2e:
-    name: Playwright E2E Tests
-    runs-on: ubuntu-latest
-    needs: [frontend-lint-typecheck-build, docker-build-and-scan]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install Playwright browsers
-        run: npm run test:e2e:install
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Install root dependencies
-        run: npm ci --include=dev
-
-      - name: Download frontend build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist
-
-      - name: Start Compose stack
-        run: |
-          docker compose build --no-cache
-          docker compose up -d --wait
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          VITE_FINANCE_BACKEND: 'true'
-
-      - name: Wait for web server
-        run: |
-          for i in {1..30}; do
-            if curl -s http://localhost:8080/ > /dev/null; then
-              echo "Web server is ready"
-              exit 0
-            fi
-            echo "Waiting for web server... ($i/30)"
-            sleep 2
-          done
-          echo "Web server failed to start"
-          exit 1
-
-      - name: Run authenticated Compose Playwright tests
-        run: npm run test:e2e:backend
-        env:
-          PLAYWRIGHT_TEST_BASE_URL: http://localhost:8080
-
-      - name: Stop Compose stack
-        if: always()
-        run: docker compose down -v
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          retention-days: 7
-
-  security-checks:
-    name: Security Checks (Secrets, Dependencies)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run secret scanning with TruffleHog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-
-      - name: Check for VITE_ env vars in source
-        run: |
-          echo "Checking for sensitive VITE_ env vars in source code..."
-          if grep -r "VITE_.*KEY\|VITE_.*SECRET\|VITE_.*PASSWORD\|VITE_.*TOKEN" src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx"; then
-            echo "ERROR: Found sensitive environment variables with VITE_ prefix"
-            exit 1
-          fi
-          echo "No sensitive VITE_ env vars found"
-
-      - name: Verify .env and .env.local are gitignored
-        run: |
-          echo "Checking .gitignore for .env files..."
-          if grep -E "^\.env$|^\.env\.local$|^\.env\.\*\.local$" .gitignore; then
-            echo ".env files are properly gitignored"
-          else
-            echo "WARNING: .env files might not be properly gitignored"
-            cat .gitignore | grep env
-          fi
-
-      - name: Check for committed secrets
-        run: |
-          echo "Checking for common secret patterns..."
-          if grep -r "DATABASE_URL.*password\|API_KEY.*=.*[a-zA-Z0-9]\{20,\}\|SECRET.*=.*[a-zA-Z0-9]\{20,\}" . \
-            --include="*.yaml" --include="*.yml" --include="*.json" \
-            --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist; then
-            echo "WARNING: Found potential secrets in configuration files"
-          fi
-          echo "Secret check complete"
-
-  summary:
-    name: CI Summary
-    runs-on: ubuntu-latest
-    needs:
-      [
-        frontend-lint-typecheck-build,
-        backend-tests,
-        backend-integration-tests,
-        docker-build-and-scan,
-        openapi-contract-check,
-        playwright-e2e,
-        security-checks,
-      ]
-    if: always()
-    steps:
-      - name: Check CI Status
-        run: |
-          if [ "${{ needs.frontend-lint-typecheck-build.result }}" != "success" ]; then
-            echo "Frontend checks failed"
-            exit 1
-          fi
-          if [ "${{ needs.backend-tests.result }}" != "success" ]; then
-            echo "Backend tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.backend-integration-tests.result }}" != "success" ]; then
-            echo "Backend integration tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.docker-build-and-scan.result }}" != "success" ]; then
-            echo "Docker build/scan failed"
-            exit 1
-          fi
-          if [ "${{ needs.openapi-contract-check.result }}" != "success" ]; then
-            echo "OpenAPI contract check failed"
-            exit 1
-          fi
-          if [ "${{ needs.playwright-e2e.result }}" != "success" ]; then
-            echo "Playwright E2E tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.security-checks.result }}" != "success" ]; then
-            echo "Security checks failed"
-            exit 1
-          fi
-          echo "All CI checks passed!"

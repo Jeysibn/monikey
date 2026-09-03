@@ -226,7 +226,7 @@ jobs:
         with:
           image-ref: monikey-backend:latest
           format: 'sarif'
-          output: 'trivy-backend.sarif'
+          output: 'trivy-results/trivy-backend.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Run Trivy vulnerability scan - Frontend
@@ -234,14 +234,18 @@ jobs:
         with:
           image-ref: monikey-web:latest
           format: 'sarif'
-          output: 'trivy-frontend.sarif'
+          output: 'trivy-results/trivy-frontend.sarif'
           severity: 'CRITICAL,HIGH'
 
+      # upload-sarif's `sarif_file` does not shell-expand a glob like
+      # `trivy-*.sarif` (that's a literal filename to it, which never
+      # exists) — it does accept a directory and uploads every .sarif file
+      # inside it, so both scans are written into one directory instead.
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-*.sarif'
+          sarif_file: 'trivy-results'
           category: 'trivy'
 
   openapi-contract-check:

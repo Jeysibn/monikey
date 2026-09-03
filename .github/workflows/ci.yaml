@@ -57,6 +57,14 @@ jobs:
 
       - name: Run frontend unit tests
         run: npm run test
+        env:
+          # Overrides the job-level NODE_ENV=production (kept elsewhere so
+          # build/integration steps exercise real production behavior) —
+          # Vitest/Testing Library's React.act helper is stripped from
+          # React's production build, so under NODE_ENV=production it
+          # doesn't exist and every test using it throws "React.act is not
+          # a function".
+          NODE_ENV: test
 
       - name: Upload frontend build artifacts
         uses: actions/upload-artifact@v4

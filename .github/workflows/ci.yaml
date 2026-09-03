@@ -221,6 +221,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Create Trivy output directory
+        run: mkdir -p trivy-results
+
       - name: Run Trivy vulnerability scan - Backend
         uses: aquasecurity/trivy-action@master
         with:

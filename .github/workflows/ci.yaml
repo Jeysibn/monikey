@@ -240,16 +240,23 @@ jobs:
           output: 'trivy-results/trivy-frontend.sarif'
           severity: 'CRITICAL,HIGH'
 
-      # upload-sarif's `sarif_file` does not shell-expand a glob like
-      # `trivy-*.sarif` (that's a literal filename to it, which never
-      # exists) — it does accept a directory and uploads every .sarif file
-      # inside it, so both scans are written into one directory instead.
-      - name: Upload Trivy results to GitHub Security tab
+      # Uploading the whole trivy-results/ directory in one step (both
+      # files sharing category: 'trivy') hit "The CodeQL Action does not
+      # support uploading multiple SARIF runs with the same category" —
+      # each file needs its own upload step with a distinct category.
+      - name: Upload backend Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results'
-          category: 'trivy'
+          sarif_file: 'trivy-results/trivy-backend.sarif'
+          category: 'trivy-backend'
+
+      - name: Upload frontend Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results/trivy-frontend.sarif'
+          category: 'trivy-frontend'
 
   openapi-contract-check:
     name: OpenAPI Contract Verification

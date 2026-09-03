@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, feature/backend-implementation, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main, feature/backend-implementation, develop]
 
 env:
   POSTGRES_DB: monikey

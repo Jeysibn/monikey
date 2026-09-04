@@ -24,8 +24,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-api
-  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-web
 
 jobs:
   # For a push event, dorny/paths-filter diffs against github.event.before —
@@ -37,6 +35,12 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      # github.repository_owner preserves account casing ("Jeysibn"), but
+      # GHCR (like every OCI registry) requires an all-lowercase repository
+      # name — `docker/build-push-action` fails at tag-validation, before
+      # it ever builds a layer, if this isn't lowercased first. Computed
+      # once here and reused by both publish jobs below.
+      image_owner: ${{ steps.owner.outputs.lowercase }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,11 +54,19 @@ jobs:
             frontend:
               - 'frontend/**'
 
+      - name: Lowercase repository owner for GHCR
+        id: owner
+        run: echo "lowercase=${OWNER,,}" >> "$GITHUB_OUTPUT"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
   publish-backend:
     name: Build & push api/worker image
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    env:
+      API_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-api
     steps:
       - uses: actions/checkout@v4
 
@@ -97,6 +109,8 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    env:
+      WEB_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-web
     steps:
       - uses: actions/checkout@v4
 

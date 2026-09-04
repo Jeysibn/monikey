@@ -15,6 +15,13 @@ permissions:
   contents: read
   packages: write
 
+# Never cancel a publish mid-push — an interrupted docker push can leave a
+# half-uploaded manifest/tag in GHCR. Two merges to main close together
+# queue instead of racing or clobbering each other's `:latest`.
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-api
@@ -70,6 +77,21 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
+      - name: Verify pushed image is pullable
+        run: |
+          set -euo pipefail
+          docker pull "${{ env.API_IMAGE }}:${{ github.sha }}"
+          docker inspect "${{ env.API_IMAGE }}:${{ github.sha }}" \
+            --format 'Pulled {{.RepoTags}} ({{.Id}})'
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "## Backend Image Published ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** ${{ env.API_IMAGE }}:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pulled back from GHCR and verified. Argo CD (homelab-gitops) will roll this tag out on its next sync." >> "$GITHUB_STEP_SUMMARY"
+
   publish-frontend:
     name: Build & push web image
     needs: detect-changes
@@ -98,3 +120,18 @@ jobs:
             ${{ env.WEB_IMAGE }}:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Verify pushed image is pullable
+        run: |
+          set -euo pipefail
+          docker pull "${{ env.WEB_IMAGE }}:${{ github.sha }}"
+          docker inspect "${{ env.WEB_IMAGE }}:${{ github.sha }}" \
+            --format 'Pulled {{.RepoTags}} ({{.Id}})'
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "## Frontend Image Published ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** ${{ env.WEB_IMAGE }}:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pulled back from GHCR and verified. Argo CD (homelab-gitops) will roll this tag out on its next sync." >> "$GITHUB_STEP_SUMMARY"

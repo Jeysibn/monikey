@@ -10,6 +10,13 @@ on:
   pull_request:
     branches: [main]
 
+# A rapid double-push to dev, or a new commit landing on an open PR before
+# the last run finished, cancels the stale run instead of letting two
+# validations race each other for the same ref.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   POSTGRES_DB: monikey
   POSTGRES_USER: monikey

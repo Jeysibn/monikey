@@ -10,6 +10,13 @@ name: Publish images
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which image(s) to build and push'
+        type: choice
+        options: [both, backend, frontend]
+        default: both
 
 permissions:
   contents: read
@@ -24,24 +31,33 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-api
-  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-web
 
 jobs:
   # For a push event, dorny/paths-filter diffs against github.event.before —
   # the SHA main pointed to right before this push — so a squash- or
-  # merge-commit's full net diff from the PR is captured correctly.
+  # merge-commit's full net diff from the PR is captured correctly. A
+  # manual (workflow_dispatch) run has no "before" commit to diff against,
+  # so it skips the filter entirely and instead builds whichever image(s)
+  # the `target` input picked — the obvious thing to want from a manual
+  # run is "publish this on demand," not "figure out what changed."
   detect-changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.final.outputs.backend }}
+      frontend: ${{ steps.final.outputs.frontend }}
+      # github.repository_owner preserves account casing ("Jeysibn"), but
+      # GHCR (like every OCI registry) requires an all-lowercase repository
+      # name — `docker/build-push-action` fails at tag-validation, before
+      # it ever builds a layer, if this isn't lowercased first. Computed
+      # once here and reused by both publish jobs below.
+      image_owner: ${{ steps.owner.outputs.lowercase }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Filter changed paths
         id: filter
+        if: github.event_name == 'push'
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -50,11 +66,33 @@ jobs:
             frontend:
               - 'frontend/**'
 
+      - name: Resolve final backend/frontend targets
+        id: final
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            target="${{ github.event.inputs.target }}"
+            backend=$([ "$target" = both ] || [ "$target" = backend ] && echo true || echo false)
+            frontend=$([ "$target" = both ] || [ "$target" = frontend ] && echo true || echo false)
+          else
+            backend="${{ steps.filter.outputs.backend }}"
+            frontend="${{ steps.filter.outputs.frontend }}"
+          fi
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Lowercase repository owner for GHCR
+        id: owner
+        run: echo "lowercase=${OWNER,,}" >> "$GITHUB_OUTPUT"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
   publish-backend:
     name: Build & push api/worker image
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    env:
+      API_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-api
     steps:
       - uses: actions/checkout@v4
 
@@ -97,6 +135,8 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    env:
+      WEB_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-web
     steps:
       - uses: actions/checkout@v4
 

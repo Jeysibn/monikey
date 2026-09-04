@@ -1,0 +1,5 @@
+export { createInsightsService } from './insights.service.js'
+export { createInsightsRepository } from './insights.repository.js'
+export { insightsRoutes } from './insights.routes.js'
+export { buildPrivacySafeFinancialContext } from './contextBuilder.js'
+export * from './schemas.js'

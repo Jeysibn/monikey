@@ -1,0 +1,352 @@
+.see-all {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+  text-align: right;
+  flex: none;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+@media (min-width: 1000px) {
+  .dash-grid {
+    grid-template-columns: 300px repeat(3, 1fr);
+    grid-template-rows: repeat(4, minmax(190px, auto));
+    grid-template-areas:
+      'balance  expenses expenses expenses'
+      'balance  budget   goals    spend'
+      'ai       credit   credit   portfolio'
+      'ai       recent   recent   portfolio';
+  }
+  .area-balance {
+    grid-area: balance;
+  }
+  .area-expenses {
+    grid-area: expenses;
+  }
+  .area-budget {
+    grid-area: budget;
+  }
+  .area-goals {
+    grid-area: goals;
+  }
+  .area-spend {
+    grid-area: spend;
+  }
+  .area-ai {
+    grid-area: ai;
+  }
+  .area-credit {
+    grid-area: credit;
+  }
+  .area-portfolio {
+    grid-area: portfolio;
+  }
+  .area-recent {
+    grid-area: recent;
+  }
+}
+
+/* Below the desktop grid breakpoint, .dash-grid falls back to a single
+   auto-fit column and stacks cards in DOM order. Reorder them here to the
+   priority the review brief asks for on mobile: available cash, recent
+   transactions, budget, goals, then everything else. */
+@media (max-width: 999px) {
+  .area-balance {
+    order: 1;
+  }
+  .area-recent {
+    order: 2;
+  }
+  .area-budget {
+    order: 3;
+  }
+  .area-goals {
+    order: 4;
+  }
+  .area-expenses {
+    order: 5;
+  }
+  .area-credit {
+    order: 6;
+  }
+  .area-spend {
+    order: 7;
+  }
+  .area-ai {
+    order: 8;
+  }
+  .area-portfolio {
+    order: 9;
+  }
+}
+
+.balance-card {
+  gap: 12px;
+}
+.bal-amount {
+  font-size: 26px;
+  font-weight: 700;
+}
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.flow-amt {
+  font-size: 18px;
+  font-weight: 700;
+}
+.badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal);
+  background: oklch(74% 0.13 175 / 0.14);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.acct-preview {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.acct-preview-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.bal-acct-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.bal-acct-row:first-of-type {
+  border-top: none;
+}
+.bal-acct-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.bal-acct-type {
+  font-size: 12px;
+}
+.bal-acct-amt {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.expenses-line {
+  display: flex;
+  flex-direction: column;
+  height: 140px;
+  margin-top: 12px;
+}
+.expenses-spark {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.months {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.expenses-line-today {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.mini-list--goals li {
+  align-items: center;
+}
+.ai-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ai-msg {
+  max-width: 85%;
+  font-size: 12px;
+  padding: 8px 11px;
+  border-radius: 12px;
+}
+.ai-msg--user {
+  align-self: flex-end;
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  font-weight: 600;
+}
+.ai-msg--bot {
+  align-self: flex-start;
+  background: var(--card-hi);
+  color: var(--text-dim);
+}
+.ai-input {
+  margin-top: 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 9px 14px;
+}
+
+.cc-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.cc-item {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  min-width: 220px;
+}
+.cc-plastic {
+  width: 130px;
+  height: 84px;
+  border-radius: 12px;
+  padding: 10px;
+  flex: none;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.cc-plastic--visa {
+  background: linear-gradient(135deg, oklch(38% 0.09 260), oklch(22% 0.05 265));
+}
+.cc-plastic--mastercard {
+  background: linear-gradient(135deg, oklch(30% 0.015 40), oklch(16% 0.01 40));
+}
+.cc-chip {
+  width: 22px;
+  height: 15px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, oklch(88% 0.06 95), oklch(66% 0.09 80));
+}
+.cc-num {
+  font-family: var(--font-display);
+  letter-spacing: 1.5px;
+  font-size: 12px;
+}
+.cc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.portfolio-tile {
+  background: var(--card-hi);
+  border-radius: 11px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.portfolio-spark {
+  width: 100%;
+  height: 24px;
+  margin: 2px 0;
+}
+.portfolio-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.tx-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.tx-table td {
+  padding: 8px 6px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+}
+.tx-table tr:first-child td {
+  border-top: none;
+}
+.tx-table td:nth-child(1) {
+  width: 32%;
+}
+.tx-table td:nth-child(2) {
+  width: 24%;
+  text-align: center;
+  overflow: hidden;
+}
+.tx-table td:nth-child(3) {
+  width: 24%;
+}
+.tx-table td:nth-child(4) {
+  width: 20%;
+}
+.tx-table .tx-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tx-table td.tx-amt--out {
+  color: var(--text);
+  font-weight: 700;
+  text-align: right;
+}
+.tx-table td.tx-amt--in {
+  color: var(--teal);
+  font-weight: 700;
+  text-align: right;
+}
+
+.expenses-head-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.seg-pill {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Essential dashboard metadata (transaction source/date/time, fee and card
+   payment reconciliation, credit card due dates and utilization, goal pace,
+   preview disclosures) — all raised to the 12px floor (TR-009). */
+.dash-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+/* The exact date window the expense chart above it covers (TR-005). */
+.expenses-range {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: -4px;
+}

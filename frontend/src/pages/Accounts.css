@@ -1,0 +1,89 @@
+.accounts-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .accounts-split {
+    grid-template-columns: 1.8fr 1fr;
+  }
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  gap: 12px;
+}
+.account-row:first-of-type {
+  border-top: none;
+}
+.acct-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* Institution/sync status, credit-card due date + minimum, and the card's
+   limit: essential account metadata, so it holds the 12px floor rather than
+   the old inherited `.faint` sizing (TR-009). */
+.acct-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.acct-amt {
+  text-align: right;
+  flex: none;
+}
+.acct-amt .num {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.alloc-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.alloc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.alloc-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: none;
+  width: 90px;
+}
+.alloc-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--slate);
+  overflow: hidden;
+}
+.alloc-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--teal));
+  border-radius: 999px;
+}
+.alloc-amt {
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+  width: 60px;
+  text-align: right;
+}
+
+.add-account-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  border: 1.5px dashed var(--card-border);
+  background: transparent;
+  box-shadow: none;
+}

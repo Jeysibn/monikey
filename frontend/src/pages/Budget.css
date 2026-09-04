@@ -1,0 +1,149 @@
+.budget-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .budget-split {
+    grid-template-columns: 1.7fr 1fr;
+  }
+}
+.budget-row {
+  display: grid;
+  grid-template-columns: 1fr 108px 92px auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.budget-row:first-of-type {
+  border-top: none;
+}
+.budget-row-actions {
+  display: flex;
+  gap: 6px;
+}
+.budget-row-actions .btn {
+  white-space: nowrap;
+}
+.budget-row-mid {
+  min-width: 0;
+}
+.budget-row-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.budget-row > .status-badge {
+  justify-self: center;
+}
+.budget-amt {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+}
+.budget-amt--over {
+  color: var(--red);
+}
+
+.bva-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 140px;
+  gap: 8px;
+  margin-top: 8px;
+}
+.bva-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.bva-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 1;
+}
+.bva-bar {
+  width: 12px;
+  border-radius: 4px 4px 2px 2px;
+}
+.bva-bar--budget {
+  background: var(--slate-lt);
+}
+.bva-bar--actual {
+  background: linear-gradient(180deg, var(--cyan), var(--cyan-dim));
+}
+.bva-bar--over {
+  background: linear-gradient(180deg, var(--red), oklch(45% 0.12 25));
+}
+.bva-label {
+  font-size: 12px;
+}
+.bva-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.bva-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.bva-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.bva-swatch--budget {
+  background: var(--slate-lt);
+}
+.bva-swatch--actual {
+  background: var(--cyan);
+}
+.bva-swatch--over {
+  background: var(--red);
+}
+
+/* Stack category rows on narrow screens instead of forcing 3 fixed-width
+   columns (name/bar, status, amount) into a viewport too narrow for them. */
+@media (max-width: 520px) {
+  .budget-row {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+  .budget-row > .status-badge {
+    justify-self: start;
+  }
+  .budget-amt {
+    text-align: left;
+  }
+  .budget-row-actions {
+    flex-direction: row;
+  }
+  .budget-row-actions .btn {
+    flex: 1;
+  }
+}
+
+/* Period caption, per-category spent/allocated figures, and the forecast
+   line: all essential budget information, raised to the 12px floor from
+   9.5–10.5px (TR-009). */
+.budget-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.budget-forecast {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}

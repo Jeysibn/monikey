@@ -1,0 +1,92 @@
+/* Layout for a two-field row inside the Add Recurring Item form (amount +
+   frequency, linked account + category) — same shape as `.new-category-form`
+   fields (Budget.css/Goals.css), just paired side by side where there's
+   room. */
+.rec-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rec-autopay-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rec-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 96px auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.rec-row:first-of-type {
+  border-top: none;
+}
+.rec-row-main {
+  min-width: 0;
+}
+.rec-row-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.rec-merchant {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.rec-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12px;
+}
+.rec-row-amt {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+.rec-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rec-row-actions .btn {
+  white-space: nowrap;
+  justify-content: center;
+}
+
+/* Stack the merchant/meta, amount, status, and actions into one column on
+   narrow screens instead of forcing the 4-column row grid — same pattern as
+   Budget.css's `.budget-row` collapse (down to ~390px, TR-009's essential
+   text stays at 12px throughout). */
+@media (max-width: 640px) {
+  .rec-row {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+  .rec-row-amt {
+    text-align: left;
+  }
+  .rec-row-actions {
+    flex-direction: row;
+  }
+  .rec-row-actions .btn {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .rec-form-row {
+    grid-template-columns: 1fr;
+  }
+}

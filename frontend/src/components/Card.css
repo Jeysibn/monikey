@@ -1,0 +1,28 @@
+.card {
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 22%);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  box-shadow:
+    0 1px 0 0 oklch(100% 0 0 / 0.03) inset,
+    0 10px 24px -16px oklch(5% 0 0 / 0.7);
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 12px;
+  /* Lets a title + action row (e.g. the Dashboard Expenses card's segmented
+     period control) drop to its own line instead of forcing horizontal
+     overflow when both together don't fit the card width (SR-011, 320px). */
+  flex-wrap: wrap;
+  row-gap: 6px;
+}

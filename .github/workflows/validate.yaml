@@ -105,7 +105,7 @@ jobs:
           NODE_ENV: test
 
       - name: Upload frontend build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: frontend-dist

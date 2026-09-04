@@ -30,7 +30,7 @@ authentication, no real bank/AI/OCR integration exists yet (see
 - Create a savings goal and fund it from a named account — funding can never
   overdraw that account or push a goal past its target.
 
-Every one of those rules lives in `src/domain/financeRules.ts` and is enforced
+Every one of those rules lives in `frontend/src/domain/financeRules.ts` and is enforced
 by the repository, not by the forms — see
 [`docs/ARCHITECTURE.md#finance-invariants`](./docs/ARCHITECTURE.md#finance-invariants)
 for the full list, including the asset-overdraft, credit-limit, card-payment,
@@ -58,19 +58,36 @@ form's default date — to that date at once. See
 
 - [Vite](https://vite.dev) + React 19 + TypeScript
 - [react-router-dom](https://reactrouter.com) for client-side routing
-- Plain CSS (design tokens in `src/styles/tokens.css`) — no CSS framework
+- Plain CSS (design tokens in `frontend/src/styles/tokens.css`) — no CSS framework
 - [Playwright](https://playwright.dev) for end-to-end tests
 - A React state layer backed by the Fastify API through `ApiFinanceGateway` in
   backend mode, with a deterministic mock adapter for local UI tests. See
   [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full shape.
 - Currency: Philippine peso (`en-PH`/`PHP` via `Intl.NumberFormat`), see
-  `src/utils/currency.ts`. The configuration is module-level and
+  `frontend/src/utils/currency.ts`. The configuration is module-level and
   non-reactive, so switching currency at runtime is explicitly unsupported
   until a Settings page moves it into React state.
+
+## Repository layout
+
+This repo is a small monorepo with two independently-built packages, each
+with its own `package.json`, lockfile, and Dockerfile:
+
+```
+frontend/   React + TypeScript + Vite SPA (this README's subject)
+backend/    Fastify API + worker (see docs/ARCHITECTURE.md)
+docker/     Shared/observability infra (Grafana, Prometheus) not owned by
+            either package
+docs/       Architecture docs and screenshots
+compose.yaml, compose.dev.yaml   Local orchestration of both packages
+```
+
+All commands below are run from inside `frontend/` unless noted otherwise.
 
 ## Getting started
 
 ```bash
+cd frontend
 npm install
 npm run dev       # http://localhost:5173
 ```
@@ -86,11 +103,16 @@ npm run dev       # http://localhost:5173
 | `npm run test` | Run the Vitest unit-test suite (`financeSelectors.ts`, `clock.ts`, `date.ts`, `money.ts`, `financeRules.ts` via the repository, `financeStore.ts`, `FinanceProvider.tsx`) |
 | `npm run test:e2e:install` | Install the pinned Playwright Chromium build and its system dependencies (once per machine / in CI) |
 | `npm run test:e2e` | Run the Playwright end-to-end suite — its web server runs `npm run build && npm run preview`, so it builds once and serves that build |
-| `npm run screenshots` | Build and regenerate the screenshots under `docs/screenshots/` |
+| `npm run screenshots` | Build and regenerate the screenshots under `../docs/screenshots/` |
+
+The repo root also has a thin `package.json` with `--prefix`-delegating
+convenience scripts (e.g. `npm run dev:frontend`, `npm run test:backend`) for
+working across both packages without `cd`-ing back and forth.
 
 ### Running the end-to-end tests
 
 ```bash
+cd frontend
 npm run test:e2e:install   # once per machine: downloads Chromium + system deps
 npm run test:e2e
 ```

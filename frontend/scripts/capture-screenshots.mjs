@@ -14,11 +14,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '..')
-const outDir = path.join(root, 'docs', 'screenshots')
+const frontendRoot = path.resolve(__dirname, '..')
+const repoRoot = path.resolve(frontendRoot, '..')
+const outDir = path.join(repoRoot, 'docs', 'screenshots')
 
 async function main() {
-  const server = await preview({ root, preview: { port: 4174, strictPort: false } })
+  const server = await preview({ root: frontendRoot, preview: { port: 4174, strictPort: false } })
   const base = server.resolvedUrls.local[0].replace(/\/$/, '')
 
   const browser = await chromium.launch()

@@ -1,4 +1,7 @@
 # syntax=docker/dockerfile:1
+#
+# Build context is ./frontend (see compose.yaml / publish.yaml) — every COPY
+# below is relative to this package, not the repo root.
 
 # ---- build: compile the existing Vite React SPA -----------------------
 FROM node:24-alpine AS build

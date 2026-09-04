@@ -1,7 +1,7 @@
 name: Publish images
 
 # Builds and publishes the Monikey API/worker image (backend/Dockerfile) and
-# the web image (docker/Web.Dockerfile) to GHCR whenever CI has passed on
+# the web image (frontend/Dockerfile) to GHCR whenever CI has passed on
 # main or feature/backend-implementation (the current active integration
 # branch, ahead of main until it's merged). Images are tagged with the
 # commit SHA so the homelab-gitops Argo Application can pin an exact,
@@ -53,8 +53,7 @@ jobs:
       - name: Build & push web image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: docker/Web.Dockerfile
+          context: ./frontend
           push: true
           build-args: |
             VITE_FINANCE_BACKEND=true

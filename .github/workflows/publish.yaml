@@ -1,16 +1,15 @@
 name: Publish images
 
-# Builds and publishes the Monikey API/worker image (backend/Dockerfile) and
-# the web image (frontend/Dockerfile) to GHCR whenever CI has passed on
-# main or feature/backend-implementation (the current active integration
-# branch, ahead of main until it's merged). Images are tagged with the
-# commit SHA so the homelab-gitops Argo Application can pin an exact,
-# immutable digest-equivalent tag rather than tracking a mutable `latest`.
+# Runs on every push to `main` — i.e. right after a dev→main PR merges.
+# validate.yaml is the quality gate (it already ran on `dev` and on the PR
+# itself), so this workflow does no re-validation: it just figures out
+# which package(s) changed in the merge and builds+pushes only those
+# image(s). Images are tagged with the commit SHA so the homelab-gitops
+# Argo Application can pin an exact, immutable digest-equivalent tag rather
+# than tracking a mutable `latest`.
 on:
-  workflow_run:
-    workflows: [CI]
-    branches: [main, feature/backend-implementation]
-    types: [completed]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -22,14 +21,35 @@ env:
   WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/monikey-web
 
 jobs:
-  publish:
-    name: Build & push images
+  # For a push event, dorny/paths-filter diffs against github.event.before —
+  # the SHA main pointed to right before this push — so a squash- or
+  # merge-commit's full net diff from the PR is captured correctly.
+  detect-changes:
+    name: Detect changed paths
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  publish-backend:
+    name: Build & push api/worker image
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
@@ -45,10 +65,26 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ${{ env.API_IMAGE }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.API_IMAGE }}:${{ github.sha }}
             ${{ env.API_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  publish-frontend:
+    name: Build & push web image
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push web image
         uses: docker/build-push-action@v6
@@ -58,7 +94,7 @@ jobs:
           build-args: |
             VITE_FINANCE_BACKEND=true
           tags: |
-            ${{ env.WEB_IMAGE }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
             ${{ env.WEB_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

@@ -1,0 +1,396 @@
+/* Positive/negative currency figures across the page — gain/loss, daily
+   return, dividends. Matches the `.kpi-delta--up`/`.kpi-delta--down`
+   convention already used elsewhere for the same distinction. */
+.inv-pos {
+  color: var(--teal);
+}
+.inv-neg {
+  color: var(--red);
+}
+
+.inv-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---- Top Gainer / Top Loser callout --------------------------------------
+   Two-card row surfacing which holding moved most in the last 24h, same
+   pattern as Delta/CoinStats overview screens. */
+.inv-movers-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.inv-mover-card {
+  padding: 14px 16px;
+}
+.inv-mover-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.inv-mover-pct {
+  font-size: 18px;
+  font-weight: 700;
+}
+@media (max-width: 520px) {
+  .inv-movers-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Asset Allocation --------------------------------------------------- */
+.inv-alloc-card {
+  margin-bottom: 24px;
+}
+.inv-alloc-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--card-hi);
+  margin: 10px 0 12px;
+}
+.inv-alloc-seg {
+  height: 100%;
+}
+.inv-alloc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inv-alloc-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.inv-alloc-name {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+.inv-alloc-val {
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ---- Holdings ------------------------------------------------------------
+   Desktop: a role="table" grid, same accessible-grid pattern the
+   Transactions page uses. Below the tablet breakpoint it's hidden in favor
+   of the stacked mobile card list, so an 8-column table never has to be
+   squeezed into a ~390px viewport (FR-007 precedent). */
+.inv-section-head {
+  margin-bottom: 8px;
+}
+.inv-holdings-card {
+  padding: 6px 4px;
+  margin-bottom: 24px;
+}
+.inv-holdings-table {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.inv-holdings-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.7fr 0.7fr 1fr 1fr 1.1fr 1.1fr 1.1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.inv-holdings-row:first-child {
+  border-top: none;
+}
+.inv-holdings-head {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+.inv-col-right {
+  text-align: right;
+}
+
+.inv-holdings-mobile {
+  display: none;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+.inv-holdings-mobile-card {
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 22%);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inv-holdings-mobile-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.inv-holdings-mobile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .inv-holdings-card {
+    display: none;
+  }
+  .inv-holdings-mobile {
+    display: flex;
+  }
+}
+
+/* ---- Closed Positions -----------------------------------------------------
+   A fully-exited holding's realized P&L, kept visible after it drops out of
+   the live Holdings table — see ClosedPosition in domain/investments.ts. */
+.inv-closed-card {
+  padding: 4px 4px;
+  margin-bottom: 24px;
+}
+.inv-closed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.inv-closed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.inv-closed-row:first-child {
+  border-top: none;
+}
+
+/* ---- Investment Transactions / Dividends --------------------------------- */
+.inv-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+@media (min-width: 900px) {
+  .inv-split {
+    grid-template-columns: 1.4fr 1fr;
+  }
+}
+
+.log-tx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: oklch(24% 0.03 255 / 0.35);
+}
+.log-tx-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.log-tx-type {
+  display: flex;
+  gap: 6px;
+}
+
+.ticker-presets {
+  margin-top: 8px;
+}
+.ticker-presets-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.ticker-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ticker-preset {
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: oklch(24% 0.03 255 / 0.5);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+}
+.ticker-preset:hover {
+  border-color: var(--cyan);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.ticker-preset--active {
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px oklch(80% 0.13 210 / 0.16);
+}
+@media (max-width: 420px) {
+  .log-tx-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inv-tx-list,
+.inv-div-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.inv-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--line);
+}
+.inv-tx-row:first-child {
+  border-top: none;
+}
+.inv-tx-mid {
+  flex: 1;
+  min-width: 0;
+}
+.inv-tx-amt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.inv-tx-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.inv-tx-actions .btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .inv-tx-row {
+    flex-wrap: wrap;
+  }
+  .inv-tx-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.inv-div-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.inv-div-row:first-child {
+  border-top: none;
+}
+
+/* Coming-soon disabled actions, matching the visual language of
+   `.completed-actions .btn--outline`/`.btn--muted` on Goals.css, but scoped
+   under Investments-only class names so this file never redefines the
+   shared bare `.btn--outline`/`.btn--muted` class names. */
+.inv-btn--outline {
+  color: var(--cyan);
+  background: oklch(80% 0.13 210 / 0.1);
+  border: 1px solid oklch(80% 0.13 210 / 0.35);
+}
+.inv-btn--muted {
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--card-border);
+}
+.inv-btn--outline:disabled:hover,
+.inv-btn--muted:disabled:hover {
+  background: initial;
+  border-color: inherit;
+}
+
+/* ---- Performance History --------------------------------------------------
+   Same sparkline-plus-axis pattern as the Dashboard's Expenses chart. */
+.inv-perf-card {
+  margin-bottom: 8px;
+}
+.inv-perf-line {
+  margin-top: 8px;
+}
+.inv-perf-spark {
+  width: 100%;
+  height: 130px;
+}
+.inv-perf-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 6px;
+}
+
+/* The 3-column grids above (`.inv-alloc-row`, `.inv-div-row`) already use a
+   flexible `1fr` first column, so a long sector name wraps onto a second
+   line at narrow widths instead of overflowing — no separate breakpoint
+   needed to keep them inside a ~390px viewport. */
+@media (max-width: 520px) {
+  .inv-alloc-val {
+    min-width: 76px;
+  }
+}
+
+/* Shown when the portfolio backend is configured but its latest fetch
+   failed — see Investments.tsx's `inv.portfolioError`. Distinct from the
+   page's normal cards so a stale/estimated figure is never mistaken for a
+   live one. */
+.inv-portfolio-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  font-size: 13px;
+  color: var(--text);
+}

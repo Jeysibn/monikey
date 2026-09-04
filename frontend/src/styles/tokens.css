@@ -1,0 +1,38 @@
+:root {
+  --bg: oklch(16% 0.028 255);
+  --bg-grad: oklch(19% 0.035 255);
+  --card: oklch(21% 0.032 255);
+  --card-hi: oklch(24% 0.04 255);
+  --card-border: oklch(30% 0.03 255 / 0.6);
+  --line: oklch(30% 0.03 255 / 0.5);
+  --text: oklch(96% 0.008 255);
+  --text-dim: oklch(70% 0.02 255);
+  /* Lightened from 52% — at 52% this only reached ~3.2:1 against card
+     surfaces, below the 4.5:1 WCAG AA threshold for normal text (FR-008).
+     63% clears 4.5:1 against --bg, --card, and --card-hi. */
+  --text-faint: oklch(63% 0.02 255);
+  --cyan: oklch(80% 0.13 210);
+  --cyan-dim: oklch(45% 0.06 210);
+  --cyan-ink: oklch(18% 0.03 210);
+  --teal: oklch(74% 0.13 175);
+  --purple: oklch(72% 0.13 295);
+  --amber: oklch(78% 0.13 75);
+  --red: oklch(68% 0.16 25);
+  --slate: oklch(38% 0.02 255);
+  --slate-lt: oklch(48% 0.02 255);
+  /* Text-safe variants of --slate/--slate-lt for use as a category tag's
+     foreground (as opposed to a fill/swatch). The base tokens are too dark
+     to read as text against their own 16%-tint tag background (SR-011):
+     --slate-lt as text measured ~2.4:1, --slate ~1.7:1, both failing the
+     4.5:1 WCAG AA floor for normal text. These are lightened within the
+     same neutral hue/chroma family until the same tag-background formula
+     clears 4.5:1 (verified ~5.0:1 and ~6.0:1 respectively). */
+  --slate-fg: oklch(68% 0.02 255);
+  --slate-lt-fg: oklch(74% 0.02 255);
+
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 7px;
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+}

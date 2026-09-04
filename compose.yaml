@@ -1,0 +1,95 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ./backend
+      target: build
+    command: ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+    command: ["node", "dist/server.js"]
+    env_file: .env
+    # `env_file` is applied at container run time and wins over the image's
+    # `ENV NODE_ENV=production` (Dockerfile) — so with NODE_ENV=development
+    # in .env.example, the "production" compose stack was actually booting
+    # in development mode (QA Attempt 1, Finding 4). Setting it explicitly
+    # here, in `environment:`, wins over both the image default AND
+    # `env_file`, so this stack is always production regardless of what a
+    # developer's local `.env` happens to say. `compose.dev.yaml` is the
+    # only place development mode is turned back on.
+    environment:
+      NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - receipt_data:/data
+    healthcheck:
+      test: ["CMD", "node", "./scripts/healthcheck.mjs"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+    command: ["node", "dist/worker.js"]
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - receipt_data:/data
+    # The backend image's Dockerfile HEALTHCHECK probes an HTTP endpoint that
+    # only the api process serves; the worker has no HTTP surface, so disable
+    # the inherited healthcheck here rather than report a perpetually
+    # unhealthy status for a container that is actually fine.
+    healthcheck:
+      disable: true
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_FINANCE_BACKEND: ${VITE_FINANCE_BACKEND:-false}
+    ports:
+      - "8080:80"
+    environment:
+      NGINX_DNS_RESOLVER: ${NGINX_DNS_RESOLVER:-127.0.0.11}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: [mail]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  postgres_data:
+  receipt_data:

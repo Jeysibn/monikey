@@ -1,0 +1,72 @@
+version: 2
+updates:
+  # Enable version updates for npm packages
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'Jeysibn'
+    labels:
+      - 'dependencies'
+      - 'npm'
+    allow:
+      - dependency-type: 'all'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+
+  # Enable version updates for backend npm packages
+  - package-ecosystem: 'npm'
+    directory: '/backend'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '05:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'Jeysibn'
+    labels:
+      - 'dependencies'
+      - 'npm'
+      - 'backend'
+    allow:
+      - dependency-type: 'all'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+
+  # Enable version updates for Docker images
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+    reviewers:
+      - 'Jeysibn'
+    labels:
+      - 'dependencies'
+      - 'docker'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '07:00'
+    reviewers:
+      - 'Jeysibn'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'

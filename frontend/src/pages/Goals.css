@@ -1,0 +1,154 @@
+.goal-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 8px 0 10px;
+}
+
+.goal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.goal-card {
+  justify-content: space-between;
+  gap: 8px;
+}
+.goal-nums {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.goal-status {
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.goal-status--ok {
+  color: var(--teal);
+}
+.goal-status--warn {
+  color: var(--amber);
+}
+.goal-status--faint {
+  color: var(--text-faint);
+}
+/* Target date, reached date, and the monthly plan amount: essential goal
+   information, raised from 10px to the 12px floor (TR-009). */
+.goal-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.goal-required {
+  font-size: 12px;
+  color: var(--cyan);
+  margin-top: 4px;
+}
+.goal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.add-goal-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  border: 1.5px dashed var(--card-border);
+  background: transparent;
+  box-shadow: none;
+}
+.completed-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+}
+.completed-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+.completed-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: none;
+}
+.completed-actions .btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+.coming-soon-tag {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.completed-actions .btn--outline {
+  color: var(--cyan);
+  background: oklch(80% 0.13 210 / 0.1);
+  border: 1px solid oklch(80% 0.13 210 / 0.35);
+}
+.completed-actions .btn--outline:hover {
+  background: oklch(80% 0.13 210 / 0.18);
+}
+.completed-actions .btn--muted {
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--card-border);
+}
+.completed-actions .btn--muted:hover {
+  color: var(--text-dim);
+  border-color: var(--text-faint);
+}
+.completed-actions .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.completed-actions .btn--outline:disabled:hover,
+.completed-actions .btn--muted:disabled:hover {
+  background: initial;
+  border-color: inherit;
+}
+
+.add-funds-form,
+.create-goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.add-funds-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Let a completed-goal card and its two actions fit at 390px instead of
+   squeezing a fixed row layout. */
+@media (max-width: 480px) {
+  .completed-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .completed-actions {
+    flex-direction: row;
+  }
+  .completed-actions .btn {
+    flex: 1;
+  }
+}

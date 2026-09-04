@@ -1,0 +1,402 @@
+name: Validate
+
+# Runs on every push to `dev` and on any PR targeting `main`. This is a
+# pre-merge quality gate only — it never builds/pushes a publishable image.
+# `publish.yaml` is what builds and pushes images, and only runs on `main`
+# after a PR has actually merged.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+
+env:
+  POSTGRES_DB: monikey
+  POSTGRES_USER: monikey
+  POSTGRES_PASSWORD: test-password
+  DATABASE_URL: postgresql://monikey:test-password@localhost:5432/monikey
+  NODE_ENV: production
+  APP_ORIGIN: http://localhost:8080
+  API_PORT: 3000
+  INTEGRATIONS_MODE: stub
+  SESSION_SECURE: false
+  SESSION_TTL_DAYS: 30
+  LOG_LEVEL: info
+  FX_PROVIDER: stub
+  EQUITY_PROVIDER: stub
+  CRYPTO_PROVIDER: stub
+  OCR_PROVIDER: stub
+  AI_PROVIDER: stub
+  EMAIL_PROVIDER: stub
+  BANK_PROVIDER: stub
+  OBJECT_STORE: filesystem
+  RECEIPT_STORAGE_PATH: /tmp/receipts
+  ALLOW_TEST_CLOCK: true
+
+jobs:
+  # Determines which package(s) actually changed so the rest of this
+  # workflow — and publish.yaml on main — only does work for what moved.
+  # For a `push` event, dorny/paths-filter diffs against the commit before
+  # the push (github.event.before); for `pull_request`, it diffs against
+  # the PR's base ref. Either way this correctly captures "everything this
+  # push/PR touched", including a squash- or merge-commit's full net diff.
+  detect-changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  frontend-validate:
+    name: Frontend Lint, Typecheck, and Build
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci --include=dev
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        working-directory: ./frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Run frontend unit tests
+        working-directory: ./frontend
+        run: npm run test
+        env:
+          # Overrides the job-level NODE_ENV=production (kept elsewhere so
+          # build/integration steps exercise real production behavior) —
+          # Vitest/Testing Library's React.act helper is stripped from
+          # React's production build, so under NODE_ENV=production it
+          # doesn't exist and every test using it throws "React.act is not
+          # a function".
+          NODE_ENV: test
+
+      - name: Upload frontend build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
+  backend-tests:
+    name: Backend Tests with PostgreSQL
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci --include=dev
+
+      - name: Lint backend
+        working-directory: ./backend
+        run: npm run lint
+
+      - name: Typecheck backend
+        working-directory: ./backend
+        run: npm run typecheck
+
+      - name: Generate Prisma client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Prisma migration from empty DB
+        working-directory: ./backend
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Run backend unit tests
+        working-directory: ./backend
+        run: npm run test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  backend-integration-tests:
+    name: Backend Integration Tests with Live DB
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    # No `needs: backend-tests` — this job doesn't consume backend-tests'
+    # output, it just re-does its own install/generate/migrate against a
+    # separate Postgres service, so gating it behind that job only adds
+    # serial wall-clock for no correctness benefit. Both report into the
+    # `summary` job's needs list regardless, so a failure either place
+    # still fails CI overall.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci --include=dev
+
+      - name: Generate Prisma client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Prisma migration for integration tests
+        working-directory: ./backend
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Run integration tests
+        working-directory: ./backend
+        run: npm run test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  # Builds each changed image (push: false) purely so Trivy has something to
+  # scan pre-merge. publish.yaml does the real build-and-push, on main.
+  docker-scan-backend:
+    name: Docker Build and Scan with Trivy (backend)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: monikey-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Create Trivy output directory
+        run: mkdir -p trivy-results
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: monikey-backend:latest
+          format: 'sarif'
+          output: 'trivy-results/trivy-backend.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results/trivy-backend.sarif'
+          category: 'trivy-backend'
+
+  docker-scan-frontend:
+    name: Docker Build and Scan with Trivy (frontend)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: monikey-web:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Create Trivy output directory
+        run: mkdir -p trivy-results
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: monikey-web:latest
+          format: 'sarif'
+          output: 'trivy-results/trivy-frontend.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results/trivy-frontend.sarif'
+          category: 'trivy-frontend'
+
+  # Always runs regardless of which paths changed — secret scanning and the
+  # repo-wide checks below are cheap and should never be skippable by only
+  # touching one package.
+  security-checks:
+    name: Security Checks (Secrets, Dependencies)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run secret scanning with TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: Check for VITE_ env vars in source
+        run: |
+          echo "Checking for sensitive VITE_ env vars in source code..."
+          if grep -r "VITE_.*KEY\|VITE_.*SECRET\|VITE_.*PASSWORD\|VITE_.*TOKEN" frontend/src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx"; then
+            echo "ERROR: Found sensitive environment variables with VITE_ prefix"
+            exit 1
+          fi
+          echo "No sensitive VITE_ env vars found"
+
+      - name: Verify .env and .env.local are gitignored
+        run: |
+          echo "Checking .gitignore for .env files..."
+          if grep -E "^\.env$|^\.env\.local$|^\.env\.\*\.local$" .gitignore; then
+            echo ".env files are properly gitignored"
+          else
+            echo "WARNING: .env files might not be properly gitignored"
+            cat .gitignore | grep env
+          fi
+
+      - name: Check for committed secrets
+        run: |
+          echo "Checking for common secret patterns..."
+          if grep -r "DATABASE_URL.*password\|API_KEY.*=.*[a-zA-Z0-9]\{20,\}\|SECRET.*=.*[a-zA-Z0-9]\{20,\}" . \
+            --include="*.yaml" --include="*.yml" --include="*.json" \
+            --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist; then
+            echo "WARNING: Found potential secrets in configuration files"
+          fi
+          echo "Secret check complete"
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        detect-changes,
+        frontend-validate,
+        backend-tests,
+        backend-integration-tests,
+        docker-scan-backend,
+        docker-scan-frontend,
+        security-checks,
+      ]
+    if: always()
+    steps:
+      - name: Check CI Status
+        run: |
+          # A job that was skipped because its path didn't change is fine —
+          # only a job that actually ran and failed should fail this gate.
+          check() {
+            local name="$1" result="$2"
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "$name failed (result: $result)"
+              exit 1
+            fi
+          }
+          check "Frontend validate" "${{ needs.frontend-validate.result }}"
+          check "Backend tests" "${{ needs.backend-tests.result }}"
+          check "Backend integration tests" "${{ needs.backend-integration-tests.result }}"
+          check "Docker scan (backend)" "${{ needs.docker-scan-backend.result }}"
+          check "Docker scan (frontend)" "${{ needs.docker-scan-frontend.result }}"
+          check "Security checks" "${{ needs.security-checks.result }}"
+          echo "All CI checks passed (or were correctly skipped for unchanged paths)!"

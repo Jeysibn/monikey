@@ -1,0 +1,764 @@
+// Monikey backend — Phase 1 + Phase 3 schema.
+// Scope: users, sessions, preferences, categories, financial accounts, credit
+// card details, transactions, transaction balance effects, goals, budgets,
+// and recurring definitions.
+//
+// IMPORTANT: this file must stay byte-for-byte consistent with what
+// `prisma/migrations/20260831000000_init/migration.sql` and
+// `prisma/migrations/20260831_phase3_ledger_transactions/migration.sql` actually create.
+// Every `DateTime` column is `@db.Timestamptz(6)` because the migrations
+// create `TIMESTAMPTZ` columns — a bare `DateTime` would describe Prisma's
+// default `timestamp(3)` (no timezone) and silently drift from the applied
+// schema (QA Attempt 1, Finding 1). Verify with:
+//   npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma \
+//     --to-url "$DATABASE_URL" --script
+// which must print no `ALTER COLUMN ... SET DATA TYPE` output.
+//
+// This schema also cannot represent the CHECK constraints or the triggers
+// the migrations add (Prisma has no declarative support for either in this
+// version) — those exist ONLY in the raw migration SQL. Any future
+// `prisma migrate dev` diff must be hand-audited to re-append them; see
+// Database Schema.md in the Obsidian vault for the authoritative list.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  checking
+  savings
+  ewallet
+  cash
+  credit_card
+
+  @@map("account_type")
+}
+
+enum AccountClassification {
+  asset
+  liability
+
+  @@map("account_classification")
+}
+
+enum CardNetwork {
+  visa
+  mastercard
+
+  @@map("card_network")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  displayName  String   @map("display_name")
+  timezone     String   @default("Asia/Manila")
+  baseCurrency String   @default("PHP") @map("base_currency") @db.Char(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions           UserSession[]
+  preferences        UserPreferences?
+  categories         Category[]
+  financialAccounts  FinancialAccount[]
+  transactions       Transaction[]
+  goals              Goal[]
+  budgetPeriods      BudgetPeriod[]
+  recurringItems     RecurringItem[]
+  notificationOutbox NotificationOutbox[]
+  instruments        Instrument[]
+  investmentTrades   InvestmentTrade[]
+  dividends          Dividend[]
+  receipts           Receipt[]
+  plaidItems         PlaidItem[]
+  plaidLinkTokens    PlaidLinkToken[]
+  importBatches      ImportBatch[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAgent   String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // TODO(Phase 5 / JobModule): a scheduled cleanup job should periodically
+  // delete rows where expires_at is in the past. Not built in Phase 2 — the
+  // auth guard already refuses to authenticate an expired session (and
+  // opportunistically deletes the one row it just resolved), so correctness
+  // does not depend on this job; it only bounds table growth over time.
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// NOTE (deliberate Phase-1 deviation, recorded per orchestrator sign-off —
+// see the Phase 1 development log "Problems Encountered" and
+// Database Schema.md): the plan's Phase 1 checklist lists only
+// users/sessions/categories/accounts/cards. This table is genuinely Phase 2
+// territory (settings persistence), but is included now as harmless
+// pre-provisioning: it has no FK/behavioral coupling to anything Phase 1
+// builds, Phase 2's AuthModule/SettingsModule will consume it unchanged, and
+// removing it would require a churny down-migration for zero benefit. If
+// Phase 2 needs a different shape, add a follow-up migration — do not edit
+// this one.
+model UserPreferences {
+  userId                        String   @id @map("user_id") @db.Uuid
+  billDueReminders              Boolean  @default(true) @map("bill_due_reminders")
+  budgetNearLimitWarnings       Boolean  @default(true) @map("budget_near_limit_warnings")
+  weeklySummaryEmail            Boolean  @default(false) @map("weekly_summary_email")
+  hideCents                     Boolean  @default(false) @map("hide_cents")
+  externalAiEnabled             Boolean  @default(false) @map("external_ai_enabled")
+  externalOcrEnabled            Boolean  @default(false) @map("external_ocr_enabled")
+  detailedAiContextEnabled      Boolean  @default(false) @map("detailed_ai_context_enabled")
+  createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Category {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  name              String
+  color             String
+  budgetable        Boolean   @default(true)
+  allowsIncome      Boolean   @default(false) @map("allows_income")
+  allowsExpense     Boolean   @default(true) @map("allows_expense")
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+  budgetAllocations BudgetAllocation[]
+  recurringItems RecurringItem[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+model FinancialAccount {
+  id                  String                @id @default(uuid()) @db.Uuid
+  userId              String                @map("user_id") @db.Uuid
+  name                String
+  institution         String?
+  accountType         AccountType           @map("account_type")
+  classification      AccountClassification
+  currencyCode        String                @default("PHP") @map("currency_code") @db.Char(3)
+  openingBalanceMinor BigInt                @default(0) @map("opening_balance_minor")
+  currentBalanceMinor BigInt                @default(0) @map("current_balance_minor")
+  lastFour            String?               @map("last_four")
+  syncStatus          String                @default("manual") @map("sync_status")
+  manual              Boolean               @default(true)
+  version             Int                   @default(0)
+  archivedAt          DateTime?             @map("archived_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditCardDetail CreditCardDetail?
+  fromTransactions Transaction[]           @relation("TransactionFromAccount")
+  toTransactions   Transaction[]           @relation("TransactionToAccount")
+  balanceEffects   TransactionBalanceEffect[]
+  goalContributions GoalContribution[]
+  recurringItems RecurringItem[]
+  investmentTrades InvestmentTrade[]
+  dividends      Dividend[]
+
+  @@index([userId])
+  @@map("financial_accounts")
+}
+
+model CreditCardDetail {
+  accountId          String   @id @map("account_id") @db.Uuid
+  network            CardNetwork
+  creditLimitMinor   BigInt   @map("credit_limit_minor")
+  dueDay             Int      @map("due_day")
+  minimumPaymentMinor BigInt  @default(0) @map("minimum_payment_minor")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("credit_card_details")
+}
+
+enum TransactionType {
+  income
+  expense
+  transfer
+
+  @@map("transaction_type")
+}
+
+enum TransactionSource {
+  manual
+  ocr
+  recurring
+  import
+
+  @@map("transaction_source")
+}
+
+enum TransactionStatus {
+  cleared
+  pending
+
+  @@map("transaction_status")
+}
+
+enum BalanceEffectRole {
+  source
+  destination
+  expense
+  income
+  card_charge
+  card_payment
+  fee
+
+  @@map("balance_effect_role")
+}
+
+model Transaction {
+  id                    String             @id @default(uuid()) @db.Uuid
+  userId                String             @map("user_id") @db.Uuid
+  type                  TransactionType    @map("type")
+  title                 String
+  categoryId            String?            @map("category_id") @db.Uuid
+  goalId                String?            @map("goal_id") @db.Uuid
+  fromAccountId         String?            @map("from_account_id") @db.Uuid
+  toAccountId           String?            @map("to_account_id") @db.Uuid
+  occurredOn            DateTime           @map("occurred_on") @db.Date
+  occurredTime          DateTime?          @map("occurred_time") @db.Time
+  amountMinor           BigInt             @map("amount_minor")
+  feeMinor              BigInt             @default(0) @map("fee_minor")
+  currencyCode          String             @default("PHP") @map("currency_code") @db.Char(3)
+  source                TransactionSource
+  status                TransactionStatus
+  note                  String?
+  idempotencyKey        String?            @map("idempotency_key")
+  reversedTransactionId String?            @unique @map("reversed_transaction_id") @db.Uuid
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category            Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  goal                Goal?                  @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  fromAccount         FinancialAccount?      @relation("TransactionFromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
+  toAccount           FinancialAccount?      @relation("TransactionToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  reversedTransaction Transaction?           @relation("TransactionReversal", fields: [reversedTransactionId], references: [id], onDelete: SetNull)
+  reversingTransaction Transaction?          @relation("TransactionReversal")
+  balanceEffects      TransactionBalanceEffect[]
+  contributions       GoalContribution[]
+  receipt             Receipt?               @relation("ReceiptTransaction")
+  posting             Posting?               @relation("PostingTransaction")
+
+  @@index([userId, occurredOn])
+  @@index([userId, categoryId, occurredOn])
+  @@unique([userId, idempotencyKey], map: "transactions_user_id_idempotency_key_idx")
+  @@map("transactions")
+}
+
+model TransactionBalanceEffect {
+  id                 String              @id @default(uuid()) @db.Uuid
+  transactionId      String              @map("transaction_id") @db.Uuid
+  accountId          String              @map("account_id") @db.Uuid
+  role               BalanceEffectRole
+  deltaMinor         BigInt              @map("delta_minor")
+  balanceAfterMinor  BigInt              @map("balance_after_minor")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@map("transaction_balance_effects")
+}
+
+model Goal {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  name                    String
+  targetMinor             BigInt   @map("target_minor")
+  currentMinor            BigInt   @default(0) @map("current_minor")
+  currencyCode            String   @default("PHP") @map("currency_code") @db.Char(3)
+  targetDate              DateTime @map("target_date") @db.Date
+  completedDate           DateTime? @map("completed_date") @db.Date
+  monthlyContributionMinor BigInt? @map("monthly_contribution_minor")
+  status                  String   @default("active")
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  contributions GoalContribution[]
+
+  @@map("goals")
+}
+
+model GoalContribution {
+  id              String   @id @default(uuid()) @db.Uuid
+  goalId          String   @map("goal_id") @db.Uuid
+  transactionId   String   @unique @map("transaction_id") @db.Uuid
+  sourceAccountId String   @map("source_account_id") @db.Uuid
+  amountMinor     BigInt   @map("amount_minor")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  goal          Goal             @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  sourceAccount FinancialAccount @relation(fields: [sourceAccountId], references: [id], onDelete: Restrict)
+
+  @@index([goalId, createdAt])
+  @@map("goal_contributions")
+}
+
+enum RecurringFrequency {
+  weekly
+  monthly
+  yearly
+
+  @@map("recurring_frequency")
+}
+
+enum RecurringStatus {
+  active
+  paused
+
+  @@map("recurring_status")
+}
+
+model RecurringItem {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  merchant     String
+  amountMinor  BigInt             @map("amount_minor")
+  frequency    RecurringFrequency
+  nextDueDate  DateTime           @map("next_due_date") @db.Date
+  accountId    String             @map("account_id") @db.Uuid
+  categoryId   String             @map("category_id") @db.Uuid
+  autopay      Boolean            @default(false)
+  status       RecurringStatus    @default(active)
+  lastPaidDate DateTime?          @map("last_paid_date") @db.Date
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, nextDueDate])
+  @@index([userId, status])
+  @@map("recurring_items")
+}
+
+enum NotificationStatus {
+  pending
+  sending
+  sent
+  failed
+
+  @@map("notification_status")
+}
+
+model NotificationOutbox {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  kind         String
+  dedupeKey    String             @unique @map("dedupe_key")
+  payload      Json
+  status       NotificationStatus @default(pending)
+  availableAt  DateTime           @default(now()) @map("available_at") @db.Timestamptz(6)
+  sentAt       DateTime?          @map("sent_at") @db.Timestamptz(6)
+  attemptCount Int                @default(0) @map("attempt_count")
+  lastError    String?            @map("last_error")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([userId, kind])
+  @@map("notification_outbox")
+}
+
+enum InvestmentTradeType {
+  buy
+  sell
+
+  @@map("investment_trade_type")
+}
+
+// Explicit market identity for an instrument. Stocks/ETFs/REITs behave like
+// equity-market instruments (Today's Change, previous close); crypto behaves
+// like a 24/7 market (24h Change). Bonds are manual/unsupported for quoting
+// initially. Do not infer this from the ticker string at read time — it is
+// persisted so quote routing never has to guess.
+enum InstrumentAssetType {
+  stock
+  etf
+  crypto
+  reit
+  bond
+
+  @@map("instrument_asset_type")
+}
+
+model Instrument {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  ticker      String
+  name        String
+  assetClass  String   @map("asset_class")
+  assetType   InstrumentAssetType? @map("asset_type")
+  sector      String
+  currencyCode String  @default("PHP") @map("currency_code") @db.Char(3)
+
+  // Equity/ETF/REIT market identity.
+  exchange       String? @map("exchange")
+  providerSymbol String? @map("provider_symbol")
+
+  // Crypto pair identity, e.g. baseAsset "BTC" / quoteAsset "USD".
+  baseAsset       String? @map("base_asset")
+  quoteAsset      String? @map("quote_asset")
+  providerAssetId String? @map("provider_asset_id")
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades InvestmentTrade[]
+  dividends Dividend[]
+  quoteSnapshots QuoteSnapshot[]
+
+  @@unique([userId, ticker])
+  @@index([ticker])
+  @@map("instruments")
+}
+
+model InvestmentTrade {
+  id             String              @id @default(uuid()) @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  instrumentId   String              @map("instrument_id") @db.Uuid
+  type           InvestmentTradeType
+  units          Decimal             @db.Decimal(30, 10)
+  priceMinor     BigInt              @map("price_minor")
+  currencyCode   String              @default("PHP") @map("currency_code") @db.Char(3)
+  feeMinor       BigInt              @default(0) @map("fee_minor")
+  occurredOn     DateTime            @map("occurred_on") @db.Date
+  cashAccountId  String?             @map("cash_account_id") @db.Uuid
+
+  // Settlement amount actually moved on the linked cash account, in the
+  // account's own currency (may differ from trade currencyCode). Populated
+  // when a cash account is linked so FX at time of trade can be reconstructed.
+  settlementAmountMinor   BigInt?  @map("settlement_amount_minor")
+  settlementCurrencyCode  String?  @map("settlement_currency_code") @db.Char(3)
+  fxRateToBase            Decimal? @map("fx_rate_to_base") @db.Decimal(20, 10)
+
+  note           String?
+  idempotencyKey String?             @map("idempotency_key")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  cashAccount FinancialAccount? @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, instrumentId, occurredOn])
+  @@map("investment_trades")
+}
+
+model Dividend {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  instrumentId String     @map("instrument_id") @db.Uuid
+  amountMinor  BigInt     @map("amount_minor")
+  occurredOn   DateTime   @map("occurred_on") @db.Date
+  cashAccountId  String?  @map("cash_account_id") @db.Uuid
+  idempotencyKey String?  @map("idempotency_key")
+  note         String?
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  cashAccount FinancialAccount? @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, instrumentId, occurredOn])
+  @@map("dividends")
+}
+
+model QuoteSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  instrumentId String   @map("instrument_id") @db.Uuid
+  source       String
+  priceMinor   BigInt   @map("price_minor")
+  currencyCode String   @default("PHP") @map("currency_code") @db.Char(3)
+  fetchedAt    DateTime @map("fetched_at") @db.Timestamptz(6)
+
+  // Equity fields (stock/ETF/REIT). Null for crypto.
+  previousCloseMinor BigInt?  @map("previous_close_minor")
+  dayChangeMinor     BigInt?  @map("day_change_minor")
+  dayChangePct       Decimal? @map("day_change_pct") @db.Decimal(10, 4)
+
+  // Crypto fields (24/7 market). Null for equities.
+  change24hMinor BigInt?  @map("change_24h_minor")
+  change24hPct   Decimal? @map("change_24h_pct") @db.Decimal(10, 4)
+
+  marketTimestamp DateTime? @map("market_timestamp") @db.Timestamptz(6)
+
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([instrumentId, fetchedAt])
+  @@map("quote_snapshots")
+}
+
+model BudgetPeriod {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  periodStart   DateTime @map("period_start") @db.Date
+  periodEnd     DateTime @map("period_end") @db.Date
+  incomePoolMinor BigInt @default(0) @map("income_pool_minor")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocations BudgetAllocation[]
+
+  @@unique([userId, periodStart, periodEnd])
+  @@index([userId, periodStart])
+  @@map("budget_periods")
+}
+
+model BudgetAllocation {
+  id            String       @id @default(uuid()) @db.Uuid
+  budgetPeriodId String      @map("budget_period_id") @db.Uuid
+  categoryId    String       @map("category_id") @db.Uuid
+  allocatedMinor BigInt      @map("allocated_minor")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  budgetPeriod BudgetPeriod @relation(fields: [budgetPeriodId], references: [id], onDelete: Cascade)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([budgetPeriodId, categoryId])
+  @@map("budget_allocations")
+}
+
+// Plan §18: local quota budget for outbound market-data providers. One row
+// per (provider, period) — `period` is a caller-defined identifier (e.g. an
+// ISO date "2026-09-01" for Alpha Vantage's daily cap, or an ISO month
+// "2026-09" for CoinGecko's monthly cap) so the same table serves both
+// cadences without a schema change. Atomic upsert-increment via the unique
+// constraint below; never a read-then-write race (QA Attempt 1, Defects 3/4).
+model ExternalApiUsage {
+  id         String   @id @default(uuid()) @db.Uuid
+  provider   String
+  period     String
+  operation  String
+  callCount  Int      @default(0) @map("call_count")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([provider, period, operation])
+  @@map("external_api_usage")
+}
+
+// Phase 7: Daily finance snapshots for fast historical report generation.
+// Materialized denormalized state: assets, liabilities, net worth, card debt as of snapshot_date.
+// Built daily by a worker job; rebuildable from ledger history.
+// Not authoritative — derived from transactions and market snapshots.
+model DailyFinanceSnapshot {
+  userId           String   @map("user_id") @db.Uuid
+  snapshotDate     DateTime @map("snapshot_date") @db.Date
+  assetTotalMinor  BigInt   @default(0) @map("asset_total_minor")
+  liabilityTotalMinor BigInt @default(0) @map("liability_total_minor")
+  netWorthMinor    BigInt   @default(0) @map("net_worth_minor")
+  cardDebtMinor    BigInt   @default(0) @map("card_debt_minor")
+  baseCurrency     String   @default("PHP") @map("base_currency") @db.Char(3)
+  generatedAt      DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+
+  @@id([userId, snapshotDate], map: "daily_finance_snapshots_pkey")
+  @@index([userId, snapshotDate(sort: Desc)])
+  @@map("daily_finance_snapshots")
+}
+
+// Phase 8: FX rate snapshots for multi-currency support.
+// Persists historical FX rates by (base, quote, date, provider).
+// Never overwrite historical rates — future queries for past dates will use the cached rate from that date.
+// Daily worker refreshes rates only for currencies actually in use by any user.
+// If provider is unavailable, return the most recently cached rate with isStale: true.
+model FxRateSnapshot {
+  baseCurrency   String   @map("base_currency") @db.Char(3)
+  quoteCurrency  String   @map("quote_currency") @db.Char(3)
+  rate           Decimal  @db.Decimal(20, 10)
+  provider       String   @db.VarChar(50)
+  rateDate       DateTime @map("rate_date") @db.Date
+  fetchedAt      DateTime @map("fetched_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([baseCurrency, quoteCurrency, rateDate, provider], map: "fx_rate_snapshots_unique_idx")
+  @@index([baseCurrency, quoteCurrency, rateDate(sort: Desc)])
+  @@index([provider, rateDate(sort: Desc)])
+  @@map("fx_rate_snapshots")
+}
+
+// Phase 9: Receipt OCR pipeline.
+// Stores receipt images and OCR extraction state. Receipt images are stored
+// via ObjectStore (filesystem/MinIO) with randomized keys; this table stores
+// metadata and OCR results. OCR extraction never directly posts transactions —
+// the user must review and confirm the parsed draft before it crosses
+// LedgerModule.
+model Receipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  storageKey      String   @map("storage_key")
+  originalFilename String  @map("original_filename")
+  mimeType        String   @map("mime_type")
+  sizeBytes       BigInt   @map("size_bytes")
+  sha256          String   @map("sha256") @db.Char(64)
+  status          String   @default("uploaded") // uploaded, processing, ready, failed, committed
+  ocrProvider     String?  @map("ocr_provider")
+  ocrText         String?  @map("ocr_text")
+  parsedPayload   Json?    @map("parsed_payload") // ReceiptDraft-like structure
+  transactionId   String?  @unique @map("transaction_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation("ReceiptTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("receipts")
+}
+
+// Phase 11: Plaid Sandbox integration.
+// Stores encrypted Plaid access tokens and link session metadata per user.
+// Only used for Plaid Sandbox; production Philippine bank sync is out of scope for Phase 11.
+model PlaidItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  itemId          String   @map("item_id") // Plaid item ID
+  institutionName String?  @map("institution_name")
+  accountIds      String[] @map("account_ids") // JSON array of Plaid account IDs
+  // Access token is encrypted at rest using a KDF derived from user ID + server key
+  encryptedAccessToken String @map("encrypted_access_token")
+  lastSyncedAt    DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  status          String   @default("active") // active, revoked, error
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importBatches ImportBatch[]
+
+  @@unique([userId, itemId])
+  @@index([userId, createdAt])
+  @@map("plaid_items")
+}
+
+// Phase 11: Plaid Link token exchange (temporary).
+// Short-lived Plaid link tokens that are exchanged for access tokens.
+// Cleaned up after exchange or on expiration.
+model PlaidLinkToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  linkToken   String   @unique @map("link_token")
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("plaid_link_tokens")
+}
+
+// Phase 11: Import batch (staging area).
+// Represents a single import session (Plaid sync or CSV file upload).
+// Imported transactions land as draft rows; user reviews/matches before commit.
+model ImportBatch {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  importSourceId  String?  @map("import_source_id") // FK to PlaidItem.id if from Plaid, or null for manual CSV
+  importSourceType String  @map("import_source_type") // "plaid_sandbox" or "csv_manual"
+  status          String   @default("reviewing") // reviewing, committed, archived, failed
+  matchedAccountId String? @map("matched_account_id") @db.Uuid // which account to post to after review
+  totalCount      Int      @default(0) @map("total_count") // count of importedTransactions in this batch
+  committedCount  Int      @default(0) @map("committed_count") // count that have been posted
+  errorCount      Int      @default(0) @map("error_count")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  committedAt     DateTime? @map("committed_at") @db.Timestamptz(6)
+
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidItem         PlaidItem?           @relation(fields: [importSourceId], references: [id], onDelete: SetNull)
+  importedTransactions ImportedTransaction[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, matchedAccountId])
+  @@map("import_batches")
+}
+
+// Phase 11: Imported transaction (draft row).
+// A single transaction imported from Plaid or CSV, waiting for user review.
+// Has a stable dedup key (provider transaction ID or CSV row hash) with unique constraint.
+// Only posted to ledger after explicit user commit of the batch.
+model ImportedTransaction {
+  id                String   @id @default(uuid()) @db.Uuid
+  importBatchId     String   @map("import_batch_id") @db.Uuid
+  dedupKey          String   @map("dedup_key") // e.g., Plaid transaction ID or hash of date+amount+desc
+  provider          String   // "plaid_sandbox" or "csv"
+  providerTransactionId String? @map("provider_transaction_id") // Plaid txn ID or CSV row reference
+  occurredOn        DateTime @map("occurred_on") @db.Date
+  title             String
+  description       String?
+  amountMinor       BigInt   @map("amount_minor")
+  currencyCode      String   @default("PHP") @map("currency_code") @db.Char(3)
+  merchantName      String?  @map("merchant_name")
+  status            String   @default("pending_review") // pending_review, validated, rejected, posted
+  validationErrors  String[] @map("validation_errors") // JSON array of error strings
+  posting Posting?  @relation("ImportedTransactionPosting")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@unique([importBatchId, dedupKey])
+  @@index([importBatchId, status])
+  @@index([provider, dedupKey]) // Global dedup check
+  @@map("imported_transactions")
+}
+
+// Phase 11: Link between ImportedTransaction and committed Transaction.
+// Once a user confirms and commits an ImportedTransaction, a real Transaction
+// is posted through LedgerModule, and Posting records that relationship.
+model Posting {
+  id                    String   @id @default(uuid()) @db.Uuid
+  importedTransactionId String   @unique @map("imported_transaction_id") @db.Uuid
+  transactionId         String   @unique @map("transaction_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  importedTransaction ImportedTransaction @relation("ImportedTransactionPosting", fields: [importedTransactionId], references: [id], onDelete: Cascade)
+  transaction         Transaction         @relation("PostingTransaction", fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("postings")
+}

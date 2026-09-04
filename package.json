@@ -1,0 +1,18 @@
+{
+  "name": "monikey",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo root — see frontend/ and backend/ for the two independently-built packages.",
+  "scripts": {
+    "install:all": "npm ci --prefix frontend && npm ci --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev:api --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "lint:backend": "npm run lint --prefix backend",
+    "test:frontend": "npm run test --prefix frontend",
+    "test:backend": "npm run test --prefix backend",
+    "test:e2e": "npm run test:e2e --prefix frontend"
+  }
+}

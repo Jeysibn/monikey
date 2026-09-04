@@ -1,0 +1,80 @@
+/* The dashboard's one distinctive element — kept quiet in color (reusing
+   the same tokens as every other card) so it reads as authoritative
+   rather than decorative. See FR-009. */
+.money-position {
+  background: linear-gradient(160deg, var(--card-hi) 0%, var(--card) 22%);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.money-position-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.money-position-flow {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.money-position-step-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 150px;
+}
+.money-position-step {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: oklch(24% 0.03 255 / 0.35);
+}
+.money-position-step--emphasis {
+  border-color: oklch(80% 0.13 210 / 0.4);
+  background: oklch(80% 0.13 210 / 0.1);
+}
+.money-position-amt {
+  font-size: 18px;
+  font-weight: 700;
+}
+.money-position-label {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.money-position-hint {
+  font-size: 12px;
+  margin-top: 2px;
+}
+.money-position-arrow {
+  color: var(--text-faint);
+  flex: none;
+}
+.money-position-summary {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.money-position-summary strong {
+  color: var(--text);
+}
+.money-position-scope {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .money-position-flow {
+    flex-direction: column;
+  }
+  .money-position-arrow {
+    transform: rotate(90deg);
+  }
+}

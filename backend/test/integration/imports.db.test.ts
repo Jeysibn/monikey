@@ -617,8 +617,8 @@ describe('Imports Module - Phase 11', () => {
       const path = require('path')
 
       // Write CSV to a temporary file
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -661,7 +661,7 @@ describe('Imports Module - Phase 11', () => {
         expect(txns[1].amountMinor).toBe(4525n)  // 45.25 -> 4525
         expect(txns[2].amountMinor).toBe(99999n) // 999.99 -> 99999
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -671,7 +671,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempFile = path.join(require('os').tmpdir(), `replay_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'replay.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       const upload = async () => {
@@ -692,7 +693,7 @@ describe('Imports Module - Phase 11', () => {
         const batch = await prisma.importBatch.findUnique({ where: { id: result.batchId }, include: { importedTransactions: true } })
         expect(batch?.importedTransactions).toHaveLength(0)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -725,8 +726,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -748,7 +749,7 @@ describe('Imports Module - Phase 11', () => {
         const result = JSON.parse(response.body)
         expect(result.error.code).toBe('MISSING_COLUMNS')
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -758,8 +759,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -781,7 +782,7 @@ describe('Imports Module - Phase 11', () => {
         const result = JSON.parse(response.body)
         expect(result.error.code).toBe('INVALID_CSV')
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
   })
@@ -826,8 +827,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -855,7 +856,7 @@ describe('Imports Module - Phase 11', () => {
 
         expect(batch?.importedTransactions[0].amountMinor).toBe(1999n)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -866,8 +867,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -895,7 +896,7 @@ describe('Imports Module - Phase 11', () => {
 
         expect(batch?.importedTransactions[0].amountMinor).toBe(820n)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -906,8 +907,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -935,7 +936,7 @@ describe('Imports Module - Phase 11', () => {
 
         expect(batch?.importedTransactions[0].amountMinor).toBe(435n)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -946,8 +947,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -975,7 +976,7 @@ describe('Imports Module - Phase 11', () => {
 
         expect(batch?.importedTransactions[0].amountMinor).toBe(29n)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
 
@@ -989,8 +990,8 @@ describe('Imports Module - Phase 11', () => {
       const FormData = require('form-data')
       const fs = require('fs')
       const path = require('path')
-      const tempDir = require('os').tmpdir()
-      const tempFile = path.join(tempDir, `test_${Date.now()}.csv`)
+      const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'monikey-import-'))
+      const tempFile = path.join(tempDir, 'transactions.csv')
       fs.writeFileSync(tempFile, csvContent)
 
       try {
@@ -1036,7 +1037,7 @@ describe('Imports Module - Phase 11', () => {
         expect(transactions[2].amountMinor).toBe(435n)
         expect(transactions[3].amountMinor).toBe(29n)
       } finally {
-        fs.unlinkSync(tempFile)
+        fs.rmSync(tempDir, { recursive: true, force: true })
       }
     })
   })

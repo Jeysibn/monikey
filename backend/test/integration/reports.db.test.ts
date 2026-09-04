@@ -473,10 +473,7 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       // Local Sept 1, 00:00 = Aug 31, 16:00 UTC
       // Local Oct 1, 00:00 = Sept 30, 16:00 UTC
       // So budget must be stored with these UTC boundaries
-      const localSeptStart = new Date('2026-09-01T00:00:00Z') // This is treated as local Sept 1, but stored as UTC
-      const localOctStart = new Date('2026-10-01T00:00:00Z')  // This is treated as local Oct 1, but stored as UTC
-
-      // Actually, the budget should be stored in UTC based on the local dates
+      // The budget should be stored in UTC based on the local dates —
       // Since the POST endpoint now converts local dates to UTC, we need to compute
       // what the UTC boundaries should be for a Sept 2026 budget in Asia/Manila
       // Local Sept 1 00:00 in Manila = UTC Aug 31 16:00

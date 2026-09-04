@@ -133,7 +133,9 @@ describeIfDb('BudgetModule (real PostgreSQL)', () => {
     try {
       // Alice creates a private category and budget period
       const aliceCategory = await prisma.category.create({ data: { userId: userAlice, name: 'Alice Private', color: '#111', allowsExpense: true } })
-      const alicePeriod = await prisma.budgetPeriod.create({ data: { userId: userAlice, periodStart: new Date('2026-09-01T00:00:00Z'), periodEnd: new Date('2026-09-30T00:00:00Z'), incomePoolMinor: 0 } })
+      // Alice's own budget period exists in the DB for scenario realism, even though
+      // this test never references it directly.
+      await prisma.budgetPeriod.create({ data: { userId: userAlice, periodStart: new Date('2026-09-01T00:00:00Z'), periodEnd: new Date('2026-09-30T00:00:00Z'), incomePoolMinor: 0 } })
 
       // Bob creates his own budget period
       const bobPeriod = await prisma.budgetPeriod.create({ data: { userId: userBob, periodStart: new Date('2026-09-01T00:00:00Z'), periodEnd: new Date('2026-09-30T00:00:00Z'), incomePoolMinor: 0 } })

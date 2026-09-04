@@ -22,8 +22,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
-import { createReadStream } from 'fs'
-import { pipeline } from 'stream/promises'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
@@ -285,8 +283,8 @@ export async function createImportsRoutes(
       const input = plaidExchangeTokenSchema.parse(request.body)
 
       try {
-        // Verify link token exists and is valid
-        const linkToken = await importsService.getPlaidLinkToken(input.linkToken)
+        // Verify link token exists and is valid (throws if not — result itself is unused)
+        await importsService.getPlaidLinkToken(input.linkToken)
 
         // Exchange public token
         const result = await bankProvider.exchangePublicToken(userId, input.publicToken)

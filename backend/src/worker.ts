@@ -7,7 +7,7 @@ import { processDueRecurringItems } from './modules/recurring/recurring.worker.j
 import { enqueueDueBillNotifications, enqueueWeeklySummaryNotifications } from './modules/notifications/outbox.js'
 import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
-import { createQuoteProvider, refreshQuoteSnapshots } from './modules/investments/quotes.js'
+import { createQuoteProvider, refreshQuoteSnapshots, type RefreshQuoteSnapshotsPrisma } from './modules/investments/quotes.js'
 import { generateDailySnapshots } from './modules/reports/snapshots.worker.js'
 import { createFxModule } from './modules/fx/fx.module.js'
 import { createFxRatesProvider } from './integrations/adapters/frankfurter/index.js'
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
     const { processed, failed } = await processDueRecurringItems(prisma, ledger.service, todayIso, logger)
     if (env.QUOTE_PROVIDER === 'live') {
       try {
-        const refreshed = await refreshQuoteSnapshots(prisma, quoteProvider)
+        const refreshed = await refreshQuoteSnapshots(prisma as unknown as RefreshQuoteSnapshotsPrisma, quoteProvider)
         if (refreshed > 0) logger.info({ refreshed }, 'refreshed investment quotes')
       } catch (err) {
         // Market-data outages are non-critical: retain the last snapshot and

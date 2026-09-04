@@ -35,15 +35,42 @@ export class FxRateService {
 
   /**
    * Gets FX rates for a base currency against multiple quotes on a specific date.
-   * Attempts live fetch first; on provider failure, returns cached rate with isStale: true.
+   *
+   * By default, attempts a live fetch first; on provider failure, returns a
+   * cached rate with isStale forced to true (since a live attempt was made
+   * and failed — the cache might be fine but we can't confirm it's current).
+   *
+   * Pass `{ preferCache: true }` for a hot read path (e.g. loading a
+   * portfolio) that has its own daily-refreshed cache (see
+   * `refreshRatesForActiveCurrencies`, run by the worker) and shouldn't pay
+   * for a live outbound call on every request: if every requested quote
+   * currency already has a cached rate, that's returned as-is (carrying the
+   * repository's own real `isStale` flag, not forced) without ever touching
+   * the network. Only falls through to the live-fetch path when the cache is
+   * incomplete, so correctness for an uncached pair is unaffected.
    */
   async getRates(
     base: string,
     quotes: string[],
     date?: string,
+    options?: { preferCache?: boolean },
   ): Promise<FxRateSet> {
     const targetDate = date ? new Date(date) : new Date()
     const dateStr = date || targetDate.toISOString().slice(0, 10)
+
+    if (options?.preferCache) {
+      const cachedRates: FxRateSet['rates'] = {}
+      let allFound = true
+      for (const quote of quotes) {
+        const cached = await this.repository.find(base, quote, targetDate)
+        if (!cached) { allFound = false; break }
+        cachedRates[quote] = { rate: cached.rate, isStale: cached.isStale }
+      }
+      if (allFound && quotes.length > 0) {
+        return { base, rates: cachedRates, date: dateStr, fetchedAt: new Date() }
+      }
+      // Cache incomplete — fall through to the normal live-fetch-first path below.
+    }
 
     // Try to fetch fresh rates from provider
     try {

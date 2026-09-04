@@ -4,6 +4,7 @@ import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import type {
   AllocationSlice,
   AssetClass,
+  ClosedPosition,
   Dividend,
   EnrichedHolding,
   HoldingDetail,
@@ -64,6 +65,13 @@ export function useInvestments() {
   // backend is configured. `null` in mock mode, where the client-side
   // fallback below (mock detail + naive market-value math) still applies.
   const portfolio = asyncFinance?.investmentPortfolio ?? null
+  // Non-null only when a real investment backend is configured AND its most
+  // recent fetch failed. Distinguishes "mock mode" (no backend at all, where
+  // falling back to `mockHoldings` below is intended) from "backend
+  // configured but currently unreachable" (where the same fallback is a
+  // last resort, not the normal path, and the page must say so).
+  const portfolioError = asyncFinance?.investmentPortfolioError ?? null
+  const retryPortfolio = asyncFinance?.retryInvestmentPortfolio
 
   const [loggedTransactions, setLoggedTransactions] = useState<InvestmentTransaction[]>([])
   const [deletedTransactionIds, setDeletedTransactionIds] = useState<Set<string>>(new Set())
@@ -76,7 +84,14 @@ export function useInvestments() {
     // Only ever the backend's own quote — never fabricated from cost basis —
     // so a holding with no cached quote falls back to its average cost only
     // as a last-known reference price, not a claim of current market value.
-    const price = h.latestPriceMinor != null ? h.latestPriceMinor / 100 : averageCost
+    // Bug: this used to read `h.latestPriceMinor` directly, which is the
+    // RAW native-currency quote price (e.g. USD cents for crypto) with no
+    // FX conversion — displayed here with the portfolio's base-currency (₱)
+    // symbol, e.g. showing "₱1.36" for an XRP quote that was actually
+    // $1.36. Prefer the base-converted figure (null when conversion wasn't
+    // possible) and fall back to the native one only then.
+    const latestPriceSourceMinor = h.latestPriceBaseMinor ?? h.latestPriceMinor
+    const price = latestPriceSourceMinor != null ? latestPriceSourceMinor / 100 : averageCost
     // Prefer the base-currency (portfolio display currency) figure — already
     // FX-converted server-side — and fall back to the native-currency one
     // only when conversion wasn't possible (h.baseValuationUnavailable) or
@@ -90,7 +105,12 @@ export function useInvestments() {
       name: h.name,
       units: h.units,
       price,
-      changePct: 0, // day-change is Phase 3 (quote-provider) work — never invented client-side
+      // Trailing-24h % move (CoinGecko's `usd_24h_change`, threaded through
+      // the backend) — 0 only as a genuine "no data yet" fallback, since
+      // EnrichedHolding.changePct isn't nullable; the KPI-level daily-change
+      // total (see todaysChange below) correctly distinguishes "no data"
+      // from "flat 0%" instead.
+      changePct: h.change24hPct ?? 0,
       history: [price],
       averageCost,
       sector: h.sector,
@@ -99,7 +119,7 @@ export function useInvestments() {
       costBasis,
       totalReturn,
       totalReturnPct: costBasis > 0 ? (totalReturn / costBasis) * 100 : 0,
-      dailyReturn: 0,
+      dailyReturn: h.dailyChangeBaseMinor != null ? h.dailyChangeBaseMinor / 100 : 0,
       allocationPct: 0, // filled in below once the portfolio total is known
     }
   }, [])
@@ -110,6 +130,40 @@ export function useInvestments() {
     const total = rows.reduce((sum, h) => sum + h.marketValue, 0) || 1
     return rows.map((h) => ({ ...h, allocationPct: (h.marketValue / total) * 100 }))
   }, [portfolio, toEnrichedHolding])
+
+  // Fully-exited positions (units held = 0) — kept out of the live Holdings
+  // table by the backend (see PortfolioResult.closedPositions), but their
+  // realized P&L shouldn't just vanish once the last unit sells, e.g. the
+  // XRP round-trip that motivated this: buy @₱1, sell @₱78, a real ₱77 gain
+  // that used to disappear entirely from the page. `costBasisMinor` on a
+  // closed position is forced to 0 by the engine (plan §31 — no dangling
+  // cost basis carried into a future re-buy of the same ticker), so it
+  // can't be used as the %-return denominator; total cost basis ever
+  // allocated (sum of every buy's gross + fee) is recomputed here from the
+  // raw trade history instead.
+  const closedPositions: ClosedPosition[] = useMemo(() => {
+    if (!portfolio) return []
+    const totalBoughtMinorByInstrument = new Map<string, number>()
+    for (const t of portfolio.trades) {
+      if (t.type !== 'buy') continue
+      const grossMinor = t.units * t.priceMinor + t.feeMinor
+      totalBoughtMinorByInstrument.set(t.instrumentId, (totalBoughtMinorByInstrument.get(t.instrumentId) ?? 0) + grossMinor)
+    }
+    return portfolio.closedPositions.map((h) => {
+      const realizedPnl = h.realizedPnlMinor / 100
+      const totalBoughtMinor = totalBoughtMinorByInstrument.get(h.instrumentId) ?? 0
+      return {
+        ticker: h.ticker,
+        name: h.name,
+        sector: h.sector,
+        assetClass: h.assetClass as AssetClass,
+        realizedPnl,
+        realizedPnlPct: totalBoughtMinor > 0 ? (realizedPnl / (totalBoughtMinor / 100)) * 100 : null,
+        dividendsReceived: h.dividendsReceivedMinor / 100,
+        feesPaid: h.feesPaidMinor / 100,
+      }
+    })
+  }, [portfolio])
 
   const mockHoldings: EnrichedHolding[] = useMemo(() => {
     const totalMarketValue = holdings.reduce((sum, h) => sum + h.price * h.units, 0) || 1
@@ -157,26 +211,61 @@ export function useInvestments() {
     () => portfolio ? portfolio.summary.remainingCostBasisMinor / 100 : enrichedHoldings.reduce((sum, h) => sum + h.costBasis, 0),
     [portfolio, enrichedHoldings],
   )
-  const totalGainLoss = portfolio ? portfolio.summary.unrealizedPnlMinor / 100 : portfolioValue - totalCostBasis
-  const totalGainLossPct = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0
-  // Day-change (todaysChange/Pct) requires a quote provider's prior-close
-  // field, which is Phase 3 work (see `QuoteSnapshot.previousCloseMinor` /
-  // `.change24hMinor` on the backend, not yet populated). Reporting 0 here
-  // rather than a client-derived guess is deliberate — see plan's ban on
-  // treating stock "Today's Change" and crypto "24h Change" as interchangeable.
-  const todaysChange = useMemo(() => portfolio ? 0 : enrichedHoldings.reduce((sum, h) => sum + h.dailyReturn, 0), [portfolio, enrichedHoldings])
+  // Bug: this used to read summary.unrealizedPnlMinor, which is 0 for any
+  // fully-closed position (unitsHeld = 0 has no unrealized P&L by
+  // definition — see calculatePortfolio) — so selling out of a position
+  // entirely made its realized gain/loss vanish from the top "Total
+  // Gain/Loss" KPI, e.g. buying XRP @₱1 and selling @₱78 (a real ₱77 gain)
+  // showed "₱0.00 / +0.00%". totalReturnMinor already folds realized +
+  // unrealized + dividends together (see the engine's doc comment on
+  // PortfolioSummary) and is what every other portfolio app (Coinbase,
+  // Binance, CoinStats) means by an all-time "total P&L" figure — use that.
+  const totalGainLoss = portfolio ? portfolio.summary.totalReturnMinor / 100 : portfolioValue - totalCostBasis
+  const totalGainLossPct = portfolio
+    ? (portfolio.summary.totalReturnPct ?? 0)
+    : totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0
+  // Now backed by the quote provider's 24h-change field (CoinGecko's
+  // `usd_24h_change`, threaded through as summary.todaysChangeMinor/Pct —
+  // see investments.routes.ts). Null there means "no holding has 24h data
+  // yet" (e.g. an all-equity portfolio, or before the worker's first
+  // refresh) — reported as 0 here since the KPI card isn't nullable, same
+  // convention as totalGainLossPct above.
+  const todaysChange = portfolio ? (portfolio.summary.todaysChangeMinor ?? 0) / 100 : enrichedHoldings.reduce((sum, h) => sum + h.dailyReturn, 0)
   const todaysChangePct = useMemo(() => {
-    if (portfolio) return 0
+    if (portfolio) return portfolio.summary.todaysChangePct ?? 0
     const previousTotal = enrichedHoldings.reduce((sum, h) => sum + (h.price / (1 + h.changePct / 100)) * h.units, 0)
     return previousTotal > 0 ? (todaysChange / previousTotal) * 100 : 0
   }, [portfolio, enrichedHoldings, todaysChange])
+
+  // Top Gainer / Top Loser callout — a staple of every tracker's overview
+  // (Delta, CoinStats) surfacing which position moved most today, so a user
+  // doesn't have to scan the whole Holdings table to spot it. null when
+  // there's nothing to rank (no holdings at all).
+  const bestPerformer = useMemo(
+    () => enrichedHoldings.length === 0 ? null : enrichedHoldings.reduce((best, h) => (h.changePct > best.changePct ? h : best)),
+    [enrichedHoldings],
+  )
+  const worstPerformer = useMemo(
+    () => enrichedHoldings.length === 0 ? null : enrichedHoldings.reduce((worst, h) => (h.changePct < worst.changePct ? h : worst)),
+    [enrichedHoldings],
+  )
 
   const allocation: AllocationSlice[] = useMemo(() => {
     const bySector = new Map<string, number>()
     for (const h of enrichedHoldings) {
       bySector.set(h.sector, (bySector.get(h.sector) ?? 0) + h.marketValue)
     }
-    const total = portfolioValue || 1
+    // Bug: falling back to a bare `1` when the authoritative portfolioValue
+    // is 0 (e.g. a brand-new holding with no quote fetched yet, so the
+    // backend correctly reports it as worth nothing yet) divided a real
+    // per-holding marketValue — still shown per-row as a last-known
+    // reference price, see toEnrichedHolding above — by 1 instead of by the
+    // total actually being displayed, producing a percentage in the
+    // billions instead of a sane one. Sum the sector values actually being
+    // rendered instead, so the percentages shown always relate to each
+    // other correctly regardless of whether the authoritative total lags.
+    const displayedTotal = Array.from(bySector.values()).reduce((sum, v) => sum + v, 0)
+    const total = portfolioValue || displayedTotal || 1
     return Array.from(bySector.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([sector, marketValue], i) => ({
@@ -238,7 +327,38 @@ export function useInvestments() {
   }, [portfolio, finance.state.investmentActivity, loggedDividends])
   const totalDividends = useMemo(() => dividends.reduce((sum, d) => sum + d.amount, 0), [dividends])
 
-  const tickers = useMemo(() => holdings.map((h) => h.ticker), [holdings])
+  // Bug: this used to read the raw mock `holdings` (finance.state.portfolio)
+  // instead of `enrichedHoldings`, so in backend mode the ticker dropdown
+  // always showed the mock fixture's tickers (AAPL/AMZN/MSFT/NVDA) and never
+  // the user's real backend holdings — logging a trade against an existing
+  // ticker the dropdown couldn't show forced free-text re-entry, which could
+  // then trip the INSTRUMENT_METADATA_MISMATCH guard on a harmless
+  // casing/wording difference. Also fold in closed positions (fully sold,
+  // net zero units) so a since-closed ticker is still offered rather than
+  // silently disappearing from the list it was created under.
+  const tickers = useMemo(() => {
+    if (portfolio) return [...new Set([...portfolio.holdings, ...portfolio.closedPositions].map((h) => h.ticker))]
+    return enrichedHoldings.map((h) => h.ticker)
+  }, [portfolio, enrichedHoldings])
+
+  // Bug: the caller (Investments.tsx's handleLog) used to look up an
+  // existing ticker's name/assetClass/sector only in `enrichedHoldings`
+  // (open positions), then fall back to generic defaults ('equity', 'Other')
+  // when not found. A fully-sold (closed) position — or any ticker the
+  // dropdown didn't happen to include — fell through to those defaults,
+  // which then almost always mismatched the instrument's real, previously
+  // recorded metadata and tripped the backend's INSTRUMENT_METADATA_MISMATCH
+  // guard on a perfectly legitimate re-buy. Covers closed positions too, so
+  // the real recorded details are always used when they exist.
+  const instrumentMetadataByTicker = useMemo(() => {
+    const map = new Map<string, { name: string; assetClass: AssetClass; sector: string }>()
+    if (portfolio) {
+      for (const h of [...portfolio.holdings, ...portfolio.closedPositions]) map.set(h.ticker, { name: h.name, assetClass: h.assetClass as AssetClass, sector: h.sector })
+    } else {
+      for (const h of enrichedHoldings) map.set(h.ticker, { name: h.name, assetClass: h.assetClass, sector: h.sector })
+    }
+    return map
+  }, [portfolio, enrichedHoldings])
 
   // Appends a manually logged buy/sell to the local activity feed. This is a
   // standalone log entry — it does not (and cannot) alter the read-only
@@ -287,12 +407,16 @@ export function useInvestments() {
 
   return {
     holdings: enrichedHoldings,
+    closedPositions,
     tickers,
+    instrumentMetadataByTicker,
     portfolioValue,
     totalGainLoss,
     totalGainLossPct,
     todaysChange,
     todaysChangePct,
+    bestPerformer,
+    worstPerformer,
     allocation,
     performanceHistory,
     transactions,
@@ -302,5 +426,12 @@ export function useInvestments() {
     logDividend,
     editTransaction,
     deleteTransaction,
+    // Set only when a real backend is configured and its most recent
+    // portfolio fetch failed — never in mock mode. `usingFallbackData` is
+    // true whenever the figures above are NOT the authoritative backend
+    // portfolio, so the page can warn that they're an approximation.
+    portfolioError,
+    usingFallbackData: portfolio === null,
+    retryPortfolio,
   }
 }

@@ -10,6 +10,7 @@ import { formatDateLabel, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import { parseMoneyInput } from '../utils/money'
 import type { InvestmentTransactionType } from '../domain/investments'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
+import { FinanceApiError } from '../services/apiFinanceGateway'
 import './Investments.css'
 
 const TX_TYPE_LABEL: Record<InvestmentTransactionType, string> = { buy: 'Buy', sell: 'Sell' }
@@ -18,6 +19,23 @@ const TX_FIELDS = ['ticker', 'name', 'sector', 'assetClass', 'units', 'price', '
 type TxField = (typeof TX_FIELDS)[number]
 
 const ASSET_CLASS_OPTIONS = ['equity', 'etf', 'crypto', 'reit', 'bond'] as const
+
+// Quick-pick presets for the most commonly traded coins, so logging a new
+// crypto position doesn't require typing/remembering the exact ticker,
+// name, and sector every time (and keeps them consistent with whatever was
+// used before, avoiding an accidental INSTRUMENT_METADATA_MISMATCH later).
+const TOP_CRYPTO_PRESETS = [
+  { ticker: 'BTC', name: 'Bitcoin' },
+  { ticker: 'ETH', name: 'Ethereum' },
+  { ticker: 'USDT', name: 'Tether' },
+  { ticker: 'BNB', name: 'BNB' },
+  { ticker: 'SOL', name: 'Solana' },
+  { ticker: 'XRP', name: 'XRP' },
+  { ticker: 'USDC', name: 'USD Coin' },
+  { ticker: 'DOGE', name: 'Dogecoin' },
+  { ticker: 'ADA', name: 'Cardano' },
+  { ticker: 'TRX', name: 'TRON' },
+] as const
 
 function LogTransactionForm({
   tickers,
@@ -115,7 +133,12 @@ function LogTransactionForm({
       if (pending) await pending
       onClose()
     } catch (err) {
-      fail({ ticker: err instanceof Error ? err.message : 'Could not save investment trade.' })
+      // Route a field-scoped server error (e.g. INVESTMENT_OVERSELL's
+      // `field: 'units'`) to the field it actually names instead of always
+      // blaming the ticker input — fall back to ticker only when the error
+      // carries no field or names one this form doesn't have.
+      const apiField = err instanceof FinanceApiError && err.field && (TX_FIELDS as readonly string[]).includes(err.field) ? err.field as TxField : 'ticker'
+      fail({ [apiField]: err instanceof Error ? err.message : 'Could not save investment trade.' } as Partial<Record<TxField, string>>)
     } finally { setSubmitting(false) }
   }
 
@@ -140,14 +163,54 @@ function LogTransactionForm({
             <option value={NEW_TICKER_VALUE}>+ New ticker…</option>
           </select>
           {tickerMode === 'new' && (
-            <input
-              type="text"
-              className="tx-input"
-              placeholder="e.g. AAPL"
-              value={newTicker}
-              style={{ marginTop: '0.5rem' }}
-              onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
-            />
+            <>
+              <input
+                type="text"
+                className="tx-input"
+                placeholder="e.g. AAPL"
+                value={newTicker}
+                style={{ marginTop: '0.5rem' }}
+                onChange={(e) => {
+                  // Bug: typing over a ticker set by a preset pill (e.g.
+                  // clicking BTC, then editing the text to ETH instead of
+                  // re-picking) left the preset's `name`/`sector` behind,
+                  // silently pairing the wrong instrument name with the
+                  // newly-typed ticker on submit — this is how an instrument
+                  // like "ETH" ends up permanently recorded as "Bitcoin".
+                  // Re-sync on every keystroke: snap straight to another
+                  // preset's details if the new value matches one, otherwise
+                  // clear the (possibly stale) name/sector rather than risk
+                  // submitting a mismatched pairing.
+                  const value = e.target.value.toUpperCase()
+                  setNewTicker(value)
+                  const preset = TOP_CRYPTO_PRESETS.find((p) => p.ticker === value)
+                  if (preset) { setName(preset.name); setSector('Cryptocurrency'); setAssetClass('crypto') }
+                  else if (TOP_CRYPTO_PRESETS.some((p) => p.name === name)) { setName(''); setSector('Other') }
+                }}
+              />
+              <div className="ticker-presets">
+                <span className="ticker-presets-label">Or pick a top coin</span>
+                <div className="ticker-preset-list">
+                  {TOP_CRYPTO_PRESETS.map((preset) => (
+                    <button
+                      key={preset.ticker}
+                      type="button"
+                      className={`ticker-preset${newTicker === preset.ticker ? ' ticker-preset--active' : ''}`}
+                      title={preset.name}
+                      aria-pressed={newTicker === preset.ticker}
+                      onClick={() => {
+                        setNewTicker(preset.ticker)
+                        setName(preset.name)
+                        setSector('Cryptocurrency')
+                        setAssetClass('crypto')
+                      }}
+                    >
+                      {preset.ticker}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
           {errors.ticker && (
             <p className="tx-error" role="alert" id={errorId('ticker')}>
@@ -329,7 +392,15 @@ function EditTransactionForm({
       if (pending) await pending
       onClose()
     } catch (err) {
-      fail({ units: err instanceof Error ? err.message : 'Could not update investment trade.' })
+      // TRADE_HAS_LINKED_TRANSACTION (409) has no field of its own — surface
+      // it as a distinct, explanatory message rather than a generic
+      // "units" validation error, since it isn't one.
+      if (err instanceof FinanceApiError && err.code === 'TRADE_HAS_LINKED_TRANSACTION') {
+        fail({ units: 'This trade moved cash between accounts and can’t be edited here. Delete and re-log it instead.' })
+        return
+      }
+      const apiField = err instanceof FinanceApiError && err.field && (EDIT_TX_FIELDS as readonly string[]).includes(err.field) ? err.field as EditTxField : 'units'
+      fail({ [apiField]: err instanceof Error ? err.message : 'Could not update investment trade.' } as Partial<Record<EditTxField, string>>)
     } finally { setSubmitting(false) }
   }
 
@@ -487,9 +558,13 @@ export function Investments() {
   }
   const handleLog = (input: { ticker: string; name?: string; sector?: string; assetClass?: string; type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.logTransaction(input); return }
-    const holding = inv.holdings.find((item) => item.ticker === input.ticker)
-    const assetClass = (input.assetClass ?? holding?.assetClass ?? 'equity') as 'equity' | 'etf' | 'crypto' | 'reit' | 'bond'
-    return asyncFinance.addInvestmentTrade({ ...input, name: input.name ?? holding?.name ?? input.ticker, assetClass, sector: input.sector ?? holding?.sector ?? 'Other' })
+    // Look up the ticker's real recorded metadata (open OR closed
+    // positions) rather than only open holdings, so re-buying a fully-sold
+    // ticker reuses its actual name/assetClass/sector instead of falling
+    // through to generic defaults that would mismatch it.
+    const known = inv.instrumentMetadataByTicker.get(input.ticker)
+    const assetClass = (input.assetClass ?? known?.assetClass ?? 'equity') as 'equity' | 'etf' | 'crypto' | 'reit' | 'bond'
+    return asyncFinance.addInvestmentTrade({ ...input, name: input.name ?? known?.name ?? input.ticker, assetClass, sector: input.sector ?? known?.sector ?? 'Other' })
   }
   const handleEditTrade = (id: string, input: { type: InvestmentTransactionType; units: number; price: number; date: string; note?: string }) => {
     if (!asyncFinance) { inv.editTransaction(id, input); return }
@@ -522,6 +597,18 @@ export function Investments() {
         )}
       </div>
 
+      {inv.portfolioError && (
+        <div className="inv-portfolio-warning" role="alert">
+          <span>
+            Couldn’t reach the portfolio service — showing an approximate, locally-estimated value instead of your real cost basis and returns.
+            {inv.portfolioError.message ? ` (${inv.portfolioError.message})` : ''}
+          </span>
+          <button type="button" className="btn btn--ghost btn--compact" onClick={() => inv.retryPortfolio?.()}>
+            Retry
+          </button>
+        </div>
+      )}
+
       <div className="kpi-row">
         <Card>
           <div className="eyebrow">Portfolio Value</div>
@@ -550,6 +637,37 @@ export function Investments() {
           <div className="faint">{inv.dividends.length} payouts logged</div>
         </Card>
       </div>
+
+      {inv.bestPerformer && inv.worstPerformer && inv.bestPerformer.ticker !== inv.worstPerformer.ticker && (
+        <div className="inv-movers-row">
+          <Card className="inv-mover-card">
+            <div className="eyebrow">Top Gainer (24h)</div>
+            <div className="inv-mover-body">
+              <div>
+                <div style={{ fontWeight: 700 }}>{inv.bestPerformer.name}</div>
+                <div className="inv-meta">{inv.bestPerformer.ticker}</div>
+              </div>
+              <div className={`num inv-mover-pct ${inv.bestPerformer.changePct >= 0 ? 'inv-pos' : 'inv-neg'}`}>
+                {inv.bestPerformer.changePct >= 0 ? '+' : ''}
+                {inv.bestPerformer.changePct.toFixed(2)}%
+              </div>
+            </div>
+          </Card>
+          <Card className="inv-mover-card">
+            <div className="eyebrow">Top Loser (24h)</div>
+            <div className="inv-mover-body">
+              <div>
+                <div style={{ fontWeight: 700 }}>{inv.worstPerformer.name}</div>
+                <div className="inv-meta">{inv.worstPerformer.ticker}</div>
+              </div>
+              <div className={`num inv-mover-pct ${inv.worstPerformer.changePct >= 0 ? 'inv-pos' : 'inv-neg'}`}>
+                {inv.worstPerformer.changePct >= 0 ? '+' : ''}
+                {inv.worstPerformer.changePct.toFixed(2)}%
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <Card className="inv-alloc-card">
         <div className="section-head">
@@ -702,6 +820,35 @@ export function Investments() {
           </li>
         ))}
       </ul>
+
+      {inv.closedPositions.length > 0 && (
+        <>
+          <div className="section-head inv-section-head">
+            <span className="card-title-text">Closed Positions</span>
+            <span className="faint">{inv.closedPositions.length} closed</span>
+          </div>
+          <Card className="inv-closed-card">
+            <ul className="inv-closed-list">
+              {inv.closedPositions.map((c) => (
+                <li className="inv-closed-row" key={c.ticker}>
+                  <span>
+                    <div style={{ fontWeight: 600 }}>{c.name}</div>
+                    <div className="inv-meta">
+                      {c.ticker} · {c.sector}
+                    </div>
+                  </span>
+                  <span className={`num inv-col-right ${c.realizedPnl >= 0 ? 'inv-pos' : 'inv-neg'}`}>
+                    {formatMoney(c.realizedPnl, { withCents: false })}
+                    <div className="inv-meta">
+                      {c.realizedPnlPct == null ? 'Realized P&L' : `${c.realizedPnlPct >= 0 ? '+' : ''}${c.realizedPnlPct.toFixed(2)}%`}
+                    </div>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
 
       <div className="inv-split">
         <Card>

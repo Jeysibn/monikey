@@ -9,6 +9,7 @@ on:
     branches: [dev]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # A rapid double-push to dev, or a new commit landing on an open PR before
 # the last run finished, cancels the stale run instead of letting two
@@ -47,18 +48,22 @@ jobs:
   # the push (github.event.before); for `pull_request`, it diffs against
   # the PR's base ref. Either way this correctly captures "everything this
   # push/PR touched", including a squash- or merge-commit's full net diff.
+  # A manual (workflow_dispatch) run has no base to diff against — the
+  # filter step is skipped and both packages are validated instead, since
+  # "run everything" is the obvious intent of a manual trigger.
   detect-changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.final.outputs.backend }}
+      frontend: ${{ steps.final.outputs.frontend }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Filter changed paths
         id: filter
+        if: github.event_name != 'workflow_dispatch'
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -66,6 +71,19 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+
+      - name: Resolve final backend/frontend targets
+        id: final
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            backend=true
+            frontend=true
+          else
+            backend="${{ steps.filter.outputs.backend }}"
+            frontend="${{ steps.filter.outputs.frontend }}"
+          fi
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
 
   frontend-validate:
     name: Frontend Lint, Typecheck, and Build

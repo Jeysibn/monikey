@@ -53,7 +53,7 @@ jobs:
       # once here and reused by both publish jobs below.
       image_owner: ${{ steps.owner.outputs.lowercase }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Filter changed paths
         id: filter
@@ -94,7 +94,7 @@ jobs:
     env:
       API_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
@@ -138,7 +138,7 @@ jobs:
     env:
       WEB_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 

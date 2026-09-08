@@ -165,5 +165,5 @@ checks from the jobs actually enabled in [CI](CI-CD-Operations.md).
   sweep remains unimplemented.
 - Disabled UI includes bank connection, free-form AI questions, report CSV/PDF
   exports/custom ranges, currency switching, password changes and two-factor auth.
-- The `frontend` package's `test:backend:compose` script references the old script
-  location; run `bash scripts/test-compose-backend-regression.sh` from the root.
+- The `frontend` package's `test:backend:compose` script changes to the repository
+  root before running `scripts/test-compose-backend-regression.sh`.

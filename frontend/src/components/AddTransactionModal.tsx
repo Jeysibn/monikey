@@ -7,6 +7,7 @@ import { FinanceValidationError } from '../domain/financeRules'
 import { categoriesForTransactionType } from '../state/financeSelectors'
 import { parseMoneyInput } from '../utils/money'
 import { isValidIsoDate, isValidTime24 } from '../utils/date'
+import { createIdempotencyKey } from '../utils/idempotencyKey'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './AddTransactionModal.css'
 
@@ -184,7 +185,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
         amount: amountResult.value,
         fee: feeResult && feeResult.ok ? feeResult.value : undefined,
         note: form.note.trim() || undefined,
-        idempotencyKey: editingTransaction ? undefined : (idempotencyKeyRef.current ?? (idempotencyKeyRef.current = crypto.randomUUID())),
+        idempotencyKey: editingTransaction ? undefined : (idempotencyKeyRef.current ?? (idempotencyKeyRef.current = createIdempotencyKey())),
       }
 
       if (editingTransaction) {

@@ -85,6 +85,16 @@ carry constraints/triggers not fully expressible in Prisma's schema.
 Use the regression tests and raw SQL migrations for exact edge cases; a frontend
 validator alone is not proof that an API operation preserves an invariant.
 
+## Client idempotency keys
+
+Create requests carry opaque idempotency keys so retries can be recognized by the
+API. `frontend/src/utils/idempotencyKey.ts` uses `crypto.randomUUID()` where it is
+available. Browsers that expose Web Crypto without `randomUUID` use random bytes;
+environments with no Web Crypto use a timestamp/random fallback. These keys are
+for collision avoidance, not authentication or secret material. The transaction
+modal keeps one generated key for a pending submission; the investment gateway
+generates one key per create request.
+
 ## Backend modules and workers
 
 `backend/src/app.ts` constructs the app, providers and route modules. It registers

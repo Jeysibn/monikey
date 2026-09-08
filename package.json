@@ -13,6 +13,9 @@
     "lint:backend": "npm run lint --prefix backend",
     "test:frontend": "npm run test --prefix frontend",
     "test:backend": "npm run test --prefix backend",
-    "test:e2e": "npm run test:e2e --prefix frontend"
+    "test:e2e": "npm run test:e2e:mock --prefix frontend",
+    "test:e2e:mock": "npm run test:e2e:mock --prefix frontend",
+    "test:e2e:backend": "PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npm run test:e2e:backend --prefix frontend",
+    "test:backend:compose": "npm run test:backend:compose --prefix frontend"
   }
 }

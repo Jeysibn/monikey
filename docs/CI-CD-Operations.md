@@ -57,6 +57,8 @@ select either package. Security checks and the summary job are separate.
 | Job | Actual scope |
 | --- | --- |
 | Frontend validation | Node 24, install, oxlint, typecheck, build, Vitest with `NODE_ENV=test`, build artifact upload |
+| Mock browser tests | Installs Chromium and runs the frontend Playwright suite excluding `@backend-compose` scenarios |
+| Full-stack browser test | Builds backend-mode Compose, waits for API readiness, then runs the registration/login/persisted-expense Playwright scenario against `http://localhost:8080` |
 | Backend tests | Node 24, PostgreSQL 16, install, lint, typecheck, generate Prisma, migrations, `npm run test` |
 | Backend integration tests | Independent PostgreSQL 16 service, install, generate, migrate and the same full backend test command |
 | Docker scans | Build changed package images without publication; Trivy SARIF and security upload |
@@ -64,8 +66,11 @@ select either package. Security checks and the summary job are separate.
 | Summary | Aggregates listed job results, accepting successful or skipped jobs |
 
 Validation concurrency cancels an older run for the same ref.
-The current workflow does **not** run Playwright, Compose end-to-end startup,
-OpenAPI baseline comparison, or an explicit backend production build command.
+The workflow runs mock and backend-mode Playwright coverage. The backend browser
+lane runs for frontend/backend and shared Compose, Docker, environment, script or
+validation-workflow changes; it is intentionally skipped for documentation-only
+changes. The workflow does not run OpenAPI baseline comparison or a separate
+explicit backend production build command.
 Docker scan builds do compile the backend image. The two backend test jobs both
 invoke the same suite despite their different names. Do not describe these
 workflows as a complete release certification.
@@ -101,12 +106,13 @@ Use a disposable migrated database. Local Compose uses PostgreSQL 18, while the
 CI services currently use PostgreSQL 16; results apply to the version exercised.
 
 ```bash
-bash scripts/test-compose-backend-regression.sh
-PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npm --prefix frontend run test:e2e:backend
-npm --prefix frontend run test:e2e:mock
+npm run test:backend:compose
+npm run test:e2e:backend
+npm run test:e2e:mock
 ```
 
 Run these from the repository root with dependencies/browser prerequisites
-installed and the backend-mode test stack running. The helper isolates the worker
+installed and the backend-mode test stack running. `test:e2e` is the mock-only
+root default; `test:e2e:backend` explicitly targets localhost:8080. The helper isolates the worker
 while tests mutate the database, then restores it. A docs-only validation run may
 skip package jobs; it should not be reported as a fresh application test pass.

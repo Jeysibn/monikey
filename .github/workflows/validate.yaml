@@ -57,6 +57,7 @@ jobs:
     outputs:
       backend: ${{ steps.final.outputs.backend }}
       frontend: ${{ steps.final.outputs.frontend }}
+      browser: ${{ steps.final.outputs.browser }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,6 +72,23 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+              - 'package.json'
+            # A backend-mode browser test exercises the production Compose
+            # topology. Any code or shared runtime change that can alter that
+            # topology selects this lane; documentation-only changes stay
+            # inexpensive.
+            browser:
+              - 'frontend/**'
+              - 'backend/**'
+              - 'compose.yaml'
+              - 'compose.dev.yaml'
+              - '.env.example'
+              - 'scripts/**'
+              - 'frontend/Dockerfile'
+              - 'frontend/docker/**'
+              - 'backend/Dockerfile'
+              - 'package.json'
+              - '.github/workflows/validate.yaml'
 
       - name: Resolve final backend/frontend targets
         id: final
@@ -78,12 +96,17 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             backend=true
             frontend=true
+            browser=true
           else
             backend="${{ steps.filter.outputs.backend }}"
             frontend="${{ steps.filter.outputs.frontend }}"
+            browser="${{ steps.filter.outputs.browser }}"
           fi
-          echo "backend=$backend" >> "$GITHUB_OUTPUT"
-          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          {
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "browser=$browser"
+          } >> "$GITHUB_OUTPUT"
 
   frontend-validate:
     name: Frontend Lint, Typecheck, and Build
@@ -136,6 +159,93 @@ jobs:
           name: frontend-dist
           path: frontend/dist
           retention-days: 1
+
+  frontend-e2e-mock:
+    name: Frontend browser tests (mock mode)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci --include=dev
+
+      - name: Install Playwright Chromium
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run mock browser tests
+        working-directory: ./frontend
+        run: npm run test:e2e:mock
+
+  backend-e2e-compose:
+    name: Full-stack browser test (Compose)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci --include=dev
+
+      - name: Install Playwright Chromium
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Configure backend-mode Compose
+        run: |
+          cp .env.example .env
+          sed -i 's/^VITE_FINANCE_BACKEND=.*/VITE_FINANCE_BACKEND=true/' .env
+
+      - name: Start full stack
+        run: docker compose up -d --build
+
+      - name: Wait for API readiness
+        run: |
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --show-error http://localhost:8080/api/v1/health/ready; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Compose API did not become ready within two minutes." >&2
+          exit 1
+
+      - name: Run authenticated backend browser test
+        working-directory: ./frontend
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: http://localhost:8080
+        run: npm run test:e2e:backend
+
+      - name: Show Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop full stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
 
   backend-tests:
     name: Backend Tests with PostgreSQL
@@ -379,7 +489,7 @@ jobs:
             echo ".env files are properly gitignored"
           else
             echo "WARNING: .env files might not be properly gitignored"
-            cat .gitignore | grep env
+            grep env .gitignore
           fi
 
       - name: Check for committed secrets
@@ -399,6 +509,8 @@ jobs:
       [
         detect-changes,
         frontend-validate,
+        frontend-e2e-mock,
+        backend-e2e-compose,
         backend-tests,
         backend-integration-tests,
         docker-scan-backend,
@@ -419,6 +531,8 @@ jobs:
             fi
           }
           check "Frontend validate" "${{ needs.frontend-validate.result }}"
+          check "Frontend browser tests (mock mode)" "${{ needs.frontend-e2e-mock.result }}"
+          check "Full-stack browser test (Compose)" "${{ needs.backend-e2e-compose.result }}"
           check "Backend tests" "${{ needs.backend-tests.result }}"
           check "Backend integration tests" "${{ needs.backend-integration-tests.result }}"
           check "Docker scan (backend)" "${{ needs.docker-scan-backend.result }}"

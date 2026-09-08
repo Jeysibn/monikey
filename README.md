@@ -110,13 +110,15 @@ A green run with DB tests skipped is not a full backend verification.
 For a disposable local Compose test stack, the worker-isolating helper is:
 
 ```bash
-bash scripts/test-compose-backend-regression.sh
-PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npm --prefix frontend run test:e2e:backend
+npm run test:backend:compose
+npm run test:e2e:backend
 ```
 
-Run the regression helper **from the root**. The package-level
-`frontend` script `test:backend:compose` still points at the old relative script
-location; use the command above until that script is corrected.
+Both root commands run from the repository root. `test:backend:compose` changes
+to the root before invoking the worker-isolating helper, so its `.env` and Compose
+paths resolve correctly. `test:e2e` and `test:e2e:mock` run only mock-mode browser
+tests. `test:e2e:backend` targets an already-running backend-mode Compose stack at
+`http://localhost:8080`.
 The helper stops a running worker and restores it on exit; tests write to the
 selected database. Use a test stack, not production data.
 

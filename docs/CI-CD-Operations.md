@@ -1,389 +1,110 @@
-# CI/CD Operations Guide for Monikey
+# CI/CD Operations
 
-This document describes the Continuous Integration and Continuous Deployment (CI/CD) setup for the Monikey application.
+Reviewed against `.github/workflows/` on 2026-09-08. The project workflow is
+**push to dev → PR from dev to protected main → merge → image publication**.
+Main protection is the owner's stated policy; its remote settings were not
+independently verified because GitHub CLI was unauthenticated during this review.
 
-## Overview
+## Branch workflow
 
-Monikey uses GitHub Actions for automated testing, building, and scanning. The CI/CD pipeline ensures code quality, security, and operational readiness before deployment.
-
-## CI/CD Pipeline Structure
-
-### Main Workflow: `.github/workflows/ci.yaml`
-
-The primary CI/CD workflow includes:
-
-1. **Frontend Quality Checks**
-   - Linting (ESLint via oxlint)
-   - TypeScript type checking
-   - Unit tests (Vitest)
-   - Production build
-
-2. **Backend Quality Checks**
-   - Linting (oxlint)
-   - TypeScript type checking
-   - Unit tests (Vitest)
-
-3. **Database Integration Tests**
-   - PostgreSQL 16 service provisioning
-   - Prisma migration deployment
-   - Full integration test suite with live database
-
-4. **Docker Build & Scanning**
-   - Backend image build
-   - Frontend/web image build
-   - Trivy vulnerability scanning (CRITICAL and HIGH severity)
-   - SARIF report upload to GitHub Security tab
-
-5. **OpenAPI Contract Verification**
-   - Full stack startup
-   - OpenAPI spec generation
-   - Baseline comparison (if baseline exists)
-
-6. **End-to-End Testing**
-   - Full Docker Compose stack startup
-   - Playwright E2E test suite
-   - Playwright report generation
-
-7. **Security Checks**
-   - Secret scanning (TruffleHog)
-   - VITE environment variable validation
-   - .gitignore verification
-   - Common secret pattern detection
-
-### Secondary Workflows
-
-#### CodeQL Analysis (`.github/workflows/codeql.yaml`)
-
-- Runs on pushes to main/feature branches and pull requests
-- Daily scheduled analysis at 2 AM UTC
-- Detects security and quality issues
-- Reports to GitHub Security tab
-
-#### Dependabot Configuration (`.github/dependabot.yml`)
-
-Automated dependency updates for:
-- Frontend npm packages (weekly, Mondays at 04:00)
-- Backend npm packages (weekly, Mondays at 05:00)
-- Docker images (weekly, Mondays at 06:00)
-- GitHub Actions (weekly, Mondays at 07:00)
-
-Opens pull requests for dependency updates with automatic reviews.
-
-## Test Environment Configuration
-
-The CI environment uses standard configuration to avoid dependency on specific secrets:
-
-```env
-NODE_ENV=production
-DATABASE_URL=postgresql://monikey:test-password@localhost:5432/monikey
-INTEGRATIONS_MODE=stub
-# All external providers use stub implementations in CI
-```
-
-### PostgreSQL Service
-
-- Image: `postgres:16-alpine`
-- Database: `monikey`
-- User: `monikey`
-- Port: `5432` (localhost)
-- Health check: Every 10s, timeout 5s, 5 retries
-
-## Running Locally
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Node.js 24+
-- PostgreSQL client tools (optional, for direct DB access)
-
-### Full Stack Test Locally
+From a clean working tree, fetch and compare before editing:
 
 ```bash
-# 1. Start PostgreSQL
-docker run -d \
-  --name test-db \
-  -e POSTGRES_DB=monikey \
-  -e POSTGRES_USER=monikey \
-  -e POSTGRES_PASSWORD=test-password \
-  -p 5432:5432 \
-  postgres:16-alpine
-
-# 2. Wait for DB to be ready
-sleep 5
-
-# 3. Run migrations
-cd backend
-DATABASE_URL="postgresql://monikey:test-password@localhost:5432/monikey" \
-  npx prisma migrate deploy
-
-# 4. Run tests
-npm run test
-
-# 5. Stop DB
-docker stop test-db && docker rm test-db
+git fetch origin
+git switch dev
+git merge --ff-only origin/dev
+git log --oneline --left-right origin/dev...origin/main
+git diff --stat origin/dev origin/main
 ```
 
-### Docker Image Build
+If main contains release fixes missing from dev, incorporate `origin/main` into
+`dev` before the next PR (fast-forward where possible; otherwise resolve a normal
+merge). Do not reset away either branch's work or push directly to main.
+After committing and validating changes:
 
 ```bash
-# Build all images
-docker compose build
-
-# Build specific service
-docker compose build backend
-docker compose build web
-
-# Build without cache
-docker compose build --no-cache
+git push origin dev
 ```
 
-### Run Full Stack
+Open a PR with base `main` and head `dev`, using the web UI or authenticated
+`gh pr create --base main --head dev`. Required checks/review govern merging;
+do not bypass protection. Vault edits are outside this repository and are not
+included in its commits or PRs.
+
+### Reconciliation record, 2026-09-08
+
+After fetching, `origin/dev` was `2429da1` and `origin/main` was `ab5c8ce`.
+Main was three commits ahead with no dev-only commits. Local `dev` was
+fast-forwarded to `ab5c8ce`; the only inherited file change was
+`frontend/docker/resolve-nginx-dns.sh`, which qualifies the API service with the
+Kubernetes namespace when it detects an in-cluster service-account namespace.
+Docker Compose continues to use the short `api` service name.
+
+The documentation reconciliation was committed as `c21ebcd` and pushed to
+`origin/dev`. Immediately after the push, `origin/dev` was one commit ahead of
+`origin/main` and no commits behind. This record is a branch-alignment result,
+not a guarantee about future remote positions, deployed configuration or CI
+status. SSH fetch succeeded. GitHub CLI could not inspect PRs/protection because
+it was not signed in; no protection rules were changed by this work.
+
+## Validation: validate.yaml
+
+Triggers: pushes to `dev`, PRs targeting `main`, and manual dispatch.
+Every run executes the same three independent jobs. This avoids path-filter and
+aggregate-status logic, so a pull request has a small, predictable required
+check set.
+
+| Job | Actual scope |
+| --- | --- |
+| Frontend | Node 24, install, oxlint, typecheck, build, Vitest with `NODE_ENV=test`, and mock-mode Playwright browser tests |
+| Backend | Node 24, PostgreSQL 16, install, lint, typecheck, generate Prisma, migrations, and `npm run test` |
+| Secret scan | TruffleHog verified-secret scan |
+
+Validation concurrency cancels an older run for the same ref.
+The required workflow deliberately does not build Docker images, scan images,
+start Compose, or run backend-mode browser tests. Those full-stack checks remain
+available for deliberate local verification before a release. Do not describe
+these workflows as a complete release certification.
+
+## Publication: publish.yaml
+
+Triggers: pushes to `main`, or manual dispatch with `both`, `backend`, or `frontend`.
+Normal pushes publish packages selected by their changed paths. Manual dispatch
+uses the selected target. Publication does not rerun validation; choose the
+intended reviewed main ref for a manual release.
+
+Images are built from each package directory, published to GHCR as
+`ghcr.io/<lowercase-owner>/monikey-api` and `monikey-web`, and tagged with the
+commit SHA and `latest`. The web build sets `VITE_FINANCE_BACKEND=true`.
+Each publication pulls the SHA-tagged image back to verify it is retrievable.
+Publication runs are queued rather than cancelled mid-push.
+
+These workflows publish images; they contain no step that updates a GitOps
+repository or an Argo CD desired image reference. Deployment automation outside
+this repo must be verified separately. A SHA tag is not an immutable digest;
+pin the actual digest when immutable image identity is required.
+
+## CodeQL and dependency updates
+
+`codeql.yaml` runs on pushes to main/dev, PRs targeting main, and daily at 02:00 UTC.
+Dependabot configuration is in `.github/dependabot.yml`. Workflow configuration
+is source evidence; check the Actions UI for actual run results.
+
+## Local release verification
+
+See [README](../README.md#verification-commands) for package checks and browser tests.
+Use a disposable migrated database. Local Compose uses PostgreSQL 18, while the
+CI services currently use PostgreSQL 16; results apply to the version exercised.
 
 ```bash
-# Start all services
-docker compose up -d
-
-# Wait for services to be healthy
-docker compose ps
-
-# Check logs
-docker compose logs -f api
-
-# Stop and clean up
-docker compose down -v
+npm run test:backend:compose
+npm run test:e2e:backend
+npm run test:e2e:mock
 ```
 
-### Run E2E Tests Locally
-
-```bash
-# Install Playwright browsers
-npm run test:e2e:install
-
-# Start the full stack
-docker compose up -d
-
-# Run tests
-npm run test:e2e
-
-# View results
-npx playwright show-report
-
-# Clean up
-docker compose down
-```
-
-## Observability
-
-### Optional Observability Stack
-
-Enable Prometheus and Grafana monitoring:
-
-```bash
-# Start with observability profile
-docker compose -f compose.yaml -f compose.observability.yaml up -d
-
-# Access services:
-# - Prometheus: http://localhost:9090
-# - Grafana: http://localhost:3001 (admin/admin)
-```
-
-Configuration files:
-- `docker/prometheus.yml` - Prometheus scrape config
-- `docker/grafana-provisioning/` - Grafana dashboards and datasources
-
-## Troubleshooting
-
-### CI Fails Locally but Passes on GitHub
-
-1. Check Docker version (use latest)
-2. Verify sufficient disk space for Docker images
-3. Clear Docker build cache: `docker system prune -a`
-4. Check .env file is not checked in
-5. Verify node_modules are not checked in
-
-### PostgreSQL Migration Fails
-
-1. Ensure PostgreSQL service is healthy: `docker compose ps db`
-2. Check database connectivity:
-   ```bash
-   docker compose exec db psql -U monikey -d monikey -c "SELECT version();"
-   ```
-3. Verify DATABASE_URL is correct
-4. Check Prisma schema: `ls backend/prisma/schema.prisma`
-
-### Docker Build Fails with Network Error
-
-1. Check Docker network: `docker network ls`
-2. Restart Docker daemon
-3. Build with no cache: `docker compose build --no-cache`
-4. Check npm registry: `npm config get registry`
-
-### Tests Timeout
-
-1. Increase test timeout in `vitest.config.ts`
-2. Check system resources: `docker stats`
-3. Check PostgreSQL performance: `docker compose logs db | grep slow`
-
-## Security Practices
-
-### Secrets Management
-
-- Never commit `.env` or `.env.local`
-- `.gitignore` includes `.env*` patterns
-- All secrets in CI are GitHub Secrets
-- Use `VITE_*` only for non-sensitive frontend values
-
-### Dependency Scanning
-
-- Dependabot scans for vulnerable packages
-- GitHub Actions fail on HIGH/CRITICAL vulnerabilities
-- Review and update dependencies regularly
-- Monitor GitHub Security Advisories
-
-### Container Scanning
-
-- Trivy scans Docker images for vulnerabilities
-- SARIF reports uploaded to Security tab
-- Base images: `node:24-alpine`, `postgres:16-alpine`, `nginx:1.27-alpine`
-- Production images run as non-root user
-
-### Code Quality
-
-- ESLint/oxlint for style consistency
-- TypeScript strict mode for type safety
-- Security headers in Nginx configuration
-- CORS validation in API
-
-## Metrics and Monitoring
-
-### Key Metrics
-
-- Build time (target: <5 minutes per job)
-- Test execution time (target: <2 minutes per suite)
-- Code coverage (track over time)
-- Vulnerability count (target: 0 HIGH/CRITICAL)
-
-### CI Logs
-
-Access CI logs in GitHub:
-1. Go to Actions tab
-2. Select workflow run
-3. View job logs
-4. Download artifacts
-
-### Artifacts
-
-Each workflow run produces:
-- `frontend-dist` - Frontend build output (1 day retention)
-- `openapi-spec` - Generated OpenAPI spec (30 day retention)
-- `playwright-report` - E2E test report (7 day retention)
-- `trivy-*.sarif` - Vulnerability scan results
-
-## Database Migrations
-
-### Managing Migrations
-
-```bash
-# Create new migration
-cd backend
-DATABASE_URL="postgresql://..." npx prisma migrate dev --name "descriptive_name"
-
-# Deploy to environment
-DATABASE_URL="postgresql://..." npx prisma migrate deploy
-
-# Reset database (development only!)
-DATABASE_URL="postgresql://..." npx prisma migrate reset
-```
-
-### Migration Testing in CI
-
-The CI pipeline automatically:
-1. Provisions fresh PostgreSQL instance
-2. Deploys all pending migrations
-3. Runs full test suite against migrated schema
-4. Verifies rollback capability
-
-## Performance Optimization
-
-### Build Caching
-
-GitHub Actions uses Build Kit cache for Docker images:
-- Cache layers across builds
-- Significant speedup on subsequent builds
-- Separate caches for frontend and backend
-
-### Dependency Caching
-
-Node.js dependencies cached per workflow:
-- `package-lock.json` included in cache key
-- Changes to lock file invalidate cache
-- Reduces npm install time
-
-## Release Workflow
-
-1. **Code Review**: All changes reviewed before merge
-2. **CI Pass**: All checks pass on target branch
-3. **Manual Approval**: Release engineer approves
-4. **Deploy**: Tag creation triggers deployment workflow
-5. **Monitoring**: Post-deploy health checks and metrics
-
-## Emergency Procedures
-
-### CI Broken - Need to Deploy
-
-1. **Diagnose Issue**
-   ```bash
-   # Check workflow logs
-   # Run failing test locally
-   npm run test
-   docker compose build
-   ```
-
-2. **Fix in Feature Branch**
-   - Create fix commit
-   - Push to branch
-   - Wait for CI to pass
-
-3. **Hotfix to Main**
-   - Merge to main via PR
-   - Monitor CI results
-   - Verify deployment
-
-### Rollback
-
-```bash
-# Identify good commit
-git log --oneline main | head -5
-
-# Deploy previous version
-git tag v1.2.3-rollback <commit-hash>
-# Deployment workflow triggers
-```
-
-## Checklists
-
-### Before Deploying to Production
-
-- [ ] All CI checks pass
-- [ ] Code review approved
-- [ ] Database migrations tested
-- [ ] No HIGH/CRITICAL vulnerabilities
-- [ ] E2E tests pass
-- [ ] Observability metrics available
-- [ ] Rollback plan documented
-
-### After Deploying to Production
-
-- [ ] Monitor error rates (target: <0.1%)
-- [ ] Check database performance
-- [ ] Verify user-reported issues
-- [ ] Review security logs
-- [ ] Document any incidents
-
-## References
-
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [PostgreSQL Backup and Recovery](https://www.postgresql.org/docs/current/backup.html)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Trivy Security Scanning](https://github.com/aquasecurity/trivy)
-- [CodeQL Documentation](https://codeql.github.com/)
+Run these from the repository root with dependencies/browser prerequisites
+installed and the backend-mode test stack running. `test:e2e` is the mock-only
+root default; `test:e2e:backend` explicitly targets localhost:8080. The helper isolates the worker
+while tests mutate the database, then restores it. A docs-only validation run may
+still run the three checks; it should not be reported as a fresh application test
+pass.

@@ -1,193 +1,147 @@
 # Monikey
 
-Monikey is a personal finance tracker: expenses, income, budgets, multi-account
-bank/e-wallet money tracking, credit-card tracking, and savings goals, with an
-AI assistant and OCR receipt capture on the product roadmap.
+Monikey is a personal finance application for transactions, accounts and credit
+cards, budgets, savings goals, investments, recurring bills, reports, and settings.
+It is a monorepo with a React frontend and a Fastify API and worker backed by PostgreSQL.
 
-This repository is the **frontend implementation**, built from a set of
-approved design mockups (see [`docs/`](./docs) and the linked Obsidian project
-notes for the full design history). It is a React + TypeScript + Vite
-single-page app with five working pages backed by real (in-memory) frontend
-state, a functional Add Transaction workflow, local Account/Budget-category/
-Goal creation, and an end-to-end Playwright test suite.
+## Runtime modes
 
-## What actually works vs. what's a preview
+- **Mock mode** (default): deterministic in-memory finance state for demos and UI
+  tests. The injected date is `2026-08-29`; `?today=YYYY-MM-DD` overrides it.
+- **Backend mode**: build with `VITE_FINANCE_BACKEND=true` to use the session-cookie
+  registration/sign-in gate and asynchronous API gateways. Data persists in PostgreSQL.
+  The mock clock override does not control this mode; the async provider currently
+  uses the UTC calendar date, and the backend has its own date handling.
 
-Everything below runs entirely on frontend state — no backend, no
-authentication, no real bank/AI/OCR integration exists yet (see
-[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md#no-backend-yet)):
+This flag is a Vite **build-time** setting; changing it requires a frontend rebuild.
+Mock and backend modes have different capabilities; they are not interchangeable test targets.
 
-**Implemented, real, local workflows:**
-- Add a transaction (expense, income, or transfer) — validated, saved to
-  state, and reflected in every total immediately.
-- Pay a credit card from a cash account: cash and amount owed both fall,
-  while income, expenses, and net cash flow are untouched (it is a transfer,
-  not a cash-flow event).
-- Add a manual bank/e-wallet/cash account, or a credit card with its real
-  payment due date and minimum payment.
-- Add a budget category (it consumes the unallocated pool rather than growing
-  the monthly envelope).
-- Create a savings goal and fund it from a named account — funding can never
-  overdraw that account or push a goal past its target.
+## Stack and layout
 
-Every one of those rules lives in `frontend/src/domain/financeRules.ts` and is enforced
-by the repository, not by the forms — see
-[`docs/ARCHITECTURE.md#finance-invariants`](./docs/ARCHITECTURE.md#finance-invariants)
-for the full list, including the asset-overdraft, credit-limit, card-payment,
-and goal-overfunding rules.
-
-**Honestly labeled as not yet built** (a real, disabled control — never a
-clickable-looking dead end): connecting a real bank/e-wallet/card, OCR
-receipt scanning, a live AI assistant, and archiving/continuing/increasing
-the target on a completed goal. A goal's monthly contribution is likewise a
-*planned* amount, not an automatic transfer — there is no recurring-transfer
-engine, and the UI never claims one.
-
-## The demo date
-
-The app runs on one injected clock, fixed at the demo dataset's date
-(**2026-08-29**), so the seeded figures read consistently whenever the app is
-opened. Because that date is fixed rather than live, the UI labels its
-reporting window with the real month ("August 2026") instead of an ambiguous
-"this month". Appending `?today=YYYY-MM-DD` to any URL moves the whole app —
-period totals, chart windows, budget days remaining, and the Add Transaction
-form's default date — to that date at once. See
-[`docs/ARCHITECTURE.md#the-application-clock`](./docs/ARCHITECTURE.md#the-application-clock).
-
-## Stack
-
-- [Vite](https://vite.dev) + React 19 + TypeScript
-- [react-router-dom](https://reactrouter.com) for client-side routing
-- Plain CSS (design tokens in `frontend/src/styles/tokens.css`) — no CSS framework
-- [Playwright](https://playwright.dev) for end-to-end tests
-- A React state layer backed by the Fastify API through `ApiFinanceGateway` in
-  backend mode, with a deterministic mock adapter for local UI tests. See
-  [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full shape.
-- Currency: Philippine peso (`en-PH`/`PHP` via `Intl.NumberFormat`), see
-  `frontend/src/utils/currency.ts`. The configuration is module-level and
-  non-reactive, so switching currency at runtime is explicitly unsupported
-  until a Settings page moves it into React state.
-
-## Repository layout
-
-This repo is a small monorepo with two independently-built packages, each
-with its own `package.json`, lockfile, and Dockerfile:
-
-```
-frontend/   React + TypeScript + Vite SPA (this README's subject)
-backend/    Fastify API + worker (see docs/ARCHITECTURE.md)
-docker/     Shared/observability infra (Grafana, Prometheus) not owned by
-            either package
-docs/       Architecture docs and screenshots
-compose.yaml, compose.dev.yaml   Local orchestration of both packages
-```
-
-All commands below are run from inside `frontend/` unless noted otherwise.
-
-## Getting started
-
-```bash
-cd frontend
-npm install
-npm run dev       # http://localhost:5173
-```
-
-## Scripts
-
-| Script | What it does |
+| Path | Responsibility |
 | --- | --- |
-| `npm run dev` | Start the Vite dev server |
-| `npm run build` | Type-check (`tsc -b`) and build for production into `dist/` |
-| `npm run preview` | Serve the production build at `http://localhost:4173` |
-| `npm run lint` | Run `oxlint` |
-| `npm run test` | Run the Vitest unit-test suite (`financeSelectors.ts`, `clock.ts`, `date.ts`, `money.ts`, `financeRules.ts` via the repository, `financeStore.ts`, `FinanceProvider.tsx`) |
-| `npm run test:e2e:install` | Install the pinned Playwright Chromium build and its system dependencies (once per machine / in CI) |
-| `npm run test:e2e` | Run the Playwright end-to-end suite — its web server runs `npm run build && npm run preview`, so it builds once and serves that build |
-| `npm run screenshots` | Build and regenerate the screenshots under `../docs/screenshots/` |
+| `frontend/` | React 19, TypeScript, Vite, React Router, plain CSS; Vitest and Playwright |
+| `backend/` | Node.js 24+, Fastify 5, Prisma 6, PostgreSQL; API and worker entry points |
+| `backend/prisma/` | Database schema, SQL migrations, seed |
+| `docker/` | Optional Prometheus/Grafana configuration |
+| `scripts/` | Compose regression helper and database/receipt backup scripts |
+| `docs/` | Architecture, operations, recovery guide, historical screenshots |
+| `.github/workflows/` | Validation, image publication, CodeQL |
 
-The repo root also has a thin `package.json` with `--prefix`-delegating
-convenience scripts (e.g. `npm run dev:frontend`, `npm run test:backend`) for
-working across both packages without `cd`-ing back and forth.
+Each package has its own lockfile and Dockerfile. Root npm scripts delegate to
+those packages; this is not an npm-workspaces setup.
 
-### Running the end-to-end tests
+## Local development
+
+Install Node.js 24+ and, for the full stack, Docker with Compose.
+From the repository root:
 
 ```bash
-cd frontend
-npm run test:e2e:install   # once per machine: downloads Chromium + system deps
-npm run test:e2e
+npm run install:all
+npm run dev:frontend
 ```
 
-`npm run test:e2e` is self-contained from a clean checkout. Playwright's
-`webServer` command (in `playwright.config.ts`) is
-`npm run build && npm run preview`, and Playwright starts that server **once**
-per run, before any worker — so exactly one production build happens, no
-matter how many parallel workers run.
+This starts the mock frontend at `http://localhost:5173`. For the full stack,
+copy `.env.example` to `.env` if you do not already have one, configure its
+PostgreSQL values and `DATABASE_URL` using host `db`, and set
+`VITE_FINANCE_BACKEND=true` and `APP_ORIGIN=http://localhost:8080`.
+Then run:
 
-That build always happens: `reuseExistingServer` is `false` everywhere, not
-just in CI, so a preview server you already had running on port 4173 is never
-adopted (which would have skipped the build and quietly tested whatever
-`dist/` that server held). If the port is already in use the run fails loudly
-instead. `e2e/tr-remediation.spec.ts` backs this up by checking that the
-bundle the server hands out is the one sitting in `dist/` after this run's
-build — so stale output is caught, not just a missing build.
+```bash
+docker compose up -d --build
+curl --fail http://localhost:8080/api/v1/health/ready
+```
 
-It then runs every spec in `e2e/` against `http://localhost:4173`, covering
-navigation, the Add Transaction workflow (including saving each transaction
-type end-to-end), the local Account/Card/Budget-category/Goal workflows, the
-credit-card payment flow, cross-page data consistency, clock rollover,
-expense-chart window labeling, form-error accessibility and text legibility,
-responsive behavior at 390px and 200% zoom, and the financial-invariant
-regression checks in `e2e/sr012-invariants.spec.ts` and
-`e2e/tr-remediation.spec.ts`.
+Open `http://localhost:8080` and register or sign in. Compose runs PostgreSQL 18,
+a one-shot migration **and seed** service, the API, worker, and nginx frontend.
+The optional backend development overlay mounts source and uses `tsx watch`:
 
-The frontend logic itself (the clock, date/money parsing, selectors, the
-domain rules, the mock repository, the field-error hook, and the state
-store/provider) also has a Vitest unit suite — run with `npm run test`.
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build
+```
 
-The browser binary is the one prerequisite `npm run test:e2e` does not
-install for you. If Chromium is missing or its system libraries
-(`libnss3`, `libnspr4`, `libasound2`, …) are absent, Playwright fails to
-launch before any test runs — that is an environment problem, not an
-application failure. `npm run test:e2e:install` is the fix, and it is the
-same command CI should run.
+Production cookies are Secure. Use HTTPS for a non-local deployment and configure
+`APP_ORIGIN` to match its browser origin. Provider selection and credentials are
+configured separately; source adapters do not prove a live integration is enabled.
 
-## Pages
+## Pages and capabilities
 
 | Route | Page |
 | --- | --- |
-| `/` | Dashboard — money position, available cash, expenses trend, budget, goals, spend mix, credit cards, portfolio, recent transactions |
-| `/transactions` | Transactions — search, filter, and add income/expense/transfer |
-| `/accounts` | Accounts — banks, e-wallets, cash, and credit cards; add a manual account or card |
-| `/budget` | Budget — category budgets, Budget Health, Budget vs Actual; add a category |
-| `/goals` | Goals — active and completed savings goals; add funds or create a goal |
-| `/investments`, `/recurring`, `/reports`, `/settings` | Honest "coming soon" placeholders behind the "More" menu |
+| `/` | Dashboard and derived financial summaries |
+| `/transactions` | Search/filter and transaction entry; backend edit/reversal flows |
+| `/accounts` | Manual accounts and credit cards; backend update/archive flows |
+| `/budget` | Categories and allocations |
+| `/goals` | Goal creation and funding; backend update/delete flows |
+| `/investments` | Holdings, trades, dividends, portfolio views and quote refresh |
+| `/recurring` | Recurring bills and status/payment controls |
+| `/reports` | Financial report views and period controls |
+| `/settings` | Profile/preferences and JSON data export |
 
-## Responsive
+The backend also has receipt/OCR, structured AI insight, FX, and CSV/Plaid-sandbox
+import modules. Their presence does not mean every corresponding browser workflow
+is available: bank connection and the dashboard's free-form AI question control
+remain disabled. Reports CSV/PDF export and custom ranges, runtime currency/locale
+switching, password changes, and two-factor authentication remain disabled too.
 
-Verified with zero horizontal overflow at 320px, 390px (mobile), 640px
-(equivalent to 200% zoom at 1280px), 768px (tablet), 1024px (small desktop),
-and 1440px (desktop). Essential financial text is never rendered below 12px,
-and every form field associates its own error message via `aria-invalid` /
-`aria-describedby`, focusing the first invalid control on a failed submit. Below 760px the top nav
-collapses into a compact menu button; below 768px the Transactions page
-shows a stacked card list instead of the desktop grid; the Add Transaction
-dialog goes full-screen below 520px.
+Investment V2 is partial: the API accepts optional linked cash accounts, but the
+current trade/dividend forms lack dedicated account selectors. Historical event
+currency capture and fully correct mixed-currency aggregate returns are unfinished.
+Money Position still excludes recurring bills.
+See [architecture limitations](docs/ARCHITECTURE.md#known-limitations).
 
-## Screenshots
+## Verification commands
 
-| | |
-| --- | --- |
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Transactions](docs/screenshots/transactions.png) |
-| ![Accounts](docs/screenshots/accounts.png) | ![Budget](docs/screenshots/budget.png) |
-| ![Goals](docs/screenshots/goals.png) | ![Dashboard (mobile)](docs/screenshots/dashboard-mobile.png) |
+Run from the repository root:
+
+```bash
+npm run lint:frontend
+npm run lint:backend
+npm run build:frontend
+npm run build:backend
+npm run test:frontend
+npm run test:backend
+npm --prefix frontend run test:e2e:install
+npm --prefix frontend run test:e2e:mock
+```
+
+Database integration coverage requires a configured, migrated test database.
+A green run with DB tests skipped is not a full backend verification.
+For a disposable local Compose test stack, the worker-isolating helper is:
+
+```bash
+npm run test:backend:compose
+npm run test:e2e:backend
+```
+
+Both root commands run from the repository root. `test:backend:compose` changes
+to the root before invoking the worker-isolating helper, so its `.env` and Compose
+paths resolve correctly. `test:e2e` and `test:e2e:mock` run only mock-mode browser
+tests. `test:e2e:backend` targets an already-running backend-mode Compose stack at
+`http://localhost:8080`.
+The helper stops a running worker and restores it on exit; tests write to the
+selected database. Use a test stack, not production data.
+
+Mock Playwright runs build once and serve port 4173 with server reuse disabled.
+With `PLAYWRIGHT_TEST_BASE_URL`, Playwright tests the external stack without
+building or starting a local server. Regenerate screenshots with
+`npm --prefix frontend run screenshots`; checked-in screenshots reflect an older UI.
+No test counts or release certification are implied by this documentation refresh.
+
+## Contribution and release workflow
+
+`main` is protected by project policy. Work on `dev`, push to `dev`, then open a
+PR with **base `main`, head `dev`**. Let required checks pass and merge through
+that PR; do not push application or documentation changes directly to `main`.
+Fetch and compare branches before starting; bring any main-only fixes into `dev`
+before preparing the next release. The 2026-09-08 baseline incorporated the
+main-only Kubernetes nginx resolver fix. See [CI/CD operations](docs/CI-CD-Operations.md).
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — component structure, the
-  frontend state boundary, CSS isolation, currency, honest interactions,
-  what's implemented vs. deferred, and how this maps to the original design
-  docs.
-- The full design history (implementation briefs, QA passes, the frontend
-  review brief, and the Claude Design canvas mockups this app was built from)
-  lives in the project's Obsidian vault under `03 Projects/Monikey/` — not
-  duplicated here, since it predates and exceeds the scope of this codebase.
+- [Architecture](docs/ARCHITECTURE.md)
+- [CI/CD operations](docs/CI-CD-Operations.md)
+- [Disaster recovery](docs/Disaster-Recovery.md)
+- Canonical Obsidian project: `~/main-brain/main-brain/03 Projects/Monikey/`.
+  Start with its `README.md`; dated development/QA/release logs are historical
+  evidence for their recorded revision, not automatic certification of current code.

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, beforeAll } from 'vitest'
+import { afterEach, describe, expect, it, beforeAll, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { AddTransactionModal } from './AddTransactionModal'
 import { FinanceProvider } from '../state/FinanceProvider'
@@ -24,7 +24,10 @@ beforeAll(() => {
 // Vitest runs without `globals`, so Testing Library's automatic cleanup hook
 // is never registered — unmount between tests explicitly or each render's DOM
 // piles up in the same document.
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 function renderModal(todayIso: string) {
   return render(
@@ -72,5 +75,27 @@ describe('AddTransactionModal transfer destinations (TR-003)', () => {
 
     expect(screen.getByText(/Credit card payment:/)).toBeDefined()
     expect(screen.getByText(/income and expense totals don’t change/)).toBeDefined()
+  })
+})
+
+describe('AddTransactionModal idempotency key compatibility', () => {
+  it('saves a transaction when the browser crypto object lacks randomUUID', () => {
+    vi.stubGlobal('crypto', {})
+    const onClose = vi.fn()
+
+    render(
+      <FinanceProvider clock={fixedClock('2026-08-29')}>
+        <AddTransactionModal open onClose={onClose} />
+      </FinanceProvider>,
+    )
+
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '25' } })
+    fireEvent.change(screen.getByLabelText(/Merchant \/ Description/), { target: { value: 'Tricycle' } })
+    fireEvent.change(screen.getByLabelText(/Category/), { target: { value: 'food' } })
+    fireEvent.change(screen.getByLabelText(/Account/), { target: { value: 'checking' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Expense' }))
+
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })

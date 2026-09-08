@@ -1,4 +1,5 @@
 import type { InvestmentTransactionType } from '../domain/investments'
+import { createIdempotencyKey } from '../utils/idempotencyKey'
 import { FinanceApiError } from './apiFinanceGateway'
 
 export type InvestmentTradeInput = {
@@ -145,7 +146,7 @@ export class ApiInvestmentGateway implements InvestmentGateway {
     // raw `input.date` key left `occurredOn` undefined, which zod rejected
     // with "Invalid input: expected string, received undefined".
     const { date, price, feeMinor, cashAccountId, ...rest } = input
-    const response = await this.fetcher(`${this.baseUrl}/investments/trades`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...rest, occurredOn: date, priceMinor: Math.round(price * 100), feeMinor: feeMinor ?? 0, cashAccountId: cashAccountId ?? null, idempotencyKey: crypto.randomUUID() }) })
+    const response = await this.fetcher(`${this.baseUrl}/investments/trades`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...rest, occurredOn: date, priceMinor: Math.round(price * 100), feeMinor: feeMinor ?? 0, cashAccountId: cashAccountId ?? null, idempotencyKey: createIdempotencyKey() }) })
     if (!response.ok) await this.parseError(response, 'Could not save investment trade.')
   }
   async updateTrade(id: string, input: InvestmentTradeUpdateInput): Promise<void> {

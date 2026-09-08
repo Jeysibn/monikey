@@ -40,11 +40,12 @@ fast-forwarded to `ab5c8ce`; the only inherited file change was
 Kubernetes namespace when it detects an in-cluster service-account namespace.
 Docker Compose continues to use the short `api` service name.
 
-At this point `origin/dev` remains behind until the documentation commit is
-pushed. This record is a branch-alignment result, not a guarantee about future
-remote positions, deployed configuration or CI status. SSH fetch succeeded.
-GitHub CLI could not inspect PRs/protection because it was not signed in; no
-protection rules were changed by this work.
+The documentation reconciliation was committed as `c21ebcd` and pushed to
+`origin/dev`. Immediately after the push, `origin/dev` was one commit ahead of
+`origin/main` and no commits behind. This record is a branch-alignment result,
+not a guarantee about future remote positions, deployed configuration or CI
+status. SSH fetch succeeded. GitHub CLI could not inspect PRs/protection because
+it was not signed in; no protection rules were changed by this work.
 
 ## Validation: validate.yaml
 

@@ -50,30 +50,21 @@ it was not signed in; no protection rules were changed by this work.
 ## Validation: validate.yaml
 
 Triggers: pushes to `dev`, PRs targeting `main`, and manual dispatch.
-Path filtering selects `frontend/**` and `backend/**`; manual dispatch selects both.
-Changes only to root docs, scripts or shared Compose files do not by themselves
-select either package. Security checks and the summary job are separate.
+Every run executes the same three independent jobs. This avoids path-filter and
+aggregate-status logic, so a pull request has a small, predictable required
+check set.
 
 | Job | Actual scope |
 | --- | --- |
-| Frontend validation | Node 24, install, oxlint, typecheck, build, Vitest with `NODE_ENV=test`, build artifact upload |
-| Mock browser tests | Installs Chromium and runs the frontend Playwright suite excluding `@backend-compose` scenarios |
-| Full-stack browser test | Builds backend-mode Compose, waits for API readiness, then runs the registration/login/persisted-expense Playwright scenario against `http://localhost:8080` |
-| Backend tests | Node 24, PostgreSQL 16, install, lint, typecheck, generate Prisma, migrations, `npm run test` |
-| Backend integration tests | Independent PostgreSQL 16 service, install, generate, migrate and the same full backend test command |
-| Docker scans | Build changed package images without publication; Trivy SARIF and security upload |
-| Security checks | TruffleHog plus source/config hygiene checks |
-| Summary | Aggregates listed job results, accepting successful or skipped jobs |
+| Frontend | Node 24, install, oxlint, typecheck, build, Vitest with `NODE_ENV=test`, and mock-mode Playwright browser tests |
+| Backend | Node 24, PostgreSQL 16, install, lint, typecheck, generate Prisma, migrations, and `npm run test` |
+| Secret scan | TruffleHog verified-secret scan |
 
 Validation concurrency cancels an older run for the same ref.
-The workflow runs mock and backend-mode Playwright coverage. The backend browser
-lane runs for frontend/backend and shared Compose, Docker, environment, script or
-validation-workflow changes; it is intentionally skipped for documentation-only
-changes. The workflow does not run OpenAPI baseline comparison or a separate
-explicit backend production build command.
-Docker scan builds do compile the backend image. The two backend test jobs both
-invoke the same suite despite their different names. Do not describe these
-workflows as a complete release certification.
+The required workflow deliberately does not build Docker images, scan images,
+start Compose, or run backend-mode browser tests. Those full-stack checks remain
+available for deliberate local verification before a release. Do not describe
+these workflows as a complete release certification.
 
 ## Publication: publish.yaml
 
@@ -115,4 +106,5 @@ Run these from the repository root with dependencies/browser prerequisites
 installed and the backend-mode test stack running. `test:e2e` is the mock-only
 root default; `test:e2e:backend` explicitly targets localhost:8080. The helper isolates the worker
 while tests mutate the database, then restores it. A docs-only validation run may
-skip package jobs; it should not be reported as a fresh application test pass.
+still run the three checks; it should not be reported as a fresh application test
+pass.

@@ -32,8 +32,6 @@ COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY prisma ./prisma
 COPY scripts ./scripts
 
-RUN chown -R monikey:monikey /app
-
 # Create /data directory with proper permissions for receipt storage.
 # The filesystem object store adapter (src/integrations/adapters/filesystem-object-store)
 # needs to create subdirectories at runtime; this directory will be mounted as a Docker

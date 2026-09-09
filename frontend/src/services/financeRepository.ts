@@ -22,10 +22,12 @@
 import type {
   Account,
   AddBudgetCategoryInput,
+  AddCategoryInput,
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
   BudgetCategory,
+  Category,
   CreateGoalInput,
   CreditCard,
   FinanceState,
@@ -41,8 +43,23 @@ export interface FinanceRepository {
   addTransaction(state: FinanceState, input: AddTransactionInput): { state: FinanceState; transaction: Transaction }
   addManualAccount(state: FinanceState, input: AddManualAccountInput): { state: FinanceState; account: Account }
   addManualCreditCard(state: FinanceState, input: AddManualCreditCardInput): { state: FinanceState; creditCard: CreditCard }
+  /** @deprecated Category creation and budgeting are now separate actions —
+   * use `addCategory` (Settings) then `setCategoryBudget` (Budget). Kept for
+   * the existing SR-002 envelope test coverage; no longer called by any page. */
   addBudgetCategory(state: FinanceState, input: AddBudgetCategoryInput): { state: FinanceState; category: BudgetCategory }
-  updateCategory(state: FinanceState, categoryId: string, updates: { name?: string; allocated?: number }): { state: FinanceState; category: BudgetCategory }
+  /** Settings: create a category (name/color only), unbudgeted until Budget
+   * sets an amount for it via `setCategoryBudget`. */
+  addCategory(state: FinanceState, input: AddCategoryInput): { state: FinanceState; category: Category }
+  /** Settings: rename a category and/or change its color. Never touches
+   * budget allocation — that's `setCategoryBudget`'s job. */
+  updateCategory(state: FinanceState, categoryId: string, updates: { name?: string; color?: string }): { state: FinanceState; category: Category }
+  /** Budget: set (or change) the monthly budget amount for a category that
+   * already exists. Creates the budget-category entry on first use, upserts
+   * it thereafter. Setting `allocated` to 0 is how Budget "removes" a
+   * category from the active budget without deleting the category itself. */
+  setCategoryBudget(state: FinanceState, categoryId: string, allocated: number): { state: FinanceState; category: BudgetCategory }
+  /** Settings: delete a category outright — removes it and its budget entry.
+   * Transactions still referencing it become uncategorized. */
   deleteCategory(state: FinanceState, categoryId: string): FinanceState
   createGoal(state: FinanceState, input: CreateGoalInput): { state: FinanceState; goal: Goal }
   /**

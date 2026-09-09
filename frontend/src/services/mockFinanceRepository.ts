@@ -22,11 +22,13 @@ import { demoClock } from '../utils/clock'
 import { isDateInPeriod, monthPeriodContaining } from '../utils/date'
 import {
   validateAddBudgetCategory,
+  validateAddCategory,
   validateAddGoalFunds,
   validateAddManualAccount,
   validateAddManualCreditCard,
   validateAddTransaction,
   validateCreateGoal,
+  validateSetCategoryBudget,
 } from '../domain/financeRules'
 
 let idCounter = 0
@@ -263,25 +265,49 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
       }
     },
 
+    addCategory(state, input) {
+      validateAddCategory(input)
+      const id = nextId('cat')
+      const color = input.color ?? NEW_CATEGORY_PALETTE[state.categories.length % NEW_CATEGORY_PALETTE.length]
+      const category: Category = { id, name: input.name.trim(), color, budgetable: true, transactionKinds: ['expense'] }
+      return {
+        state: { ...state, categories: [...state.categories, category] },
+        category,
+      }
+    },
+
     updateCategory(state, categoryId, updates) {
       const categoryIndex = state.categories.findIndex((c) => c.id === categoryId)
       if (categoryIndex === -1) throw new Error(`Category ${categoryId} not found`)
 
-      const updatedCategory = { ...state.categories[categoryIndex], ...updates }
+      const updatedCategory = {
+        ...state.categories[categoryIndex],
+        ...(updates.name !== undefined && { name: updates.name.trim() }),
+        ...(updates.color !== undefined && { color: updates.color }),
+      }
       const categories = [...state.categories]
       categories[categoryIndex] = updatedCategory
 
-      const budgetCategoryIndex = state.budgetCategories.findIndex((bc) => bc.id === categoryId)
-      let budgetCategories = state.budgetCategories
-      if (budgetCategoryIndex !== -1 && updates.allocated !== undefined) {
-        budgetCategories = [...state.budgetCategories]
-        budgetCategories[budgetCategoryIndex] = { ...budgetCategories[budgetCategoryIndex], allocated: updates.allocated }
-      }
-
       return {
-        state: { ...state, categories, budgetCategories },
-        category: budgetCategories[budgetCategoryIndex] || state.budgetCategories[budgetCategoryIndex],
+        state: { ...state, categories },
+        category: updatedCategory,
       }
+    },
+
+    setCategoryBudget(state, categoryId, allocated) {
+      validateSetCategoryBudget(state, categoryId, allocated)
+      const existingIndex = state.budgetCategories.findIndex((bc) => bc.id === categoryId)
+      let budgetCategories: BudgetCategory[]
+      let category: BudgetCategory
+      if (existingIndex === -1) {
+        category = { id: categoryId, allocated, spent: 0 }
+        budgetCategories = [...state.budgetCategories, category]
+      } else {
+        category = { ...state.budgetCategories[existingIndex], allocated }
+        budgetCategories = [...state.budgetCategories]
+        budgetCategories[existingIndex] = category
+      }
+      return { state: { ...state, budgetCategories }, category }
     },
 
     deleteCategory(state, categoryId) {
@@ -429,8 +455,33 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
 
       const transactions = state.transactions.map((t) => (t.id === transactionId ? updatedTransaction : t))
 
+      // Keep the matching budget category's `spent` figure in sync: reverse
+      // the old expense's contribution (if any) and apply the updated one.
+      // Without this, recategorizing a transaction, editing its amount, or
+      // moving its date in/out of the active reporting period left
+      // `budgetCategories[].spent` — and therefore Dashboard's Spend Mix,
+      // which reads it directly — stale after an edit.
+      const activePeriod = monthPeriodContaining(clock.todayIso())
+      const oldContribution =
+        transaction.type === 'expense' && transaction.categoryId && isDateInPeriod(transaction.date, activePeriod)
+          ? -transaction.amount
+          : 0
+      const newContribution =
+        updatedTransaction.type === 'expense' && updatedTransaction.categoryId && isDateInPeriod(updatedTransaction.date, activePeriod)
+          ? -updatedTransaction.amount
+          : 0
+      let budgetCategories = state.budgetCategories
+      if (oldContribution !== 0 || newContribution !== 0) {
+        budgetCategories = budgetCategories.map((c) => {
+          let spent = c.spent
+          if (c.id === transaction.categoryId) spent -= oldContribution
+          if (c.id === updatedTransaction.categoryId) spent += newContribution
+          return spent === c.spent ? c : { ...c, spent }
+        })
+      }
+
       return {
-        state: { ...state, transactions },
+        state: { ...state, transactions, budgetCategories },
         transaction: updatedTransaction,
       }
     },
@@ -474,12 +525,27 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
         reverseAccountDelta(transaction.accountId, reversalAmount)
       }
 
+      // Mirror the account-balance reversal above for the matching budget
+      // category's `spent` figure — the compensating transaction above
+      // never flows back through `addTransaction`'s bookkeeping, so
+      // without this a deleted/reversed expense stayed counted in
+      // Dashboard's Spend Mix forever.
+      const activePeriod = monthPeriodContaining(clock.todayIso())
+      let budgetCategories = state.budgetCategories
+      if (transaction.type === 'expense' && transaction.categoryId && isDateInPeriod(transaction.date, activePeriod)) {
+        const amount = -transaction.amount
+        budgetCategories = budgetCategories.map((c) =>
+          c.id === transaction.categoryId ? { ...c, spent: c.spent - amount } : c,
+        )
+      }
+
       return {
         state: {
           ...state,
           transactions: [compensatingTransaction, ...state.transactions],
           accounts,
           creditCards,
+          budgetCategories,
         },
         reversedTransaction: transaction,
       }

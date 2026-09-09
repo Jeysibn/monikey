@@ -58,7 +58,10 @@
 }
 .tx-grid-row {
   display: grid;
-  grid-template-columns: 60px 1.6fr 110px 1.1fr 90px 100px 90px;
+  /* 8 tracks, one per header/cell column — Actions gets its own fixed
+     track sized for two icon buttons so it never falls back to an
+     implicit auto column (which used to squeeze/misalign Edit/Delete). */
+  grid-template-columns: 60px 1.6fr 110px 1.1fr 90px 100px 90px 76px;
   column-gap: 14px;
   align-items: center;
   padding: 12px 8px;
@@ -92,6 +95,51 @@
   text-align: right;
   font-weight: 700;
   color: var(--text-dim);
+}
+
+/* Row actions, desktop table — a tight, right-aligned pair of icon-only
+   buttons instead of full text labels, so they read as a lightweight
+   affordance at the end of the row rather than competing with the data. */
+.tx-row-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.tx-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  flex: none;
+}
+.tx-icon-btn:hover:not(:disabled) {
+  background: oklch(from var(--text-dim) l c h / 0.12);
+  color: var(--text);
+}
+.tx-icon-btn--danger:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--red) 18%, transparent);
+  color: var(--red);
+}
+
+/* Row actions, mobile cards — full labels stay (there's room), but as an
+   even two-up row instead of the stacked column `.rec-row-actions`
+   defaults to, and Delete gets a subtle danger tint on hover/focus. */
+.tx-mobile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tx-mobile-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+.tx-mobile-actions .btn--danger-ghost:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--red) 16%, transparent);
+  color: var(--red);
+  border-color: color-mix(in oklch, var(--red) 40%, var(--card-border));
 }
 
 .empty-state {

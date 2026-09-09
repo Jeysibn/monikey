@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
@@ -10,34 +11,37 @@ import { FinanceValidationError } from '../domain/financeRules'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Budget.css'
 
-const CATEGORY_FIELDS = ['name', 'allocated'] as const
+const CATEGORY_FIELDS = ['category', 'allocated'] as const
 type CategoryField = (typeof CATEGORY_FIELDS)[number]
 
 export function Budget() {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const { budgetCategories, categories, budgetVsActual, totalBudgetAllocated } = finance.state
+  // Only categories with an amount set (allocated > 0) show up as budget
+  // lines here — Budget never creates, renames, or deletes a category, it
+  // only sets/changes/clears the amount for one that Settings already made.
+  const activeBudgetCategories = budgetCategories.filter((c) => c.allocated > 0)
+  const unbudgetedCategories = categories.filter((c) => !activeBudgetCategories.some((bc) => bc.id === c.id))
   const [formOpen, setFormOpen] = useState(false)
-  const [name, setName] = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const [allocated, setAllocated] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
   const [editAllocated, setEditAllocated] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
   const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
   const { errors: editErrors, field: editField, errorId: editErrorId, fail: editFail, clear: editClear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
 
-  const overNames = budgetCategories
+  const overNames = activeBudgetCategories
     .filter((c) => finance.budgetStatus(c.allocated, c.spent) === 'over_budget')
     .map((c) => categories.find((cc) => cc.id === c.id)?.name ?? c.id)
     .join(', ')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      fail({ name: 'Category name is required.' })
+    if (!categoryId) {
+      fail({ category: 'Choose a category.' })
       return
     }
     if (!allocated.trim()) {
@@ -58,27 +62,25 @@ export function Budget() {
     // it just surfaces whatever the repository rejects on the field at fault.
     try {
       setSubmitting(true)
-      if (asyncFinance) await asyncFinance.addBudgetCategory({ name: trimmedName, allocated: result.value })
-      else finance.addBudgetCategory({ name: trimmedName, allocated: result.value })
+      if (asyncFinance) await asyncFinance.setCategoryBudget(categoryId, result.value)
+      else finance.setCategoryBudget(categoryId, result.value)
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as CategoryField) : 'allocated'
-      fail({ [at]: err instanceof Error ? err.message : 'Could not add category.' })
+      fail({ [at]: err instanceof Error ? err.message : 'Could not set budget.' })
       return
     } finally {
       setSubmitting(false)
     }
-    setName('')
+    setCategoryId('')
     setAllocated('')
     clear()
     setFormOpen(false)
   }
 
   function startEdit(categoryId: string) {
-    const category = categories.find((c) => c.id === categoryId)
     const budgetCategory = budgetCategories.find((bc) => bc.id === categoryId)
-    if (category && budgetCategory) {
+    if (budgetCategory) {
       setEditingId(categoryId)
-      setEditName(category.name)
       setEditAllocated(formatMoney(budgetCategory.allocated, { withCents: false }).replace(/[^\d.]/g, ''))
       editClear()
     }
@@ -86,18 +88,12 @@ export function Budget() {
 
   function cancelEdit() {
     setEditingId(null)
-    setEditName('')
     setEditAllocated('')
     editClear()
   }
 
   async function handleEditSubmit(e: React.FormEvent, categoryId: string) {
     e.preventDefault()
-    const trimmedName = editName.trim()
-    if (!trimmedName) {
-      editFail({ name: 'Category name is required.' })
-      return
-    }
     if (!editAllocated.trim()) {
       editFail({ allocated: 'Enter a budget amount greater than zero.' })
       return
@@ -113,11 +109,11 @@ export function Budget() {
     }
     try {
       setEditSubmitting(true)
-      if (asyncFinance) await asyncFinance.updateCategory(categoryId, { name: trimmedName, allocated: result.value })
-      else finance.updateCategory(categoryId, { name: trimmedName, allocated: result.value })
+      if (asyncFinance) await asyncFinance.setCategoryBudget(categoryId, result.value)
+      else finance.setCategoryBudget(categoryId, result.value)
     } catch (err) {
       const at = err instanceof FinanceValidationError && err.field ? (err.field as CategoryField) : 'allocated'
-      editFail({ [at]: err instanceof Error ? err.message : 'Could not update category.' })
+      editFail({ [at]: err instanceof Error ? err.message : 'Could not update budget.' })
       return
     } finally {
       setEditSubmitting(false)
@@ -126,14 +122,16 @@ export function Budget() {
   }
 
   async function handleDelete(categoryId: string) {
-    if (!window.confirm('Are you sure you want to delete this category? Transactions assigned to it will be uncategorized.')) {
+    // Removes the category from the active budget without deleting the
+    // category itself — deleting the category outright is a Settings action.
+    if (!window.confirm('Remove this category from the budget? It will still exist in Settings and can be re-budgeted any time.')) {
       return
     }
     try {
-      if (asyncFinance) await asyncFinance.deleteCategory(categoryId)
-      else finance.deleteCategory(categoryId)
+      if (asyncFinance) await asyncFinance.setCategoryBudget(categoryId, 0)
+      else finance.setCategoryBudget(categoryId, 0)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not delete category.')
+      alert(err instanceof Error ? err.message : 'Could not remove category from budget.')
     }
   }
 
@@ -170,28 +168,43 @@ export function Budget() {
         <Card className="cat-card">
           <div className="section-head">
             <span className="card-title-text">Category Budgets</span>
-            <button type="button" className="add-link" aria-expanded={formOpen} onClick={() => setFormOpen((v) => !v)}>
-              + New category
+            <button
+              type="button"
+              className="add-link"
+              aria-expanded={formOpen}
+              onClick={() => setFormOpen((v) => !v)}
+              disabled={unbudgetedCategories.length === 0}
+              title={unbudgetedCategories.length === 0 ? 'All categories from Settings already have a budget' : undefined}
+            >
+              + Set a budget
             </button>
           </div>
 
           {formOpen && (
             <form className="new-category-form" onSubmit={handleSubmit} noValidate>
               <label className="new-category-field">
-                <span className="tx-label">Category name</span>
-                <input
-                  type="text"
+                <span className="tx-label">Category</span>
+                <select
                   className="tx-input"
-                  value={name}
-                  placeholder="e.g. Entertainment"
-                  aria-label="Category name"
-                  {...field('name', (e) => setName(e.target.value))}
-                />
-                {errors.name && (
-                  <p className="tx-error" role="alert" id={errorId('name')}>
-                    {errors.name}
+                  value={categoryId}
+                  aria-label="Category"
+                  {...field('category', (e) => setCategoryId(e.target.value))}
+                >
+                  <option value="">Choose a category…</option>
+                  {unbudgetedCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.category && (
+                  <p className="tx-error" role="alert" id={errorId('category')}>
+                    {errors.category}
                   </p>
                 )}
+                <p className="budget-meta">
+                  Need a new category? <Link to="/settings">Create one in Settings</Link> first.
+                </p>
               </label>
               <label className="new-category-field">
                 <span className="tx-label">Monthly budget</span>
@@ -215,13 +228,13 @@ export function Budget() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn--primary" disabled={submitting || asyncFinance?.status === 'loading'}>
-                  {submitting ? 'Saving…' : 'Add category'}
+                  {submitting ? 'Saving…' : 'Set budget'}
                 </button>
               </div>
             </form>
           )}
 
-          {budgetCategories.map((c) => {
+          {activeBudgetCategories.map((c) => {
             const status = finance.budgetStatus(c.allocated, c.spent)
             const rawPct = Math.round((c.spent / c.allocated) * 100)
             const diff = c.allocated - c.spent
@@ -236,20 +249,8 @@ export function Budget() {
                 {isEditing ? (
                   <form className="new-category-form" onSubmit={(e) => void handleEditSubmit(e, c.id)} noValidate>
                     <label className="new-category-field">
-                      <span className="tx-label">Category name</span>
-                      <input
-                        type="text"
-                        className="tx-input"
-                        value={editName}
-                        placeholder="e.g. Entertainment"
-                        aria-label="Category name"
-                        {...editField('name', (e) => setEditName(e.target.value))}
-                      />
-                      {editErrors.name && (
-                        <p className="tx-error" role="alert" id={editErrorId('name')}>
-                          {editErrors.name}
-                        </p>
-                      )}
+                      <span className="tx-label">Category</span>
+                      <span className="budget-meta">{category?.name ?? c.id}</span>
                     </label>
                     <label className="new-category-field">
                       <span className="tx-label">Monthly budget</span>
@@ -309,7 +310,7 @@ export function Budget() {
                         Edit
                       </button>
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => void handleDelete(c.id)}>
-                        Delete
+                        Remove
                       </button>
                     </div>
                   </div>

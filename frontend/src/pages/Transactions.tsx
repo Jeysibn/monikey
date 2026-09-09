@@ -210,30 +210,30 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                   <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
                 </span>
                 <span role="cell" className="tx-col-center">
-                  <div className="rec-row-actions">
+                  <div className="tx-row-actions">
                     <button
                       type="button"
-                      className="btn btn--ghost btn--compact"
+                      className="btn btn--ghost btn--compact tx-icon-btn"
                       disabled={busyId === t.id}
                       onClick={() => handleEdit(t)}
                       title="Edit transaction"
+                      aria-label="Edit transaction"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M3 17.25V21h3.75L17.81 9.94m-4.75-4.75L19.5 3.5c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41L14.5 10.94" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Edit
                     </button>
                     <button
                       type="button"
-                      className="btn btn--ghost btn--compact"
+                      className="btn btn--ghost btn--compact tx-icon-btn tx-icon-btn--danger"
                       disabled={busyId === t.id}
                       onClick={() => handleDelete(t.id)}
                       title="Delete transaction"
+                      aria-label="Delete transaction"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
                       </svg>
-                      Delete
                     </button>
                   </div>
                 </span>
@@ -287,7 +287,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                 <span className="tx-acct-dot" style={{ background: finance.transactionAccountDotColor(t) }} />
                 <span className="faint">{finance.transactionAccountLabel(t)}</span>
               </div>
-              <div className="rec-row-actions" style={{ marginTop: '0.75rem' }}>
+              <div className="tx-mobile-actions">
                 <button
                   type="button"
                   className="btn btn--ghost btn--compact"
@@ -302,7 +302,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                 </button>
                 <button
                   type="button"
-                  className="btn btn--ghost btn--compact"
+                  className="btn btn--ghost btn--compact btn--danger-ghost"
                   disabled={busyId === t.id}
                   onClick={() => handleDelete(t.id)}
                   title="Delete transaction"

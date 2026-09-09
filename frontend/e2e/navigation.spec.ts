@@ -27,22 +27,20 @@ test.describe('Primary navigation', () => {
   // `menu`/`menuitem` — it doesn't implement roving-focus keyboard
   // behavior, so claiming the menu role would be a false a11y promise
   // (FR-008).
-  test('More menu opens and lists Investments, Recurring & Bills, Reports, Settings', async ({ page }) => {
+  test('More menu opens and lists Recurring & Bills, Reports, Settings', async ({ page }) => {
     await page.goto('/')
     const moreButton = page.getByRole('button', { name: /More/ })
     await expect(moreButton).toHaveAttribute('aria-expanded', 'false')
     await moreButton.click()
     await expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 
-    await expect(page.getByRole('link', { name: /Investments/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /Recurring & Bills/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /Reports/ })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
 
-    await page.getByRole('link', { name: /Investments/ }).click()
-    await expect(page).toHaveURL(/\/investments$/)
-    await expect(page.getByRole('heading', { name: 'Investments' })).toBeVisible()
-    await expect(page.getByText('Portfolio Value')).toBeVisible()
+    await page.getByRole('link', { name: /Reports/ }).click()
+    await expect(page).toHaveURL(/\/reports$/)
+    await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible()
   })
 
   test('More menu closes on outside click and Escape, and returns focus to the toggle', async ({ page }) => {

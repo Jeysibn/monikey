@@ -12,6 +12,29 @@ export interface ReceiptDraft {
   confidence?: number
 }
 
+function normalizeDate(value: string): string | undefined {
+  const cleaned = value.replace(/[.]/g, '/').trim()
+  let match = cleaned.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/)
+  if (match) return `${match[1]}-${match[2]!.padStart(2, '0')}-${match[3]!.padStart(2, '0')}`
+
+  match = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
+  if (match) {
+    const year = match[3]!.length === 2 ? `20${match[3]}` : match[3]!
+    return `${year}-${match[2]!.padStart(2, '0')}-${match[1]!.padStart(2, '0')}`
+  }
+
+  const month = cleaned.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/)
+  if (month) {
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+    const monthIndex = months.findIndex((name) => name.startsWith(month[2]!.toLowerCase()))
+    if (monthIndex >= 0) {
+      const year = month[3]!.length === 2 ? `20${month[3]}` : month[3]!
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${month[1]!.padStart(2, '0')}`
+    }
+  }
+  return undefined
+}
+
 /**
  * Parses OCR text and extracts likely merchant, date, total, and category.
  * Uses simple heuristics: line position, currency patterns, date formats.
@@ -24,14 +47,18 @@ export function parseReceiptOcr(ocrText: string): ReceiptDraft {
 
   const lines = ocrText.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
 
-  // Extract merchant (usually first non-empty line)
-  if (lines.length > 0) {
-    const merchantCandidate = lines[0] ?? ''
-    if (merchantCandidate && merchantCandidate.length < 100 && !merchantCandidate.match(/^\d+/)) {
-      draft.merchant = merchantCandidate
+  // Tesseract frequently returns a phone/address/header before the merchant.
+  const merchantCandidate = lines.slice(0, 8).find((line) => {
+    const lower = line.toLowerCase()
+    return line.length >= 2 && line.length < 100 &&
+      !/^\d[\d\s()+./-]*$/.test(line) &&
+      !/(receipt|invoice|tax invoice|date|time|cashier|tel|phone|address|thank you)/i.test(lower) &&
+      !/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(line)
+  })
+  if (merchantCandidate) {
+      draft.merchant = merchantCandidate.replace(/\s{2,}/g, ' ')
       totalConfidence += 70
       confidenceCount += 1
-    }
   }
 
   // Extract date using common patterns
@@ -44,17 +71,20 @@ export function parseReceiptOcr(ocrText: string): ReceiptDraft {
   for (const pattern of datePatterns) {
     const match = ocrText.match(pattern)
     if (match) {
-      draft.date = match[1]
-      totalConfidence += 50
-      confidenceCount += 1
-      break
+      const normalized = normalizeDate(match[1]!)
+      if (normalized) {
+        draft.date = normalized
+        totalConfidence += 50
+        confidenceCount += 1
+        break
+      }
     }
   }
 
   // Extract total amount (PHP currency marker)
   const totalPatterns = [
-    /(?:TOTAL|Total|GRAND TOTAL|Grand Total|Amount Due)[\s:]*PHP\s*([\d,]+(?:\.\d{2})?)/i,
-    /PHP\s*([\d,]+(?:\.\d{2})?)(?:\s|$)/,
+    /(?:GRAND\s+TOTAL|TOTAL\s+DUE|AMOUNT\s+DUE|NET\s+TOTAL|TOTAL)[^\d]{0,20}(?:PHP|₱|P)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:PHP|₱|P)\s*([\d,]+(?:\.\d{1,2})?)(?:\s|$)/i,
   ]
 
   for (const pattern of totalPatterns) {

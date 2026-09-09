@@ -190,8 +190,9 @@ export class ReceiptsService {
       // Retrieve the stored image from object store
       const imageBuffer = await this.objectStore.retrieve(receipt.storageKey)
 
-      // Hosted OCR has a provider quota; local OCR does not.
-      if (this.ocrProvider.constructor.name === 'OcrSpaceAdapter') {
+      // Local OCR has no hosted-provider quota. Keep quota enforcement for
+      // OCR.Space and the stub provider used by the integration contract.
+      if (this.ocrProvider.constructor.name !== 'TesseractOcrAdapter') {
         const quotaAllowed = await tryConsumeApiQuota(this.prisma, 'ocrspace', dailyPeriod(), 'extract', 450)
         if (!quotaAllowed) {
           throw new AppError('EXTERNAL_PROVIDER_QUOTA_REACHED', 'OCR.Space daily quota reached. Please try again tomorrow.', { statusCode: 429 })

@@ -38,8 +38,6 @@ export class OcrSpaceAdapter implements OcrProvider {
 
       // Create a Blob from the buffer with the correct MIME type
       const blob = new Blob([buffer], { type: input.mimeType })
-      formData.append('filename', input.filename)
-      formData.append('filetype', input.mimeType)
       formData.append('apikey', this.apiKey)
       formData.append('isOverlayRequired', 'false')
       formData.append('language', 'eng')

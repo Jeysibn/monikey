@@ -46,4 +46,5 @@ export interface SettingsState {
   profile: UserProfile
   notifications: NotificationPreferences
   display: DisplayPreferences
+  externalOcrEnabled: boolean
 }

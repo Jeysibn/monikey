@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   display: {
     hideCents: false,
   },
+  externalOcrEnabled: false,
 }
 
 /**
@@ -43,6 +44,7 @@ function readStoredSettings(): SettingsState {
       profile: { ...DEFAULT_SETTINGS.profile, ...parsed.profile },
       notifications: { ...DEFAULT_SETTINGS.notifications, ...parsed.notifications },
       display: { ...DEFAULT_SETTINGS.display, ...parsed.display },
+      externalOcrEnabled: parsed.externalOcrEnabled ?? DEFAULT_SETTINGS.externalOcrEnabled,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -108,11 +110,15 @@ export function useSettings(gateway?: SettingsGateway) {
     [settings, persist],
   )
 
+  const setExternalOcrEnabled = useCallback((value: boolean) => {
+    persist({ ...settings, externalOcrEnabled: value })
+  }, [settings, persist])
+
   const resetToDefaults = useCallback(() => {
     persist(DEFAULT_SETTINGS)
   }, [persist])
 
-  return { settings, saveProfile, setNotification, setDisplayPreference, resetToDefaults }
+  return { settings, saveProfile, setNotification, setDisplayPreference, setExternalOcrEnabled, resetToDefaults }
 }
 
 /**

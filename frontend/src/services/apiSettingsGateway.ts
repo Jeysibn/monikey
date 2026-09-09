@@ -8,6 +8,7 @@ type ApiSettings = {
   budgetNearLimitWarnings: boolean
   weeklySummaryEmail: boolean
   hideCents: boolean
+  externalOcrEnabled: boolean
 }
 
 export interface SettingsGateway {
@@ -39,11 +40,11 @@ export class ApiSettingsGateway implements SettingsGateway {
   async save(settings: SettingsState): Promise<SettingsState> {
     return this.map(await this.request<ApiSettings>('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ displayName: settings.profile.displayName, billDueReminders: settings.notifications.billDueReminders, budgetNearLimitWarnings: settings.notifications.budgetNearLimitWarnings, weeklySummaryEmail: settings.notifications.weeklySummaryEmail, hideCents: settings.display.hideCents }),
+      body: JSON.stringify({ displayName: settings.profile.displayName, billDueReminders: settings.notifications.billDueReminders, budgetNearLimitWarnings: settings.notifications.budgetNearLimitWarnings, weeklySummaryEmail: settings.notifications.weeklySummaryEmail, hideCents: settings.display.hideCents, externalOcrEnabled: settings.externalOcrEnabled }),
     }))
   }
 
   private map(value: ApiSettings): SettingsState {
-    return { profile: { displayName: value.displayName, email: value.email }, notifications: { billDueReminders: value.billDueReminders, budgetNearLimitWarnings: value.budgetNearLimitWarnings, weeklySummaryEmail: value.weeklySummaryEmail }, display: { hideCents: value.hideCents } }
+    return { profile: { displayName: value.displayName, email: value.email }, notifications: { billDueReminders: value.billDueReminders, budgetNearLimitWarnings: value.budgetNearLimitWarnings, weeklySummaryEmail: value.weeklySummaryEmail }, display: { hideCents: value.hideCents }, externalOcrEnabled: value.externalOcrEnabled }
   }
 }

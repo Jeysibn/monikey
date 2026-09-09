@@ -174,6 +174,10 @@ function NotificationsSection({ settings, setNotification }: Pick<UseSettingsRes
   )
 }
 
+function ExternalOcrSection({ settings, setExternalOcrEnabled }: Pick<UseSettingsResult, 'settings' | 'setExternalOcrEnabled'>) {
+  return <Card><CardTitle>Receipt scanning</CardTitle><Toggle id="external-ocr" label="Enable external OCR" help="Sends receipt images to the configured OCR provider to extract merchant, amount, and date. Review results before saving." checked={settings.externalOcrEnabled} onChange={setExternalOcrEnabled} /></Card>
+}
+
 function DisplayPreferencesSection({
   settings,
   setDisplayPreference,
@@ -549,6 +553,7 @@ export function Settings() {
             setDisplayPreference={settingsApi.setDisplayPreference}
           />
           <NotificationsSection settings={settingsApi.settings} setNotification={settingsApi.setNotification} />
+          <ExternalOcrSection settings={settingsApi.settings} setExternalOcrEnabled={settingsApi.setExternalOcrEnabled} />
           <SecuritySection />
         </div>
         <div className="settings-col">

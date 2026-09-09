@@ -190,21 +190,12 @@ export class ReceiptsService {
       // Retrieve the stored image from object store
       const imageBuffer = await this.objectStore.retrieve(receipt.storageKey)
 
-      // Enforce quota atomically
-      const quotaAllowed = await tryConsumeApiQuota(
-        this.prisma,
-        'ocrspace',
-        dailyPeriod(),
-        'extract',
-        450, // OCRSPACE_MAX_CALLS_PER_DAY
-      )
-
-      if (!quotaAllowed) {
-        throw new AppError(
-          'EXTERNAL_PROVIDER_QUOTA_REACHED',
-          'OCR.Space daily quota reached. Please try again tomorrow.',
-          { statusCode: 429 },
-        )
+      // Hosted OCR has a provider quota; local OCR does not.
+      if (this.ocrProvider.constructor.name === 'OcrSpaceAdapter') {
+        const quotaAllowed = await tryConsumeApiQuota(this.prisma, 'ocrspace', dailyPeriod(), 'extract', 450)
+        if (!quotaAllowed) {
+          throw new AppError('EXTERNAL_PROVIDER_QUOTA_REACHED', 'OCR.Space daily quota reached. Please try again tomorrow.', { statusCode: 429 })
+        }
       }
 
       // Call OCR provider

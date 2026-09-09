@@ -51,7 +51,7 @@ const envSchema = z.object({
 
   // Phase 9: OCR provider and receipt storage configuration.
   // OCR is disabled by default (OCR_PROVIDER=stub) until user opts in via settings.
-  OCR_PROVIDER: z.enum(['stub', 'ocrspace']).default('stub'),
+  OCR_PROVIDER: z.enum(['stub', 'ocrspace', 'tesseract']).default('stub'),
   OCRSPACE_API_KEY: z.string().optional(),
   // Plan §18 local quota budgets for OCR.Space (free tier limits: 450/day, 20000/month).
   OCRSPACE_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(450),

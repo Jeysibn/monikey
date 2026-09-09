@@ -1,5 +1,21 @@
 import { FinanceApiError } from './apiFinanceGateway'
 
+async function receiptRequest(path: string, body: unknown) {
+  const response = await fetch(`/api/v1/receipts${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined) as { error?: { message?: string } } | undefined
+    throw new FinanceApiError(response.status, 'RECEIPT_ERROR', payload?.error?.message ?? 'Could not process receipt.')
+  }
+  return response.json() as Promise<any>
+}
+
+export async function uploadAndProcessReceipt(file: File) {
+  const data = await file.arrayBuffer()
+  const encoded = btoa(String.fromCharCode(...new Uint8Array(data)))
+  const uploaded = await receiptRequest('', { filename: file.name, mimeType: file.type, data: encoded })
+  return receiptRequest(`/${uploaded.receipt.id}/process`, {})
+}
+
 export type AuthMode = 'register' | 'login'
 
 export async function authenticate(mode: AuthMode, input: { email: string; password: string; displayName?: string }): Promise<void> {

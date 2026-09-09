@@ -10,6 +10,7 @@ import { isValidIsoDate, isValidTime24 } from '../utils/date'
 import { createIdempotencyKey } from '../utils/idempotencyKey'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './AddTransactionModal.css'
+import { uploadAndProcessReceipt } from '../services/apiAuth'
 
 type TxTab = TransactionType
 
@@ -66,6 +67,8 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
     return emptyFormState(finance.todayIso)
   })
   const [submitting, setSubmitting] = useState(false)
+  const [ocrProcessing, setOcrProcessing] = useState(false)
+  const [receiptError, setReceiptError] = useState<string | null>(null)
   // TR-009 / FINDING-010: the same shared hook the page forms use, rather
   // than a second hand-rolled copy of the accessibility contract.
   const { errors, field, errorId, fail, clear } = useFieldErrors<FieldName>(FIELD_ORDER)
@@ -218,6 +221,25 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
     }
 
     handleClose()
+  }
+
+  async function handleReceipt(file: File | undefined) {
+    if (!file) return
+    setReceiptError(null)
+    update('receiptName', file.name)
+    setOcrProcessing(true)
+    try {
+      const result = await uploadAndProcessReceipt(file)
+      const draft = result.receipt?.draft ?? {}
+      if (draft.merchant) update('title', draft.merchant)
+      if (typeof draft.totalMinor === 'number') update('amount', (draft.totalMinor / 100).toFixed(2))
+      if (draft.date) update('date', draft.date)
+      showToast('Receipt scanned — review the fields before saving')
+    } catch (error) {
+      setReceiptError(error instanceof Error ? error.message : 'Could not scan receipt.')
+    } finally {
+      setOcrProcessing(false)
+    }
   }
 
   const categories = form.tab === 'transfer' ? [] : categoriesForTransactionType(finance.state.categories, form.tab)
@@ -483,7 +505,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
                 type="file"
                 accept="image/*,.pdf"
                 className="visually-hidden"
-                onChange={(e) => update('receiptName', e.target.files?.[0]?.name ?? '')}
+                onChange={(e) => { void handleReceipt(e.target.files?.[0]) }}
               />
               <button type="button" className="tx-receipt" onClick={() => fileInputRef.current?.click()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -495,11 +517,12 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
                   />
                   <rect x="7" y="10" width="10" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
                 </svg>
-                {form.receiptName ? `Attached: ${form.receiptName}` : 'Attach a receipt photo (optional)'}
+                {ocrProcessing ? 'Scanning receipt…' : form.receiptName ? `Scanned: ${form.receiptName}` : 'Scan a receipt photo (optional)'}
               </button>
               <p className="tx-help">
-                Receipt scan (OCR) is planned for a future release — attaching here only keeps a local filename preview.
+                OCR fills the merchant, amount, and date. Review all fields before saving.
               </p>
+              {receiptError && <p className="tx-error" role="alert">{receiptError}</p>}
             </div>
           )}
         </div>

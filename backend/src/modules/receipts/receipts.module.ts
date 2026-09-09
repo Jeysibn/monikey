@@ -9,6 +9,7 @@ import type { Env } from '../../config/env.js'
 import type { OcrProvider } from '../../integrations/interfaces/ocrProvider.js'
 import { StubOcrAdapter } from '../../integrations/adapters/ocr-space/stub.adapter.js'
 import { OcrSpaceAdapter } from '../../integrations/adapters/ocr-space/ocr-space.adapter.js'
+import { TesseractOcrAdapter } from '../../integrations/adapters/tesseract/tesseract.adapter.js'
 import { FilesystemObjectStoreAdapter } from '../../integrations/adapters/filesystem-object-store/filesystem.adapter.js'
 import { receiptsRoutes, type ReceiptsRoutesOptions } from './receipts.routes.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
@@ -31,6 +32,8 @@ export function createReceiptsModule(
     ocrProvider = new OcrSpaceAdapter({
       apiKey: env.OCRSPACE_API_KEY,
     })
+  } else if (env.OCR_PROVIDER === 'tesseract') {
+    ocrProvider = new TesseractOcrAdapter()
   } else {
     // Default to stub
     ocrProvider = new StubOcrAdapter()

@@ -9,7 +9,7 @@ import type { OcrInput, OcrProvider, OcrResult } from '../../interfaces/ocrProvi
 
 export interface OcrSpaceAdapterOptions {
   apiKey: string
-  /** Base URL for the OCR.Space API (default: https://api.ocr.space/parse) */
+  /** Base URL for the OCR.Space API (default: https://api.ocr.space/parse/image) */
   baseUrl?: string
   /** Request timeout in milliseconds (default: 30000) */
   timeoutMs?: number
@@ -25,7 +25,7 @@ export class OcrSpaceAdapter implements OcrProvider {
 
   constructor(options: OcrSpaceAdapterOptions) {
     this.apiKey = options.apiKey
-    this.baseUrl = options.baseUrl ?? 'https://api.ocr.space/parse'
+    this.baseUrl = options.baseUrl ?? 'https://api.ocr.space/parse/image'
     this.timeoutMs = options.timeoutMs ?? 30000
   }
 

@@ -30,32 +30,32 @@ test.describe('Budget page', () => {
     expect(valueText).toContain('over budget')
   })
 
-  test('+ New category consumes unallocated funds without expanding the total envelope', async ({ page }) => {
+  test('+ Set a budget consumes unallocated funds without expanding the total envelope', async ({ page }) => {
     await page.goto('/budget')
     // Seed data: ₱11,600 total budget, ₱9,600 allocated across categories → ₱2,000 unallocated.
     await expect(page.getByText('₱2,000')).toBeVisible()
 
-    await page.getByRole('button', { name: '+ New category' }).click()
-    await page.getByPlaceholder('e.g. Entertainment').fill('Entertainment')
+    await page.getByRole('button', { name: '+ Set a budget' }).click()
+    await page.getByLabel('Category', { exact: true }).selectOption({ label: 'Subscriptions' })
     await page.getByRole('textbox', { name: 'Monthly budget' }).fill('500')
-    await page.getByRole('button', { name: 'Add category' }).click()
+    await page.getByRole('button', { name: 'Set budget' }).click()
 
-    await expect(page.locator('.budget-row').getByText('Entertainment', { exact: true })).toBeVisible()
+    await expect(page.locator('.budget-row').getByText('Subscriptions', { exact: true })).toBeVisible()
     // Total envelope is unchanged...
     await expect(page.getByText('₱11,600')).toBeVisible()
     // ...but unallocated dropped by the new category's allocation.
     await expect(page.getByText('₱1,500')).toBeVisible()
   })
 
-  test('+ New category rejects an allocation greater than the unallocated amount', async ({ page }) => {
+  test('+ Set a budget rejects an allocation greater than the unallocated amount', async ({ page }) => {
     await page.goto('/budget')
-    await page.getByRole('button', { name: '+ New category' }).click()
-    await page.getByPlaceholder('e.g. Entertainment').fill('Too Big')
+    await page.getByRole('button', { name: '+ Set a budget' }).click()
+    await page.getByLabel('Category', { exact: true }).selectOption({ label: 'Subscriptions' })
     await page.getByRole('textbox', { name: 'Monthly budget' }).fill('5000')
-    await page.getByRole('button', { name: 'Add category' }).click()
+    await page.getByRole('button', { name: 'Set budget' }).click()
 
     await expect(page.getByRole('alert')).toContainText('unallocated')
-    await expect(page.locator('.budget-row').getByText('Too Big', { exact: true })).not.toBeVisible()
+    await expect(page.locator('.budget-row').getByText('Subscriptions', { exact: true })).not.toBeVisible()
   })
 })
 

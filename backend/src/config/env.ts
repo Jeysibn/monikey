@@ -28,6 +28,7 @@ const envSchema = z.object({
 
   SESSION_SECURE: booleanFromString.default(false),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(60),
 
   INTEGRATIONS_MODE: z.enum(['stub', 'live']).default('stub'),
   QUOTE_PROVIDER: z.enum(['stub', 'live']).default('stub'),

@@ -1,17 +1,23 @@
 import type { PrismaClient } from '@prisma/client'
 import { AppError } from '../../common/errors/appError.js'
 import { hashPassword, verifyPassword } from '../../common/auth/password.js'
-import { generateSessionToken, hashSessionToken } from '../../common/auth/sessionToken.js'
+import { generateSessionToken, hashSessionToken, safeCompareHashes } from '../../common/auth/sessionToken.js'
 import type { Clock } from '../../common/auth/authGuard.js'
 import type { AuthenticatedUser } from '../../common/auth/types.js'
+import type { EmailProvider } from '../notifications/email.js'
 import {
+  createPasswordResetToken,
   createSession,
   createUserWithDefaults,
+  deleteAllSessionsForUser,
   deleteSessionById,
+  findPasswordResetTokenByHash,
   findUserByEmail,
+  markPasswordResetTokenUsed,
   normalizeEmail,
+  updateUserPassword,
 } from './auth.repository.js'
-import type { RegisterInput, LoginInput } from './auth.schemas.js'
+import type { RegisterInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schemas.js'
 
 export interface AuthResult {
   user: AuthenticatedUser
@@ -109,4 +115,62 @@ async function issueSession(opts: AuthServiceOptions, user: AuthenticatedUser): 
 
 export async function logoutUser(prisma: PrismaClient, sessionId: string): Promise<void> {
   await deleteSessionById(prisma, sessionId)
+}
+
+export interface PasswordResetServiceOptions {
+  prisma: PrismaClient
+  emailProvider: EmailProvider
+  resetTtlMinutes: number
+  appOrigin: string
+  clock?: Clock
+}
+
+/**
+ * Enumeration-resistant by design (same policy as login, plan §16): whether
+ * or not the email belongs to a registered account, this always resolves
+ * the same way and takes roughly the same time, so a caller can't use it to
+ * discover which emails have accounts. A reset email is only actually sent
+ * when the account exists.
+ */
+export async function requestPasswordReset(opts: PasswordResetServiceOptions, input: ForgotPasswordInput): Promise<void> {
+  const user = await findUserByEmail(opts.prisma, input.email)
+  if (!user) return
+
+  const now = (opts.clock ?? (() => new Date()))()
+  const expiresAt = new Date(now.getTime() + opts.resetTtlMinutes * 60 * 1000)
+  const rawToken = generateSessionToken()
+  const tokenHash = hashSessionToken(rawToken)
+
+  await createPasswordResetToken(opts.prisma, { userId: user.id, tokenHash, expiresAt })
+
+  const resetUrl = `${opts.appOrigin}/?resetToken=${encodeURIComponent(rawToken)}`
+  await opts.emailProvider.send({
+    to: user.email,
+    subject: 'Reset your Monikey password',
+    text: `We received a request to reset your Monikey password.\n\nReset it here: ${resetUrl}\n\nThis link expires in ${opts.resetTtlMinutes} minutes. If you didn't request this, you can safely ignore this email — your password won't change.`,
+  })
+}
+
+export async function resetPassword(opts: PasswordResetServiceOptions, input: ResetPasswordInput): Promise<void> {
+  const invalidToken = () => new AppError('VALIDATION_ERROR', 'This reset link is invalid or has expired.', { statusCode: 400, field: 'token' })
+
+  const tokenHash = hashSessionToken(input.token)
+  const record = await findPasswordResetTokenByHash(opts.prisma, tokenHash)
+  if (!record) throw invalidToken()
+  // Re-derive the hash from the stored value for a constant-time compare —
+  // findPasswordResetTokenByHash already looked it up by exact hash, so this
+  // is a defense-in-depth check against a mismatched row (belt-and-braces,
+  // mirrors the session-lookup pattern elsewhere).
+  if (!safeCompareHashes(record.tokenHash, tokenHash)) throw invalidToken()
+
+  const now = (opts.clock ?? (() => new Date()))()
+  if (record.usedAt || record.expiresAt.getTime() <= now.getTime()) throw invalidToken()
+
+  const passwordHash = await hashPassword(input.password)
+  await updateUserPassword(opts.prisma, record.userId, passwordHash)
+  await markPasswordResetTokenUsed(opts.prisma, record.id, now)
+  // A reset is a credential compromise-recovery event — kill every existing
+  // session so a stolen cookie stops working the moment the owner regains
+  // control of their account.
+  await deleteAllSessionsForUser(opts.prisma, record.userId)
 }

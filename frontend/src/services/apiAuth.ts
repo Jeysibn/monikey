@@ -17,6 +17,32 @@ export async function authenticate(mode: AuthMode, input: { email: string; passw
   }
 }
 
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
+    throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? 'Could not send the reset email.', payload?.error?.field)
+  }
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  const response = await fetch('/api/v1/auth/reset-password', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
+    throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? 'Could not reset your password.', payload?.error?.field)
+  }
+}
+
 export async function logout(): Promise<void> {
   const response = await fetch('/api/v1/auth/logout', {
     method: 'POST',

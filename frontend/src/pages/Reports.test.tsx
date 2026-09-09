@@ -71,12 +71,6 @@ describe('Reports page', () => {
     expect(screen.getByText('Goal Progress')).toBeDefined()
   })
 
-  it('renders Investment Performance with sample-data disclosure', () => {
-    renderReports()
-    expect(screen.getByText('Investment Performance')).toBeDefined()
-    expect(screen.getByText(/Sample portfolio data/)).toBeDefined()
-  })
-
   it('labels every trended (non-"now") figure as illustrative, never presenting invented history as real', () => {
     renderReports()
     const notes = screen.getAllByText(/Illustrative/)

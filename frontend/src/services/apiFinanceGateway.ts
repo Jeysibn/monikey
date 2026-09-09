@@ -44,8 +44,12 @@ export interface FinanceGateway {
   deleteGoal(goalId: string, signal?: AbortSignal): Promise<void>
   createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod>
   setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
-  addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }>
-  updateCategory(categoryId: string, input: { name?: string; allocated?: number }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  /** Settings: create a category (name/color only), unbudgeted until Budget calls `setCategoryBudget`. */
+  addCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  /** Settings: rename/recolor a category. Never touches budget allocation. */
+  updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  /** Budget: set (or change) the budget amount for a category that already exists. */
+  setCategoryBudget(categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
   deleteCategory(categoryId: string, signal?: AbortSignal): Promise<void>
 }
 
@@ -194,32 +198,27 @@ export class ApiFinanceGateway implements FinanceGateway {
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 
-  async addBudgetCategory(input: { name: string; allocated: number; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; allocated: number }> {
-    const category = await this.request<{ id: string; name: string; color: string }>('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
+  async addCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
+    return this.request<{ id: string; name: string; color: string }>('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
+  }
+
+  async updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
+    return this.request<{ id: string; name: string; color: string }>(`/categories/${categoryId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
+  }
+
+  // Allocation isn't part of the category record — it lives on the current
+  // budget period's allocations, so setting it means resolving (or creating)
+  // this month's period, then upserting the allocation on it.
+  private async resolveCurrentBudgetPeriod(signal?: AbortSignal): Promise<ApiBudgetPeriod> {
     const now = new Date()
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
-    const period = await this.createBudgetPeriod(start, end, 0, signal)
-    await this.setBudgetAllocation(period.id, category.id, input.allocated, signal)
-    return { ...category, allocated: input.allocated }
+    return this.createBudgetPeriod(start, end, 0, signal)
   }
 
-  async updateCategory(categoryId: string, input: { name?: string; allocated?: number }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
-    const { allocated, ...rest } = input
-    const category = Object.keys(rest).length > 0
-      ? await this.request<{ id: string; name: string; color: string }>(`/categories/${categoryId}`, { method: 'PATCH', signal, body: JSON.stringify(rest) })
-      : { id: categoryId, name: rest.name ?? '', color: '' }
-    // Allocation isn't part of the category record — it lives on the current
-    // budget period's allocations, so editing it goes through the same
-    // upsert-period + set-allocation path addBudgetCategory uses.
-    if (allocated !== undefined) {
-      const now = new Date()
-      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
-      const period = await this.createBudgetPeriod(start, end, 0, signal)
-      await this.setBudgetAllocation(period.id, categoryId, allocated, signal)
-    }
-    return category
+  async setCategoryBudget(categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory> {
+    const period = await this.resolveCurrentBudgetPeriod(signal)
+    return this.setBudgetAllocation(period.id, categoryId, allocated, signal)
   }
 
   async deleteCategory(categoryId: string, signal?: AbortSignal): Promise<void> {

@@ -25,7 +25,7 @@ published by the base Compose file. Local PostgreSQL is version 18; CI uses 16.
 | Mode | Provider and data path |
 | --- | --- |
 | Mock | `FinanceProvider` → external `financeStore` → synchronous `FinanceRepository` / `mockFinanceRepository` |
-| API | `AsyncFinanceProvider` → `BackendFinanceGate` → `ApiFinanceGateway`, recurring and investment gateways |
+| API | `AsyncFinanceProvider` → `BackendFinanceGate` → `ApiFinanceGateway`, recurring gateway |
 
 The mock store uses `useSyncExternalStore`; mutations execute against its latest
 state and rejected mutations do not publish a new state. This synchronous
@@ -39,8 +39,10 @@ sign-out. Settings has its own API gateway. The modes do not have complete featu
 parity, and tests must explicitly choose the intended mode.
 
 `domain/` holds types and frontend validation; `state/financeSelectors.ts` holds
-shared derived calculations; `hooks/` exposes those values to pages. Investment,
-recurring and settings features also have dedicated domain/hooks/gateway code.
+shared derived calculations; `hooks/` exposes those values to pages. Recurring
+and settings features also have dedicated domain/hooks/gateway code. Investments
+has been removed from the frontend (see "Investment accounting boundary
+(disabled)" below).
 The actual nine-route table is `frontend/src/App.tsx`; none of those routes uses
 `Placeholder.tsx`.
 
@@ -92,14 +94,15 @@ API. `frontend/src/utils/idempotencyKey.ts` uses `crypto.randomUUID()` where it 
 available. Browsers that expose Web Crypto without `randomUUID` use random bytes;
 environments with no Web Crypto use a timestamp/random fallback. These keys are
 for collision avoidance, not authentication or secret material. The transaction
-modal keeps one generated key for a pending submission; the investment gateway
-generates one key per create request.
+modal keeps one generated key for a pending submission.
 
 ## Backend modules and workers
 
 `backend/src/app.ts` constructs the app, providers and route modules. It registers
 health, authentication, settings, accounts, ledger, bootstrap, budgets, goals,
-recurring, investments, receipts, reports, insights and imports under `/api/v1`.
+recurring, receipts, reports, insights and imports under `/api/v1`. Investments
+is deliberately unregistered (module and Prisma models left in place; see
+"Investment accounting boundary (disabled)" below).
 Swagger UI is registered at `/docs`, and the generated spec at `/openapi.json` on
 the API process. nginx also proxies `/docs` and `/openapi.json` at the web origin.
 
@@ -118,22 +121,20 @@ email and bank import. Live adapters need their configured providers/credentials
 CI uses stubs. Plaid is sandbox-only. Receipt data is stored on the shared local
 volume in Compose; PostgreSQL and receipt files need separate backups.
 
-## Investment accounting boundary
+## Investment accounting boundary (disabled)
 
-The API supports trades, dividends, quote refresh and FX-based portfolio
-valuation. Optional cash-linked buys/sells post ledger transfers; linked dividends
-post income. Cash-linked trade edits are rejected with
-`TRADE_HAS_LINKED_TRANSACTION` in this revision.
-
-`InvestmentTrade` has `currencyCode`, optional settlement fields and `fxRateToBase`,
-but the trade request schema does not collect a historical currency and creation
-does not populate a complete historical FX record. `Dividend` lacks equivalent
-currency/FX metadata. The latest checked-in migration is
-`20260902073707_investments_v2_schema`.
-
-Neither `historicalFx.ts`, `historicalFxComplete`, `assumed_legacy` nor migration
-`20260902110000_historical_investment_fx` exists in either reviewed branch.
-Earlier vault claims that this slice shipped do not describe these revisions.
+The Investments feature has been removed from the running app pending a
+rebuild: `investmentsRoutes`/`fx.module`'s FX-rate route wiring are no longer
+registered in `app.ts`, the frontend has no `/investments` route or nav entry,
+and the Reports/Dashboard investment cards are gone. The module code
+(`backend/src/modules/investments/**`) and its Prisma models
+(`InvestmentTrade`, `Dividend`, `Instrument`, `QuoteSnapshot`, etc., latest
+migration `20260902073707_investments_v2_schema`) are left in place
+untouched — no destructive migration — so a future rebuild can reuse or
+replace them. `BootstrapService` and the insights context builder still query
+`investmentTrade`/`dividend`/`quoteSnapshot` directly; with no route able to
+create rows, they simply return empty investment data, so the rest of the app
+is unaffected.
 
 ## UI and accessibility
 
@@ -165,5 +166,5 @@ checks from the jobs actually enabled in [CI](CI-CD-Operations.md).
   sweep remains unimplemented.
 - Disabled UI includes bank connection, free-form AI questions, report CSV/PDF
   exports/custom ranges, currency switching, password changes and two-factor auth.
-- The `frontend` package's `test:backend:compose` script references the old script
-  location; run `bash scripts/test-compose-backend-regression.sh` from the root.
+- The `frontend` package's `test:backend:compose` script changes to the repository
+  root before running `scripts/test-compose-backend-regression.sh`.

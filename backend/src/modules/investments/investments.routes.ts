@@ -279,7 +279,9 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // sector, or the same ticker symbol legitimately meaning a different
     // instrument). A mismatch is now rejected instead of applied, so the
     // caller finds out rather than the classification silently drifting.
-    const existingInstrument = await options.prisma.instrument.findUnique({ where: { userId_ticker: { userId, ticker: input.ticker } } })
+    // Legacy generic trades have no provider ID. A ticker is therefore only a
+    // display lookup here; Crypto V1 uses userId + providerAssetId instead.
+    const existingInstrument = await options.prisma.instrument.findFirst({ where: { userId, ticker: input.ticker } })
     if (existingInstrument && (existingInstrument.name !== input.name || existingInstrument.assetClass !== input.assetClass || existingInstrument.sector !== input.sector)) {
       return reply.code(409).send({
         error: {
@@ -322,7 +324,7 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // TRADE_CASH_LINK_UNRESOLVED below).
     const linkKey = input.cashAccountId ? (input.idempotencyKey ?? randomUUID()) : (input.idempotencyKey ?? null)
     const ledgerInput = input.cashAccountId ? { type: 'transfer' as const, title: `${input.type === 'buy' ? 'Investment buy' : 'Investment sell'} · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: input.type === 'buy' ? input.cashAccountId : null, toAccountId: input.type === 'sell' ? input.cashAccountId : null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: cashAmount, feeMinor: 0, currencyCode: request.user!.baseCurrency, source: 'manual' as const, status: 'cleared' as const, note: input.note ?? null, idempotencyKey: linkKey } : null
-    const createTrade = async (tx: any) => tx.investmentTrade.create({ data: { userId, instrumentId: instrument.id, type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), feeMinor: BigInt(feeMinor), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), cashAccountId: input.cashAccountId ?? null, note: input.note ?? null, idempotencyKey: linkKey }, include: { instrument: true } })
+    const createTrade = async (tx: any) => tx.investmentTrade.create({ data: { userId, instrumentId: instrument.id, type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), priceAmount: new Prisma.Decimal(input.priceMinor).dividedBy(100), feeMinor: BigInt(feeMinor), feeAmount: new Prisma.Decimal(feeMinor).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), cashAccountId: input.cashAccountId ?? null, note: input.note ?? null, idempotencyKey: linkKey }, include: { instrument: true } })
     const trade = ledgerInput ? await options.ledgerService.postTransactionWithCallback(userId, ledgerInput, async (tx) => createTrade(tx)) : await createTrade(options.prisma)
     return reply.code(201).send({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), feeMinor: Number(trade.feeMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })
   })
@@ -345,7 +347,8 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // trade that does have one, rather than silently letting the cash
     // account balance drift out of sync with the trade record.
     if (existing.cashAccountId) return reply.code(409).send({ error: { code: 'TRADE_HAS_LINKED_TRANSACTION', message: 'Cannot edit a trade linked to a cash account transaction.', requestId: request.id } })
-    const updated = await options.prisma.investmentTrade.update({ where: { id }, data: { type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), feeMinor: input.feeMinor !== undefined ? BigInt(input.feeMinor) : existing.feeMinor, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null }, include: { instrument: true } })
+    const updatedFeeMinor = input.feeMinor !== undefined ? BigInt(input.feeMinor) : existing.feeMinor
+    const updated = await options.prisma.investmentTrade.update({ where: { id }, data: { type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), priceAmount: new Prisma.Decimal(input.priceMinor).dividedBy(100), feeMinor: updatedFeeMinor, feeAmount: new Prisma.Decimal(updatedFeeMinor.toString()).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null }, include: { instrument: true } })
     return reply.send({ ...updated, units: Number(updated.units), priceMinor: Number(updated.priceMinor), feeMinor: Number(updated.feeMinor), occurredOn: updated.occurredOn.toISOString().slice(0, 10) })
   })
   app.delete<{ Params: { id: string } }>('/investments/trades/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {

@@ -101,12 +101,28 @@ describe('Display Preferences section', () => {
   })
 })
 
-describe('Categories section (read-only)', () => {
-  it('lists the shared finance categories without an editable control', () => {
+describe('Categories section', () => {
+  it('lists the shared finance categories', () => {
     renderSettings()
     expect(screen.getByText('Salary')).toBeDefined()
-    const addButton = screen.getByRole('button', { name: /Add category/ })
-    expect(addButton).toHaveProperty('disabled', true)
+  })
+
+  it('creates a new category via the Add category form', async () => {
+    renderSettings()
+    fireEvent.click(screen.getByRole('button', { name: /Add category/ }))
+    fireEvent.change(screen.getByLabelText('Category name'), { target: { value: 'Hobbies' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Add category$/ }))
+    expect(await screen.findByText('Hobbies')).toBeDefined()
+  })
+
+  it('edits an existing category name', async () => {
+    renderSettings()
+    const editButtons = screen.getAllByRole('button', { name: 'Edit' })
+    fireEvent.click(editButtons[0])
+    const nameInput = screen.getByLabelText('Category name')
+    fireEvent.change(nameInput, { target: { value: 'Renamed Category' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/ }))
+    expect(await screen.findByText('Renamed Category')).toBeDefined()
   })
 })
 

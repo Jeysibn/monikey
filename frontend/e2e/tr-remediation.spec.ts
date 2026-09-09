@@ -287,10 +287,10 @@ test.describe('TR-009 — form errors are programmatically associated and take f
 
   test('a local form error lands on the field that caused it, not a detached paragraph', async ({ page }) => {
     await page.goto('/budget')
-    await page.getByRole('button', { name: '+ New category' }).click()
-    await page.getByRole('textbox', { name: 'Category name' }).fill('Too Big')
+    await page.getByRole('button', { name: '+ Set a budget' }).click()
+    await page.getByLabel('Category', { exact: true }).selectOption({ label: 'Subscriptions' })
     await page.getByRole('textbox', { name: 'Monthly budget' }).fill('5000')
-    await page.getByRole('button', { name: 'Add category' }).click()
+    await page.getByRole('button', { name: 'Set budget' }).click()
 
     const allocated = page.getByRole('textbox', { name: 'Monthly budget' })
     await expect(allocated).toBeFocused()
@@ -320,17 +320,17 @@ test.describe('TR-009 — form errors are programmatically associated and take f
 
   test('a corrected field stops announcing itself as invalid — Budget category form', async ({ page }) => {
     await page.goto('/budget')
-    await page.getByRole('button', { name: '+ New category' }).click()
-    await page.getByRole('button', { name: 'Add category' }).click()
+    await page.getByRole('button', { name: '+ Set a budget' }).click()
+    await page.getByRole('button', { name: 'Set budget' }).click()
 
-    const name = page.getByRole('textbox', { name: 'Category name' })
-    await expect(name).toHaveAttribute('aria-invalid', 'true')
-    await expect(page.getByText('Category name is required.')).toBeVisible()
+    const category = page.getByLabel('Category', { exact: true })
+    await expect(category).toHaveAttribute('aria-invalid', 'true')
+    await expect(page.getByText('Choose a category.')).toBeVisible()
 
-    await name.fill('Entertainment')
+    await category.selectOption({ label: 'Subscriptions' })
 
-    await expect(name).not.toHaveAttribute('aria-invalid', /.*/)
-    await expect(page.getByText('Category name is required.')).toHaveCount(0)
+    await expect(category).not.toHaveAttribute('aria-invalid', /.*/)
+    await expect(page.getByText('Choose a category.')).toHaveCount(0)
   })
 
   test('a corrected field stops announcing itself as invalid — Add Card and Add Funds forms', async ({ page }) => {

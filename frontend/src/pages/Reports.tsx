@@ -10,7 +10,6 @@ import {
   debtTrendSample,
   netWorthNow,
   netWorthTrendSample,
-  portfolioSummary,
   reportPeriodLabel,
   reportingPeriodForView,
   savingsRate,
@@ -85,7 +84,7 @@ export function Reports() {
   const trendRange = finance.expensesTrendRangeLabel(trendPoints)
   const trendMax = Math.max(1, ...trendPoints.map((p) => p.amount))
 
-  const { categories, budgetCategories, portfolio, creditCards } = state
+  const { categories, budgetCategories, creditCards } = state
   const overOrNearBudget = budgetCategories
     .filter((c) => finance.budgetStatus(c.allocated, c.spent) !== 'safe' && finance.budgetStatus(c.allocated, c.spent) !== 'on_track')
     .map((c) => ({ ...c, name: categories.find((cc) => cc.id === c.id)?.name ?? c.id }))
@@ -94,7 +93,6 @@ export function Reports() {
   const netWorthTrend = netWorthTrendSample(state, todayIso)
   const balanceTrend = accountBalanceTrendSample(state, todayIso)
   const debtTrend = debtTrendSample(state, todayIso)
-  const invest = portfolioSummary(state)
 
   return (
     <div className="reports-page">
@@ -294,37 +292,6 @@ export function Reports() {
           </ul>
         </Card>
 
-        <Card className="rp-span-2">
-          <CardTitle action={<span className="faint">{formatMoney(invest.totalValue, { withCents: false })} total</span>}>
-            Investment Performance
-          </CardTitle>
-          <div className="budget-meta faint" style={{ marginTop: -4, marginBottom: 6 }}>
-            Sample portfolio data ·{' '}
-            <span className={invest.weightedChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-              {invest.weightedChangePct >= 0 ? '+' : ''}
-              {invest.weightedChangePct}% value-weighted
-            </span>
-          </div>
-          <div className="rp-portfolio-grid">
-            {portfolio.map((h) => (
-              <div className="rp-portfolio-tile" key={h.ticker}>
-                <div className="num" style={{ fontWeight: 700 }}>
-                  {formatMoney(h.price, { withCents: true })}
-                </div>
-                <div className={h.changePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                  {h.changePct >= 0 ? '+' : ''}
-                  {h.changePct}%
-                </div>
-                <Sparkline values={h.history} width={120} height={24} color={h.changePct >= 0 ? 'var(--teal)' : 'var(--red)'} strokeWidth={2} />
-                <div className="rp-portfolio-foot">
-                  <span title={h.name}>{h.ticker}</span>
-                  <span className="faint">Units {h.units}</span>
-                </div>
-              </div>
-            ))}
-            {portfolio.length === 0 && <div className="faint">No holdings yet.</div>}
-          </div>
-        </Card>
       </div>
     </div>
   )

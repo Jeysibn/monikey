@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type {
-  AddBudgetCategoryInput,
+  AddCategoryInput,
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
@@ -97,19 +97,28 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
     [store, activeRepository],
   )
 
-  const addBudgetCategory = useCallback(
-    (input: AddBudgetCategoryInput) =>
+  const addCategory = useCallback(
+    (input: AddCategoryInput) =>
       store.run((s) => {
-        const { state: next, category } = activeRepository.addBudgetCategory(s, input)
+        const { state: next, category } = activeRepository.addCategory(s, input)
         return { state: next, result: category }
       }),
     [store, activeRepository],
   )
 
   const updateCategory = useCallback(
-    (categoryId: string, updates: { name?: string; allocated?: number }) =>
+    (categoryId: string, updates: { name?: string; color?: string }) =>
       store.run((s) => {
         const { state: next, category } = activeRepository.updateCategory(s, categoryId, updates)
+        return { state: next, result: category }
+      }),
+    [store, activeRepository],
+  )
+
+  const setCategoryBudget = useCallback(
+    (categoryId: string, allocated: number) =>
+      store.run((s) => {
+        const { state: next, category } = activeRepository.setCategoryBudget(s, categoryId, allocated)
         return { state: next, result: category }
       }),
     [store, activeRepository],
@@ -150,8 +159,9 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
       reverseTransaction,
       addManualAccount,
       addManualCreditCard,
-      addBudgetCategory,
+      addCategory,
       updateCategory,
+      setCategoryBudget,
       deleteCategory,
       createGoal,
       addGoalFunds,
@@ -164,8 +174,9 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
       reverseTransaction,
       addManualAccount,
       addManualCreditCard,
-      addBudgetCategory,
+      addCategory,
       updateCategory,
+      setCategoryBudget,
       deleteCategory,
       createGoal,
       addGoalFunds,

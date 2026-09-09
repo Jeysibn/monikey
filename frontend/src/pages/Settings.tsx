@@ -212,29 +212,212 @@ function DisplayPreferencesSection({
   )
 }
 
+const CATEGORY_PALETTE = ['var(--cyan)', 'var(--violet)', 'var(--amber)', 'var(--red)', 'var(--green)', 'var(--pink)']
+const CATEGORY_FORM_FIELDS = ['name'] as const
+type CategoryFormField = (typeof CATEGORY_FORM_FIELDS)[number]
+
 function CategoriesSection() {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
+  const [formOpen, setFormOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [color, setColor] = useState(CATEGORY_PALETTE[0])
+  const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editColor, setEditColor] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryFormField>(CATEGORY_FORM_FIELDS)
+  const { errors: editErrors, field: editField, errorId: editErrorId, fail: editFail, clear: editClear } = useFieldErrors<CategoryFormField>(CATEGORY_FORM_FIELDS)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      fail({ name: 'Category name is required.' })
+      return
+    }
+    try {
+      setSubmitting(true)
+      if (asyncFinance) await asyncFinance.addCategory({ name: trimmedName, color })
+      else finance.addCategory({ name: trimmedName, color })
+    } catch (err) {
+      fail({ name: err instanceof Error ? err.message : 'Could not add category.' })
+      return
+    } finally {
+      setSubmitting(false)
+    }
+    setName('')
+    setColor(CATEGORY_PALETTE[0])
+    clear()
+    setFormOpen(false)
+  }
+
+  function startEdit(categoryId: string, currentName: string, currentColor: string) {
+    setEditingId(categoryId)
+    setEditName(currentName)
+    setEditColor(currentColor)
+    editClear()
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditName('')
+    setEditColor('')
+    editClear()
+  }
+
+  async function handleEditSubmit(e: React.FormEvent, categoryId: string) {
+    e.preventDefault()
+    const trimmedName = editName.trim()
+    if (!trimmedName) {
+      editFail({ name: 'Category name is required.' })
+      return
+    }
+    try {
+      setEditSubmitting(true)
+      if (asyncFinance) await asyncFinance.updateCategory(categoryId, { name: trimmedName, color: editColor })
+      else finance.updateCategory(categoryId, { name: trimmedName, color: editColor })
+    } catch (err) {
+      editFail({ name: err instanceof Error ? err.message : 'Could not update category.' })
+      return
+    } finally {
+      setEditSubmitting(false)
+    }
+    cancelEdit()
+  }
+
+  async function handleDelete(categoryId: string) {
+    if (!window.confirm('Delete this category? Any budget line for it goes too, and its transactions become uncategorized.')) {
+      return
+    }
+    try {
+      if (asyncFinance) await asyncFinance.deleteCategory(categoryId)
+      else finance.deleteCategory(categoryId)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not delete category.')
+    }
+  }
 
   return (
     <Card>
       <div className="section-head">
         <span className="card-title-text">Categories</span>
-        <button type="button" className="add-link" disabled title="Coming soon">
-          + Add category <span className="coming-soon-tag">Coming soon</span>
+        <button type="button" className="add-link" aria-expanded={formOpen} onClick={() => setFormOpen((v) => !v)}>
+          + Add category
         </button>
       </div>
       <p className="form-help">
-        Read-only here — category management lives with the shared Budget data, not Settings.
+        Create and manage categories here. Head to <Link to="/budget">Budget</Link> to set how much to spend on one each month.
       </p>
+
+      {formOpen && (
+        <form className="settings-form" onSubmit={handleSubmit} noValidate>
+          <label className="new-category-field">
+            <span className="tx-label">Category name</span>
+            <input
+              type="text"
+              className="tx-input"
+              value={name}
+              placeholder="e.g. Entertainment"
+              aria-label="Category name"
+              {...field('name', (e) => setName(e.target.value))}
+            />
+            {errors.name && (
+              <p className="tx-error" role="alert" id={errorId('name')}>
+                {errors.name}
+              </p>
+            )}
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Color</span>
+            <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 6 }}>
+              {CATEGORY_PALETTE.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  className="swatch"
+                  style={{ background: swatch, outline: color === swatch ? '2px solid var(--text)' : 'none', width: 20, height: 20 }}
+                  aria-label={`Use color ${swatch}`}
+                  onClick={() => setColor(swatch)}
+                />
+              ))}
+            </div>
+          </label>
+          <div className="new-category-actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setFormOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Add category'}
+            </button>
+          </div>
+        </form>
+      )}
+
       <ul className="mini-list">
-        {finance.state.categories.map((c) => (
-          <li key={c.id}>
-            <span>
-              <span className="swatch" style={{ background: c.color }} /> {c.name}
-            </span>
-            <span className="faint">{c.transactionKinds.join(' & ')}</span>
-          </li>
-        ))}
+        {finance.state.categories.map((c) => {
+          const isEditing = editingId === c.id
+          return isEditing ? (
+            <li key={c.id} style={{ display: 'block' }}>
+              <form className="settings-form" onSubmit={(e) => void handleEditSubmit(e, c.id)} noValidate>
+                <label className="new-category-field">
+                  <span className="tx-label">Category name</span>
+                  <input
+                    type="text"
+                    className="tx-input"
+                    value={editName}
+                    aria-label="Category name"
+                    {...editField('name', (e) => setEditName(e.target.value))}
+                  />
+                  {editErrors.name && (
+                    <p className="tx-error" role="alert" id={editErrorId('name')}>
+                      {editErrors.name}
+                    </p>
+                  )}
+                </label>
+                <label className="new-category-field">
+                  <span className="tx-label">Color</span>
+                  <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 6 }}>
+                    {CATEGORY_PALETTE.map((swatch) => (
+                      <button
+                        key={swatch}
+                        type="button"
+                        className="swatch"
+                        style={{ background: swatch, outline: editColor === swatch ? '2px solid var(--text)' : 'none', width: 20, height: 20 }}
+                        aria-label={`Use color ${swatch}`}
+                        onClick={() => setEditColor(swatch)}
+                      />
+                    ))}
+                  </div>
+                </label>
+                <div className="new-category-actions">
+                  <button type="button" className="btn btn--ghost" onClick={cancelEdit}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn--primary" disabled={editSubmitting}>
+                    {editSubmitting ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </form>
+            </li>
+          ) : (
+            <li key={c.id}>
+              <span>
+                <span className="swatch" style={{ background: c.color }} /> {c.name}
+              </span>
+              <span className="new-category-actions" style={{ gap: 4 }}>
+                <span className="faint">{c.transactionKinds.join(' & ')}</span>
+                <button type="button" className="btn btn--ghost btn--compact" onClick={() => startEdit(c.id, c.name, c.color)}>
+                  Edit
+                </button>
+                <button type="button" className="btn btn--ghost btn--compact" onClick={() => void handleDelete(c.id)}>
+                  Delete
+                </button>
+              </span>
+            </li>
+          )
+        })}
       </ul>
     </Card>
   )

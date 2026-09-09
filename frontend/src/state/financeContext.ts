@@ -1,11 +1,12 @@
 import { createContext } from 'react'
 import type {
   Account,
-  AddBudgetCategoryInput,
+  AddCategoryInput,
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
   BudgetCategory,
+  Category,
   CreateGoalInput,
   CreditCard,
   FinanceState,
@@ -28,8 +29,13 @@ export interface FinanceContextValue {
   reverseTransaction: (transactionId: string) => Transaction | Promise<Transaction>
   addManualAccount: (input: AddManualAccountInput) => Account | Promise<Account>
   addManualCreditCard: (input: AddManualCreditCardInput) => CreditCard | Promise<CreditCard>
-  addBudgetCategory: (input: AddBudgetCategoryInput) => BudgetCategory | Promise<BudgetCategory>
-  updateCategory: (categoryId: string, updates: { name?: string; allocated?: number }) => BudgetCategory | Promise<BudgetCategory>
+  /** Settings: create a category (name/color only), unbudgeted until Budget sets an amount. */
+  addCategory: (input: AddCategoryInput) => Category | Promise<Category>
+  /** Settings: rename/recolor a category. Never touches budget allocation. */
+  updateCategory: (categoryId: string, updates: { name?: string; color?: string }) => Category | Promise<Category>
+  /** Budget: set (or change) the budget amount for a category that already exists. */
+  setCategoryBudget: (categoryId: string, allocated: number) => BudgetCategory | Promise<BudgetCategory>
+  /** Settings: delete a category outright. */
   deleteCategory: (categoryId: string) => void | Promise<void>
   createGoal: (input: CreateGoalInput) => Goal | Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal | Promise<Goal>

@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Account, CreditCard, FinanceState, Holding, Transaction } from '../domain/finance'
+import type { Account, CreditCard, FinanceState, Transaction } from '../domain/finance'
 import { DEMO_TODAY_ISO } from '../utils/clock'
 import {
   accountBalanceTrendSample,
   debtTrendSample,
   netWorthNow,
   netWorthTrendSample,
-  portfolioSummary,
   reportPeriodLabel,
   reportingPeriodForView,
   savingsRate,
@@ -183,21 +182,3 @@ describe('illustrative trend samples', () => {
   })
 })
 
-describe('portfolioSummary', () => {
-  it('sums real holding values and computes a value-weighted change percentage', () => {
-    const holdings: Holding[] = [
-      { ticker: 'AAA', name: 'Alpha', price: 100, changePct: 10, units: 10, history: [90, 100] }, // value 1000
-      { ticker: 'BBB', name: 'Beta', price: 50, changePct: -2, units: 20, history: [55, 50] }, // value 1000
-    ]
-    const state = makeState({ portfolio: holdings })
-    const summary = portfolioSummary(state)
-    expect(summary.totalValue).toBe(2000)
-    expect(summary.holdingsCount).toBe(2)
-    // (1000*10 + 1000*-2) / 2000 = 4
-    expect(summary.weightedChangePct).toBe(4)
-  })
-
-  it('returns zero change for an empty portfolio without dividing by zero', () => {
-    expect(portfolioSummary(makeState())).toEqual({ totalValue: 0, weightedChangePct: 0, holdingsCount: 0 })
-  })
-})

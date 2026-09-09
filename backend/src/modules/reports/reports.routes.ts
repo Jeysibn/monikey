@@ -10,7 +10,6 @@ import {
   computeNetWorthTrend,
   computeBudgetPerformance,
   computeGoalsReport,
-  computeInvestmentsReport,
 } from './reports.repository.js'
 
 const dateRangeSchema = z.object({
@@ -178,18 +177,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
     return reply.send(goals)
   })
 
-  /**
-   * GET /reports/investments?from=2026-09-01&to=2026-09-30
-   *
-   * Returns investment holdings and performance for trades executed in the period.
-   */
-  app.get<{ Querystring: Record<string, string> }>('/investments', async (request, reply) => {
-    const query = dateRangeSchema.parse(request.query)
-    const userId = request.user!.id
-    const dateFrom = new Date(`${query.from}T00:00:00Z`)
-    const dateTo = new Date(`${query.to}T23:59:59Z`)
-
-    const investments = await computeInvestmentsReport(prisma, userId, dateFrom, dateTo)
-    return reply.send(investments)
-  })
+  // The /investments report route is deliberately unregistered along with
+  // the rest of the Investments feature — `computeInvestmentsReport` itself
+  // is left in reports.repository.ts, untouched, for a future rebuild.
 }

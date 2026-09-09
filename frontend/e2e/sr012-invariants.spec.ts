@@ -63,12 +63,12 @@ test.describe('Budget allocation (SR-002)', () => {
     await page.goto('/budget')
     await expect(page.getByText('₱2,000')).toBeVisible()
 
-    await page.getByRole('button', { name: '+ New category' }).click()
-    await page.getByPlaceholder('e.g. Entertainment').fill('Streaming')
+    await page.getByRole('button', { name: '+ Set a budget' }).click()
+    await page.getByLabel('Category', { exact: true }).selectOption({ label: 'Subscriptions' })
     await page.getByRole('textbox', { name: 'Monthly budget' }).fill('250')
-    await page.getByRole('button', { name: 'Add category' }).click()
+    await page.getByRole('button', { name: 'Set budget' }).click()
 
-    await expect(page.locator('.budget-row').getByText('Streaming', { exact: true })).toBeVisible()
+    await expect(page.locator('.budget-row').getByText('Subscriptions', { exact: true })).toBeVisible()
     await expect(page.getByText('₱1,750')).toBeVisible() // 2,000 - 250
     await expect(page.getByText('₱11,600')).toBeVisible() // total envelope unchanged
   })

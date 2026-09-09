@@ -37,6 +37,7 @@
 
 import type {
   AddBudgetCategoryInput,
+  AddCategoryInput,
   AddManualAccountInput,
   AddManualCreditCardInput,
   AddTransactionInput,
@@ -274,6 +275,36 @@ export function validateAddBudgetCategory(state: FinanceState, input: AddBudgetC
   // only consume what is still unallocated.
   const unallocated = state.totalBudgetAllocated - state.budgetCategories.reduce((s, c) => s + c.allocated, 0)
   if (input.allocated > unallocated) {
+    reject(
+      'BUDGET_ALLOCATION_EXCEEDS_UNALLOCATED',
+      `Allocation can’t exceed the ${formatMoney(unallocated)} unallocated.`,
+      'allocated',
+    )
+  }
+}
+
+/** Category creation, name/color only (Settings) — no envelope math here,
+ * since an unbudgeted category commits nothing against the monthly total. */
+export function validateAddCategory(input: AddCategoryInput): void {
+  if (!input.name || !input.name.trim()) {
+    reject('CATEGORY_NAME_REQUIRED', 'Category name is required.', 'name')
+  }
+}
+
+/** Setting (or changing) the budget amount for an EXISTING category
+ * (Budget page). Same SR-002 envelope rule as `validateAddBudgetCategory`,
+ * but excludes the category's own current allocation from "already used" so
+ * editing an existing amount isn't double-counted against itself. */
+export function validateSetCategoryBudget(state: FinanceState, categoryId: string, allocated: number): void {
+  if (!state.categories.some((c) => c.id === categoryId)) {
+    reject('UNKNOWN_CATEGORY', 'Category not found.', 'categoryId')
+  }
+  // 0 is allowed — it's how Budget removes a category from the active
+  // budget without deleting the category itself (see `setCategoryBudget`).
+  requireNonNegativeAmount(allocated, 'allocated', 'BUDGET_ALLOCATION_INVALID', 'budget amount')
+  const usedByOthers = state.budgetCategories.reduce((s, c) => (c.id === categoryId ? s : s + c.allocated), 0)
+  const unallocated = state.totalBudgetAllocated - usedByOthers
+  if (allocated > unallocated) {
     reject(
       'BUDGET_ALLOCATION_EXCEEDS_UNALLOCATED',
       `Allocation can’t exceed the ${formatMoney(unallocated)} unallocated.`,

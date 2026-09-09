@@ -10,10 +10,10 @@ const NAV_ITEMS = [
   { to: '/accounts', label: 'Accounts' },
   { to: '/budget', label: 'Budget' },
   { to: '/goals', label: 'Goals' },
+  { to: '/investments', label: 'Crypto' },
 ]
 
 const MORE_ITEMS = [
-  { to: '/investments', label: 'Investments', sub: 'Portfolio & holdings' },
   { to: '/recurring', label: 'Recurring & Bills', sub: 'Subscriptions & due dates' },
   { to: '/reports', label: 'Reports', sub: 'Trends over time' },
 ]

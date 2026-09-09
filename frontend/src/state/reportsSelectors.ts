@@ -155,22 +155,3 @@ export function debtTrendSample(state: FinanceState, todayIso: string): Illustra
   return scaledTrend(totalCreditOwed(state), SETTLING_DEBT_FACTORS, trailingMonthLabels(todayIso))
 }
 
-// ---- Investment performance (real) -----------------------------------------
-
-export interface PortfolioSummary {
-  totalValue: number
-  /** Value-weighted average of each holding's real `changePct`. */
-  weightedChangePct: number
-  holdingsCount: number
-}
-
-/** Aggregates `state.portfolio` — every input (`price`, `units`, `changePct`) is real seed data, not an invented trend. */
-export function portfolioSummary(state: FinanceState): PortfolioSummary {
-  const holdings = state.portfolio
-  const totalValue = holdings.reduce((sum, h) => sum + h.price * h.units, 0)
-  const weightedChangePct =
-    totalValue > 0
-      ? Math.round((holdings.reduce((sum, h) => sum + h.price * h.units * h.changePct, 0) / totalValue) * 10) / 10
-      : 0
-  return { totalValue, weightedChangePct, holdingsCount: holdings.length }
-}

@@ -8,10 +8,10 @@ import { Transactions } from './pages/Transactions'
 import { Accounts } from './pages/Accounts'
 import { Budget } from './pages/Budget'
 import { Goals } from './pages/Goals'
-import { Investments } from './pages/Investments'
 import { Recurring } from './pages/Recurring'
 import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
+import { Crypto } from './pages/Crypto'
 import type { Transaction } from './domain/finance'
 
 export default function App() {
@@ -41,9 +41,9 @@ export default function App() {
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/budget" element={<Budget />} />
         <Route path="/goals" element={<Goals />} />
-        <Route path="/investments" element={<Investments />} />
         <Route path="/recurring" element={<Recurring />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/investments" element={<Crypto />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={handleCloseModal} editingTransaction={editingTransaction ?? undefined} />

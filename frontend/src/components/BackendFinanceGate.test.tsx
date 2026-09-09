@@ -24,8 +24,9 @@ const gateway = (load: FinanceGateway['load']): FinanceGateway => ({
   deleteGoal: vi.fn(),
   createBudgetPeriod: vi.fn(),
   setBudgetAllocation: vi.fn(),
-  addBudgetCategory: vi.fn(),
+  addCategory: vi.fn(),
   updateCategory: vi.fn(),
+  setCategoryBudget: vi.fn(),
   deleteCategory: vi.fn(),
 })
 const wrapper = (value: FinanceGateway) => ({ children }: { children: ReactNode }) => <AsyncFinanceProvider gateway={value}><BackendFinanceGate>{children}</BackendFinanceGate></AsyncFinanceProvider>

@@ -45,11 +45,12 @@ describe.each([
     const { result } = renderHook(() => useFinance(), { wrapper: renderWrapper })
 
     const before = result.current.state.budgetCategories.length
+    const [existingCategory] = result.current.state.categories
 
     let thrown: unknown
     act(() => {
       try {
-        result.current.addBudgetCategory({ name: 'Way Too Much', allocated: 999_999 })
+        result.current.setCategoryBudget(existingCategory.id, 999_999)
       } catch (err) {
         thrown = err
       }

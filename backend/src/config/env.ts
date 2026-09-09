@@ -35,6 +35,7 @@ const envSchema = z.object({
   COINGECKO_API_KEY: z.string().optional(),
   ALPHA_VANTAGE_URL: z.string().url().default('https://www.alphavantage.co/query'),
   COINGECKO_URL: z.string().url().default('https://api.coingecko.com/api/v3/simple/price'),
+  COINGECKO_CATALOG_URL: z.string().url().default('https://api.coingecko.com/api/v3'),
   // Plan §18 local quota budgets, enforced in quotes.ts before a live
   // provider call — never rely on the vendor's own free-tier limit alone.
   ALPHA_VANTAGE_MAX_CALLS_PER_DAY: z.coerce.number().int().positive().default(20),

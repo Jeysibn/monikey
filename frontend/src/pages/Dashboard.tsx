@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
@@ -9,6 +9,16 @@ import { formatMoney } from '../utils/currency'
 import { formatDateLabel, formatDueDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
 
+type CryptoCoinPreview = { instrumentId?: string; symbol: string; name: string; quantity?: string; currentPrice?: string | null; marketValue?: string | null; change24hPct?: number | null }
+type CryptoSummaryPreview = { portfolioValue: string; totalPnl: string; totalPnlPct?: string | null }
+const DEMO_CRYPTO_COINS: CryptoCoinPreview[] = [
+  { symbol: 'BTC', name: 'Bitcoin', quantity: '0.42', currentPrice: '4906411', marketValue: '2060812.62', change24hPct: -1.09 },
+  { symbol: 'ETH', name: 'Ethereum', quantity: '6.1', currentPrice: '155455', marketValue: '948275.5', change24hPct: -0.46 },
+  { symbol: 'SOL', name: 'Solana', quantity: '38', currentPrice: '9280', marketValue: '352640', change24hPct: 2.14 },
+]
+const DEMO_CRYPTO_SUMMARY: CryptoSummaryPreview = { portfolioValue: '3361728.12', totalPnl: '28819.82', totalPnlPct: '18.5' }
+function backendEnabled() { return import.meta.env.VITE_FINANCE_BACKEND === 'true' }
+
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
 const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
 // Label for the trailing bucket's total — the bucket that always ends today,
@@ -18,7 +28,7 @@ const PERIOD_SUFFIX: Record<ExpensesPeriod, string> = { daily: 'today', weekly: 
 
 export function Dashboard() {
   const finance = useFinance()
-  const { accounts, creditCards, portfolio } = finance.state
+  const { accounts, creditCards } = finance.state
   const previewAccounts = accounts.slice(0, 4)
   const activeGoalsPreview = finance.activeGoals
   const completedCount = finance.completedGoals.length
@@ -33,6 +43,27 @@ export function Dashboard() {
   // The last bucket in every period always ends today, so its amount is the
   // correct "so far" figure for whichever period is currently selected.
   const latestBucketAmount = expensesByDay.length > 0 ? expensesByDay[expensesByDay.length - 1].amount : null
+
+  const [cryptoCoins, setCryptoCoins] = useState<CryptoCoinPreview[]>(backendEnabled() ? [] : DEMO_CRYPTO_COINS)
+  const [cryptoSummary, setCryptoSummary] = useState<CryptoSummaryPreview | null>(backendEnabled() ? null : DEMO_CRYPTO_SUMMARY)
+  const [cryptoStale, setCryptoStale] = useState(false)
+  useEffect(() => {
+    if (!backendEnabled()) return
+    const controller = new AbortController()
+    void fetch('/api/v1/crypto', { credentials: 'include', signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json() as { summary?: CryptoSummaryPreview; coins?: CryptoCoinPreview[]; marketStatus?: { stale?: boolean } }
+        if (!response.ok) throw new Error('Could not load crypto portfolio.')
+        setCryptoSummary(body.summary ?? null)
+        setCryptoCoins(body.coins ?? [])
+        setCryptoStale(Boolean(body.marketStatus?.stale))
+      })
+      .catch(() => { if (!controller.signal.aborted) setCryptoStale(true) })
+    return () => controller.abort()
+  }, [])
+  const topCryptoCoins = [...cryptoCoins]
+    .sort((a, b) => Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0))
+    .slice(0, 4)
 
   return (
     <div className="dashboard">
@@ -261,35 +292,50 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-portfolio">
-          <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>My Portfolio</CardTitle>
-          <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
-            Sample data
-          </div>
-          <div className="portfolio-grid">
-            {portfolio.map((h) => (
-              <div className="portfolio-tile" key={h.ticker}>
-                <div className="num" style={{ fontWeight: 700 }}>
-                  {formatMoney(h.price, { withCents: true })}
+          <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
+          {cryptoSummary ? (
+            <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
+              {formatMoney(Number(cryptoSummary.portfolioValue), { withCents: true })} total
+              {cryptoSummary.totalPnlPct != null && (
+                <>
+                  {' · '}
+                  <span className={Number(cryptoSummary.totalPnl) >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                    {Number(cryptoSummary.totalPnl) >= 0 ? '+' : ''}
+                    {Number(cryptoSummary.totalPnlPct).toFixed(1)}% all-time
+                  </span>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
+              {backendEnabled() ? (cryptoStale ? 'Market prices are temporarily unavailable.' : 'No coins tracked yet.') : 'Sample data'}
+            </div>
+          )}
+          {topCryptoCoins.length > 0 ? (
+            <div className="portfolio-grid">
+              {topCryptoCoins.map((coin) => (
+                <div className="portfolio-tile" key={coin.instrumentId ?? coin.symbol}>
+                  <div className="num" style={{ fontWeight: 700 }}>
+                    {coin.currentPrice ? formatMoney(Number(coin.currentPrice), { withCents: true }) : '—'}
+                  </div>
+                  {typeof coin.change24hPct === 'number' && (
+                    <div className={coin.change24hPct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                      {coin.change24hPct >= 0 ? '+' : ''}
+                      {coin.change24hPct.toFixed(2)}%
+                    </div>
+                  )}
+                  <div className="portfolio-foot">
+                    <span title={coin.name}>{coin.symbol}</span>
+                    {coin.quantity && <span className="faint">Units {coin.quantity}</span>}
+                  </div>
                 </div>
-                <div className={h.changePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                  {h.changePct >= 0 ? '+' : ''}
-                  {h.changePct}%
-                </div>
-                <Sparkline
-                  values={h.history}
-                  width={120}
-                  height={24}
-                  color={h.changePct >= 0 ? 'var(--teal)' : 'var(--red)'}
-                  strokeWidth={2}
-                  className="portfolio-spark"
-                />
-                <div className="portfolio-foot">
-                  <span title={h.name}>{h.ticker}</span>
-                  <span className="faint">Units {h.units}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <Link to="/investments" className="see-all" style={{ display: 'block', textAlign: 'left' }}>
+              Add your first coin →
+            </Link>
+          )}
         </Card>
 
         <Card className="area-recent">

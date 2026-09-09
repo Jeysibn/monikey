@@ -237,6 +237,14 @@ export interface AddBudgetCategoryInput {
   color?: string
 }
 
+/** Category creation is now Settings-only and deliberately carries no
+ * allocation — a category can exist unbudgeted, and Budget only ever sets
+ * an amount for a category that already exists (see `setCategoryBudget`). */
+export interface AddCategoryInput {
+  name: string
+  color?: string
+}
+
 export interface CreateGoalInput {
   name: string
   targetAmount: number

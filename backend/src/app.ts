@@ -29,6 +29,7 @@ import { monthlyPeriod, tryConsumeApiQuota } from './modules/investments/quotes.
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { createReceiptsModule } from './modules/receipts/receipts.module.js'
 import { insightsRoutes } from './modules/insights/insights.routes.js'
+import type { EmailProvider } from './modules/notifications/email.js'
 import type { AiProvider } from './integrations/interfaces/aiProvider.js'
 import { createStubAiAdapter, createGeminiAdapter } from './integrations/adapters/gemini/index.js'
 import type { BankAggregationProvider } from './integrations/interfaces/bankDataProvider.js'
@@ -41,6 +42,8 @@ export interface BuildAppOptions {
   prisma: PrismaClient
   /** Test-only override for "now" used by session issuance/resolution. Never wired to client input in production. */
   clock?: Clock
+  /** Test-only override for the outbound email provider (e.g. a capturing fake for password-reset assertions). Defaults to `createEmailProvider(env)`. */
+  emailProvider?: EmailProvider
 }
 
 /**
@@ -49,7 +52,7 @@ export interface BuildAppOptions {
  * against a real app without binding a port.
  */
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
-  const { env, prisma, clock } = opts
+  const { env, prisma, clock, emailProvider } = opts
 
   const app = Fastify({
     logger: buildLoggerOptions(env),
@@ -165,7 +168,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(
     async (v1) => {
       await v1.register(healthRoutes, { prisma })
-      await v1.register(authRoutes, { prisma, env, clock })
+      await v1.register(authRoutes, { prisma, env, clock, emailProvider })
       await v1.register(settingsRoutes, { prisma, env, clock })
 
       const ledger = createLedgerModule(prisma)

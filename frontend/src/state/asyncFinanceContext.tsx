@@ -154,7 +154,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   }, [stableGateway])
   const addCategory = useCallback(async (input: AddCategoryInput) => {
     const result = await stableGateway.addCategory(input)
-    const category: Category = { id: result.id, name: result.name, color: result.color, budgetable: true, transactionKinds: ['expense'] }
+    const category: Category = { id: result.id, name: result.name, color: result.color, budgetable: result.budgetable, transactionKinds: [...(result.allowsIncome ? ['income' as const] : []), ...(result.allowsExpense ? ['expense' as const] : [])] }
     const refreshed = await stableGateway.load()
     setState((current) => refreshed ?? (current ? { ...current, categories: [...current.categories, category] } : current))
     return category

@@ -243,6 +243,7 @@ export interface AddBudgetCategoryInput {
 export interface AddCategoryInput {
   name: string
   color?: string
+  transactionKinds?: ('income' | 'expense')[]
 }
 
 export interface CreateGoalInput {

@@ -226,6 +226,7 @@ function CategoriesSection() {
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [color, setColor] = useState(CATEGORY_PALETTE[0])
+  const [categoryKind, setCategoryKind] = useState<'income' | 'expense' | 'both'>('expense')
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -243,8 +244,9 @@ function CategoriesSection() {
     }
     try {
       setSubmitting(true)
-      if (asyncFinance) await asyncFinance.addCategory({ name: trimmedName, color })
-      else finance.addCategory({ name: trimmedName, color })
+      const transactionKinds = categoryKind === 'both' ? ['income' as const, 'expense' as const] : [categoryKind]
+      if (asyncFinance) await asyncFinance.addCategory({ name: trimmedName, color, transactionKinds })
+      else finance.addCategory({ name: trimmedName, color, transactionKinds })
     } catch (err) {
       fail({ name: err instanceof Error ? err.message : 'Could not add category.' })
       return
@@ -347,6 +349,14 @@ function CategoriesSection() {
                 />
               ))}
             </div>
+          </label>
+          <label className="new-category-field">
+            <span className="tx-label">Use for</span>
+            <select className="tx-input" value={categoryKind} onChange={(e) => setCategoryKind(e.target.value as typeof categoryKind)}>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+              <option value="both">Income &amp; expenses</option>
+            </select>
           </label>
           <div className="new-category-actions">
             <button type="button" className="btn btn--ghost" onClick={() => setFormOpen(false)}>

@@ -269,7 +269,8 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
       validateAddCategory(input)
       const id = nextId('cat')
       const color = input.color ?? NEW_CATEGORY_PALETTE[state.categories.length % NEW_CATEGORY_PALETTE.length]
-      const category: Category = { id, name: input.name.trim(), color, budgetable: true, transactionKinds: ['expense'] }
+      const transactionKinds = input.transactionKinds?.length ? input.transactionKinds : ['expense'] as const
+      const category: Category = { id, name: input.name.trim(), color, budgetable: transactionKinds.includes('expense'), transactionKinds: [...transactionKinds] }
       return {
         state: { ...state, categories: [...state.categories, category] },
         category,

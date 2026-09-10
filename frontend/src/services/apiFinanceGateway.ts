@@ -45,7 +45,7 @@ export interface FinanceGateway {
   createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod>
   setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory>
   /** Settings: create a category (name/color only), unbudgeted until Budget calls `setCategoryBudget`. */
-  addCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
+  addCategory(input: { name: string; color?: string; transactionKinds?: ('income' | 'expense')[] }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>
   /** Settings: rename/recolor a category. Never touches budget allocation. */
   updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }>
   /** Budget: set (or change) the budget amount for a category that already exists. */
@@ -198,8 +198,9 @@ export class ApiFinanceGateway implements FinanceGateway {
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 
-  async addCategory(input: { name: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
-    return this.request<{ id: string; name: string; color: string }>('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: true, allowsIncome: false, allowsExpense: true }) })
+  async addCategory(input: { name: string; color?: string; transactionKinds?: ('income' | 'expense')[] }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }> {
+    const kinds = input.transactionKinds?.length ? input.transactionKinds : ['expense']
+    return this.request('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: kinds.includes('expense'), allowsIncome: kinds.includes('income'), allowsExpense: kinds.includes('expense') }) })
   }
 
   async updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {

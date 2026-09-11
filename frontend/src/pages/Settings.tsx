@@ -217,6 +217,7 @@ function DisplayPreferencesSection({
 }
 
 const CATEGORY_PALETTE = ['var(--cyan)', 'var(--violet)', 'var(--amber)', 'var(--red)', 'var(--green)', 'var(--pink)']
+const CATEGORY_PICKER_DEFAULT = '#22d3ee'
 const CATEGORY_FORM_FIELDS = ['name'] as const
 type CategoryFormField = (typeof CATEGORY_FORM_FIELDS)[number]
 
@@ -226,6 +227,7 @@ function CategoriesSection() {
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [color, setColor] = useState(CATEGORY_PALETTE[0])
+  const [customColor, setCustomColor] = useState(CATEGORY_PICKER_DEFAULT)
   const [categoryKind, setCategoryKind] = useState<'income' | 'expense' | 'both'>('expense')
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -255,6 +257,7 @@ function CategoriesSection() {
     }
     setName('')
     setColor(CATEGORY_PALETTE[0])
+    setCustomColor(CATEGORY_PICKER_DEFAULT)
     clear()
     setFormOpen(false)
   }
@@ -348,7 +351,10 @@ function CategoriesSection() {
                   onClick={() => setColor(swatch)}
                 />
               ))}
+              <input className="category-color-picker" type="color" value={customColor} aria-label="Choose a custom category color" onChange={(e) => { setCustomColor(e.target.value); setColor(e.target.value) }} />
+              <input className="category-color-hex" type="text" value={customColor} aria-label="Custom category color hex value" maxLength={7} pattern="#[0-9a-fA-F]{6}" onChange={(e) => { const value = e.target.value; setCustomColor(value); if (/^#[0-9a-fA-F]{6}$/.test(value)) setColor(value) }} />
             </div>
+            <span className="form-help">Choose a preset or enter any 6-digit hex color.</span>
           </label>
           <label className="new-category-field">
             <span className="tx-label">Use for</span>
@@ -403,7 +409,10 @@ function CategoriesSection() {
                         onClick={() => setEditColor(swatch)}
                       />
                     ))}
+                    <input className="category-color-picker" type="color" value={/^#[0-9a-fA-F]{6}$/.test(editColor) ? editColor : CATEGORY_PICKER_DEFAULT} aria-label="Choose a custom category color" onChange={(e) => setEditColor(e.target.value)} />
+                    <input className="category-color-hex" type="text" value={editColor} aria-label="Custom category color hex value" maxLength={7} pattern="#[0-9a-fA-F]{6}" onChange={(e) => setEditColor(e.target.value)} />
                   </div>
+                  <span className="form-help">Choose a preset or enter any 6-digit hex color.</span>
                 </label>
                 <div className="new-category-actions">
                   <button type="button" className="btn btn--ghost" onClick={cancelEdit}>

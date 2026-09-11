@@ -105,6 +105,33 @@
   align-items: center;
 }
 
+.category-color-picker {
+  width: 28px;
+  height: 24px;
+  padding: 1px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card);
+  cursor: pointer;
+}
+.category-color-hex {
+  width: 84px;
+  height: 24px;
+  padding: 2px 7px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.category-color-hex:focus-visible,
+.category-color-picker:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .add-link:disabled {
   opacity: 0.55;
   cursor: not-allowed;

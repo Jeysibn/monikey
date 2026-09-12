@@ -136,7 +136,10 @@ export async function receiptsRoutes(
     title: z.string().min(1).max(255),
     categoryId: z.string().uuid().nullable().optional(),
     fromAccountId: z.string().uuid(),
-    amountMinor: z.number().int().positive(),
+    // Money crosses the JSON boundary as a decimal string. Accepting a
+    // JavaScript number here would create an avoidable precision boundary
+    // before the ledger receives its canonical bigint value.
+    amountMinor: z.string().regex(/^\d+$/, 'amountMinor must be a non-negative integer string').transform((value) => BigInt(value)).pipe(z.bigint().positive()),
     currencyCode: z.string().length(3).default('PHP'),
     occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     note: z.string().nullable().optional(),
@@ -168,7 +171,7 @@ export async function receiptsRoutes(
           title: body.title,
           categoryId: body.categoryId ?? null,
           fromAccountId: body.fromAccountId,
-          amountMinor: BigInt(body.amountMinor),
+          amountMinor: body.amountMinor,
           feeMinor: 0n,
           currencyCode: body.currencyCode,
           occurredOn: body.occurredOn,

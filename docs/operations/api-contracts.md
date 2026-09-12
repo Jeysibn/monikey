@@ -27,3 +27,8 @@ maps them into frontend domain models. A real-PostgreSQL contract test verifies
 that minor units remain strings and account enums survive response
 serialization. Routes that still generate `content?: never` need accurate
 backend schemas before their handwritten gateway DTOs can be safely removed.
+
+Financial minor-unit fields use decimal strings at the JSON boundary (for
+example, receipt commit `amountMinor: "125000"`). The API converts these
+validated strings directly to PostgreSQL/ledger `bigint` values; clients must
+not send floating-point major-unit values for financial mutations.

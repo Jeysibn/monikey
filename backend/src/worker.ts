@@ -14,10 +14,9 @@ import { createFxRatesProvider } from './integrations/adapters/frankfurter/index
 import { claimDueJob, enqueueJob, failJob, finishJob } from './modules/worker/jobs.js'
 import { recordWorkerJob } from './modules/health/metrics.js'
 
-// Phase 1 worker process: proves out the separate-process topology (same
-// backend image, different command) required by compose.yaml. Job handlers
-// (recurring due checks, market refresh, email outbox, etc.) land in later
-// phases via JobModule — this only verifies DB connectivity and stays alive.
+// The worker runs in the same backend image as the API but owns durable job
+// claiming and processing. PostgreSQL remains the source of truth for job
+// state, retries, and scheduling.
 async function main(): Promise<void> {
   const env = loadEnv()
   const logger = pino(buildLoggerOptions(env))

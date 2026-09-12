@@ -289,12 +289,12 @@ export async function createImportsRoutes(
         // Exchange public token
         const result = await bankProvider.exchangePublicToken(userId, input.publicToken)
 
-        // TODO: Encrypt access token before storage
-        // For Phase 11, we'll store it as-is (future: use user_id + server key for encryption)
+        // The service encrypts the provider credential before persistence;
+        // plaintext access tokens never enter the repository layer.
         await importsService.createPlaidItem(
           userId,
           result.itemId,
-          result.accessToken, // TODO: encrypt this
+          result.accessToken,
           result.accountIds,
           result.institutionName
         )

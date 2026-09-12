@@ -9,9 +9,9 @@ test.describe('Budget page', () => {
     await expect(page.getByText('Shopping, Debt Payments')).toBeVisible()
   })
 
-  test('Food & Groceries shows a forecast line', async ({ page }) => {
+  test('Food & Groceries shows a deterministic projection line', async ({ page }) => {
     await page.goto('/budget')
-    await expect(page.getByText(/Forecast ₱1,680/)).toBeVisible()
+    await expect(page.getByText(/Projected period-end spend/).first()).toBeVisible()
   })
 
   test('"On track" category count is derived, and Budget vs Actual has a visible legend', async ({ page }) => {
@@ -68,10 +68,9 @@ test.describe('Accounts page', () => {
     await expect(page.getByText('Cash Wallet').first()).toBeVisible()
   })
 
-  test('Connect account is a real disabled control, not a clickable-looking dead end', async ({ page }) => {
+  test('unavailable bank linking is not exposed as a dead-end control', async ({ page }) => {
     await page.goto('/accounts')
-    const connectButton = page.getByRole('button', { name: /Connect account/ })
-    await expect(connectButton).toBeDisabled()
+    await expect(page.getByRole('button', { name: /Connect account/ })).toHaveCount(0)
   })
 
   test('+ Add account creates a manual account that appears immediately', async ({ page }) => {

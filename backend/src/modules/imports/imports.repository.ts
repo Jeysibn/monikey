@@ -27,7 +27,7 @@ export interface CreateImportedTransactionInput {
 }
 
 export interface UpdateImportBatchInput {
-  status?: 'reviewing' | 'committed' | 'archived' | 'failed'
+  status?: 'reviewing' | 'validating' | 'ready' | 'committing' | 'partially_committed' | 'committed' | 'archived' | 'failed'
   matchedAccountId?: string | null
   totalCount?: number
   committedCount?: number

@@ -7,6 +7,7 @@ import {
   computeReportSummary,
   computeCashFlow,
   computeSpendingByCategory,
+  computeSpendingByTag,
   computeNetWorthTrend,
   computeBudgetPerformance,
   computeGoalsReport,
@@ -113,6 +114,12 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
     const dateTo = new Date(`${query.to}T23:59:59Z`)
 
     const spending = await computeSpendingByCategory(prisma, userId, dateFrom, dateTo)
+    return reply.send(spending)
+  })
+
+  app.get<{ Querystring: Record<string, string> }>('/spending-by-tag', async (request, reply) => {
+    const query = dateRangeSchema.parse(request.query)
+    const spending = await computeSpendingByTag(prisma, request.user!.id, new Date(`${query.from}T00:00:00Z`), new Date(`${query.to}T23:59:59Z`))
     return reply.send(spending)
   })
 

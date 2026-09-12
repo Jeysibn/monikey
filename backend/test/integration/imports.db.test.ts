@@ -22,6 +22,8 @@ import { generateSessionToken, hashSessionToken } from '../../src/common/auth/se
 const SESSION_COOKIE_NAME = 'monikey_session'
 const APP_ORIGIN = 'http://localhost:8080'
 const TEST_RUN_ID = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
+const describeIfDb = databaseUrl ? describe : describe.skip
 
 /**
  * Generate a unique dedup key for this test run to avoid UNIQUE constraint violations
@@ -52,13 +54,12 @@ async function createTestSessionCookie(prisma: PrismaClient, userId: string): Pr
   return `${SESSION_COOKIE_NAME}=${rawToken}`
 }
 
-describe('Imports Module - Phase 11', () => {
+describeIfDb('Imports Module - CSV workflow', () => {
   let app: any
   let prisma: PrismaClient
   let env: any
 
   beforeAll(async () => {
-    const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
     env = loadEnv({
       ...process.env,
       DATABASE_URL: databaseUrl,
@@ -170,7 +171,7 @@ describe('Imports Module - Phase 11', () => {
       expect(txnRes.statusCode).toBe(201)
       const txn = JSON.parse(txnRes.body)
       expect(txn.title).toBe('Coffee Shop')
-      expect(txn.amountMinor).toBe(15050)
+      expect(txn.amountMinor).toBe('15050')
       expect(txn.status).toBe('pending_review')
     })
   })

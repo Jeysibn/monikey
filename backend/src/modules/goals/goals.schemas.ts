@@ -1,23 +1,24 @@
 import { z } from 'zod'
+import { minorUnitInput } from '../ledger/ledger.schemas.js'
 
 export const createGoalSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  targetMinor: z.number().int().positive(),
+  targetMinor: minorUnitInput.pipe(z.bigint().positive()),
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  monthlyContributionMinor: z.number().int().positive().nullable().optional(),
+  monthlyContributionMinor: minorUnitInput.pipe(z.bigint().positive()).nullable().optional(),
   currencyCode: z.string().length(3).default('PHP'),
 })
 
 export const updateGoalSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  targetMinor: z.number().int().positive().optional(),
+  targetMinor: minorUnitInput.pipe(z.bigint().positive()).optional(),
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  monthlyContributionMinor: z.number().int().positive().nullable().optional(),
+  monthlyContributionMinor: minorUnitInput.pipe(z.bigint().positive()).nullable().optional(),
 })
 
 export const fundGoalSchema = z.object({
   sourceAccountId: z.string().uuid(),
-  amountMinor: z.number().int().positive(),
+  amountMinor: minorUnitInput.pipe(z.bigint().positive()),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   idempotencyKey: z.string().max(128).nullable().optional(),
 })
@@ -26,12 +27,12 @@ export interface GoalView {
   id: string
   userId: string
   name: string
-  targetMinor: number
-  currentMinor: number
+  targetMinor: string
+  currentMinor: string
   currencyCode: string
   targetDate: string
   completedDate: string | null
-  monthlyContributionMinor: number | null
+  monthlyContributionMinor: string | null
   status: string
   active: boolean
   createdAt: string

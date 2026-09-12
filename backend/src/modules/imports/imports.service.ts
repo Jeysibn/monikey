@@ -14,6 +14,7 @@ import type { PostTransactionInput } from '../ledger/ledger.schemas.js'
 import type { Env } from '../../config/env.js'
 import { AppError } from '../../common/errors/appError.js'
 import { encryptForUser, decryptForUser } from '../../common/crypto/encryption.js'
+import { applyRuleActions, matchesRule, type RuleActions, type RuleConditions } from '../rules/rules.engine.js'
 
 export interface ImportBatchSummary {
   id: string
@@ -206,6 +207,7 @@ export class ImportsService {
     }
 
     const matchedAccountId = input.matchedAccountId || batch.matchedAccountId!
+    await this.repo.updateImportBatch(batchId, userId, { status: 'committing', matchedAccountId })
 
     // Verify user owns the target account
     const account = await this.prisma.financialAccount.findFirst({
@@ -228,6 +230,8 @@ export class ImportsService {
         },
       },
     })
+    const rules = await this.prisma.transactionRule.findMany({ where: { userId, enabled: true }, orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] })
+    const ownedCategoryIds = new Set((await this.prisma.category.findMany({ where: { OR: [{ userId }, { userId: null }] }, select: { id: true } })).map((category) => category.id))
 
     let committedCount = 0
     const errors: Array<{ txnId: string; error: string }> = []
@@ -242,44 +246,52 @@ export class ImportsService {
           continue
         }
 
-        // Determine transaction type based on amount sign and merchant
-        const type: 'income' | 'expense' | 'transfer' = this.determineTransactionType(importedTxn)
+        // Determine transaction type, then apply the user's deterministic rules
+        // in priority order. Rules never perform arithmetic or external calls.
+        const initialType = this.determineTransactionType(importedTxn)
+        let ruled: any = { title: importedTxn.title, description: importedTxn.description, merchantName: importedTxn.merchantName, amountMinor: importedTxn.amountMinor, accountId: matchedAccountId, type: initialType, source: 'import', currencyCode: importedTxn.currencyCode, tags: [] as string[] }
+        for (const rule of rules) {
+          if (matchesRule(ruled, rule.conditions as unknown as RuleConditions)) ruled = { ...ruled, ...applyRuleActions(ruled, rule.actions as unknown as RuleActions), title: (rule.actions as any).normalizedMerchant ?? ruled.title, tags: [...ruled.tags, ...((rule.actions as any).addTags ?? [])] }
+        }
+        const type: 'income' | 'expense' | 'transfer' = ruled.type as 'income' | 'expense' | 'transfer'
 
         // Post through LedgerModule
         const occurredOnStr = importedTxn.occurredOn.toISOString().split('T')[0]
-        // FIXME: Phase 11 Defect 6 - amountMinor conversion from bigint to Number
-        // LedgerService.postTransaction() accepts number (not bigint) per its schema.
-        // The ledger repository internally converts to BigInt for storage.
-        // Converting imported amounts (bigint) to Number is safe for PHP currency because:
-        // - MAX_SAFE_INTEGER = 9007199254740991 = PHP 90,071,992,547,409.91
-        // - Personal finance amounts never reach this (production corporate mode is out of scope)
-        // - If amounts ever exceed this, silent precision loss is a hard error and must be fixed
-        // Ideal fix: refactor ledger schema to accept bigint directly for consistency.
+        // The legacy ledger input is number-based. Refuse values that cannot be
+        // represented exactly instead of silently corrupting money.
+        if (importedTxn.amountMinor > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new AppError('AMOUNT_OUT_OF_RANGE', 'Imported amount exceeds the exact ledger input range.', { statusCode: 422, field: 'amountMinor' })
+        }
         const postInput: PostTransactionInput = {
           type,
-          title: importedTxn.title,
-          categoryId: null, // User can categorize manually later
+          title: ruled.title,
+          categoryId: (() => { const categoryId = (rules.find((rule) => matchesRule(ruled, rule.conditions as unknown as RuleConditions))?.actions as any)?.categoryId; return categoryId && ownedCategoryIds.has(categoryId) ? categoryId : null })(),
           goalId: null,
           fromAccountId: type === 'expense' || type === 'transfer' ? matchedAccountId : null,
           toAccountId: type === 'income' || type === 'transfer' ? matchedAccountId : null,
           occurredOn: occurredOnStr || new Date().toISOString().split('T')[0]!,
           occurredTime: null,
-          amountMinor: Number(importedTxn.amountMinor), // Safe for PHP; see comment above
-          feeMinor: 0,
+          amountMinor: importedTxn.amountMinor,
+          feeMinor: 0n,
           currencyCode: importedTxn.currencyCode,
           source: 'import',
           status: 'cleared',
-          note: importedTxn.description ? importedTxn.description : undefined,
+          note: ruled.note ?? importedTxn.description ?? undefined,
           idempotencyKey: importedTxn.dedupKey, // Use dedup key as idempotency key
         }
 
+        const tagNames = [...new Set((ruled.tags as string[]).map((tag) => tag.trim()).filter((tag) => /^[\p{L}\p{N}_-]{1,64}$/u.test(tag)))]
+        const tags = await Promise.all(tagNames.map((name) => this.prisma.transactionTag.upsert({ where: { userId_name: { userId, name } }, update: {}, create: { userId, name }, select: { id: true } })))
+
         const result = await this.ledgerService.postTransaction(userId, postInput)
+
+        if (tags.length > 0) await this.prisma.transactionTagOnTransaction.createMany({ data: tags.map((tag) => ({ transactionId: result.transaction.id, tagId: tag.id })), skipDuplicates: true })
 
         // Create posting to link imported transaction to real transaction
         await this.repo.createPosting(importedTxn.id, result.transaction.id)
 
-        // Update imported transaction status to validated (already confirmed by user)
-        await this.repo.updateImportedTransactionStatus(importedTxn.id, userId, 'validated')
+        // Update imported transaction status after the ledger posting and tag assignments succeed.
+        await this.repo.updateImportedTransactionStatus(importedTxn.id, userId, 'posted')
 
         committedCount++
       } catch (error) {
@@ -290,7 +302,7 @@ export class ImportsService {
 
     // Update batch status
     await this.repo.updateImportBatch(batchId, userId, {
-      status: 'committed',
+      status: errors.length > 0 ? 'partially_committed' : 'committed',
       committedCount,
       committedAt: new Date(),
       errorMessage: errors.length > 0 ? `${errors.length} transactions failed to post` : null,

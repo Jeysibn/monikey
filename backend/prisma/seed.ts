@@ -13,6 +13,10 @@ import { createLedgerModule } from '../src/modules/ledger/ledger.module.js'
 
 const prisma = new PrismaClient()
 
+if (process.env.MONIKEY_DEMO_MODE !== 'true' || process.env.NODE_ENV === 'production' && process.env.MONIKEY_ALLOW_DEMO_SEED !== 'true') {
+  throw new Error('Demo seed refused. Set MONIKEY_DEMO_MODE=true; production also requires MONIKEY_ALLOW_DEMO_SEED=true.')
+}
+
 // Deterministic UUIDs (not random) so re-running this script — in dev, in
 // CI, or against a fresh container — always produces the same category ids.
 // Mirrors the stable slugs in src/services/mockFinanceRepository.ts's

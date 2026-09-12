@@ -6,6 +6,8 @@ export const transactionTypeSchema = z.enum(['income', 'expense', 'transfer']);
 export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring', 'import']);
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);
 
+export const minorUnitInput = z.union([z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string'), z.number().int().nonnegative()]).transform((value) => BigInt(value))
+
 export const postTransactionSchema = z.object({
   type: transactionTypeSchema,
   title: z.string().min(1).max(255),
@@ -15,8 +17,8 @@ export const postTransactionSchema = z.object({
   toAccountId: z.string().uuid().nullable().optional(),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   occurredTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-  amountMinor: z.number().int().positive(),
-  feeMinor: z.number().int().nonnegative().default(0),
+  amountMinor: minorUnitInput.pipe(z.bigint().positive()),
+  feeMinor: minorUnitInput.default(0n),
   currencyCode: z.string().length(3).default('PHP'),
   source: transactionSourceSchema.default('manual'),
   status: transactionStatusSchema.default('cleared'),
@@ -33,8 +35,8 @@ export const updateTransactionSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   occurredTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-  amountMinor: z.number().int().positive().optional(),
-  feeMinor: z.number().int().nonnegative().optional(),
+  amountMinor: minorUnitInput.pipe(z.bigint().positive()).optional(),
+  feeMinor: minorUnitInput.optional(),
   status: transactionStatusSchema.optional(),
   note: z.string().nullable().optional(),
 });
@@ -54,14 +56,15 @@ export interface TransactionView {
   toAccountId: string | null;
   occurredOn: string;
   occurredTime: string | null;
-  amountMinor: number;
-  feeMinor: number;
+  amountMinor: string;
+  feeMinor: string;
   currencyCode: string;
   source: 'manual' | 'ocr' | 'recurring' | 'import';
   status: 'cleared' | 'pending';
   note: string | null;
   idempotencyKey: string | null;
   reversedTransactionId: string | null;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -71,8 +74,8 @@ export interface PostTransactionResult {
   balanceEffects: Array<{
     accountId: string;
     role: string;
-    deltaMinor: number;
-    balanceAfterMinor: number;
+    deltaMinor: string;
+    balanceAfterMinor: string;
   }>;
 }
 
@@ -82,8 +85,8 @@ export interface ReverseTransactionResult {
   balanceEffects: Array<{
     accountId: string;
     role: string;
-    deltaMinor: number;
-    balanceAfterMinor: number;
+    deltaMinor: string;
+    balanceAfterMinor: string;
   }>;
 }
 
@@ -92,8 +95,8 @@ export interface UpdateTransactionResult {
   balanceEffects: Array<{
     accountId: string;
     role: string;
-    deltaMinor: number;
-    balanceAfterMinor: number;
+    deltaMinor: string;
+    balanceAfterMinor: string;
   }>;
 }
 
@@ -106,6 +109,7 @@ export interface TransactionQuery {
   type?: 'income' | 'expense' | 'transfer';
   categoryId?: string;
   accountId?: string;
+  tagId?: string;
 }
 
 export interface Page<T> {

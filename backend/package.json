@@ -19,8 +19,11 @@
     "db:generate": "prisma generate",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "npm run db:seed:system",
+    "db:seed:system": "tsx prisma/seed-system.ts",
     "db:seed:demo": "tsx prisma/seed.ts"
+    ,"api:openapi": "tsx scripts/openapi.ts"
+    ,"api:openapi:check": "tsx scripts/openapi.ts --check"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

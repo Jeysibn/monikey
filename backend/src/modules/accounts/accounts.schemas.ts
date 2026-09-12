@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { accountTypeSchema } from '../ledger/ledger.schemas.js';
+import { accountTypeSchema, minorUnitInput } from '../ledger/ledger.schemas.js';
 
 export const createAccountSchema = z.object({
   name: z.string().min(1).max(100),
   institution: z.string().max(100).nullable().optional(),
   accountType: accountTypeSchema.exclude(['credit_card']),
   currencyCode: z.string().length(3).default('PHP'),
-  openingBalanceMinor: z.number().int().nonnegative().default(0),
+  openingBalanceMinor: minorUnitInput.default(0n),
   lastFour: z.string().length(4).nullable().optional(),
 });
 
@@ -14,12 +14,12 @@ export const createCreditCardSchema = z.object({
   name: z.string().min(1).max(100),
   institution: z.string().max(100).nullable().optional(),
   currencyCode: z.string().length(3).default('PHP'),
-  openingBalanceMinor: z.number().int().nonnegative().default(0),
+  openingBalanceMinor: minorUnitInput.default(0n),
   lastFour: z.string().length(4).nullable().optional(),
   network: z.enum(['visa', 'mastercard']),
-  creditLimitMinor: z.number().int().positive(),
+  creditLimitMinor: minorUnitInput.pipe(z.bigint().positive()),
   dueDay: z.number().int().min(1).max(31),
-  minimumPaymentMinor: z.number().int().nonnegative().default(0),
+  minimumPaymentMinor: minorUnitInput.default(0n),
 });
 
 export const updateAccountSchema = z.object({
@@ -30,7 +30,7 @@ export const updateAccountSchema = z.object({
   // This overwrites the stored balance directly rather than posting a
   // transaction — appropriate for manual accounts, which have no external
   // sync to reconcile against.
-  currentBalanceMinor: z.number().int().optional(),
+  currentBalanceMinor: z.union([z.string().regex(/^-?\d+$/), z.number().int()]).transform((value) => BigInt(value)).optional(),
 });
 
 export interface AccountView {
@@ -41,8 +41,8 @@ export interface AccountView {
   accountType: string;
   classification: 'asset' | 'liability';
   currencyCode: string;
-  openingBalanceMinor: number;
-  currentBalanceMinor: number;
+  openingBalanceMinor: string;
+  currentBalanceMinor: string;
   lastFour: string | null;
   syncStatus: string;
   manual: boolean;
@@ -52,9 +52,9 @@ export interface AccountView {
   updatedAt: string;
   creditCardDetail?: {
     network: string;
-    creditLimitMinor: number;
+    creditLimitMinor: string;
     dueDay: number;
-    minimumPaymentMinor: number;
+    minimumPaymentMinor: string;
     createdAt: string;
     updatedAt: string;
   } | null;

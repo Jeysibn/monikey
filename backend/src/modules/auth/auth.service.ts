@@ -117,6 +117,12 @@ export async function logoutUser(prisma: PrismaClient, sessionId: string): Promi
   await deleteSessionById(prisma, sessionId)
 }
 
+export async function changePassword(prisma: PrismaClient, userId: string, currentSessionId: string, input: { currentPassword: string; newPassword: string }): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } })
+  if (!user || !(await verifyPassword(user.passwordHash, input.currentPassword))) throw new AppError('UNAUTHORIZED', 'Current password is incorrect.', { statusCode: 401, field: 'currentPassword' })
+  await prisma.$transaction(async (tx) => { await tx.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(input.newPassword) } }); await tx.userSession.deleteMany({ where: { userId, id: { not: currentSessionId } } }) })
+}
+
 export interface PasswordResetServiceOptions {
   prisma: PrismaClient
   emailProvider: EmailProvider

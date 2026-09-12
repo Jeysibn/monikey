@@ -2,44 +2,46 @@ import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 
 export interface ReportSummary {
-  income: number
-  expenses: number
-  netCashFlow: number
-  cardDebtChange: number
-  netWorthChange: number
-  cardDebtAtEnd: number
-  netWorthAtEnd: number
+  income: string
+  expenses: string
+  netCashFlow: string
+  cardDebtChange: string
+  netWorthChange: string
+  cardDebtAtEnd: string
+  netWorthAtEnd: string
 }
 
 export interface CashFlowItem {
   date: string
-  income: number
-  expenses: number
-  netFlow: number
+  income: string
+  expenses: string
+  netFlow: string
 }
 
 export interface SpendingByCategory {
   categoryId: string
   categoryName: string
-  spent: number
+  spent: string
   budget?: number
   remaining?: number
   utilization?: number
 }
 
+export interface SpendingByTag { tagId: string; tagName: string; spent: string }
+
 export interface NetWorthTrend {
   date: string
-  assetTotal: number
-  liabilityTotal: number
-  netWorth: number
+  assetTotal: string
+  liabilityTotal: string
+  netWorth: string
 }
 
 export interface BudgetPerformanceCategory {
   categoryId: string
   categoryName: string
-  allocated: number
-  spent: number
-  remaining: number
+  allocated: string
+  spent: string
+  remaining: string
   utilization: number
 }
 
@@ -47,18 +49,18 @@ export interface BudgetPerformance {
   periodStart: string
   periodEnd: string
   categories: BudgetPerformanceCategory[]
-  totalAllocated: number
-  totalSpent: number
-  totalRemaining: number
+  totalAllocated: string
+  totalSpent: string
+  totalRemaining: string
 }
 
 export interface GoalReport {
   goalId: string
   name: string
-  target: number
-  current: number
+  target: string
+  current: string
   targetDate: string
-  monthlyContribution?: number
+  monthlyContribution?: string
   progress: number
   completed: boolean
   completedDate?: string
@@ -68,11 +70,11 @@ export interface InvestmentReport {
   instrumentId: string
   ticker: string
   name: string
-  units: number
-  currentPrice: number
-  marketValue: number
-  costBasis: number
-  gainLoss: number
+  units: string
+  currentPrice: string
+  marketValue: string
+  costBasis: string
+  gainLoss: string
   gainLossPercent: number
 }
 
@@ -139,21 +141,21 @@ export async function computeReportSummary(
     orderBy: { snapshotDate: 'desc' },
   })
 
-  const income = Number(incomeSum._sum.amountMinor ?? 0n)
-  const expenses = Number(expenseSum._sum.amountMinor ?? 0n)
-  const cardDebtAtEnd = Number(cardDebtEndSum._sum.deltaMinor ?? 0n)
-  const cardDebtAtStart = Number(cardDebtStartSum._sum.deltaMinor ?? 0n)
+  const income = incomeSum._sum.amountMinor ?? 0n
+  const expenses = expenseSum._sum.amountMinor ?? 0n
+  const cardDebtAtEnd = cardDebtEndSum._sum.deltaMinor ?? 0n
+  const cardDebtAtStart = cardDebtStartSum._sum.deltaMinor ?? 0n
   const netWorthAtEnd = endSnapshot?.netWorthMinor ?? 0n
   const netWorthAtStart = startSnapshot?.netWorthMinor ?? 0n
 
   return {
-    income,
-    expenses,
-    netCashFlow: income - expenses,
-    cardDebtChange: cardDebtAtEnd - cardDebtAtStart,
-    netWorthChange: Number(netWorthAtEnd - netWorthAtStart),
-    cardDebtAtEnd,
-    netWorthAtEnd: Number(netWorthAtEnd),
+    income: income.toString(),
+    expenses: expenses.toString(),
+    netCashFlow: (income - expenses).toString(),
+    cardDebtChange: (cardDebtAtEnd - cardDebtAtStart).toString(),
+    netWorthChange: (netWorthAtEnd - netWorthAtStart).toString(),
+    cardDebtAtEnd: cardDebtAtEnd.toString(),
+    netWorthAtEnd: netWorthAtEnd.toString(),
   }
 }
 
@@ -186,21 +188,21 @@ export async function computeCashFlow(
     _sum: { amountMinor: true },
   })
 
-  const incomeMap = new Map(incomeByDate.map((g) => [g.occurredOn.toISOString().slice(0, 10), Number(g._sum.amountMinor ?? 0n)]))
-  const expenseMap = new Map(expenseByDate.map((g) => [g.occurredOn.toISOString().slice(0, 10), Number(g._sum.amountMinor ?? 0n)]))
+  const incomeMap = new Map(incomeByDate.map((g) => [g.occurredOn.toISOString().slice(0, 10), g._sum.amountMinor ?? 0n]))
+  const expenseMap = new Map(expenseByDate.map((g) => [g.occurredOn.toISOString().slice(0, 10), g._sum.amountMinor ?? 0n]))
 
   // Build result with all dates in range
   const result: CashFlowItem[] = []
   let current = new Date(dateFrom)
   while (current <= dateTo) {
     const dateStr = current.toISOString().slice(0, 10)
-    const income = incomeMap.get(dateStr) ?? 0
-    const expenses = expenseMap.get(dateStr) ?? 0
+    const income = incomeMap.get(dateStr) ?? 0n
+    const expenses = expenseMap.get(dateStr) ?? 0n
     result.push({
       date: dateStr,
-      income,
-      expenses,
-      netFlow: income - expenses,
+      income: income.toString(),
+      expenses: expenses.toString(),
+      netFlow: (income - expenses).toString(),
     })
     current = new Date(current.getTime() + 24 * 60 * 60 * 1000)
   }
@@ -214,28 +216,34 @@ export async function computeSpendingByCategory(
   dateFrom: Date,
   dateTo: Date
 ): Promise<SpendingByCategory[]> {
-  const expenses = await prisma.transaction.groupBy({
-    by: ['categoryId'],
-    where: {
-      userId,
-      type: 'expense',
-      status: 'cleared',
-      occurredOn: { gte: dateFrom, lte: dateTo },
-    },
-    _sum: { amountMinor: true },
+  const transactions = await prisma.transaction.findMany({
+    where: { userId, type: 'expense', status: 'cleared', occurredOn: { gte: dateFrom, lte: dateTo } },
+    select: { categoryId: true, amountMinor: true, splits: { select: { categoryId: true, amountMinor: true } } },
   })
 
   const categories = await prisma.category.findMany({
-    where: { userId },
+    where: { OR: [{ userId }, { userId: null }] },
   })
 
   const categoryMap = new Map(categories.map((c) => [c.id, { name: c.name, budgetable: c.budgetable }]))
+  const totals = new Map<string, bigint>()
+  for (const transaction of transactions) {
+    if (transaction.splits.length > 0) for (const split of transaction.splits) totals.set(split.categoryId, (totals.get(split.categoryId) ?? 0n) + split.amountMinor)
+    else if (transaction.categoryId) totals.set(transaction.categoryId, (totals.get(transaction.categoryId) ?? 0n) + transaction.amountMinor)
+  }
 
-  return expenses.map((e) => ({
-    categoryId: e.categoryId as string,
-    categoryName: categoryMap.get(e.categoryId as string)?.name ?? 'Unknown',
-    spent: Number(e._sum.amountMinor ?? 0n),
-  }))
+  return [...totals].map(([categoryId, spent]) => ({ categoryId, categoryName: categoryMap.get(categoryId)?.name ?? 'Unknown', spent: spent.toString() }))
+}
+
+export async function computeSpendingByTag(prisma: PrismaClient, userId: string, dateFrom: Date, dateTo: Date): Promise<SpendingByTag[]> {
+  const rows = await prisma.transactionTagOnTransaction.findMany({ where: { tag: { userId }, transaction: { userId, type: 'expense', status: 'cleared', occurredOn: { gte: dateFrom, lte: dateTo } } }, select: { tagId: true, tag: { select: { name: true } }, transaction: { select: { amountMinor: true, splits: { select: { amountMinor: true } } } } } })
+  const totals = new Map<string, { name: string; amount: bigint }>()
+  for (const row of rows) {
+    const amount = row.transaction.splits.length > 0 ? row.transaction.splits.reduce((sum, split) => sum + split.amountMinor, 0n) : row.transaction.amountMinor
+    const current = totals.get(row.tagId)
+    totals.set(row.tagId, { name: row.tag.name, amount: (current?.amount ?? 0n) + amount })
+  }
+  return [...totals].map(([tagId, value]) => ({ tagId, tagName: value.name, spent: value.amount.toString() }))
 }
 
 export async function computeNetWorthTrend(
@@ -258,9 +266,9 @@ export async function computeNetWorthTrend(
       : new Date(s.snapshotDate).toISOString().slice(0, 10)
     return {
       date: snapshotDateStr,
-      assetTotal: Number(s.assetTotalMinor),
-      liabilityTotal: Number(s.liabilityTotalMinor),
-      netWorth: Number(s.netWorthMinor),
+      assetTotal: s.assetTotalMinor.toString(),
+      liabilityTotal: s.liabilityTotalMinor.toString(),
+      netWorth: s.netWorthMinor.toString(),
     }
   })
 }
@@ -297,33 +305,33 @@ export async function computeBudgetPerformance(
     _sum: { amountMinor: true },
   })
 
-  const spentMap = new Map(expensesByCategory.map((e) => [e.categoryId as string, Number(e._sum.amountMinor ?? 0n)]))
+  const spentMap = new Map(expensesByCategory.map((e) => [e.categoryId as string, e._sum.amountMinor ?? 0n]))
 
   const categories = period.allocations.map((a) => {
-    const spent = spentMap.get(a.categoryId) ?? 0
-    const allocated = Number(a.allocatedMinor)
+    const spent = spentMap.get(a.categoryId) ?? 0n
+    const allocated = a.allocatedMinor
     const remaining = allocated - spent
     return {
       categoryId: a.categoryId,
       categoryName: a.category.name,
-      allocated,
-      spent,
-      remaining,
-      utilization: allocated > 0 ? Math.round((spent / allocated) * 100) : 0,
+      allocated: allocated.toString(),
+      spent: spent.toString(),
+      remaining: remaining.toString(),
+      utilization: allocated > 0n ? Number((spent * 100n + allocated / 2n) / allocated) : 0,
     }
   })
 
-  const totalAllocated = categories.reduce((sum, c) => sum + c.allocated, 0)
-  const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0)
-  const totalRemaining = categories.reduce((sum, c) => sum + c.remaining, 0)
+  const totalAllocated = categories.reduce((sum, c) => sum + BigInt(c.allocated), 0n)
+  const totalSpent = categories.reduce((sum, c) => sum + BigInt(c.spent), 0n)
+  const totalRemaining = categories.reduce((sum, c) => sum + BigInt(c.remaining), 0n)
 
   return {
     periodStart: period.periodStart.toISOString().slice(0, 10),
     periodEnd: period.periodEnd.toISOString().slice(0, 10),
     categories,
-    totalAllocated,
-    totalSpent,
-    totalRemaining,
+    totalAllocated: totalAllocated.toString(),
+    totalSpent: totalSpent.toString(),
+    totalRemaining: totalRemaining.toString(),
   }
 }
 
@@ -340,11 +348,11 @@ export async function computeGoalsReport(
   return goals.map((g) => ({
     goalId: g.id,
     name: g.name,
-    target: Number(g.targetMinor),
-    current: Number(g.currentMinor),
+    target: g.targetMinor.toString(),
+    current: g.currentMinor.toString(),
     targetDate: g.targetDate.toISOString().slice(0, 10),
-    monthlyContribution: g.monthlyContributionMinor ? Number(g.monthlyContributionMinor) : undefined,
-    progress: g.targetMinor > 0n ? Math.round((Number(g.currentMinor) / Number(g.targetMinor)) * 100) : 0,
+    monthlyContribution: g.monthlyContributionMinor ? g.monthlyContributionMinor.toString() : undefined,
+    progress: g.targetMinor > 0n ? Number((g.currentMinor * 100n) / g.targetMinor) : 0,
     completed: g.completedDate != null,
     completedDate: g.completedDate?.toISOString().slice(0, 10),
   }))
@@ -414,11 +422,11 @@ export async function computeInvestmentsReport(
         instrumentId,
         ticker: instrument.ticker,
         name: instrument.name,
-        units: holding.units.toNumber(),
-        currentPrice: currentPriceMinor.toNumber(),
-        marketValue: marketValueMinor.toNumber(),
-        costBasis: holding.costBasisMinor.toNumber(),
-        gainLoss: gainLossMinor.toNumber(),
+        units: holding.units.toString(),
+        currentPrice: currentPriceMinor.round().toFixed(0),
+        marketValue: marketValueMinor.round().toFixed(0),
+        costBasis: holding.costBasisMinor.round().toFixed(0),
+        gainLoss: gainLossMinor.round().toFixed(0),
         gainLossPercent: Math.round(gainLossPercent.toNumber() * 100) / 100,
       })
     }

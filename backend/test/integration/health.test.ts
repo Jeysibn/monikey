@@ -16,6 +16,8 @@ describe('GET /api/v1/health/live', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/health/live' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ status: 'ok' })
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+    expect(res.headers['permissions-policy']).toContain('camera=()')
     await app.close()
   })
 
@@ -78,6 +80,15 @@ describe('unmatched routes and error mapping', () => {
     const app = await buildApp({ env, prisma })
     const res = await app.inject({ method: 'GET', url: '/docs' })
     expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('does not expose API documentation in production by default', async () => {
+    const productionEnv = loadEnv({ DATABASE_URL: 'postgresql://user:pass@localhost:5432/monikey', NODE_ENV: 'production', APP_ORIGIN: 'https://finance.example.test', SESSION_SECURE: 'true', LOG_LEVEL: 'silent' })
+    const prisma = fakePrisma(() => Promise.resolve())
+    const app = await buildApp({ env: productionEnv, prisma })
+    expect((await app.inject({ method: 'GET', url: '/openapi.json' })).statusCode).toBe(404)
+    expect((await app.inject({ method: 'GET', url: '/docs' })).statusCode).toBe(404)
     await app.close()
   })
 })

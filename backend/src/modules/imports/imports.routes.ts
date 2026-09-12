@@ -65,7 +65,7 @@ const addImportedTransactionSchema = z.object({
   providerTransactionId: z.string().optional(),
   title: z.string().min(1).max(255),
   description: z.string().optional(),
-  amountMinor: z.number().int().positive(),
+  amountMinor: z.union([z.string().regex(/^\d+$/), z.number().int().positive()]).transform((value) => BigInt(value)),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   currencyCode: z.string().length(3).default('PHP'),
   merchantName: z.string().optional(),
@@ -172,7 +172,7 @@ export async function createImportsRoutes(
         providerTransactionId: input.providerTransactionId,
         title: input.title,
         description: input.description,
-        amountMinor: BigInt(input.amountMinor),
+        amountMinor: input.amountMinor,
         occurredOn: new Date(`${input.occurredOn}T00:00:00Z`),
         currencyCode: input.currencyCode,
         merchantName: input.merchantName,
@@ -180,7 +180,7 @@ export async function createImportsRoutes(
 
       return reply.code(201).send({
         ...txn,
-        amountMinor: Number(txn.amountMinor),
+        amountMinor: txn.amountMinor.toString(),
       })
     }
   )
@@ -213,7 +213,7 @@ export async function createImportsRoutes(
       return reply.send(
         txns.map((txn) => ({
           ...txn,
-          amountMinor: Number(txn.amountMinor),
+          amountMinor: txn.amountMinor.toString(),
         }))
       )
     }

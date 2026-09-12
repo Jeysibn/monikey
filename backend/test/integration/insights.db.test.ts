@@ -96,8 +96,8 @@ describeIfDb('Insights Module (Phase 10)', () => {
 
       // Verify structure contains aggregated data
       expect(context.summary).toBeDefined()
-      expect(context.summary!.totalExpensesMinor).toBe(50000)
-      expect(context.summary!.totalIncomeMinor).toBe(0)
+      expect(context.summary!.totalExpensesMinor).toBe('50000')
+      expect(context.summary!.totalIncomeMinor).toBe('0')
 
       // Verify NO raw PII fields
       const contextStr = JSON.stringify(context)
@@ -185,8 +185,8 @@ describeIfDb('Insights Module (Phase 10)', () => {
       )
 
       // Contexts should be different
-      expect(context1.summary!.totalExpensesMinor).toBe(50000)
-      expect(context2.summary!.totalExpensesMinor).toBe(0) // User 2 has no expenses
+      expect(context1.summary!.totalExpensesMinor).toBe('50000')
+      expect(context2.summary!.totalExpensesMinor).toBe('0') // User 2 has no expenses
     } finally {
       await prisma.$disconnect()
     }
@@ -207,9 +207,9 @@ describeIfDb('Insights Module (Phase 10)', () => {
 
       // Stub adapter should return valid, testable structure
       expect(context.summary).toBeDefined()
-      expect(typeof context.summary!.totalIncomeMinor).toBe('number')
-      expect(typeof context.summary!.totalExpensesMinor).toBe('number')
-      expect(typeof context.summary!.netCashFlowMinor).toBe('number')
+      expect(typeof context.summary!.totalIncomeMinor).toBe('string')
+      expect(typeof context.summary!.totalExpensesMinor).toBe('string')
+      expect(typeof context.summary!.netCashFlowMinor).toBe('string')
     } finally {
       await prisma.$disconnect()
     }

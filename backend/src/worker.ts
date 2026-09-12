@@ -11,6 +11,8 @@ import { createQuoteProvider, refreshQuoteSnapshots, type RefreshQuoteSnapshotsP
 import { generateDailySnapshots } from './modules/reports/snapshots.worker.js'
 import { createFxModule } from './modules/fx/fx.module.js'
 import { createFxRatesProvider } from './integrations/adapters/frankfurter/index.js'
+import { claimDueJob, enqueueJob, failJob, finishJob } from './modules/worker/jobs.js'
+import { recordWorkerJob } from './modules/health/metrics.js'
 
 // Phase 1 worker process: proves out the separate-process topology (same
 // backend image, different command) required by compose.yaml. Job handlers
@@ -30,6 +32,8 @@ async function main(): Promise<void> {
   const runRecurring = async () => {
     const todayIso = new Date().toISOString().slice(0, 10)
     const today = new Date(todayIso)
+    const expiredSessions = await prisma.userSession.deleteMany({ where: { expiresAt: { lte: new Date() } } })
+    if (expiredSessions.count > 0) logger.info({ count: expiredSessions.count }, 'removed expired sessions')
     await enqueueDueBillNotifications(prisma, todayIso)
     if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
     await deliverNotificationOutbox(prisma, emailProvider)
@@ -65,8 +69,16 @@ async function main(): Promise<void> {
     if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
     if (failed > 0) logger.warn({ failed, todayIso }, 'some recurring items failed and were paused')
   }
-  await runRecurring()
-  logger.info('worker connected to database; recurring due-job runner registered')
+  const tick = async () => {
+    const todayIso = new Date().toISOString().slice(0, 10)
+    await enqueueJob(prisma, { type: 'daily-finance-maintenance', runAt: new Date(), dedupKey: `daily-finance-maintenance:${todayIso}` })
+    const jobId = await claimDueJob(prisma)
+    if (!jobId) return
+    try { await runRecurring(); await finishJob(prisma, jobId); recordWorkerJob('succeeded') }
+    catch (err) { await failJob(prisma, jobId, err); recordWorkerJob('failed'); logger.error({ err, jobId }, 'worker job failed') }
+  }
+  await tick()
+  logger.info('worker connected to database; durable job runner registered')
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down')
@@ -76,8 +88,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
-  // Keep the process alive; a real scheduler/queue loop arrives with JobModule.
-  setInterval(() => { void runRecurring().catch((err) => logger.error({ err }, 'recurring due-job run failed')) }, 60_000)
+  setInterval(() => { void tick().catch((err) => logger.error({ err }, 'job scheduler tick failed')) }, 60_000)
 }
 
 main().catch((err) => {

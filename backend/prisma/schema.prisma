@@ -82,8 +82,29 @@ model User {
   plaidItems         PlaidItem[]
   plaidLinkTokens    PlaidLinkToken[]
   importBatches      ImportBatch[]
+  reconciliations    Reconciliation[]
+  transactionRules   TransactionRule[]
+  transactionTags    TransactionTag[]
 
   @@map("users")
+}
+
+model WorkerJob {
+  id        String   @id @default(uuid()) @db.Uuid
+  type      String
+  runAt     DateTime @map("run_at") @db.Timestamptz(6)
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  maxAttempts Int    @default(5) @map("max_attempts")
+  lockedAt DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy String?   @map("locked_by")
+  lastError String?  @map("last_error")
+  dedupKey String?   @unique @map("dedup_key")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, runAt])
+  @@map("worker_jobs")
 }
 
 model UserSession {
@@ -171,6 +192,7 @@ model Category {
   transactions      Transaction[]
   budgetAllocations BudgetAllocation[]
   recurringItems    RecurringItem[]
+  transactionSplits TransactionSplit[]
 
   @@index([userId])
   @@map("categories")
@@ -203,9 +225,44 @@ model FinancialAccount {
   recurringItems    RecurringItem[]
   investmentTrades  InvestmentTrade[]
   dividends         Dividend[]
+  reconciliations   Reconciliation[]
 
   @@index([userId])
   @@map("financial_accounts")
+}
+
+model Reconciliation {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @map("user_id") @db.Uuid
+  accountId            String   @map("account_id") @db.Uuid
+  statementDate        DateTime @map("statement_date") @db.Date
+  statementBalanceMinor BigInt  @map("statement_balance_minor")
+  calculatedBalanceMinor BigInt @map("calculated_balance_minor")
+  differenceMinor      BigInt   @map("difference_minor")
+  status               String   @default("unreconciled")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId, accountId, statementDate])
+  @@map("reconciliations")
+}
+
+model TransactionRule {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String
+  enabled     Boolean  @default(true)
+  priority    Int      @default(100)
+  conditions  Json
+  actions     Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, enabled, priority])
+  @@map("transaction_rules")
 }
 
 model CreditCardDetail {
@@ -291,11 +348,51 @@ model Transaction {
   contributions        GoalContribution[]
   receipt              Receipt?                   @relation("ReceiptTransaction")
   posting              Posting?                   @relation("PostingTransaction")
+  splits               TransactionSplit[]
+  tags                 TransactionTagOnTransaction[]
 
   @@unique([userId, idempotencyKey], map: "transactions_user_id_idempotency_key_idx")
   @@index([userId, occurredOn])
   @@index([userId, categoryId, occurredOn])
   @@map("transactions")
+}
+
+model TransactionSplit {
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String   @map("transaction_id") @db.Uuid
+  categoryId    String   @map("category_id") @db.Uuid
+  amountMinor   BigInt   @map("amount_minor")
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  @@unique([transactionId, categoryId])
+  @@index([categoryId])
+  @@map("transaction_splits")
+}
+
+model TransactionTag {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions TransactionTagOnTransaction[]
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("transaction_tags")
+}
+
+model TransactionTagOnTransaction {
+  transactionId String @map("transaction_id") @db.Uuid
+  tagId         String @map("tag_id") @db.Uuid
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag           TransactionTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([transactionId, tagId])
+  @@index([tagId])
+  @@map("transaction_tag_assignments")
 }
 
 model TransactionBalanceEffect {
@@ -785,7 +882,7 @@ model ImportBatch {
   userId           String    @map("user_id") @db.Uuid
   importSourceId   String?   @map("import_source_id") // FK to PlaidItem.id if from Plaid, or null for manual CSV
   importSourceType String    @map("import_source_type") // "plaid_sandbox" or "csv_manual"
-  status           String    @default("reviewing") // reviewing, committed, archived, failed
+  status           String    @default("reviewing") // reviewing, validating, ready, committing, partially_committed, committed, archived, failed
   matchedAccountId String?   @map("matched_account_id") @db.Uuid // which account to post to after review
   totalCount       Int       @default(0) @map("total_count") // count of importedTransactions in this batch
   committedCount   Int       @default(0) @map("committed_count") // count that have been posted

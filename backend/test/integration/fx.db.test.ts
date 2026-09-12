@@ -5,8 +5,10 @@ import { createFxModule, FxRateRepository } from '../../src/modules/fx/fx.module
 import { FxRatesProvider, FxRateSet } from '../../src/integrations/interfaces/fxRatesProvider.js'
 
 const prisma = getPrismaClient()
+const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
+const describeIfDb = databaseUrl ? describe : describe.skip
 
-describe('FxRateRepository and FxRateService Integration', () => {
+describeIfDb('FxRateRepository and FxRateService Integration', () => {
   let repository: FxRateRepository
 
   beforeAll(async () => {

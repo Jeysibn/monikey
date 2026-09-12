@@ -6,13 +6,14 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { LedgerService } from '../ledger/ledger.service.js'
+import { minorUnitInput } from '../ledger/ledger.schemas.js'
 import { calculatePortfolio, type Dividend as EngineDividend, type Quote as EngineQuote, type Trade as EngineTrade } from './portfolioAccounting.js'
 import type { QuoteProvider } from './quotes.js'
 import type { FxRateService } from '../fx/fx.module.js'
 
-const tradeSchema = z.object({ ticker: z.string().trim().min(1).max(16), name: z.string().trim().min(1).max(160), assetClass: z.enum(['equity', 'etf', 'crypto', 'reit', 'bond']), sector: z.string().trim().min(1).max(80), type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: z.number().int().positive(), feeMinor: z.number().int().nonnegative().optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional(), idempotencyKey: z.string().max(128).nullable().optional() })
-const dividendSchema = z.object({ ticker: z.string().trim().min(1).max(16), amountMinor: z.number().int().positive(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional() })
-const updateTradeSchema = z.object({ type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: z.number().int().positive(), feeMinor: z.number().int().nonnegative().optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), note: z.string().max(500).nullable().optional() })
+const tradeSchema = z.object({ ticker: z.string().trim().min(1).max(16), name: z.string().trim().min(1).max(160), assetClass: z.enum(['equity', 'etf', 'crypto', 'reit', 'bond']), sector: z.string().trim().min(1).max(80), type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitInput.pipe(z.bigint().positive()), feeMinor: minorUnitInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional(), idempotencyKey: z.string().max(128).nullable().optional() })
+const dividendSchema = z.object({ ticker: z.string().trim().min(1).max(16), amountMinor: minorUnitInput.pipe(z.bigint().positive()), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional() })
+const updateTradeSchema = z.object({ type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitInput.pipe(z.bigint().positive()), feeMinor: minorUnitInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), note: z.string().max(500).nullable().optional() })
 const tradeIdParamSchema = z.object({ id: z.string().uuid('Invalid trade ID format') })
 
 // Phase 3 (plan §9): crypto trades 24/7 so a quote goes stale fast; equities/
@@ -58,8 +59,8 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // Authoritative accounting lives entirely in portfolioAccounting.ts —
     // this route only translates Prisma rows into the engine's plain input
     // types, then translates the engine's Decimal output into the wire
-    // response (Number(...) conversion happens only at that final
-    // serialization boundary, never mid-calculation).
+    // response serialization keeps minor-unit values as strings; only units
+    // and ratio percentages remain numeric presentation fields.
     type InstrumentWithOptionalQuotes = typeof dividends[number]['instrument'] & { quoteSnapshots?: typeof trades[number]['instrument']['quoteSnapshots'] }
     const instrumentById = new Map<string, InstrumentWithOptionalQuotes>(trades.map((trade) => [trade.instrumentId, trade.instrument]))
     for (const dividend of dividends) if (!instrumentById.has(dividend.instrumentId)) instrumentById.set(dividend.instrumentId, dividend.instrument)
@@ -123,7 +124,7 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       const needsConversion = nativeCurrencyCode !== baseCurrency
       const rate = needsConversion ? fxRateToBase.get(nativeCurrencyCode) : new Prisma.Decimal(1)
       const baseValuationUnavailable = needsConversion && rate === undefined
-      const marketValueMinor = holding.marketValueMinor?.round().toNumber() ?? null
+      const marketValueMinor = holding.marketValueMinor?.round() ?? null
       // Bug: the engine (portfolioAccounting.ts) computes
       // unrealizedPnlMinor = marketValueMinor(native currency, e.g. USD
       // cents from a crypto quote) - remainingCostBasisMinor(base currency,
@@ -140,31 +141,31 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       // *first*, then subtract the (already base-currency) cost basis.
       const marketValueBaseMinorForPnl = baseValuationUnavailable || marketValueMinor === null
         ? null
-        : new Prisma.Decimal(marketValueMinor).times(rate!).round().toNumber()
-      const unrealizedPnlMinor = holding.unrealizedPnlMinor?.round().toNumber() ?? null
+        : marketValueMinor.times(rate!).round()
+      const unrealizedPnlMinor = holding.unrealizedPnlMinor?.round() ?? null
       const unrealizedPnlBaseMinor = marketValueBaseMinorForPnl === null
         ? null
-        : marketValueBaseMinorForPnl - holding.remainingCostBasisMinor.round().toNumber()
+        : marketValueBaseMinorForPnl.minus(holding.remainingCostBasisMinor.round())
       return {
         instrumentId: holding.instrumentId,
         ticker: instrument.ticker,
         name: instrument.name,
         assetClass: instrument.assetClass,
         sector: instrument.sector,
-        units: holding.unitsHeld.toNumber(),
-        averageCostMinor: holding.averageCostMinor.round().toNumber(),
-        costBasisMinor: holding.remainingCostBasisMinor.round().toNumber(),
-        realizedPnlMinor: holding.realizedPnlMinor.round().toNumber(),
-        dividendsReceivedMinor: holding.dividendsReceivedMinor.round().toNumber(),
-        feesPaidMinor: holding.feesPaidMinor.round().toNumber(),
-        latestPriceMinor: holding.quote ? Math.round(Number(holding.quote.priceMinor)) : null,
+        units: holding.unitsHeld.toString(),
+        averageCostMinor: holding.averageCostMinor.round().toFixed(0),
+        costBasisMinor: holding.remainingCostBasisMinor.round().toFixed(0),
+        realizedPnlMinor: holding.realizedPnlMinor.round().toFixed(0),
+        dividendsReceivedMinor: holding.dividendsReceivedMinor.round().toFixed(0),
+        feesPaidMinor: holding.feesPaidMinor.round().toFixed(0),
+        latestPriceMinor: holding.quote?.priceMinor != null ? holding.quote.priceMinor.toString() : null,
         // Base-currency conversion of the raw quote price above, so a
         // "Current Price" column never shows a native (e.g. USD) figure
         // with a base-currency (e.g. ₱) symbol — null when conversion isn't
         // possible (see baseValuationUnavailable).
         latestPriceBaseMinor: baseValuationUnavailable || holding.quote == null
           ? null
-          : new Prisma.Decimal(Number(holding.quote.priceMinor)).times(rate!).round().toNumber(),
+          : new Prisma.Decimal(holding.quote.priceMinor.toString()).times(rate!).round().toFixed(0),
         // Trailing-24h change — percent is currency-agnostic (a ratio), so
         // it's passed through as-is; the currency figure needs the same
         // base-currency conversion as every other native-currency amount
@@ -173,16 +174,16 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
         change24hPct: holding.quote?.change24hPct != null ? Number(holding.quote.change24hPct) : null,
         change24hBaseMinor: baseValuationUnavailable || holding.quote?.change24hMinor == null
           ? null
-          : new Prisma.Decimal(Number(holding.quote.change24hMinor)).times(rate!).round().toNumber(),
+          : new Prisma.Decimal(holding.quote.change24hMinor.toString()).times(rate!).round().toFixed(0),
         // The above is a per-unit price move; scaled by units held for the
         // position's actual currency daily gain/loss, feeding the
         // portfolio-level "Today's Change" KPI below.
         dailyChangeBaseMinor: baseValuationUnavailable || holding.quote?.change24hMinor == null
           ? null
-          : new Prisma.Decimal(Number(holding.quote.change24hMinor)).times(rate!).times(holding.unitsHeld).round().toNumber(),
+          : new Prisma.Decimal(holding.quote.change24hMinor.toString()).times(rate!).times(holding.unitsHeld).round(),
         // Native-currency figures, straight from the quote — always present.
-        marketValueMinor,
-        unrealizedPnlMinor,
+        marketValueMinor: marketValueMinor?.toFixed(0) ?? null,
+        unrealizedPnlMinor: unrealizedPnlMinor?.toFixed(0) ?? null,
         nativeCurrencyCode,
         // Base-currency (display) figures — null when conversion isn't
         // possible. Converted via Decimal multiplication (never
@@ -191,8 +192,8 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
         // unrealizedPnlBaseMinor is NOT simply unrealizedPnlMinor*rate — see
         // the comment above marketValueBaseMinorForPnl for why that was
         // wrong (it scaled an already currency-mismatched subtraction).
-        marketValueBaseMinor: marketValueBaseMinorForPnl,
-        unrealizedPnlBaseMinor,
+        marketValueBaseMinor: marketValueBaseMinorForPnl?.toFixed(0) ?? null,
+        unrealizedPnlBaseMinor: unrealizedPnlBaseMinor?.toFixed(0) ?? null,
         baseValuationUnavailable,
         quoteSource: holding.quote?.source ?? 'trade',
         quoteFetchedAt: holding.quote?.fetchedAt.toISOString() ?? null,
@@ -206,37 +207,37 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // — better than silently dropping the position from the total) rather
     // than the engine's raw currency-agnostic sum, so a mixed PHP/USD
     // portfolio doesn't add unlike currencies together.
-    const portfolioValueBaseMinor = holdingsWithBase.reduce((sum, h) => sum + (h.marketValueBaseMinor ?? h.marketValueMinor ?? 0), 0)
-    const unrealizedPnlBaseMinor = holdingsWithBase.reduce((sum, h) => sum + (h.unrealizedPnlBaseMinor ?? h.unrealizedPnlMinor ?? 0), 0)
+    const portfolioValueBaseMinor = holdingsWithBase.reduce((sum, h) => sum.plus(h.marketValueBaseMinor ?? h.marketValueMinor ?? '0'), new Prisma.Decimal(0))
+    const unrealizedPnlBaseMinor = holdingsWithBase.reduce((sum, h) => sum.plus(h.unrealizedPnlBaseMinor ?? h.unrealizedPnlMinor ?? '0'), new Prisma.Decimal(0))
     const anyBaseValuationUnavailable = holdingsWithBase.some((h) => h.baseValuationUnavailable)
     // Skips holdings with no 24h figure (equities, or a not-yet-refreshed
     // quote) rather than treating "unknown" as "flat 0%" — a portfolio of
     // only such holdings correctly reports null, not a fabricated 0.
     const holdingsWithDailyChange = holdingsWithBase.filter((h) => h.dailyChangeBaseMinor != null)
     const todaysChangeBaseMinor = holdingsWithDailyChange.length > 0
-      ? holdingsWithDailyChange.reduce((sum, h) => sum + (h.dailyChangeBaseMinor ?? 0), 0)
+      ? holdingsWithDailyChange.reduce((sum, h) => sum.plus(h.dailyChangeBaseMinor ?? 0), new Prisma.Decimal(0))
       : null
     // Percent uses yesterday's implied portfolio value (today's value minus
     // today's move) as the denominator — the same "vs this time yesterday"
     // convention every tracker uses for a daily % badge — restricted to the
     // subset of holdings that actually have a 24h figure, so a holding with
     // no data doesn't silently distort the ratio for the ones that do.
-    const yesterdayValueForPct = holdingsWithDailyChange.reduce((sum, h) => sum + (h.marketValueBaseMinor ?? h.marketValueMinor ?? 0) - (h.dailyChangeBaseMinor ?? 0), 0)
-    const todaysChangePct = todaysChangeBaseMinor != null && yesterdayValueForPct > 0
+    const yesterdayValueForPct = holdingsWithDailyChange.reduce((sum, h) => sum.plus(new Prisma.Decimal(h.marketValueBaseMinor ?? h.marketValueMinor ?? '0')).minus(h.dailyChangeBaseMinor ?? 0), new Prisma.Decimal(0))
+    const todaysChangePct = todaysChangeBaseMinor != null && yesterdayValueForPct.greaterThan(0)
       ? new Prisma.Decimal(todaysChangeBaseMinor).dividedBy(yesterdayValueForPct).times(100).toDecimalPlaces(4).toNumber()
       : null
 
     return {
       baseCurrency,
       summary: {
-        portfolioValueMinor: portfolioValueBaseMinor,
-        remainingCostBasisMinor: portfolio.summary.remainingCostBasisMinor.round().toNumber(),
-        realizedPnlMinor: portfolio.summary.realizedPnlMinor.round().toNumber(),
-        unrealizedPnlMinor: unrealizedPnlBaseMinor,
-        todaysChangeMinor: todaysChangeBaseMinor,
+        portfolioValueMinor: portfolioValueBaseMinor.toFixed(0),
+        remainingCostBasisMinor: portfolio.summary.remainingCostBasisMinor.round().toFixed(0),
+        realizedPnlMinor: portfolio.summary.realizedPnlMinor.round().toFixed(0),
+        unrealizedPnlMinor: unrealizedPnlBaseMinor.toFixed(0),
+        todaysChangeMinor: todaysChangeBaseMinor?.toFixed(0) ?? null,
         todaysChangePct,
-        dividendsMinor: portfolio.summary.dividendsMinor.round().toNumber(),
-        feesMinor: portfolio.summary.feesMinor.round().toNumber(),
+        dividendsMinor: portfolio.summary.dividendsMinor.round().toFixed(0),
+        feesMinor: portfolio.summary.feesMinor.round().toFixed(0),
         // realizedPnlMinor/dividendsMinor aren't currency-tagged yet (no
         // per-trade currencyCode exists — see the module-level comment
         // above), so they're taken as-is (assumed base-currency, same as
@@ -245,11 +246,9 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
         // engine's raw portfolio.summary.totalReturnMinor here instead
         // would reintroduce the same mixed-currency bug this route now
         // fixes at the holding level, just at the summary level.
-        totalReturnMinor: portfolio.summary.realizedPnlMinor.round().toNumber()
-          + unrealizedPnlBaseMinor
-          + portfolio.summary.dividendsMinor.round().toNumber(),
+        totalReturnMinor: portfolio.summary.realizedPnlMinor.round().plus(unrealizedPnlBaseMinor).plus(portfolio.summary.dividendsMinor.round()).toFixed(0),
         totalReturnPct: portfolio.summary.remainingCostBasisMinor.greaterThan(0)
-          ? new Prisma.Decimal(portfolio.summary.realizedPnlMinor.round().toNumber() + unrealizedPnlBaseMinor + portfolio.summary.dividendsMinor.round().toNumber())
+          ? portfolio.summary.realizedPnlMinor.round().plus(unrealizedPnlBaseMinor).plus(portfolio.summary.dividendsMinor.round())
               .dividedBy(portfolio.summary.remainingCostBasisMinor)
               .times(100)
               .toDecimalPlaces(4)
@@ -259,8 +258,8 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       },
       holdings: holdingsWithBase,
       closedPositions: portfolio.closedPositions.map(toHolding),
-      trades: trades.map((trade) => ({ id: trade.id, userId: trade.userId, instrumentId: trade.instrumentId, ticker: trade.instrument.ticker, type: trade.type, units: Number(trade.units), priceMinor: Number(trade.priceMinor), feeMinor: Number(trade.feeMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10), cashAccountId: trade.cashAccountId, note: trade.note, idempotencyKey: trade.idempotencyKey, createdAt: trade.createdAt.toISOString() })),
-      dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })),
+      trades: trades.map((trade) => ({ id: trade.id, userId: trade.userId, instrumentId: trade.instrumentId, ticker: trade.instrument.ticker, type: trade.type, units: Number(trade.units), priceMinor: String(trade.priceMinor), feeMinor: String(trade.feeMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10), cashAccountId: trade.cashAccountId, note: trade.note, idempotencyKey: trade.idempotencyKey, createdAt: trade.createdAt.toISOString() })),
+      dividends: dividends.map((dividend) => ({ ...dividend, amountMinor: String(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })),
     }
   })
   app.post('/investments/trades', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
@@ -270,7 +269,7 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // feeMinor is a BigInt column — must be converted like the 201 response
     // below, or a duplicate submission (the very case this branch exists to
     // handle) 500s on `JSON.stringify` instead of returning the cached trade.
-    if (existing) return reply.code(200).send({ ...existing, units: Number(existing.units), priceMinor: Number(existing.priceMinor), feeMinor: Number(existing.feeMinor), occurredOn: existing.occurredOn.toISOString().slice(0, 10) })
+    if (existing) return reply.code(200).send({ ...existing, units: Number(existing.units), priceMinor: String(existing.priceMinor), feeMinor: String(existing.feeMinor), occurredOn: existing.occurredOn.toISOString().slice(0, 10) })
     // An instrument's ticker->identity mapping is fixed once created: a
     // trade against an existing ticker never changes its name/assetClass/
     // sector (previously it always did via the upsert's `update` clause,
@@ -297,13 +296,13 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     const heldUnits = previous.reduce((sum, trade) => sum.plus(trade.type === 'buy' ? new Prisma.Decimal(trade.units.toString()) : new Prisma.Decimal(trade.units.toString()).negated()), new Prisma.Decimal(0))
     const inputUnits = new Prisma.Decimal(input.units.toString())
     if (input.type === 'sell' && inputUnits.greaterThan(heldUnits)) return reply.code(422).send({ error: { code: 'INVESTMENT_OVERSELL', message: 'Sell quantity exceeds current units.', field: 'units', requestId: request.id } })
-    const feeMinor = input.feeMinor ?? 0
+    const feeMinor = input.feeMinor ?? 0n
     // Decimal multiplication before the single final rounding — never a
     // Number*Number chain (QA Attempt 1, Defect 2). The cash that actually
     // moves includes the fee: a buy costs gross + fee, a sell nets gross - fee
     // (plan §26 — fees are never tracked as a separate ordinary expense).
-    const grossAmount = inputUnits.times(input.priceMinor)
-    const cashAmount = (input.type === 'buy' ? grossAmount.plus(feeMinor) : grossAmount.minus(feeMinor)).round().toNumber()
+    const grossAmount = inputUnits.times(input.priceMinor.toString())
+    const cashAmountMinor = BigInt((input.type === 'buy' ? grossAmount.plus(feeMinor.toString()) : grossAmount.minus(feeMinor.toString())).round().toFixed(0))
     // Plan §14: buying/selling an investment is an asset transfer between
     // cash and the (ledger-external) investment position, not ordinary
     // spending or income — posting it as 'transfer' keeps it out of expense/
@@ -323,10 +322,10 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // made that later lookup permanently unable to find a match — see
     // TRADE_CASH_LINK_UNRESOLVED below).
     const linkKey = input.cashAccountId ? (input.idempotencyKey ?? randomUUID()) : (input.idempotencyKey ?? null)
-    const ledgerInput = input.cashAccountId ? { type: 'transfer' as const, title: `${input.type === 'buy' ? 'Investment buy' : 'Investment sell'} · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: input.type === 'buy' ? input.cashAccountId : null, toAccountId: input.type === 'sell' ? input.cashAccountId : null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: cashAmount, feeMinor: 0, currencyCode: request.user!.baseCurrency, source: 'manual' as const, status: 'cleared' as const, note: input.note ?? null, idempotencyKey: linkKey } : null
-    const createTrade = async (tx: any) => tx.investmentTrade.create({ data: { userId, instrumentId: instrument.id, type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), priceAmount: new Prisma.Decimal(input.priceMinor).dividedBy(100), feeMinor: BigInt(feeMinor), feeAmount: new Prisma.Decimal(feeMinor).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), cashAccountId: input.cashAccountId ?? null, note: input.note ?? null, idempotencyKey: linkKey }, include: { instrument: true } })
+    const ledgerInput = input.cashAccountId ? { type: 'transfer' as const, title: `${input.type === 'buy' ? 'Investment buy' : 'Investment sell'} · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: input.type === 'buy' ? input.cashAccountId : null, toAccountId: input.type === 'sell' ? input.cashAccountId : null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: cashAmountMinor, feeMinor: 0n, currencyCode: request.user!.baseCurrency, source: 'manual' as const, status: 'cleared' as const, note: input.note ?? null, idempotencyKey: linkKey } : null
+    const createTrade = async (tx: any) => tx.investmentTrade.create({ data: { userId, instrumentId: instrument.id, type: input.type, units: input.units, priceMinor: input.priceMinor, priceAmount: new Prisma.Decimal(input.priceMinor.toString()).dividedBy(100), feeMinor, feeAmount: new Prisma.Decimal(feeMinor.toString()).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), cashAccountId: input.cashAccountId ?? null, note: input.note ?? null, idempotencyKey: linkKey }, include: { instrument: true } })
     const trade = ledgerInput ? await options.ledgerService.postTransactionWithCallback(userId, ledgerInput, async (tx) => createTrade(tx)) : await createTrade(options.prisma)
-    return reply.code(201).send({ ...trade, units: Number(trade.units), priceMinor: Number(trade.priceMinor), feeMinor: Number(trade.feeMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })
+    return reply.code(201).send({ ...trade, units: Number(trade.units), priceMinor: String(trade.priceMinor), feeMinor: String(trade.feeMinor), occurredOn: trade.occurredOn.toISOString().slice(0, 10) })
   })
   app.patch<{ Params: { id: string } }>('/investments/trades/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const { id } = tradeIdParamSchema.parse(request.params)
@@ -347,9 +346,9 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     // trade that does have one, rather than silently letting the cash
     // account balance drift out of sync with the trade record.
     if (existing.cashAccountId) return reply.code(409).send({ error: { code: 'TRADE_HAS_LINKED_TRANSACTION', message: 'Cannot edit a trade linked to a cash account transaction.', requestId: request.id } })
-    const updatedFeeMinor = input.feeMinor !== undefined ? BigInt(input.feeMinor) : existing.feeMinor
-    const updated = await options.prisma.investmentTrade.update({ where: { id }, data: { type: input.type, units: input.units, priceMinor: BigInt(input.priceMinor), priceAmount: new Prisma.Decimal(input.priceMinor).dividedBy(100), feeMinor: updatedFeeMinor, feeAmount: new Prisma.Decimal(updatedFeeMinor.toString()).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null }, include: { instrument: true } })
-    return reply.send({ ...updated, units: Number(updated.units), priceMinor: Number(updated.priceMinor), feeMinor: Number(updated.feeMinor), occurredOn: updated.occurredOn.toISOString().slice(0, 10) })
+    const updatedFeeMinor = input.feeMinor !== undefined ? input.feeMinor : existing.feeMinor
+    const updated = await options.prisma.investmentTrade.update({ where: { id }, data: { type: input.type, units: input.units, priceMinor: input.priceMinor, priceAmount: new Prisma.Decimal(input.priceMinor.toString()).dividedBy(100), feeMinor: updatedFeeMinor, feeAmount: new Prisma.Decimal(updatedFeeMinor.toString()).dividedBy(100), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null }, include: { instrument: true } })
+    return reply.send({ ...updated, units: Number(updated.units), priceMinor: String(updated.priceMinor), feeMinor: String(updated.feeMinor), occurredOn: updated.occurredOn.toISOString().slice(0, 10) })
   })
   app.delete<{ Params: { id: string } }>('/investments/trades/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     const { id } = tradeIdParamSchema.parse(request.params)
@@ -376,7 +375,7 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
       // safe refusal below rather than risk reversing the wrong transaction.
       if (!linked && !existing.idempotencyKey) {
         const grossAmount = new Prisma.Decimal(existing.units.toString()).times(existing.priceMinor.toString())
-        const cashAmount = (existing.type === 'buy' ? grossAmount.plus(existing.feeMinor.toString()) : grossAmount.minus(existing.feeMinor.toString())).round().toNumber()
+        const cashAmount = BigInt((existing.type === 'buy' ? grossAmount.plus(existing.feeMinor.toString()) : grossAmount.minus(existing.feeMinor.toString())).round().toFixed(0))
         const candidates = await options.prisma.transaction.findMany({
           where: {
             userId,
@@ -409,11 +408,11 @@ export async function investmentsRoutes(app: FastifyInstance, options: { prisma:
     const input = dividendSchema.parse(request.body)
     const instrument = await options.prisma.instrument.findFirst({ where: { userId: request.user!.id, ticker: input.ticker } })
     if (!instrument) return reply.code(422).send({ error: { code: 'UNKNOWN_INSTRUMENT', message: 'Instrument not found.', field: 'ticker', requestId: request.id } })
-    const createDividend = async (tx: any) => tx.dividend.create({ data: { userId: request.user!.id, instrumentId: instrument.id, amountMinor: BigInt(input.amountMinor), occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null } })
+    const createDividend = async (tx: any) => tx.dividend.create({ data: { userId: request.user!.id, instrumentId: instrument.id, amountMinor: input.amountMinor, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), note: input.note ?? null } })
     const dividend = input.cashAccountId
-      ? await options.ledgerService.postTransactionWithCallback(request.user!.id, { type: 'income', title: `Dividend · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: null, toAccountId: input.cashAccountId, occurredOn: input.occurredOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0, currencyCode: request.user!.baseCurrency, source: 'manual', status: 'cleared', note: input.note ?? null }, async (tx) => createDividend(tx))
+      ? await options.ledgerService.postTransactionWithCallback(request.user!.id, { type: 'income', title: `Dividend · ${input.ticker}`, categoryId: null, goalId: null, fromAccountId: null, toAccountId: input.cashAccountId, occurredOn: input.occurredOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0n, currencyCode: request.user!.baseCurrency, source: 'manual', status: 'cleared', note: input.note ?? null }, async (tx) => createDividend(tx))
       : await createDividend(options.prisma)
-    return reply.code(201).send({ ...dividend, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })
+    return reply.code(201).send({ ...dividend, amountMinor: String(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10) })
   })
   // Plan §10/§18: on-demand refresh, scoped to only this user's instruments
   // (never every instrument in the table — that would leak cross-user quota

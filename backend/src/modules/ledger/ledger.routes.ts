@@ -44,12 +44,13 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
             type: { type: 'string', enum: ['income', 'expense', 'transfer'] },
             categoryId: { type: 'string', format: 'uuid' },
             accountId: { type: 'string', format: 'uuid' },
+            tagId: { type: 'string', format: 'uuid' },
           },
         },
       },
     },
     async (req) => {
-      const { cursor, limit, fromDate, toDate, type, categoryId, accountId } = req.query as any;
+      const { cursor, limit, fromDate, toDate, type, categoryId, accountId, tagId } = req.query as any;
       const result = await service.listTransactions({
         userId: req.user!.id,
         cursor,
@@ -59,6 +60,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
         type,
         categoryId,
         accountId,
+        tagId,
       });
       return result;
     }
@@ -77,6 +79,27 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
       return transaction;
     }
   );
+
+  f.get<{ Params: { id: string } }>('/transactions/:id/splits', async (req, reply) => {
+    const { id } = transactionIdParamSchema.parse(req.params)
+    const transaction = await prisma.transaction.findFirst({ where: { id, userId: req.user!.id }, include: { splits: true } })
+    if (!transaction) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Transaction not found.' } })
+    return transaction.splits.map((split) => ({ ...split, amountMinor: split.amountMinor.toString(), createdAt: split.createdAt.toISOString(), updatedAt: split.updatedAt.toISOString() }))
+  })
+
+  f.put<{ Params: { id: string } }>('/transactions/:id/splits', { preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }) }, async (req, reply) => {
+    const { id } = transactionIdParamSchema.parse(req.params)
+    const input = z.object({ splits: z.array(z.object({ categoryId: z.string().uuid(), amountMinor: z.string().regex(/^\d+$/), note: z.string().max(500).optional() })).min(2).max(50) }).parse(req.body)
+    const transaction = await prisma.transaction.findFirst({ where: { id, userId: req.user!.id } })
+    if (!transaction) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Transaction not found.' } })
+    const total = input.splits.reduce((sum, split) => sum + BigInt(split.amountMinor), 0n)
+    if (total !== transaction.amountMinor) return reply.code(422).send({ error: { code: 'INVALID_REQUEST', message: 'Split amounts must equal the parent transaction amount.' } })
+    const categoryIds = [...new Set(input.splits.map((split) => split.categoryId))]
+    const categories = await prisma.category.findMany({ where: { id: { in: categoryIds }, OR: [{ userId: req.user!.id }, { userId: null }] }, select: { id: true } })
+    if (categories.length !== categoryIds.length) return reply.code(422).send({ error: { code: 'UNKNOWN_CATEGORY', message: 'One or more split categories are not available.' } })
+    const splits = await prisma.$transaction(async (tx) => { await tx.transactionSplit.deleteMany({ where: { transactionId: id } }); return Promise.all(input.splits.map((split) => tx.transactionSplit.create({ data: { transactionId: id, categoryId: split.categoryId, amountMinor: BigInt(split.amountMinor), note: split.note } }))) })
+    return reply.send(splits.map((split) => ({ ...split, amountMinor: split.amountMinor.toString(), createdAt: split.createdAt.toISOString(), updatedAt: split.updatedAt.toISOString() })))
+  })
 
   // POST /transactions/:id/reverse
   f.post<{ Params: { id: string }; Body: ReverseTransactionInput }>(

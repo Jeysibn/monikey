@@ -16,33 +16,33 @@ import type { PrismaClient } from '@prisma/client'
 export interface PrivacySafeFinancialContext {
   /** Aggregated summary: total income/expenses/net cash flow for the requested period. */
   summary?: {
-    totalIncomeMinor: number
-    totalExpensesMinor: number
-    netCashFlowMinor: number
+    totalIncomeMinor: string
+    totalExpensesMinor: string
+    netCashFlowMinor: string
     period: { start: string; end: string }
   }
 
   /** Spending by category (aggregated totals only, no transaction details). */
   spendingByCategory?: Array<{
     categoryName: string
-    spentMinor: number
-    budgetMinor?: number
+    spentMinor: string
+    budgetMinor?: string
     utilizationPercent?: number
   }>
 
   /** Budget status for the period. */
   budgetStatus?: {
-    totalAllocatedMinor: number
-    totalSpentMinor: number
-    totalRemainingMinor: number
+    totalAllocatedMinor: string
+    totalSpentMinor: string
+    totalRemainingMinor: string
     utilizationPercent: number
   }
 
   /** Goal progress (aggregated). */
   goals?: Array<{
     name: string
-    targetMinor: number
-    currentMinor: number
+    targetMinor: string
+    currentMinor: string
     progressPercent: number
     targetDate: string
   }>
@@ -50,7 +50,7 @@ export interface PrivacySafeFinancialContext {
   /** Recurring items due/overdue. */
   recurring?: Array<{
     description: string
-    amountMinor: number
+    amountMinor: string
     dueDate: string
     isOverdue: boolean
     frequencyLabel: string
@@ -58,9 +58,9 @@ export interface PrivacySafeFinancialContext {
 
   /** Portfolio summary (only aggregated totals, no raw holdings). */
   portfolio?: {
-    totalMarketValueMinor: number
-    totalCostBasisMinor: number
-    totalGainLossMinor: number
+    totalMarketValueMinor: string
+    totalCostBasisMinor: string
+    totalGainLossMinor: string
     gainLossPercent: number
     instrumentCount: number
   }
@@ -117,13 +117,13 @@ export async function buildPrivacySafeFinancialContext(
     },
   })
 
-  const totalIncome = Number(incomeResult._sum.amountMinor ?? 0n)
-  const totalExpenses = Number(expenseResult._sum.amountMinor ?? 0n)
+  const totalIncome = incomeResult._sum.amountMinor ?? 0n
+  const totalExpenses = expenseResult._sum.amountMinor ?? 0n
 
   context.summary = {
-    totalIncomeMinor: totalIncome,
-    totalExpensesMinor: totalExpenses,
-    netCashFlowMinor: totalIncome - totalExpenses,
+    totalIncomeMinor: totalIncome.toString(),
+    totalExpensesMinor: totalExpenses.toString(),
+    netCashFlowMinor: (totalIncome - totalExpenses).toString(),
     period: {
       start: periodStart.toISOString().slice(0, 10),
       end: periodEnd.toISOString().slice(0, 10),
@@ -151,7 +151,7 @@ export async function buildPrivacySafeFinancialContext(
 
   context.spendingByCategory = spendingByCategory.map((s) => ({
     categoryName: categoryMap.get(s.categoryId as string) ?? 'Unknown',
-    spentMinor: Number(s._sum.amountMinor ?? 0n),
+    spentMinor: (s._sum.amountMinor ?? 0n).toString(),
   }))
 
   // 3. Budget status
@@ -165,15 +165,15 @@ export async function buildPrivacySafeFinancialContext(
   })
 
   if (budgetPeriod) {
-    const totalAllocated = budgetPeriod.allocations.reduce((sum, a) => sum + Number(a.allocatedMinor), 0)
-    const totalSpent = context.spendingByCategory!.reduce((sum, s) => sum + s.spentMinor, 0)
+    const totalAllocated = budgetPeriod.allocations.reduce((sum, a) => sum + a.allocatedMinor, 0n)
+    const totalSpent = context.spendingByCategory!.reduce((sum, s) => sum + BigInt(s.spentMinor), 0n)
     const totalRemaining = totalAllocated - totalSpent
 
     context.budgetStatus = {
-      totalAllocatedMinor: totalAllocated,
-      totalSpentMinor: totalSpent,
-      totalRemainingMinor: totalRemaining,
-      utilizationPercent: totalAllocated > 0 ? Math.round((totalSpent / totalAllocated) * 100) : 0,
+      totalAllocatedMinor: totalAllocated.toString(),
+      totalSpentMinor: totalSpent.toString(),
+      totalRemainingMinor: totalRemaining.toString(),
+      utilizationPercent: totalAllocated > 0n ? Number((totalSpent * 100n) / totalAllocated) : 0,
     }
   }
 
@@ -184,9 +184,9 @@ export async function buildPrivacySafeFinancialContext(
 
   context.goals = goals.map((g) => ({
     name: g.name,
-    targetMinor: Number(g.targetMinor),
-    currentMinor: Number(g.currentMinor),
-    progressPercent: g.targetMinor > 0n ? Math.round((Number(g.currentMinor) / Number(g.targetMinor)) * 100) : 0,
+    targetMinor: g.targetMinor.toString(),
+    currentMinor: g.currentMinor.toString(),
+    progressPercent: g.targetMinor > 0n ? Number((g.currentMinor * 100n) / g.targetMinor) : 0,
     targetDate: g.targetDate.toISOString().slice(0, 10),
   }))
 
@@ -203,7 +203,7 @@ export async function buildPrivacySafeFinancialContext(
 
   context.recurring = recurringItems.map((r) => ({
     description: r.merchant,
-    amountMinor: Number(r.amountMinor),
+    amountMinor: r.amountMinor.toString(),
     dueDate: r.nextDueDate.toISOString().slice(0, 10),
     isOverdue: r.nextDueDate.toISOString().slice(0, 10) < todayStr,
     frequencyLabel: r.frequency.replace(/_/g, ' '),
@@ -246,15 +246,13 @@ export async function buildPrivacySafeFinancialContext(
       totalMarketValueMinor += BigInt(quote.priceMinor.toString())
     }
 
-    const totalCostBasisMinorNum = Number(totalCostBasisMinor)
-    const totalMarketValueMinorNum = Number(totalMarketValueMinor)
-    const gainLoss = totalMarketValueMinorNum - totalCostBasisMinorNum
+    const gainLoss = totalMarketValueMinor - totalCostBasisMinor
 
     context.portfolio = {
-      totalMarketValueMinor: totalMarketValueMinorNum,
-      totalCostBasisMinor: totalCostBasisMinorNum,
-      totalGainLossMinor: gainLoss,
-      gainLossPercent: totalCostBasisMinorNum > 0 ? Math.round((gainLoss / totalCostBasisMinorNum) * 100 * 100) / 100 : 0,
+      totalMarketValueMinor: totalMarketValueMinor.toString(),
+      totalCostBasisMinor: totalCostBasisMinor.toString(),
+      totalGainLossMinor: gainLoss.toString(),
+      gainLossPercent: totalCostBasisMinor > 0n ? Number((gainLoss * 10000n) / totalCostBasisMinor) / 100 : 0,
       instrumentCount: instrumentIds.size,
     }
   }

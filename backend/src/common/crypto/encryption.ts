@@ -11,6 +11,7 @@ const TAG_BYTES = 16
 const KEY_LENGTH = 32
 const PBKDF2_ITERATIONS = 100000
 const PBKDF2_DIGEST = 'sha256'
+const ENVELOPE_VERSION = 'v1'
 
 /**
  * Derive a 256-bit key from a user-specific input and a server secret.
@@ -44,7 +45,7 @@ export function encrypt(plaintext: string, key: Buffer): string {
 
   // Pack IV, tag, and ciphertext; encode as base64 for storage/transmission
   const packed = Buffer.concat([iv, tag, encrypted])
-  return packed.toString('base64')
+  return `${ENVELOPE_VERSION}.${packed.toString('base64')}`
 }
 
 /**
@@ -55,7 +56,14 @@ export function encrypt(plaintext: string, key: Buffer): string {
  * @throws Error if decryption fails (e.g., wrong key, corrupted data, tampered with)
  */
 export function decrypt(ciphertext: string, key: Buffer): string {
-  const packed = Buffer.from(ciphertext, 'base64')
+  // Values written before versioned envelopes were introduced are still
+  // readable. New values carry an explicit version so future key/envelope
+  // formats can be added without guessing from ciphertext bytes.
+  const separator = ciphertext.indexOf('.')
+  const encoded = separator > 0 ? ciphertext.slice(separator + 1) : ciphertext
+  const version = separator > 0 ? ciphertext.slice(0, separator) : null
+  if (version !== null && version !== ENVELOPE_VERSION) throw new Error('Unsupported ciphertext envelope version')
+  const packed = Buffer.from(encoded, 'base64')
 
   if (packed.length < IV_BYTES + TAG_BYTES) {
     throw new Error('Invalid ciphertext: too short')

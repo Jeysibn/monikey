@@ -5,9 +5,10 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
+import { minorUnitInput } from '../ledger/ledger.schemas.js'
 
-const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: z.number().int().nonnegative().default(0) })
-const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: z.number().int().nonnegative() })
+const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: minorUnitInput.default(0n) })
+const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: minorUnitInput })
 const categorySchema = z.object({ name: z.string().trim().min(1).max(100), color: z.string().trim().min(1).max(64), budgetable: z.boolean().default(true), allowsIncome: z.boolean().default(false), allowsExpense: z.boolean().default(true) })
 const updateCategorySchema = z.object({ name: z.string().trim().min(1).max(100).optional(), color: z.string().trim().min(1).max(64).optional() })
 
@@ -42,11 +43,11 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
   }
   return {
     ...period,
-    incomePoolMinor: Number(period.incomePoolMinor),
+    incomePoolMinor: String(period.incomePoolMinor),
     allocations: period.allocations.map((a) => ({
       ...a,
-      allocatedMinor: Number(a.allocatedMinor),
-      spentMinor: Number(spentByCategory.get(a.categoryId) ?? 0n),
+      allocatedMinor: String(a.allocatedMinor),
+      spentMinor: String(spentByCategory.get(a.categoryId) ?? 0n),
     })),
   }
 }

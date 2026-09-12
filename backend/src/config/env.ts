@@ -13,9 +13,12 @@ const booleanFromString = z
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  MONIKEY_DEMO_MODE: booleanFromString.default(false),
+  MONIKEY_ALLOW_DEMO_SEED: booleanFromString.default(false),
   API_PORT: z.coerce.number().int().positive().default(3000),
   APP_ORIGIN: z.string().url().default('http://localhost:8080'),
   APP_TIMEZONE: z.string().min(1).default('Asia/Manila'),
+  PUBLIC_API_DOCS: booleanFromString.default(false),
 
   // QA Attempt 1, Finding 5: a bare `.min(1)` accepted any non-empty string
   // ("not-a-url-at-all"), so a badly-configured DATABASE_URL still passed
@@ -123,7 +126,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join('\n')
     throw new EnvValidationError(`Invalid environment configuration:\n${issues}`)
   }
-  return result.data
+  const env = result.data
+  const issues: string[] = []
+  if (env.NODE_ENV === 'production' && !env.APP_ORIGIN.startsWith('https://')) issues.push('APP_ORIGIN must use HTTPS in production')
+  if (env.NODE_ENV === 'production' && env.MONIKEY_DEMO_MODE) issues.push('MONIKEY_DEMO_MODE must be false in production')
+  if (env.NODE_ENV === 'production' && env.EMAIL_PROVIDER === 'resend' && !env.RESEND_API_KEY) issues.push('RESEND_API_KEY is required when EMAIL_PROVIDER=resend')
+  if (env.NODE_ENV === 'production' && env.OCR_PROVIDER === 'ocrspace' && !env.OCRSPACE_API_KEY) issues.push('OCRSPACE_API_KEY is required when OCR_PROVIDER=ocrspace')
+  if (env.NODE_ENV === 'production' && env.BANK_PROVIDER !== 'stub' && !env.ENCRYPTION_SECRET) issues.push('ENCRYPTION_SECRET is required for non-stub bank providers')
+  if (env.NODE_ENV === 'production' && env.QUOTE_PROVIDER === 'live' && !env.ALPHA_VANTAGE_API_KEY) issues.push('ALPHA_VANTAGE_API_KEY is required for live quote provider')
+  if (issues.length) throw new EnvValidationError(`Invalid environment configuration:\n${issues.map((issue) => `  - ${issue}`).join('\n')}`)
+  return env
 }
 
 /** Cached accessor for use outside of explicit dependency injection (e.g. one-off scripts). */

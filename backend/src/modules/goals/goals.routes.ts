@@ -44,7 +44,7 @@ export async function goalsRoutes(fastify: FastifyInstance, options: { service: 
     // D8: Validate UUID path parameter
     const { id } = goalIdParamSchema.parse(request.params)
     const input = fundGoalSchema.parse(request.body)
-    const result = await ledgerService.postTransaction(request.user!.id, { type: 'transfer', title: 'Goal funding', categoryId: null, goalId: id, fromAccountId: input.sourceAccountId, toAccountId: null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0, currencyCode: 'PHP', source: 'manual', status: 'cleared', note: null, idempotencyKey: input.idempotencyKey })
+    const result = await ledgerService.postTransaction(request.user!.id, { type: 'transfer', title: 'Goal funding', categoryId: null, goalId: id, fromAccountId: input.sourceAccountId, toAccountId: null, occurredOn: input.occurredOn, occurredTime: null, amountMinor: BigInt(input.amountMinor), feeMinor: 0n, currencyCode: 'PHP', source: 'manual', status: 'cleared', note: null, idempotencyKey: input.idempotencyKey })
     return reply.code(201).send(result)
   })
 }

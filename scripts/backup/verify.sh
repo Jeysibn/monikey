@@ -19,7 +19,12 @@ for backup_file in "$@"; do
   case "${backup_file}" in
     *.sql.gz)
       gzip -t "${backup_file}"
-      gzip -dc "${backup_file}" | head -n 1 | grep -Eq '^(--|SET|\\\\)' || {
+      # Consume the complete stream. With pipefail, `head -n 1` would close
+      # early and turn gzip's expected SIGPIPE into a false verification error.
+      gzip -dc "${backup_file}" | awk '
+        NR == 1 { plausible = ($0 ~ /^(--|SET|\\)/) }
+        END { exit plausible ? 0 : 1 }
+      ' || {
         echo "ERROR: ${backup_file} is not a plausible PostgreSQL SQL dump" >&2
         exit 1
       }

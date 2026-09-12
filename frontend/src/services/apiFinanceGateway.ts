@@ -23,6 +23,7 @@ type ApiTransaction = paths['/transactions']['post']['responses'][201]['content'
 type TransactionMutationResponse = paths['/transactions']['post']['responses'][201]['content']['application/json']
 type ReverseTransactionResponse = paths['/transactions/{id}/reverse']['post']['responses'][201]['content']['application/json']
 type ApiGoal = paths['/goals']['post']['responses'][201]['content']['application/json']
+type ApiCategory = paths['/categories']['post']['responses'][201]['content']['application/json']
 type ApiBudgetPeriod = paths['/budgets']['get']['responses'][200]['content']['application/json'][number]
 type ApiBudgetAllocation = ApiBudgetPeriod['allocations'][number]
 type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: string; amountMinor?: string; occurredOn: string; note: string | null }
@@ -202,13 +203,13 @@ export class ApiFinanceGateway implements FinanceGateway {
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 
-  async addCategory(input: { name: string; color?: string; transactionKinds?: ('income' | 'expense')[] }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }> {
+  async addCategory(input: { name: string; color?: string; transactionKinds?: ('income' | 'expense')[] }, signal?: AbortSignal): Promise<ApiCategory> {
     const kinds = input.transactionKinds?.length ? input.transactionKinds : ['expense']
     return this.request('/categories', { method: 'POST', signal, body: JSON.stringify({ name: input.name, color: input.color ?? 'var(--cyan)', budgetable: kinds.includes('expense'), allowsIncome: kinds.includes('income'), allowsExpense: kinds.includes('expense') }) })
   }
 
-  async updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<{ id: string; name: string; color: string }> {
-    return this.request<{ id: string; name: string; color: string }>(`/categories/${categoryId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
+  async updateCategory(categoryId: string, input: { name?: string; color?: string }, signal?: AbortSignal): Promise<ApiCategory> {
+    return this.request<ApiCategory>(`/categories/${categoryId}`, { method: 'PATCH', signal, body: JSON.stringify(input) })
   }
 
   // Allocation isn't part of the category record — it lives on the current

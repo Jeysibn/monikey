@@ -15,6 +15,9 @@ const updateCategorySchema = z.object({ name: z.string().trim().min(1).max(100).
 // UUID validation for path parameters (D8: malformed UUID handling)
 const budgetIdParamSchema = z.object({ id: z.string().uuid('Invalid budget ID format') })
 const categoryIdParamSchema = z.object({ id: z.string().uuid('Invalid category ID format') })
+const categoryJson = { type: 'object', required: ['id', 'userId', 'name', 'color', 'budgetable', 'allowsIncome', 'allowsExpense', 'archivedAt', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, name: { type: 'string' }, color: { type: 'string' }, budgetable: { type: 'boolean' }, allowsIncome: { type: 'boolean' }, allowsExpense: { type: 'boolean' }, archivedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const categoryBody = { type: 'object', required: ['name', 'color'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, color: { type: 'string', minLength: 1, maxLength: 64 }, budgetable: { type: 'boolean' }, allowsIncome: { type: 'boolean' }, allowsExpense: { type: 'boolean' } } } as const
+const categoryUpdateBody = { type: 'object', additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, color: { type: 'string', minLength: 1, maxLength: 64 } } } as const
 
 type PeriodWithAllocations = { id: string; userId: string; periodStart: Date; periodEnd: Date; incomePoolMinor: bigint; createdAt: Date; updatedAt: Date; allocations: Array<{ id: string; budgetPeriodId: string; categoryId: string; allocatedMinor: bigint; createdAt: Date; updatedAt: Date }> }
 
@@ -61,12 +64,12 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
 export async function budgetRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string }) {
   const { prisma, appOrigin } = options
   app.addHook('preHandler', authGuard({ prisma }))
-  app.post('/categories', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post('/categories', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { body: categoryBody, response: { 201: categoryJson } } }, async (request, reply) => {
     const input = categorySchema.parse(request.body)
     const category = await prisma.category.create({ data: { userId: request.user!.id, ...input } })
     return reply.code(201).send(category)
   })
-  app.patch<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, body: categoryUpdateBody, response: { 200: categoryJson, 404: { type: 'object' } } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = categoryIdParamSchema.parse(request.params)
     const input = updateCategorySchema.parse(request.body)

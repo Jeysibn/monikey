@@ -1481,14 +1481,40 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        color: string;
+                        budgetable?: boolean;
+                        allowsIncome?: boolean;
+                        allowsExpense?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            userId: string | null;
+                            name: string;
+                            color: string;
+                            budgetable: boolean;
+                            allowsIncome: boolean;
+                            allowsExpense: boolean;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1539,14 +1565,46 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        color?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            userId: string | null;
+                            name: string;
+                            color: string;
+                            budgetable: boolean;
+                            allowsIncome: boolean;
+                            allowsExpense: boolean;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
                 };
             };
         };

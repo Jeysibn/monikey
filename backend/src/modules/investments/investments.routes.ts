@@ -6,14 +6,14 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { LedgerService } from '../ledger/ledger.service.js'
-import { minorUnitInput } from '../ledger/ledger.schemas.js'
+import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
 import { calculatePortfolio, type Dividend as EngineDividend, type Quote as EngineQuote, type Trade as EngineTrade } from './portfolioAccounting.js'
 import type { QuoteProvider } from './quotes.js'
 import type { FxRateService } from '../fx/fx.module.js'
 
-const tradeSchema = z.object({ ticker: z.string().trim().min(1).max(16), name: z.string().trim().min(1).max(160), assetClass: z.enum(['equity', 'etf', 'crypto', 'reit', 'bond']), sector: z.string().trim().min(1).max(80), type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitInput.pipe(z.bigint().positive()), feeMinor: minorUnitInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional(), idempotencyKey: z.string().max(128).nullable().optional() })
-const dividendSchema = z.object({ ticker: z.string().trim().min(1).max(16), amountMinor: minorUnitInput.pipe(z.bigint().positive()), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional() })
-const updateTradeSchema = z.object({ type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitInput.pipe(z.bigint().positive()), feeMinor: minorUnitInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), note: z.string().max(500).nullable().optional() })
+const tradeSchema = z.object({ ticker: z.string().trim().min(1).max(16), name: z.string().trim().min(1).max(160), assetClass: z.enum(['equity', 'etf', 'crypto', 'reit', 'bond']), sector: z.string().trim().min(1).max(80), type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitTransportInput.pipe(z.bigint().positive()), feeMinor: minorUnitTransportInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional(), idempotencyKey: z.string().max(128).nullable().optional() })
+const dividendSchema = z.object({ ticker: z.string().trim().min(1).max(16), amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashAccountId: z.string().uuid().nullable().optional(), note: z.string().max(500).nullable().optional() })
+const updateTradeSchema = z.object({ type: z.enum(['buy', 'sell']), units: z.number().positive(), priceMinor: minorUnitTransportInput.pipe(z.bigint().positive()), feeMinor: minorUnitTransportInput.pipe(z.bigint().nonnegative()).optional(), occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), note: z.string().max(500).nullable().optional() })
 const tradeIdParamSchema = z.object({ id: z.string().uuid('Invalid trade ID format') })
 
 // Phase 3 (plan §9): crypto trades 24/7 so a quote goes stale fast; equities/

@@ -10,7 +10,7 @@ import type { CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } fr
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const idParamSchema = z.object({ id: z.string().uuid('Invalid account ID format') });
-const minorInputJsonSchema = { anyOf: [{ type: 'string', pattern: '^-?\\d+$' }, { type: 'integer' }] } as const;
+const minorInputJsonSchema = { type: 'string', pattern: '^\\d+$' } as const;
 const creditCardDetailResponseSchema = {
   type: 'object',
   required: ['network', 'creditLimitMinor', 'dueDay', 'minimumPaymentMinor', 'createdAt', 'updatedAt'],

@@ -65,7 +65,7 @@ const addImportedTransactionSchema = z.object({
   providerTransactionId: z.string().optional(),
   title: z.string().min(1).max(255),
   description: z.string().optional(),
-  amountMinor: z.union([z.string().regex(/^\d+$/), z.number().int().positive()]).transform((value) => BigInt(value)),
+  amountMinor: z.string().regex(/^\d+$/, 'amountMinor must be a non-negative integer string').transform((value) => BigInt(value)),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   currencyCode: z.string().length(3).default('PHP'),
   merchantName: z.string().optional(),

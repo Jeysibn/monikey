@@ -7,6 +7,8 @@ export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring', 'im
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);
 
 export const minorUnitInput = z.union([z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string'), z.number().int().nonnegative()]).transform((value) => BigInt(value))
+/** JSON/API money input. Numbers are intentionally rejected at this boundary. */
+export const minorUnitTransportInput = z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string').transform((value) => BigInt(value))
 
 export const postTransactionSchema = z.object({
   type: transactionTypeSchema,
@@ -17,8 +19,8 @@ export const postTransactionSchema = z.object({
   toAccountId: z.string().uuid().nullable().optional(),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   occurredTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-  amountMinor: minorUnitInput.pipe(z.bigint().positive()),
-  feeMinor: minorUnitInput.default(0n),
+  amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()),
+  feeMinor: minorUnitTransportInput.default(0n),
   currencyCode: z.string().length(3).default('PHP'),
   source: transactionSourceSchema.default('manual'),
   status: transactionStatusSchema.default('cleared'),
@@ -35,8 +37,8 @@ export const updateTransactionSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   occurredTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-  amountMinor: minorUnitInput.pipe(z.bigint().positive()).optional(),
-  feeMinor: minorUnitInput.optional(),
+  amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()).optional(),
+  feeMinor: minorUnitTransportInput.optional(),
   status: transactionStatusSchema.optional(),
   note: z.string().nullable().optional(),
 });

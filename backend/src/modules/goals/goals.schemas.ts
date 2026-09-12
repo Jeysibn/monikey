@@ -1,24 +1,24 @@
 import { z } from 'zod'
-import { minorUnitInput } from '../ledger/ledger.schemas.js'
+import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
 
 export const createGoalSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  targetMinor: minorUnitInput.pipe(z.bigint().positive()),
+  targetMinor: minorUnitTransportInput.pipe(z.bigint().positive()),
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  monthlyContributionMinor: minorUnitInput.pipe(z.bigint().positive()).nullable().optional(),
+  monthlyContributionMinor: minorUnitTransportInput.pipe(z.bigint().positive()).nullable().optional(),
   currencyCode: z.string().length(3).default('PHP'),
 })
 
 export const updateGoalSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  targetMinor: minorUnitInput.pipe(z.bigint().positive()).optional(),
+  targetMinor: minorUnitTransportInput.pipe(z.bigint().positive()).optional(),
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  monthlyContributionMinor: minorUnitInput.pipe(z.bigint().positive()).nullable().optional(),
+  monthlyContributionMinor: minorUnitTransportInput.pipe(z.bigint().positive()).nullable().optional(),
 })
 
 export const fundGoalSchema = z.object({
   sourceAccountId: z.string().uuid(),
-  amountMinor: minorUnitInput.pipe(z.bigint().positive()),
+  amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   idempotencyKey: z.string().max(128).nullable().optional(),
 })

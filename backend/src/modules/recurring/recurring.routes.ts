@@ -4,13 +4,13 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { LedgerService } from '../ledger/ledger.service.js'
-import { minorUnitInput } from '../ledger/ledger.schemas.js'
+import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
 import { detectMonthlyCandidates } from './detection.js'
 
 const frequency = z.enum(['weekly', 'monthly', 'yearly'])
-const createSchema = z.object({ merchant: z.string().trim().min(1).max(160), amountMinor: minorUnitInput.pipe(z.bigint().positive()), frequency, nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), accountId: z.string().uuid(), categoryId: z.string().uuid(), autopay: z.boolean().default(false) })
+const createSchema = z.object({ merchant: z.string().trim().min(1).max(160), amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()), frequency, nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), accountId: z.string().uuid(), categoryId: z.string().uuid(), autopay: z.boolean().default(false) })
 const statusSchema = z.object({ status: z.enum(['active', 'paused']) })
-const updateSchema = z.object({ merchant: z.string().trim().min(1).max(160).optional(), amountMinor: minorUnitInput.pipe(z.bigint().positive()).optional(), frequency: frequency.optional(), nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), accountId: z.string().uuid().optional(), categoryId: z.string().uuid().optional(), autopay: z.boolean().optional() })
+const updateSchema = z.object({ merchant: z.string().trim().min(1).max(160).optional(), amountMinor: minorUnitTransportInput.pipe(z.bigint().positive()).optional(), frequency: frequency.optional(), nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), accountId: z.string().uuid().optional(), categoryId: z.string().uuid().optional(), autopay: z.boolean().optional() })
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const recurringIdParamSchema = z.object({ id: z.string().uuid('Invalid recurring item ID format') })

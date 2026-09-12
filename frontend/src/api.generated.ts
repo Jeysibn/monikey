@@ -977,7 +977,7 @@ export interface paths {
                         /** @default PHP */
                         currencyCode?: string;
                         /** @default 0 */
-                        openingBalanceMinor?: string | number;
+                        openingBalanceMinor?: string;
                         lastFour?: string | null;
                     };
                 };
@@ -1058,14 +1058,14 @@ export interface paths {
                         /** @default PHP */
                         currencyCode?: string;
                         /** @default 0 */
-                        openingBalanceMinor?: string | number;
+                        openingBalanceMinor?: string;
                         lastFour?: string | null;
                         /** @enum {string} */
                         network: "visa" | "mastercard";
-                        creditLimitMinor: string | number;
+                        creditLimitMinor: string;
                         dueDay: number;
                         /** @default 0 */
-                        minimumPaymentMinor?: string | number;
+                        minimumPaymentMinor?: string;
                     };
                 };
             };
@@ -1149,7 +1149,7 @@ export interface paths {
                         name?: string;
                         institution?: string | null;
                         lastFour?: string | null;
-                        currentBalanceMinor?: string | number;
+                        currentBalanceMinor?: string;
                     };
                 };
             };

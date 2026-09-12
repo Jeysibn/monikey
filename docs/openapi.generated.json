@@ -1807,15 +1807,8 @@
                     "default": "PHP"
                   },
                   "openingBalanceMinor": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^-?\\d+$"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ],
+                    "type": "string",
+                    "pattern": "^\\d+$",
                     "default": "0"
                   },
                   "lastFour": {
@@ -2046,15 +2039,8 @@
                     "default": "PHP"
                   },
                   "openingBalanceMinor": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^-?\\d+$"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ],
+                    "type": "string",
+                    "pattern": "^\\d+$",
                     "default": "0"
                   },
                   "lastFour": {
@@ -2077,15 +2063,8 @@
                     ]
                   },
                   "creditLimitMinor": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^-?\\d+$"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ]
+                    "type": "string",
+                    "pattern": "^\\d+$"
                   },
                   "dueDay": {
                     "type": "integer",
@@ -2093,15 +2072,8 @@
                     "maximum": 31
                   },
                   "minimumPaymentMinor": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^-?\\d+$"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ],
+                    "type": "string",
+                    "pattern": "^\\d+$",
                     "default": "0"
                   }
                 }
@@ -2320,15 +2292,8 @@
                     ]
                   },
                   "currentBalanceMinor": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^-?\\d+$"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ]
+                    "type": "string",
+                    "pattern": "^\\d+$"
                   }
                 }
               }

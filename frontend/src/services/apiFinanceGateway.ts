@@ -131,13 +131,13 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account> {
-    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100), lastFour: input.lastFour ?? null }
+    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100).toString(), lastFour: input.lastFour ?? null }
     const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify(payload) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
-    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100), creditLimitMinor: Math.round(input.limit * 100), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100) }
+    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100).toString(), creditLimitMinor: Math.round(input.limit * 100).toString(), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100).toString() }
     const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify(payload) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
@@ -145,14 +145,14 @@ export class ApiFinanceGateway implements FinanceGateway {
 
   async updateAccount(accountId: string, input: UpdateAccountInput, signal?: AbortSignal): Promise<Account> {
     const { balance, ...rest } = input
-    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100).toString() }) }
     const account = await this.request<ApiAccount>(`/accounts/${accountId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async updateCreditCard(cardId: string, input: UpdateCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
     const { balance, ...rest } = input
-    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100).toString() }) }
     const account = await this.request<ApiAccount>(`/accounts/${cardId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: `${new Date().toISOString().slice(0, 7)}-${String(detail.dueDay).padStart(2, '0')}`, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }

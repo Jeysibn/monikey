@@ -83,10 +83,10 @@ describe('Notifications section', () => {
 })
 
 describe('Display Preferences section', () => {
-  it('renders the currency selector as disabled ("coming soon")', () => {
+  it('documents the supported currency without a misleading disabled control', () => {
     renderSettings()
-    const select = screen.getByRole('combobox') as HTMLSelectElement
-    expect(select.disabled).toBe(true)
+    expect(screen.getByText(/currently uses Philippine Peso/)).toBeDefined()
+    expect(screen.queryByRole('combobox')).toBeNull()
   })
 
   it('the hide-cents toggle actually changes amounts shown on this page', () => {

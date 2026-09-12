@@ -463,16 +463,6 @@ export function Goals() {
             <div className="num" style={{ fontSize: 16, fontWeight: 700 }}>
               {formatMoney(g.currentAmount, { withCents: false })}
             </div>
-            <div className="completed-actions">
-              <button type="button" className="btn btn--outline" disabled title="Coming soon">
-                {g.id === 'home' ? 'Continue saving' : 'Increase target'}
-                <span className="coming-soon-tag">Coming soon</span>
-              </button>
-              <button type="button" className="btn btn--muted" disabled title="Coming soon">
-                Archive
-                <span className="coming-soon-tag">Coming soon</span>
-              </button>
-            </div>
           </Card>
         ))}
       </div>

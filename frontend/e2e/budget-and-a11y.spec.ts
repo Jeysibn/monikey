@@ -85,17 +85,14 @@ test.describe('Accounts page', () => {
 })
 
 test.describe('Goals page', () => {
-  test('Continue saving, Increase target, and Archive are honestly disabled', async ({ page }) => {
+  test('completed goals do not expose unfinished action controls', async ({ page }) => {
     await page.goto('/goals')
-    await expect(page.getByRole('button', { name: /Continue saving/ })).toBeDisabled()
-    await expect(page.getByRole('button', { name: /Increase target/ })).toBeDisabled()
-    await expect(page.getByRole('button', { name: /Archive/ }).first()).toBeDisabled()
+    await expect(page.getByRole('button', { name: /Continue saving|Increase target|Archive/ })).toHaveCount(0)
   })
 
-  test('completed goal actions show a visible "Coming soon" note, not only a title attribute', async ({ page }) => {
+  test('completed goals contain no misleading coming-soon action labels', async ({ page }) => {
     await page.goto('/goals')
-    await expect(page.locator('.completed-actions .coming-soon-tag').first()).toBeVisible()
-    await expect(page.locator('.completed-actions .coming-soon-tag').first()).toHaveText('Coming soon')
+    await expect(page.locator('.completed-actions .coming-soon-tag')).toHaveCount(0)
   })
 
   test('completed goals show a reached date distinct from their target date', async ({ page }) => {
@@ -123,12 +120,11 @@ test.describe('Goals page', () => {
   })
 })
 
-test.describe('AI assistant honesty', () => {
-  test('the AI card is labeled a preview, not a live "online" service', async ({ page }) => {
+test.describe('AI assistant roadmap', () => {
+  test('the dashboard does not expose an unfinished generic chat control', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('AI Assistant Preview')).toBeVisible()
-    await expect(page.getByText('online', { exact: true })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /coming soon/ })).toBeDisabled()
+    await expect(page.getByText('AI Assistant Preview')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /coming soon/ })).toHaveCount(0)
   })
 })
 

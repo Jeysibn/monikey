@@ -244,20 +244,6 @@ export function Dashboard() {
           </ul>
         </Card>
 
-        <Card className="area-ai">
-          <CardTitle action={<span className="faint">preview</span>}>AI Assistant Preview</CardTitle>
-          <div className="ai-chat">
-            <div className="ai-msg ai-msg--user">What&apos;s my highest expense?</div>
-            <div className="ai-msg ai-msg--bot">Your highest is Shopping. Need details?</div>
-          </div>
-          <div className="dash-meta" style={{ marginTop: 8 }}>
-            Sample conversation only — a real AI assistant is planned for a future release.
-          </div>
-          <button type="button" className="ai-input" disabled>
-            <span className="faint">Ask a question — coming soon</span>
-          </button>
-        </Card>
-
         <Card className="area-credit">
           <CardTitle action={<span className="faint">{creditCards.length} cards · {formatMoney(finance.totalCreditOwed, { withCents: false })} owed</span>}>
             Credit Cards

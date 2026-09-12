@@ -118,10 +118,6 @@ export function Reports() {
         <h1 className="page-title">Reports</h1>
         <div className="reports-actions">
           <button type="button" className="btn btn--ghost" onClick={exportCsv}>Export CSV</button>
-          <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-            Export PDF
-            <span className="coming-soon-tag">Coming soon</span>
-          </button>
         </div>
       </div>
 

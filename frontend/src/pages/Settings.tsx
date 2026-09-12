@@ -188,20 +188,11 @@ function DisplayPreferencesSection({
   return (
     <Card>
       <CardTitle>Display Preferences</CardTitle>
-      <div className="settings-field-row">
-        <label className="new-category-field" style={{ flex: 1 }}>
-          <span className="tx-label">
-            Currency &amp; locale <span className="coming-soon-tag">Coming soon</span>
-          </span>
-          <select className="tx-input" disabled title="Coming soon" defaultValue="PHP">
-            <option value="PHP">Philippine Peso (₱) · en-PH</option>
-          </select>
-        </label>
-      </div>
       <p className="form-help">
-        Currency formatting is shared app-wide from a single, non-reactive module (see <code>utils/currency.ts</code>) — switching it live
-        needs a currency provider that re-renders every screen, which doesn’t exist yet. Changing it here would silently leave half the app in
-        the old currency, so it stays disabled until that’s built.
+        MoniKey currently uses Philippine Peso (₱) and <code>en-PH</code>
+        formatting consistently across the application. Multi-currency display
+        preferences are planned once the setting can be applied atomically to
+        every financial view.
       </p>
       <div className="settings-toggle-list">
         <Toggle

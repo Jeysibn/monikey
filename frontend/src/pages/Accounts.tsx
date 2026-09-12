@@ -661,9 +661,6 @@ export function Accounts() {
             <div className="faint" style={{ textAlign: 'center' }}>
               Connecting a real bank, e-wallet, or credit card is planned for a future release. Use "+ Add account" above for a manual entry today.
             </div>
-            <button type="button" className="btn btn--primary" disabled title="Coming soon">
-              Connect account — coming soon
-            </button>
           </Card>
         </div>
       </div>

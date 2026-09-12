@@ -50,12 +50,11 @@ describe('Reports page', () => {
     expect(screen.getByLabelText('To')).toBeDefined()
   })
 
-  it('provides a working CSV export while keeping PDF explicitly unavailable', () => {
+  it('provides CSV export without exposing an unfinished PDF control', () => {
     renderReports()
     const csv = screen.getByRole('button', { name: /Export CSV/ }) as HTMLButtonElement
-    const pdf = screen.getByRole('button', { name: /Export PDF/ }) as HTMLButtonElement
     expect(csv.disabled).toBe(false)
-    expect(pdf.disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: /Export PDF/ })).toBeNull()
   })
 
   it('renders Top Categories reusing spend mix category names', () => {

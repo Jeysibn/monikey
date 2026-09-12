@@ -1,7 +1,8 @@
 # Monikey
 
-Monikey is a personal finance application for transactions, accounts and credit
-cards, budgets, savings goals, investments, recurring bills, reports, and settings.
+Monikey is a privacy-first, self-hosted personal finance application for
+transactions, accounts and credit cards, budgets, savings goals, recurring bills,
+reports, and cryptocurrency tracking.
 It is a monorepo with a React frontend and a Fastify API and worker backed by PostgreSQL.
 
 ## Runtime modes
@@ -75,7 +76,7 @@ configured separately; source adapters do not prove a live integration is enable
 | `/accounts` | Manual accounts and credit cards; backend update/archive flows |
 | `/budget` | Categories and allocations |
 | `/goals` | Goal creation and funding; backend update/delete flows |
-| `/investments` | Holdings, trades, dividends, portfolio views and quote refresh |
+| `/investments` | Crypto holdings, trades, transfers, portfolio views and quote refresh (legacy URL) |
 | `/recurring` | Recurring bills and status/payment controls |
 | `/reports` | Financial report views and period controls |
 | `/imports` | CSV staging, preview and commit workflow |
@@ -92,13 +93,11 @@ remain disabled. Reports CSV export and custom ranges are available; PDF export,
 runtime currency/locale switching, and two-factor authentication remain disabled.
 Password changes and active-session controls are available from `/security`.
 
-Investment V2 is partial: the API accepts optional linked cash accounts, but the
-current trade/dividend forms lack dedicated account selectors. Historical event
-currency capture and fully correct mixed-currency aggregate returns are unfinished.
+Crypto is active but cryptocurrency-specific; it is not a general investment
+accounting system. Broader investment accounting, historical event currency
+capture, and fully correct mixed-currency aggregate returns are unfinished.
 Money Position includes recurring bills due within its horizon.
 See [architecture limitations](docs/ARCHITECTURE.md#known-limitations).
-
-## Verification commands
 
 ## Documentation
 

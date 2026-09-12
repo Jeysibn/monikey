@@ -113,6 +113,8 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:${{ github.sha }}
             ${{ env.API_IMAGE }}:latest
+          provenance: true
+          sbom: true
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -169,6 +171,8 @@ jobs:
           tags: |
             ${{ env.WEB_IMAGE }}:${{ github.sha }}
             ${{ env.WEB_IMAGE }}:latest
+          provenance: true
+          sbom: true
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 

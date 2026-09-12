@@ -15,7 +15,8 @@
     "test:backend:compose": "cd .. && bash scripts/test-compose-backend-regression.sh",
     "test": "vitest run --maxWorkers=1",
     "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "api:generate": "npx --yes --package=openapi-typescript@7.13.0 openapi-typescript ../docs/openapi.generated.json -o src/api.generated.ts"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -42,6 +42,11 @@ jobs:
         run: npm run test
         env:
           NODE_ENV: test
+      - name: Generated API contract drift check
+        working-directory: frontend
+        run: |
+          npm run api:generate
+          git diff --exit-code -- src/api.generated.ts
       - name: Browser tests
         working-directory: frontend
         run: |

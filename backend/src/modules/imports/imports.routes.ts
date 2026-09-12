@@ -518,12 +518,14 @@ export async function createImportsRoutes(
         // Parse header (first line)
         const headerLine = lines[0]!
         const headers = parseCSVLine(headerLine)
-        const headerMap = new Map(headers.map((h, i) => [h.toLowerCase(), i]))
+        const headerMap = new Map(headers.map((h, i) => [normalizeCsvHeader(h), i]))
+        const preset = detectCsvPreset(headerMap)
 
         // Validate required columns
-        const requiredColumns = ['date', 'amount', 'description']
+        const requiredColumns = ['date', 'amount', 'description'] as const
         for (const col of requiredColumns) {
-          if (!headerMap.has(col)) {
+          const available = col === 'amount' && preset.amountColumns !== undefined ? true : preset.columns[col] >= 0
+          if (!available) {
             return reply.code(400).send({
               error: {
                 code: 'MISSING_COLUMNS',
@@ -546,10 +548,12 @@ export async function createImportsRoutes(
 
           try {
             const fields = parseCSVLine(lines[i]!)
-            const date = fields[headerMap.get('date') || 0] || ''
-            const amountStr = fields[headerMap.get('amount') || 0] || ''
-            const description = fields[headerMap.get('description') || 0] || ''
-            const merchant = fields[headerMap.get('merchant') || 0]
+            const date = fields[preset.columns.date] || ''
+            const amountStr = preset.amountColumns
+              ? fields[preset.amountColumns.debit] || fields[preset.amountColumns.credit] || ''
+              : fields[preset.columns.amount] || ''
+            const description = fields[preset.columns.description] || ''
+            const merchant = preset.columns.merchant === undefined ? undefined : fields[preset.columns.merchant]
 
             // Validate date
             const dateObj = parseDate(date)
@@ -610,6 +614,7 @@ export async function createImportsRoutes(
           duplicateCount,
           errors: errors.length > 0 ? errors : undefined,
           status: allRowsWereDuplicates ? 'duplicate' : 'reviewing',
+          sourceProfile: preset.name,
           message: allRowsWereDuplicates
             ? 'CSV upload contained only transactions that were already imported.'
             : `CSV import created with ${addedCount} transactions${duplicateCount > 0 ? `; ${duplicateCount} duplicates skipped` : ''}. Please review and commit.`,
@@ -651,6 +656,55 @@ function parseCSVLine(line: string): string[] {
 
   fields.push(current.trim().replace(/^"|"$/g, ''))
   return fields
+}
+
+type CsvPreset = {
+  name: string
+  columns: { date: number; amount: number; description: number; merchant?: number }
+  amountColumns?: { debit: number; credit: number }
+}
+
+function normalizeCsvHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s_-]+/g, '')
+}
+
+/**
+ * Header-only templates for common Philippine export shapes. These are
+ * parser presets, not live bank integrations; exports can change and users
+ * still review staged rows before ledger commit.
+ */
+function detectCsvPreset(headers: Map<string, number>): CsvPreset {
+  const find = (...names: string[]) => names.map(normalizeCsvHeader).find((name) => headers.has(name))
+  const date = find('date', 'transaction date', 'transactiondate', 'posted date', 'posteddate')
+  const description = find('description', 'details', 'particulars', 'merchant', 'merchant name', 'merchantname')
+  const merchant = find('merchant', 'merchant name', 'merchantname', 'payee')
+  const amount = find('amount', 'transaction amount', 'transactionamount', 'value')
+  const debit = find('debit', 'debit amount', 'debitamount', 'withdrawal', 'withdrawals')
+  const credit = find('credit', 'credit amount', 'creditamount', 'deposit', 'deposits')
+  const columns = {
+    date: date === undefined ? -1 : headers.get(date)!,
+    amount: amount === undefined ? -1 : headers.get(amount) ?? -1,
+    description: description === undefined ? -1 : headers.get(description) ?? -1,
+    merchant: merchant === undefined ? undefined : headers.get(merchant),
+  }
+  const amountColumns = debit !== undefined && credit !== undefined ? { debit: headers.get(debit)!, credit: headers.get(credit)! } : undefined
+  const isPreset = amountColumns !== undefined || date !== 'date' || description !== 'description'
+  return {
+    name: isPreset ? inferCsvPresetName(headers) : 'generic',
+    columns,
+    amountColumns,
+  }
+}
+
+function inferCsvPresetName(headers: Map<string, number>): string {
+  const text = [...headers.keys()].join(' ')
+  if (text.includes('gcash')) return 'GCash'
+  if (text.includes('maya') || text.includes('paymaya')) return 'Maya'
+  if (text.includes('bpi')) return 'BPI'
+  if (text.includes('bdo')) return 'BDO'
+  if (text.includes('unionbank')) return 'UnionBank'
+  if (headers.has('debit') && headers.has('credit')) return 'bank debit/credit'
+  return 'custom alias'
 }
 
 /**

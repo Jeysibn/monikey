@@ -494,14 +494,79 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "income" | "expense" | "transfer";
+                        title: string;
+                        categoryId?: string | null;
+                        goalId?: string | null;
+                        fromAccountId?: string | null;
+                        toAccountId?: string | null;
+                        /** Format: date */
+                        occurredOn?: string;
+                        occurredTime?: string | null;
+                        amountMinor: string;
+                        feeMinor?: string;
+                        currencyCode?: string;
+                        /** @enum {string} */
+                        source?: "manual" | "ocr" | "recurring" | "import";
+                        /** @enum {string} */
+                        status?: "cleared" | "pending";
+                        note?: string | null;
+                        idempotencyKey?: string | null;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            transaction: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                /** @enum {string} */
+                                type: "income" | "expense" | "transfer";
+                                title: string;
+                                categoryId: string | null;
+                                goalId: string | null;
+                                fromAccountId: string | null;
+                                toAccountId: string | null;
+                                /** Format: date */
+                                occurredOn: string;
+                                occurredTime: string | null;
+                                amountMinor: string;
+                                feeMinor: string;
+                                currencyCode: string;
+                                /** @enum {string} */
+                                source: "manual" | "ocr" | "recurring" | "import";
+                                /** @enum {string} */
+                                status: "cleared" | "pending";
+                                note: string | null;
+                                idempotencyKey: string | null;
+                                reversedTransactionId: string | null;
+                                tags: string[];
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            balanceEffects: {
+                                /** Format: uuid */
+                                accountId: string;
+                                role: string;
+                                deltaMinor: string;
+                                balanceAfterMinor: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };
@@ -534,7 +599,39 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            /** @enum {string} */
+                            type: "income" | "expense" | "transfer";
+                            title: string;
+                            categoryId: string | null;
+                            goalId: string | null;
+                            fromAccountId: string | null;
+                            toAccountId: string | null;
+                            /** Format: date */
+                            occurredOn: string;
+                            occurredTime: string | null;
+                            amountMinor: string;
+                            feeMinor: string;
+                            currencyCode: string;
+                            /** @enum {string} */
+                            source: "manual" | "ocr" | "recurring" | "import";
+                            /** @enum {string} */
+                            status: "cleared" | "pending";
+                            note: string | null;
+                            idempotencyKey: string | null;
+                            reversedTransactionId: string | null;
+                            tags: string[];
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -571,14 +668,70 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        title?: string;
+                        categoryId?: string | null;
+                        /** Format: date */
+                        occurredOn?: string;
+                        occurredTime?: string | null;
+                        amountMinor?: string;
+                        feeMinor?: string;
+                        /** @enum {string} */
+                        status?: "cleared" | "pending";
+                        note?: string | null;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            transaction: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                /** @enum {string} */
+                                type: "income" | "expense" | "transfer";
+                                title: string;
+                                categoryId: string | null;
+                                goalId: string | null;
+                                fromAccountId: string | null;
+                                toAccountId: string | null;
+                                /** Format: date */
+                                occurredOn: string;
+                                occurredTime: string | null;
+                                amountMinor: string;
+                                feeMinor: string;
+                                currencyCode: string;
+                                /** @enum {string} */
+                                source: "manual" | "ocr" | "recurring" | "import";
+                                /** @enum {string} */
+                                status: "cleared" | "pending";
+                                note: string | null;
+                                idempotencyKey: string | null;
+                                reversedTransactionId: string | null;
+                                tags: string[];
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            balanceEffects: {
+                                /** Format: uuid */
+                                accountId: string;
+                                role: string;
+                                deltaMinor: string;
+                                balanceAfterMinor: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };
@@ -659,11 +812,83 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            reversedTransaction: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                /** @enum {string} */
+                                type: "income" | "expense" | "transfer";
+                                title: string;
+                                categoryId: string | null;
+                                goalId: string | null;
+                                fromAccountId: string | null;
+                                toAccountId: string | null;
+                                /** Format: date */
+                                occurredOn: string;
+                                occurredTime: string | null;
+                                amountMinor: string;
+                                feeMinor: string;
+                                currencyCode: string;
+                                /** @enum {string} */
+                                source: "manual" | "ocr" | "recurring" | "import";
+                                /** @enum {string} */
+                                status: "cleared" | "pending";
+                                note: string | null;
+                                idempotencyKey: string | null;
+                                reversedTransactionId: string | null;
+                                tags: string[];
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            compensatingTransaction: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                /** @enum {string} */
+                                type: "income" | "expense" | "transfer";
+                                title: string;
+                                categoryId: string | null;
+                                goalId: string | null;
+                                fromAccountId: string | null;
+                                toAccountId: string | null;
+                                /** Format: date */
+                                occurredOn: string;
+                                occurredTime: string | null;
+                                amountMinor: string;
+                                feeMinor: string;
+                                currencyCode: string;
+                                /** @enum {string} */
+                                source: "manual" | "ocr" | "recurring" | "import";
+                                /** @enum {string} */
+                                status: "cleared" | "pending";
+                                note: string | null;
+                                idempotencyKey: string | null;
+                                reversedTransactionId: string | null;
+                                tags: string[];
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            balanceEffects: {
+                                /** Format: uuid */
+                                accountId: string;
+                                role: string;
+                                deltaMinor: string;
+                                balanceAfterMinor: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };

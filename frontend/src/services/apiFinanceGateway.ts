@@ -19,7 +19,9 @@ type ApiAccount = paths['/accounts']['post']['responses'][201]['content']['appli
 type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']['application/json']
 type CreateCreditCardRequest = paths['/credit-cards']['post']['requestBody']['content']['application/json']
 type UpdateAccountRequest = paths['/accounts/{id}']['patch']['requestBody']['content']['application/json']
-type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: string; feeMinor: string; source: Transaction['source']; status: Transaction['status']; note: string | null; reversedTransactionId?: string | null; tags?: string[] }
+type ApiTransaction = paths['/transactions']['post']['responses'][201]['content']['application/json']['transaction']
+type TransactionMutationResponse = paths['/transactions']['post']['responses'][201]['content']['application/json']
+type ReverseTransactionResponse = paths['/transactions/{id}/reverse']['post']['responses'][201]['content']['application/json']
 type ApiGoal = { id: string; name: string; targetMinor: string; currentMinor: string; targetDate: string; completedDate: string | null; monthlyContributionMinor: string | null; status: string; active: boolean }
 type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: string; spentMinor: string }
 type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: string; allocations: ApiBudgetAllocation[] }
@@ -104,7 +106,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<{ transaction: ApiTransaction }>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100).toString(), feeMinor: Math.round((input.fee ?? 0) * 100).toString(), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
+    const result = await this.request<TransactionMutationResponse>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100).toString(), feeMinor: Math.round((input.fee ?? 0) * 100).toString(), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
     return this.mapTransaction(result.transaction)
   }
 
@@ -118,12 +120,12 @@ export class ApiFinanceGateway implements FinanceGateway {
     if (input.fee !== undefined) updatePayload.feeMinor = Math.round((input.fee ?? 0) * 100).toString()
     if (input.note !== undefined) updatePayload.note = input.note
 
-    const result = await this.request<{ transaction: ApiTransaction }>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
+    const result = await this.request<TransactionMutationResponse>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
     return this.mapTransaction(result.transaction)
   }
 
   async reverseTransaction(transactionId: string, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<{ reversedTransaction: ApiTransaction }>(`/transactions/${transactionId}`, { method: 'DELETE', signal })
+    const result = await this.request<ReverseTransactionResponse>(`/transactions/${transactionId}`, { method: 'DELETE', signal })
     return this.mapTransaction(result.reversedTransaction)
   }
 

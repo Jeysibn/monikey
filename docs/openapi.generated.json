@@ -145,9 +145,370 @@
     },
     "/transactions": {
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "amountMinor"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "income",
+                      "expense",
+                      "transfer"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "categoryId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "goalId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fromAccountId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "toAccountId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "occurredOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "occurredTime": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{2}:\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amountMinor": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "feeMinor": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "currencyCode": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "ocr",
+                      "recurring",
+                      "import"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "cleared",
+                      "pending"
+                    ]
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "idempotencyKey": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "transaction",
+                    "balanceEffects"
+                  ],
+                  "properties": {
+                    "transaction": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "type",
+                        "title",
+                        "categoryId",
+                        "goalId",
+                        "fromAccountId",
+                        "toAccountId",
+                        "occurredOn",
+                        "occurredTime",
+                        "amountMinor",
+                        "feeMinor",
+                        "currencyCode",
+                        "source",
+                        "status",
+                        "note",
+                        "idempotencyKey",
+                        "reversedTransactionId",
+                        "tags",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "income",
+                            "expense",
+                            "transfer"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "categoryId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "goalId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fromAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "toAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "occurredOn": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "occurredTime": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{2}:\\d{2}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "feeMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "currencyCode": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "manual",
+                            "ocr",
+                            "recurring",
+                            "import"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cleared",
+                            "pending"
+                          ]
+                        },
+                        "note": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "idempotencyKey": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reversedTransactionId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "balanceEffects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "accountId",
+                          "role",
+                          "deltaMinor",
+                          "balanceAfterMinor"
+                        ],
+                        "properties": {
+                          "accountId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "deltaMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "balanceAfterMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -243,7 +604,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
             "in": "path",
             "name": "id",
@@ -252,11 +614,264 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "type",
+                    "title",
+                    "categoryId",
+                    "goalId",
+                    "fromAccountId",
+                    "toAccountId",
+                    "occurredOn",
+                    "occurredTime",
+                    "amountMinor",
+                    "feeMinor",
+                    "currencyCode",
+                    "source",
+                    "status",
+                    "note",
+                    "idempotencyKey",
+                    "reversedTransactionId",
+                    "tags",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "income",
+                        "expense",
+                        "transfer"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "categoryId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "goalId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fromAccountId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "toAccountId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "occurredOn": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "occurredTime": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^\\d{2}:\\d{2}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "amountMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "feeMinor": {
+                      "type": "string",
+                      "pattern": "^\\d+$"
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "manual",
+                        "ocr",
+                        "recurring",
+                        "import"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "cleared",
+                        "pending"
+                      ]
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "idempotencyKey": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reversedTransactionId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
       "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "categoryId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "occurredOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "occurredTime": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{2}:\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amountMinor": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "feeMinor": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "cleared",
+                      "pending"
+                    ]
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -269,7 +884,229 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "transaction",
+                    "balanceEffects"
+                  ],
+                  "properties": {
+                    "transaction": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "type",
+                        "title",
+                        "categoryId",
+                        "goalId",
+                        "fromAccountId",
+                        "toAccountId",
+                        "occurredOn",
+                        "occurredTime",
+                        "amountMinor",
+                        "feeMinor",
+                        "currencyCode",
+                        "source",
+                        "status",
+                        "note",
+                        "idempotencyKey",
+                        "reversedTransactionId",
+                        "tags",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "income",
+                            "expense",
+                            "transfer"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "categoryId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "goalId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fromAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "toAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "occurredOn": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "occurredTime": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{2}:\\d{2}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "feeMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "currencyCode": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "manual",
+                            "ocr",
+                            "recurring",
+                            "import"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cleared",
+                            "pending"
+                          ]
+                        },
+                        "note": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "idempotencyKey": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reversedTransactionId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "balanceEffects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "accountId",
+                          "role",
+                          "deltaMinor",
+                          "balanceAfterMinor"
+                        ],
+                        "properties": {
+                          "accountId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "deltaMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "balanceAfterMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -340,8 +1177,411 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "reversedTransaction",
+                    "compensatingTransaction",
+                    "balanceEffects"
+                  ],
+                  "properties": {
+                    "reversedTransaction": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "type",
+                        "title",
+                        "categoryId",
+                        "goalId",
+                        "fromAccountId",
+                        "toAccountId",
+                        "occurredOn",
+                        "occurredTime",
+                        "amountMinor",
+                        "feeMinor",
+                        "currencyCode",
+                        "source",
+                        "status",
+                        "note",
+                        "idempotencyKey",
+                        "reversedTransactionId",
+                        "tags",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "income",
+                            "expense",
+                            "transfer"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "categoryId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "goalId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fromAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "toAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "occurredOn": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "occurredTime": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{2}:\\d{2}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "feeMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "currencyCode": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "manual",
+                            "ocr",
+                            "recurring",
+                            "import"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cleared",
+                            "pending"
+                          ]
+                        },
+                        "note": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "idempotencyKey": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reversedTransactionId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "compensatingTransaction": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "type",
+                        "title",
+                        "categoryId",
+                        "goalId",
+                        "fromAccountId",
+                        "toAccountId",
+                        "occurredOn",
+                        "occurredTime",
+                        "amountMinor",
+                        "feeMinor",
+                        "currencyCode",
+                        "source",
+                        "status",
+                        "note",
+                        "idempotencyKey",
+                        "reversedTransactionId",
+                        "tags",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "income",
+                            "expense",
+                            "transfer"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "categoryId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "goalId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fromAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "toAccountId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "occurredOn": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "occurredTime": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{2}:\\d{2}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "feeMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "currencyCode": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "manual",
+                            "ocr",
+                            "recurring",
+                            "import"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cleared",
+                            "pending"
+                          ]
+                        },
+                        "note": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "idempotencyKey": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reversedTransactionId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "balanceEffects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "accountId",
+                          "role",
+                          "deltaMinor",
+                          "balanceAfterMinor"
+                        ],
+                        "properties": {
+                          "accountId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "deltaMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "balanceAfterMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

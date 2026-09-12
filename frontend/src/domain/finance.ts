@@ -34,7 +34,7 @@ export interface CreditCard {
 }
 
 export type TransactionType = 'income' | 'expense' | 'transfer'
-export type TransactionSource = 'manual' | 'ocr' | 'recurring'
+export type TransactionSource = 'manual' | 'ocr' | 'recurring' | 'import'
 export type TransactionStatus = 'cleared' | 'pending'
 
 export interface Transaction {

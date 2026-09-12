@@ -11,6 +11,28 @@ import type { PostTransactionInput, ReverseTransactionInput, UpdateTransactionIn
 // UUID validation for path parameters (D8: malformed UUID handling)
 const transactionIdParamSchema = z.object({ id: z.string().uuid('Invalid transaction ID format') });
 
+const transactionViewJsonSchema = {
+  type: 'object',
+  required: ['id', 'userId', 'type', 'title', 'categoryId', 'goalId', 'fromAccountId', 'toAccountId', 'occurredOn', 'occurredTime', 'amountMinor', 'feeMinor', 'currencyCode', 'source', 'status', 'note', 'idempotencyKey', 'reversedTransactionId', 'tags', 'createdAt', 'updatedAt'],
+  properties: {
+    id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' },
+    type: { type: 'string', enum: ['income', 'expense', 'transfer'] }, title: { type: 'string' },
+    categoryId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, goalId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] },
+    fromAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, toAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] },
+    occurredOn: { type: 'string', format: 'date' }, occurredTime: { anyOf: [{ type: 'string', pattern: '^\\d{2}:\\d{2}$' }, { type: 'null' }] },
+    amountMinor: { type: 'string', pattern: '^-?\\d+$' }, feeMinor: { type: 'string', pattern: '^\\d+$' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3 },
+    source: { type: 'string', enum: ['manual', 'ocr', 'recurring', 'import'] }, status: { type: 'string', enum: ['cleared', 'pending'] },
+    note: { anyOf: [{ type: 'string' }, { type: 'null' }] }, idempotencyKey: { anyOf: [{ type: 'string' }, { type: 'null' }] }, reversedTransactionId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] },
+    tags: { type: 'array', items: { type: 'string' } }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+const balanceEffectJsonSchema = { type: 'object', required: ['accountId', 'role', 'deltaMinor', 'balanceAfterMinor'], properties: { accountId: { type: 'string', format: 'uuid' }, role: { type: 'string' }, deltaMinor: { type: 'string', pattern: '^-?\\d+$' }, balanceAfterMinor: { type: 'string', pattern: '^-?\\d+$' } } } as const;
+const mutationResponseJsonSchema = { type: 'object', required: ['transaction', 'balanceEffects'], properties: { transaction: transactionViewJsonSchema, balanceEffects: { type: 'array', items: balanceEffectJsonSchema } } } as const;
+const reverseResponseJsonSchema = { type: 'object', required: ['reversedTransaction', 'compensatingTransaction', 'balanceEffects'], properties: { reversedTransaction: transactionViewJsonSchema, compensatingTransaction: transactionViewJsonSchema, balanceEffects: { type: 'array', items: balanceEffectJsonSchema } } } as const;
+const minorUnitJsonSchema = { type: 'string', pattern: '^\\d+$' } as const;
+const postTransactionBodyJsonSchema = { type: 'object', required: ['type', 'title', 'amountMinor'], additionalProperties: false, properties: { type: { type: 'string', enum: ['income', 'expense', 'transfer'] }, title: { type: 'string', minLength: 1, maxLength: 255 }, categoryId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, goalId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, fromAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, toAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, occurredOn: { type: 'string', format: 'date' }, occurredTime: { anyOf: [{ type: 'string', pattern: '^\\d{2}:\\d{2}$' }, { type: 'null' }] }, amountMinor: minorUnitJsonSchema, feeMinor: minorUnitJsonSchema, currencyCode: { type: 'string', minLength: 3, maxLength: 3 }, source: { type: 'string', enum: ['manual', 'ocr', 'recurring', 'import'] }, status: { type: 'string', enum: ['cleared', 'pending'] }, note: { anyOf: [{ type: 'string' }, { type: 'null' }] }, idempotencyKey: { anyOf: [{ type: 'string' }, { type: 'null' }] } } } as const;
+const updateTransactionBodyJsonSchema = { type: 'object', additionalProperties: false, properties: { title: { type: 'string', minLength: 1, maxLength: 255 }, categoryId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, occurredOn: { type: 'string', format: 'date' }, occurredTime: { anyOf: [{ type: 'string', pattern: '^\\d{2}:\\d{2}$' }, { type: 'null' }] }, amountMinor: minorUnitJsonSchema, feeMinor: minorUnitJsonSchema, status: { type: 'string', enum: ['cleared', 'pending'] }, note: { anyOf: [{ type: 'string' }, { type: 'null' }] } } } as const;
+
 export async function ledgerRoutes(fastify: FastifyInstance, options: { service: LedgerService; prisma: PrismaClient }) {
   const { service, prisma } = options;
   const f = fastify.withTypeProvider<ZodTypeProvider>();
@@ -22,6 +44,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
     '/transactions',
     {
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+      schema: { body: postTransactionBodyJsonSchema, response: { 201: mutationResponseJsonSchema } },
     },
     async (req, reply) => {
       const result = await service.postTransaction(req.user!.id, postTransactionSchema.parse(req.body));
@@ -69,6 +92,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   // GET /transactions/:id
   f.get<{ Params: { id: string } }>(
     '/transactions/:id',
+    { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, response: { 200: transactionViewJsonSchema } } },
     async (req, reply) => {
       // D8: Validate UUID path parameter
       const { id } = transactionIdParamSchema.parse(req.params);
@@ -106,6 +130,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
     '/transactions/:id/reverse',
     {
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+      schema: { response: { 201: reverseResponseJsonSchema } },
     },
     async (req, reply) => {
       // D8: Validate UUID path parameter
@@ -120,6 +145,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
     '/transactions/:id',
     {
       preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+      schema: { body: updateTransactionBodyJsonSchema, response: { 200: mutationResponseJsonSchema } },
     },
     async (req, reply) => {
       // D8: Validate UUID path parameter

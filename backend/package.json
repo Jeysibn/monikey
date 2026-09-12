@@ -22,6 +22,7 @@
     "db:seed": "npm run db:seed:system",
     "db:seed:system": "tsx prisma/seed-system.ts",
     "db:seed:demo": "tsx prisma/seed.ts",
+    "credentials:rotate-encryption": "tsx scripts/rotate-encrypted-credentials.ts",
     "api:openapi": "tsx scripts/openapi.ts",
     "api:openapi:check": "tsx scripts/openapi.ts --check"
   },

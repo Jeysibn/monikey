@@ -6,6 +6,28 @@ use a `v1.` envelope prefix. Decryption remains backward-compatible with
 legacy unprefixed ciphertexts, while unknown envelope versions are rejected.
 
 Never commit provider credentials, encryption secrets, or real tokens to the
-repository, documentation, or test fixtures. Rotating the server secret still
-requires a planned re-encryption migration; the version prefix provides the
-format seam but does not itself rotate keys.
+repository, documentation, or test fixtures.
+
+## Rotating the server secret
+
+Set the new value as `ENCRYPTION_SECRET` and the old value as
+`ENCRYPTION_SECRET_PREVIOUS`. From `backend/`, first run the guarded dry run:
+
+```bash
+npm run credentials:rotate-encryption
+```
+
+The command decrypts every stored Plaid credential with the previous secret but
+does not write anything. After reviewing the count and ensuring the deployment
+can reach the database, run the same command with `--apply`:
+
+```bash
+npm run credentials:rotate-encryption -- --apply
+```
+
+The operation fails on the first undecryptable row and never logs plaintext or
+secrets. Keep the previous secret available until all rows are successfully
+rewritten and the provider sync path has been verified; then remove it from the
+deployment secret store. Take a verified database backup before applying the
+rotation. The update is row-by-row and can be safely re-run with the same
+secret pair if interrupted.

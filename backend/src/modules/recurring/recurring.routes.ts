@@ -19,19 +19,24 @@ function view(item: any) {
   return { id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: String(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }
 }
 
+const minorJson = { type: 'string', pattern: '^\\d+$' } as const
+const recurringJson = { type: 'object', required: ['id', 'userId', 'merchant', 'amountMinor', 'frequency', 'nextDueDate', 'accountId', 'categoryId', 'autopay', 'status', 'lastPaidDate', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, merchant: { type: 'string' }, amountMinor: minorJson, frequency: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] }, nextDueDate: { type: 'string', format: 'date' }, accountId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, autopay: { type: 'boolean' }, status: { type: 'string', enum: ['active', 'paused'] }, lastPaidDate: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const recurringBody = { type: 'object', required: ['merchant', 'amountMinor', 'frequency', 'nextDueDate', 'accountId', 'categoryId'], additionalProperties: false, properties: { merchant: { type: 'string', minLength: 1, maxLength: 160 }, amountMinor: minorJson, frequency: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] }, nextDueDate: { type: 'string', format: 'date' }, accountId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, autopay: { type: 'boolean' } } } as const
+const recurringUpdateBody = { ...recurringBody, required: [], properties: { ...recurringBody.properties, merchant: { type: 'string', minLength: 1, maxLength: 160 } } } as const
+
 export async function recurringRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string; ledgerService: LedgerService }) {
   const requireAuth = authGuard({ prisma: options.prisma })
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: options.appOrigin })
-  app.get('/recurring', { preHandler: requireAuth }, async (request) => {
+  app.get('/recurring', { preHandler: requireAuth, schema: { response: { 200: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: recurringJson } } } } } }, async (request) => {
     const items = await options.prisma.recurringItem.findMany({ where: { userId: request.user!.id }, orderBy: { nextDueDate: 'asc' } })
     return { items: items.map(view) }
   })
-  app.get('/recurring/suggestions', { preHandler: requireAuth }, async (request) => {
+  app.get('/recurring/suggestions', { preHandler: requireAuth, schema: { response: { 200: { type: 'object', required: ['suggestions'], properties: { suggestions: { type: 'array', items: { type: 'object', required: ['merchant', 'amountMinor', 'frequency', 'occurrences', 'explanation'], properties: { merchant: { type: 'string' }, amountMinor: minorJson, frequency: { type: 'string', enum: ['monthly'] }, occurrences: { type: 'integer' }, explanation: { type: 'string' } } } } } } } } }, async (request) => {
     const since = new Date(Date.now() - 366 * 86_400_000)
     const rows = await options.prisma.transaction.findMany({ where: { userId: request.user!.id, type: 'expense', status: 'cleared', occurredOn: { gte: since } }, select: { title: true, amountMinor: true, occurredOn: true }, orderBy: { occurredOn: 'asc' } })
     return { suggestions: detectMonthlyCandidates(rows) }
   })
-  app.post('/recurring', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post('/recurring', { preHandler: [requireOrigin, requireAuth], schema: { body: recurringBody, response: { 201: recurringJson, 422: { type: 'object' } } } }, async (request, reply) => {
     const input = createSchema.parse(request.body)
     const [account, category] = await Promise.all([
       options.prisma.financialAccount.findFirst({ where: { id: input.accountId, userId: request.user!.id, archivedAt: null } }),
@@ -42,7 +47,7 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const item = await options.prisma.recurringItem.create({ data: { userId: request.user!.id, merchant: input.merchant, amountMinor: input.amountMinor, frequency: input.frequency, nextDueDate: new Date(`${input.nextDueDate}T00:00:00Z`), accountId: input.accountId, categoryId: input.categoryId, autopay: input.autopay } })
     return reply.code(201).send(view(item))
   })
-  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/recurring/:id/status', { preHandler: [requireOrigin, requireAuth], schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, response: { 200: recurringJson } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = recurringIdParamSchema.parse(request.params)
     const input = statusSchema.parse(request.body)
@@ -51,7 +56,7 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const updated = await options.prisma.recurringItem.findFirstOrThrow({ where: { id, userId: request.user!.id } })
     return view(updated)
   })
-  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/recurring/:id/mark-paid', { preHandler: [requireOrigin, requireAuth], schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, response: { 201: recurringJson } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = recurringIdParamSchema.parse(request.params)
     const item = await options.prisma.recurringItem.findFirst({ where: { id, userId: request.user!.id, status: 'active' } })
@@ -62,7 +67,7 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const updated = await options.prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate, lastPaidDate: item.nextDueDate, } })
     return reply.code(201).send(view(updated))
   })
-  app.patch<{ Params: { id: string } }>('/recurring/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/recurring/:id', { preHandler: [requireOrigin, requireAuth], schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, body: recurringUpdateBody, response: { 200: recurringJson } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = recurringIdParamSchema.parse(request.params)
     const input = updateSchema.parse(request.body)

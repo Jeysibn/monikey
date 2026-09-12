@@ -1,8 +1,9 @@
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import { FinanceApiError } from './apiFinanceGateway'
+import type { paths } from '../api.generated'
 
-type ApiRecurringItem = Omit<RecurringItem, 'amount'> & { amountMinor: string }
-export type RecurringSuggestion = { merchant: string; amountMinor: string; frequency: 'monthly'; occurrences: number; explanation: string }
+type ApiRecurringItem = paths['/recurring']['post']['responses'][201]['content']['application/json']
+export type RecurringSuggestion = paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']['suggestions'][number]
 
 export interface RecurringGateway {
   load(): Promise<RecurringItem[]>
@@ -28,7 +29,7 @@ export class ApiRecurringGateway implements RecurringGateway {
     return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
   }
 
-  async load(): Promise<RecurringItem[]> { return (await this.request<{ items: ApiRecurringItem[] }>('/recurring')).items.map(this.map) }
+  async load(): Promise<RecurringItem[]> { return (await this.request<paths['/recurring']['get']['responses'][200]['content']['application/json']>('/recurring')).items.map(this.map) }
   async add(input: AddRecurringItemInput): Promise<RecurringItem> {
     return this.map(await this.request<ApiRecurringItem>('/recurring', { method: 'POST', body: JSON.stringify({ ...input, amountMinor: Math.round(input.amount * 100).toString() }) }))
   }
@@ -52,6 +53,6 @@ export class ApiRecurringGateway implements RecurringGateway {
   async delete(id: string): Promise<void> {
     await this.request<void>(`/recurring/${id}`, { method: 'DELETE' })
   }
-  async suggestions(): Promise<RecurringSuggestion[]> { return (await this.request<{ suggestions: RecurringSuggestion[] }>('/recurring/suggestions')).suggestions }
-  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, amount: Number(item.amountMinor) / 100 })
+  async suggestions(): Promise<RecurringSuggestion[]> { return (await this.request<paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']>('/recurring/suggestions')).suggestions }
+  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, lastPaidDate: item.lastPaidDate ?? undefined, amount: Number(item.amountMinor) / 100 })
 }

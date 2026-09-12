@@ -1751,7 +1751,34 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };
@@ -1763,14 +1790,64 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        merchant: string;
+                        amountMinor: string;
+                        /** @enum {string} */
+                        frequency: "weekly" | "monthly" | "yearly";
+                        /** Format: date */
+                        nextDueDate: string;
+                        /** Format: uuid */
+                        accountId: string;
+                        /** Format: uuid */
+                        categoryId: string;
+                        autopay?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            merchant: string;
+                            amountMinor: string;
+                            /** @enum {string} */
+                            frequency: "weekly" | "monthly" | "yearly";
+                            /** Format: date */
+                            nextDueDate: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: uuid */
+                            categoryId: string;
+                            autopay: boolean;
+                            /** @enum {string} */
+                            status: "active" | "paused";
+                            lastPaidDate: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
                 };
             };
         };
@@ -1801,7 +1878,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            suggestions: {
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "monthly";
+                                occurrences: number;
+                                explanation: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };
@@ -1842,7 +1930,32 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            merchant: string;
+                            amountMinor: string;
+                            /** @enum {string} */
+                            frequency: "weekly" | "monthly" | "yearly";
+                            /** Format: date */
+                            nextDueDate: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: uuid */
+                            categoryId: string;
+                            autopay: boolean;
+                            /** @enum {string} */
+                            status: "active" | "paused";
+                            lastPaidDate: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1869,11 +1982,36 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            merchant: string;
+                            amountMinor: string;
+                            /** @enum {string} */
+                            frequency: "weekly" | "monthly" | "yearly";
+                            /** Format: date */
+                            nextDueDate: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: uuid */
+                            categoryId: string;
+                            autopay: boolean;
+                            /** @enum {string} */
+                            status: "active" | "paused";
+                            lastPaidDate: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1924,14 +2062,55 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        merchant?: string;
+                        amountMinor?: string;
+                        /** @enum {string} */
+                        frequency?: "weekly" | "monthly" | "yearly";
+                        /** Format: date */
+                        nextDueDate?: string;
+                        /** Format: uuid */
+                        accountId?: string;
+                        /** Format: uuid */
+                        categoryId?: string;
+                        autopay?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            merchant: string;
+                            amountMinor: string;
+                            /** @enum {string} */
+                            frequency: "weekly" | "monthly" | "yearly";
+                            /** Format: date */
+                            nextDueDate: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: uuid */
+                            categoryId: string;
+                            autopay: boolean;
+                            /** @enum {string} */
+                            status: "active" | "paused";
+                            lastPaidDate: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };

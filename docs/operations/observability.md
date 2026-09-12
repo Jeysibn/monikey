@@ -9,6 +9,10 @@ Metrics intentionally avoid raw user IDs and other high-cardinality labels.
 `/health/live` checks process liveness; `/health/ready` checks PostgreSQL
 readiness.
 
+The provisioned `MoniKey Health` dashboard focuses on API error rate,
+pending/dead jobs, partial imports, worker outcomes, and notification backlog.
+The existing stack overview remains available for infrastructure context.
+
 ## Related
 
 - [Architecture](../ARCHITECTURE.md)

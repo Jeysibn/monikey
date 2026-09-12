@@ -54,4 +54,16 @@ describe('loadEnv', () => {
     expect(env.NODE_ENV).toBe('production')
     expect(env.APP_ORIGIN).toBe('https://monikey.example.com')
   })
+
+  it('fails fast for production providers without required credentials', () => {
+    const production = { ...baseEnv, NODE_ENV: 'production', APP_ORIGIN: 'https://monikey.example.com' }
+    expect(() => loadEnv({ ...production, EMAIL_PROVIDER: 'resend' })).toThrowError(/RESEND_API_KEY/)
+    expect(() => loadEnv({ ...production, OCR_PROVIDER: 'ocrspace' })).toThrowError(/OCRSPACE_API_KEY/)
+    expect(() => loadEnv({ ...production, BANK_PROVIDER: 'plaid_sandbox' })).toThrowError(/ENCRYPTION_SECRET/)
+    expect(() => loadEnv({ ...production, QUOTE_PROVIDER: 'live' })).toThrowError(/ALPHA_VANTAGE_API_KEY/)
+  })
+
+  it('rejects demo mode in production', () => {
+    expect(() => loadEnv({ ...baseEnv, NODE_ENV: 'production', APP_ORIGIN: 'https://monikey.example.com', MONIKEY_DEMO_MODE: 'true' })).toThrowError(/MONIKEY_DEMO_MODE/)
+  })
 })

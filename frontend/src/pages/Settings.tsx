@@ -533,12 +533,10 @@ function SecuritySection() {
     <Card>
       <CardTitle>Security</CardTitle>
       <p className="form-help">
-        Authentication is handled by the backend session. Password changes and two-factor authentication are planned controls.
+        Authentication is handled by the backend session. Manage your password and active sessions from the security page.
       </p>
       <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 10 }}>
-        <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-          Change password <span className="coming-soon-tag">Coming soon</span>
-        </button>
+        <a className="btn btn--primary" href="/security">Manage security</a>
         <button type="button" className="btn btn--ghost" disabled title="Coming soon">
           Enable two-factor authentication <span className="coming-soon-tag">Coming soon</span>
         </button>

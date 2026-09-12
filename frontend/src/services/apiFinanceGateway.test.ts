@@ -28,7 +28,7 @@ describe('ApiFinanceGateway', () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ transaction: { id: 'tx-2', type: 'expense', title: 'Lunch', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 1234, feeMinor: 50, source: 'manual', status: 'cleared', note: 'test' } }))
     const result = await new ApiFinanceGateway('/api/v1', fetcher).addTransaction({ type: 'expense', title: 'Lunch', categoryId: 'food', accountId: 'account-1', date: '2026-08-31', amount: 12.34, fee: 0.5, idempotencyKey: 'submit-1' })
     expect(result).toMatchObject({ amount: -12.34, fee: 0.5 })
-    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: 1234, feeMinor: 50, fromAccountId: 'account-1', toAccountId: null, idempotencyKey: 'submit-1' })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: '1234', feeMinor: '50', fromAccountId: 'account-1', toAccountId: null, idempotencyKey: 'submit-1' })
   })
 
   it('surfaces non-success API responses', async () => {
@@ -51,7 +51,7 @@ describe('ApiFinanceGateway', () => {
     await api.createBudgetPeriod('2026-08-01', '2026-09-01', 2500)
     const allocation = await api.setBudgetAllocation('period-1', 'food', 1600)
     expect(allocation).toMatchObject({ id: 'food', allocated: 1600 })
-    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ incomePoolMinor: 250000 })
-    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ allocatedMinor: 160000 })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ incomePoolMinor: '250000' })
+    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ allocatedMinor: '160000' })
   })
 })

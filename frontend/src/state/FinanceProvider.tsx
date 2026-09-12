@@ -9,6 +9,7 @@ import type {
 import type { FinanceRepository } from '../services/financeRepository'
 import { createMockFinanceRepository } from '../services/mockFinanceRepository'
 import type { AppClock } from '../utils/clock'
+import type { RecurringItem } from '../domain/recurring'
 import { demoClock } from '../utils/clock'
 import { createFinanceStore } from './financeStore'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
@@ -31,6 +32,7 @@ export interface FinanceProviderProps {
    * freeze or advance time.
    */
   clock?: AppClock
+  recurringItems?: RecurringItem[]
 }
 
 /**
@@ -39,7 +41,7 @@ export interface FinanceProviderProps {
  * — no ref is written or read during render to keep mutations fresh, and no
  * non-component value is exported from this module.
  */
-export function FinanceProvider({ children, clock = demoClock, repository }: FinanceProviderProps) {
+export function FinanceProvider({ children, clock = demoClock, repository, recurringItems = [] }: FinanceProviderProps) {
   // Falling back to a mock built from THIS provider's clock keeps the one
   // clock rule intact even when no repository is injected.
   const [defaultRepository] = useState(() => createMockFinanceRepository(clock))
@@ -153,6 +155,7 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
   const value = useMemo<FinanceContextValue>(
     () => ({
       state,
+      recurringItems,
       todayIso: clock.todayIso(),
       addTransaction,
       updateTransaction,
@@ -168,6 +171,7 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
     }),
     [
       state,
+      recurringItems,
       clock,
       addTransaction,
       updateTransaction,

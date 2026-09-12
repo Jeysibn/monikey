@@ -16,15 +16,15 @@ import type {
 
 type ApiAccount = {
   id: string; name: string; institution: string | null; accountType: Account['type'];
-  classification: Account['classification']; currentBalanceMinor: number; lastFour: string | null;
-  syncStatus: string; manual: boolean; creditCardDetail?: { network: CreditCard['network']; creditLimitMinor: number; dueDay: number; minimumPaymentMinor: number } | null;
+  classification: Account['classification']; currentBalanceMinor: string; lastFour: string | null;
+  syncStatus: string; manual: boolean; creditCardDetail?: { network: CreditCard['network']; creditLimitMinor: string; dueDay: number; minimumPaymentMinor: string } | null;
 }
-type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: number; feeMinor: number; source: Transaction['source']; status: Transaction['status']; note: string | null; reversedTransactionId?: string | null }
-type ApiGoal = { id: string; name: string; targetMinor: number; currentMinor: number; targetDate: string; completedDate: string | null; monthlyContributionMinor: number | null; status: string; active: boolean }
-type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: number; spentMinor: number }
-type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: number; allocations: ApiBudgetAllocation[] }
-type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: number; occurredOn: string; note: string | null }
-type ApiDividend = { id: string; ticker: string; amountMinor: number; occurredOn: string }
+type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: string; feeMinor: string; source: Transaction['source']; status: Transaction['status']; note: string | null; reversedTransactionId?: string | null; tags?: string[] }
+type ApiGoal = { id: string; name: string; targetMinor: string; currentMinor: string; targetDate: string; completedDate: string | null; monthlyContributionMinor: string | null; status: string; active: boolean }
+type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: string; spentMinor: string }
+type ApiBudgetPeriod = { id: string; periodStart: string; periodEnd: string; incomePoolMinor: string; allocations: ApiBudgetAllocation[] }
+type ApiInvestmentTrade = { id: string; ticker: string; type: 'buy' | 'sell'; units: number; priceMinor: string; amountMinor?: string; occurredOn: string; note: string | null }
+type ApiDividend = { id: string; ticker: string; amountMinor: string; occurredOn: string }
 type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: ApiDividend[] }; serverDate?: string }
 
 export interface FinanceGateway {
@@ -66,7 +66,7 @@ export class FinanceApiError extends Error {
   }
 }
 
-const minor = (value: number) => value / 100
+const minor = (value: number | string) => Number(value) / 100
 
 export class ApiFinanceGateway implements FinanceGateway {
   private readonly baseUrl: string
@@ -104,7 +104,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<{ transaction: ApiTransaction }>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100), feeMinor: Math.round((input.fee ?? 0) * 100), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
+    const result = await this.request<{ transaction: ApiTransaction }>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100).toString(), feeMinor: Math.round((input.fee ?? 0) * 100).toString(), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
     return this.mapTransaction(result.transaction)
   }
 
@@ -114,8 +114,8 @@ export class ApiFinanceGateway implements FinanceGateway {
     if (input.categoryId !== undefined) updatePayload.categoryId = input.categoryId
     if (input.date !== undefined) updatePayload.occurredOn = input.date
     if (input.time !== undefined) updatePayload.occurredTime = input.time ?? null
-    if (input.amount !== undefined) updatePayload.amountMinor = Math.round(input.amount * 100)
-    if (input.fee !== undefined) updatePayload.feeMinor = Math.round((input.fee ?? 0) * 100)
+    if (input.amount !== undefined) updatePayload.amountMinor = Math.round(input.amount * 100).toString()
+    if (input.fee !== undefined) updatePayload.feeMinor = Math.round((input.fee ?? 0) * 100).toString()
     if (input.note !== undefined) updatePayload.note = input.note
 
     const result = await this.request<{ transaction: ApiTransaction }>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
@@ -167,7 +167,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal> {
-    await this.request(`/goals/${goalId}/fund`, { method: 'POST', signal, body: JSON.stringify({ sourceAccountId, amountMinor: Math.round(amount * 100), occurredOn: date }) })
+    await this.request(`/goals/${goalId}/fund`, { method: 'POST', signal, body: JSON.stringify({ sourceAccountId, amountMinor: Math.round(amount * 100).toString(), occurredOn: date }) })
     const state = await this.load(signal)
     const goal = state.goals.find((candidate) => candidate.id === goalId)
     if (!goal) throw new Error('Goal was not returned after funding')
@@ -190,11 +190,11 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod> {
-    return this.request<ApiBudgetPeriod>('/budgets', { method: 'POST', signal, body: JSON.stringify({ periodStart, periodEnd, incomePoolMinor: Math.round(incomePool * 100) }) })
+    return this.request<ApiBudgetPeriod>('/budgets', { method: 'POST', signal, body: JSON.stringify({ periodStart, periodEnd, incomePoolMinor: Math.round(incomePool * 100).toString() }) })
   }
 
   async setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory> {
-    const result = await this.request<ApiBudgetAllocation>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100) }) })
+    const result = await this.request<ApiBudgetAllocation>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100).toString() }) })
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 
@@ -226,7 +226,7 @@ export class ApiFinanceGateway implements FinanceGateway {
     await this.request<void>(`/categories/${categoryId}`, { method: 'DELETE', signal })
   }
 
-  private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined, reversedTransactionId: t.reversedTransactionId ?? undefined })
+  private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined, reversedTransactionId: t.reversedTransactionId ?? undefined, tags: t.tags ?? [] })
   private mapGoal = (g: ApiGoal): Goal => ({ id: g.id, name: g.name, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as Goal['status'], active: g.active })
 }
 

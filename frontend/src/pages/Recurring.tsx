@@ -329,6 +329,7 @@ export function Recurring() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([])
   const todayIso = finance.todayIso
 
   const editingItem = editingItemId ? items.find((item) => item.id === editingItemId) : undefined
@@ -393,6 +394,7 @@ export function Recurring() {
     const state = dueStateOf(i, todayIso)
     return state === 'due_soon' || state === 'overdue'
   }).length
+  const suggestions = (finance.recurringSuggestions ?? []).filter((suggestion) => !ignoredSuggestions.includes(`${suggestion.merchant}|${suggestion.amountMinor}`))
 
   return (
     <div>
@@ -510,6 +512,25 @@ export function Recurring() {
           </ul>
         )}
       </Card>
+
+      {suggestions.length > 0 && (
+        <Card>
+          <div className="section-head"><span className="card-title-text">Possible recurring payments</span></div>
+          <p className="faint">These patterns are calculated from cleared transactions. Nothing is added automatically.</p>
+          <ul className="rec-list">
+            {suggestions.map((suggestion) => {
+              const key = `${suggestion.merchant}|${suggestion.amountMinor}`
+              return <li className="rec-row" key={key}>
+                <div className="rec-row-main"><strong>{suggestion.merchant}</strong><div className="faint">{formatMoney(Number(suggestion.amountMinor) / 100)} monthly · {suggestion.explanation}</div></div>
+                <div className="rec-row-actions">
+                  <button type="button" className="btn btn--primary btn--compact" onClick={() => { setFormOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Confirm &amp; add</button>
+                  <button type="button" className="btn btn--ghost btn--compact" onClick={() => setIgnoredSuggestions((current) => [...current, key])}>Ignore</button>
+                </div>
+              </li>
+            })}
+          </ul>
+        </Card>
+      )}
     </div>
   )
 }

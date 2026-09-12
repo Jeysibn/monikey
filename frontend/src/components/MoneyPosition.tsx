@@ -15,7 +15,7 @@ import './MoneyPosition.css'
  */
 export function MoneyPosition() {
   const finance = useFinance()
-  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount } =
+  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount, upcomingRecurringBills, recurringBillsCount } =
     finance.safeToSpendBreakdown
 
   const steps = [
@@ -57,13 +57,12 @@ export function MoneyPosition() {
       <p className="money-position-summary faint">
         You have {formatMoney(availableCash, { withCents: false })} in cash. After{' '}
         {formatMoney(upcomingCreditMinimums, { withCents: false })} in card minimums due within 30 days and{' '}
-        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals in {finance.activePeriodLabel} (not yet moved out
+        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals and {formatMoney(upcomingRecurringBills, { withCents: false })} in {recurringBillsCount} recurring bills (not yet moved out
         of your accounts), you have an <strong>estimated {formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
       </p>
       <p className="money-position-scope faint">
-        Included: cash account balances, credit card minimum payments due in the next 30 days, and {finance.activePeriodLabel}’s planned
-        goal contributions. Excluded: recurring bills and subscriptions — Monikey doesn’t track those yet, so this estimate may be higher
-        than what’s truly free to spend.
+        Included: cash account balances, card minimums, recurring bills, and {finance.activePeriodLabel}’s planned goal contributions due in the
+        next 30 days. This remains an estimate because future income and unrecorded obligations are excluded.
       </p>
     </section>
   )

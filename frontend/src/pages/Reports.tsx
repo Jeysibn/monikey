@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
@@ -17,8 +17,9 @@ import {
   type ReportView,
 } from '../state/reportsSelectors'
 import { formatMoney } from '../utils/currency'
-import { formatGoalDate } from '../utils/date'
+import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
+import { useBackendAuthOptional } from '../components/BackendAuthContext'
 
 const VIEWS: ReportView[] = ['monthly', 'quarterly', 'yearly']
 const VIEW_LABEL: Record<ReportView, string> = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
@@ -66,11 +67,23 @@ function IllustrativeNote({ children }: { children: ReactNode }) {
 
 export function Reports() {
   const finance = useFinance()
+  const backend = useBackendAuthOptional()
   const { state, todayIso } = finance
   const [view, setView] = useState<ReportView>('monthly')
+  const [custom, setCustom] = useState(false)
+  const [customFrom, setCustomFrom] = useState(todayIso)
+  const [customTo, setCustomTo] = useState(todayIso)
+  const [tagSpend, setTagSpend] = useState<Array<{ tagId: string; tagName: string; spent: string }>>([])
 
-  const period = useMemo(() => reportingPeriodForView(todayIso, view), [todayIso, view])
-  const periodLabel = reportPeriodLabel(todayIso, view)
+  const period = useMemo(() => custom ? { start: customFrom, end: customTo >= customFrom ? addDaysToIso(customTo, 1) : customFrom } : reportingPeriodForView(todayIso, view), [custom, customFrom, customTo, todayIso, view])
+  const periodLabel = custom ? `${customFrom} to ${customTo}` : reportPeriodLabel(todayIso, view)
+  useEffect(() => {
+    if (!backend) return
+    fetch(`/api/v1/reports/spending-by-tag?from=${period.start}&to=${addDaysToIso(period.end, -1)}`, { credentials: 'include' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('tag report unavailable')))
+      .then(setTagSpend)
+      .catch(() => setTagSpend([]))
+  }, [backend, period.start, period.end])
 
   const income = totalIncome(state, period)
   const expenses = totalExpenses(state, period)
@@ -93,16 +106,18 @@ export function Reports() {
   const netWorthTrend = netWorthTrendSample(state, todayIso)
   const balanceTrend = accountBalanceTrendSample(state, todayIso)
   const debtTrend = debtTrendSample(state, todayIso)
+  function exportCsv() {
+    const rows = [['Date', 'Title', 'Type', 'Amount', 'Currency', 'Category'], ...state.transactions.filter((transaction) => transaction.date >= period.start && transaction.date < period.end).map((transaction) => [transaction.date, transaction.title, transaction.type, String(Math.abs(transaction.amount)), 'PHP', categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'])]
+    const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `monikey-report-${todayIso}.csv`; anchor.click(); URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="reports-page">
       <div className="page-head">
         <h1 className="page-title">Reports</h1>
         <div className="reports-actions">
-          <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-            Export CSV
-            <span className="coming-soon-tag">Coming soon</span>
-          </button>
+          <button type="button" className="btn btn--ghost" onClick={exportCsv}>Export CSV</button>
           <button type="button" className="btn btn--ghost" disabled title="Coming soon">
             Export PDF
             <span className="coming-soon-tag">Coming soon</span>
@@ -122,11 +137,9 @@ export function Reports() {
             {VIEW_LABEL[v]}
           </button>
         ))}
-        <button type="button" className="pill" disabled title="Coming soon" aria-disabled="true">
-          Custom
-          <span className="coming-soon-tag">Coming soon</span>
-        </button>
+        <button type="button" className={`pill${custom ? ' pill--active' : ''}`} aria-pressed={custom} onClick={() => setCustom((value) => !value)}>Custom</button>
       </div>
+      {custom && <div className="reports-custom-range"><label>From<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label><label>To<input type="date" value={customTo} min={customFrom} onChange={(event) => setCustomTo(event.target.value)} /></label></div>}
       <div className="faint rp-period-caption">{periodLabel}</div>
 
       <div className="kpi-row">
@@ -135,6 +148,11 @@ export function Reports() {
           <div className="num kpi-val">{formatMoney(income, { withCents: false })}</div>
           <div className="budget-meta faint">{periodLabel}</div>
         </Card>
+
+        {backend && <Card>
+          <CardTitle action={<span className="faint">{periodLabel}</span>}>Spending by Tag</CardTitle>
+          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>#{tag.tagName}</a><span className="num">{formatMoney(Number(tag.spent) / 100, { withCents: false })}</span></li>)}</ul>}
+        </Card>}
         <Card>
           <div className="eyebrow">Expenses</div>
           <div className="num kpi-val">{formatMoney(expenses, { withCents: false })}</div>
@@ -221,12 +239,10 @@ export function Reports() {
             {finance.spendMix.map((s) => (
               <li key={s.categoryId} className="rp-cat-row">
                 <div className="rp-cat-row-top">
-                  <span>
-                    <span className="swatch" style={{ background: s.color }} /> {s.category}
-                  </span>
-                  <span className="num">
-                    {formatMoney(s.amount, { withCents: false })} · {s.pct}%
-                  </span>
+                  <a href={`/transactions?category=${encodeURIComponent(s.categoryId)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>
+                    <span><span className="swatch" style={{ background: s.color }} /> {s.category}</span>
+                    <span className="num">{formatMoney(s.amount, { withCents: false })} · {s.pct}%</span>
+                  </a>
                 </div>
                 <ProgressBar pct={s.pct} color={s.color} label={`${s.category} share of spend`} />
               </li>

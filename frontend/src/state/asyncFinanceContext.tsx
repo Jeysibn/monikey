@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { AddCategoryInput, AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, BudgetCategory, Category, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal, UpdateAccountInput, UpdateCreditCardInput, UpdateGoalInput } from '../domain/finance'
 import type { FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
-import type { RecurringGateway } from '../services/apiRecurringGateway'
+import type { RecurringGateway, RecurringSuggestion } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
@@ -33,6 +33,7 @@ export interface AsyncFinanceContextValue {
   setCategoryBudget: (categoryId: string, allocated: number) => Promise<BudgetCategory>
   deleteCategory: (categoryId: string) => Promise<void>
   recurringItems: RecurringItem[]
+  recurringSuggestions: RecurringSuggestion[]
   addRecurringItem: (input: AddRecurringItemInput) => Promise<RecurringItem>
   setRecurringStatus: (id: string, status: 'active' | 'paused') => Promise<RecurringItem>
   markRecurringPaid: (id: string) => Promise<RecurringItem>
@@ -56,6 +57,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   const [attempt, setAttempt] = useState(0)
   const [stableRecurringGateway] = useState(() => recurringGateway ?? (gateway ? undefined : new ApiRecurringGateway()))
   const [recurringItems, setRecurringItems] = useState<RecurringItem[]>([])
+  const [recurringSuggestions, setRecurringSuggestions] = useState<RecurringSuggestion[]>([])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -72,6 +74,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   useEffect(() => {
     if (!stableRecurringGateway) return
     stableRecurringGateway.load().then(setRecurringItems).catch(() => undefined)
+    stableRecurringGateway.suggestions?.().then(setRecurringSuggestions).catch(() => undefined)
   }, [stableRecurringGateway])
 
   const addTransaction = useCallback(async (input: AddTransactionInput) => {
@@ -223,9 +226,11 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableRecurringGateway.delete(id)
     setRecurringItems((current) => current.filter((item) => item.id !== id))
   }, [stableRecurringGateway])
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
+    recurringItems,
+    recurringSuggestions,
     todayIso: new Date().toISOString().slice(0, 10),
     addTransaction,
     updateTransaction,
@@ -238,7 +243,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     deleteCategory: (categoryId) => deleteCategory(categoryId),
     createGoal,
     addGoalFunds: (goalId, sourceAccountId, amount) => addGoalFunds(goalId, sourceAccountId, amount, new Date().toISOString().slice(0, 10)),
-  }), [state, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, addCategory, updateCategory, setCategoryBudget, deleteCategory, createGoal, addGoalFunds])
+  }), [state, recurringItems, recurringSuggestions, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, addCategory, updateCategory, setCategoryBudget, deleteCategory, createGoal, addGoalFunds])
   return <AsyncFinanceContext.Provider value={value}><FinanceContext.Provider value={financeValue}>{children}</FinanceContext.Provider></AsyncFinanceContext.Provider>
 }
 

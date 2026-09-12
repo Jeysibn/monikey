@@ -1,7 +1,8 @@
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import { FinanceApiError } from './apiFinanceGateway'
 
-type ApiRecurringItem = Omit<RecurringItem, 'amount'> & { amountMinor: number }
+type ApiRecurringItem = Omit<RecurringItem, 'amount'> & { amountMinor: string }
+export type RecurringSuggestion = { merchant: string; amountMinor: string; frequency: 'monthly'; occurrences: number; explanation: string }
 
 export interface RecurringGateway {
   load(): Promise<RecurringItem[]>
@@ -10,6 +11,7 @@ export interface RecurringGateway {
   markPaid(id: string): Promise<RecurringItem>
   update(id: string, input: Partial<AddRecurringItemInput>): Promise<RecurringItem>
   delete(id: string): Promise<void>
+  suggestions?: () => Promise<RecurringSuggestion[]>
 }
 
 export class ApiRecurringGateway implements RecurringGateway {
@@ -28,7 +30,7 @@ export class ApiRecurringGateway implements RecurringGateway {
 
   async load(): Promise<RecurringItem[]> { return (await this.request<{ items: ApiRecurringItem[] }>('/recurring')).items.map(this.map) }
   async add(input: AddRecurringItemInput): Promise<RecurringItem> {
-    return this.map(await this.request<ApiRecurringItem>('/recurring', { method: 'POST', body: JSON.stringify({ ...input, amountMinor: Math.round(input.amount * 100) }) }))
+    return this.map(await this.request<ApiRecurringItem>('/recurring', { method: 'POST', body: JSON.stringify({ ...input, amountMinor: Math.round(input.amount * 100).toString() }) }))
   }
   async setStatus(id: string, status: 'active' | 'paused'): Promise<RecurringItem> {
     return this.map(await this.request<ApiRecurringItem>(`/recurring/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }))
@@ -39,7 +41,7 @@ export class ApiRecurringGateway implements RecurringGateway {
   async update(id: string, input: Partial<AddRecurringItemInput>): Promise<RecurringItem> {
     const body: Record<string, unknown> = {}
     if (input.merchant !== undefined) body.merchant = input.merchant
-    if (input.amount !== undefined) body.amountMinor = Math.round(input.amount * 100)
+    if (input.amount !== undefined) body.amountMinor = Math.round(input.amount * 100).toString()
     if (input.frequency !== undefined) body.frequency = input.frequency
     if (input.nextDueDate !== undefined) body.nextDueDate = input.nextDueDate
     if (input.accountId !== undefined) body.accountId = input.accountId
@@ -50,5 +52,6 @@ export class ApiRecurringGateway implements RecurringGateway {
   async delete(id: string): Promise<void> {
     await this.request<void>(`/recurring/${id}`, { method: 'DELETE' })
   }
-  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, amount: item.amountMinor / 100 })
+  async suggestions(): Promise<RecurringSuggestion[]> { return (await this.request<{ suggestions: RecurringSuggestion[] }>('/recurring/suggestions')).suggestions }
+  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, amount: Number(item.amountMinor) / 100 })
 }

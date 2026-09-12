@@ -192,3 +192,6 @@
     gap: 4px;
   }
 }
+.reports-custom-range { display: flex; gap: 1rem; align-items: end; margin: .75rem 0; }
+.reports-custom-range label { display: grid; gap: .3rem; color: var(--text-muted); font-size: .85rem; }
+@media (max-width: 600px) { .reports-custom-range { align-items: stretch; flex-direction: column; } }

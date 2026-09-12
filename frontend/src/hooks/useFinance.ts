@@ -51,12 +51,13 @@ export function useFinance() {
       totalGoalSavings: selectors.totalGoalSavings(state),
       plannedMonthlyContributionTotal: selectors.plannedMonthlyContributionTotal(state),
       avgGoalProgressPct: selectors.avgGoalProgressPct(state),
-      safeToSpendBreakdown: selectors.safeToSpendBreakdown(state, todayIso),
+      safeToSpendBreakdown: selectors.safeToSpendBreakdown(state, todayIso, ctx.recurringItems ?? []),
     }
-  }, [state, todayIso])
+  }, [state, todayIso, ctx.recurringItems])
 
   return {
     state,
+    recurringSuggestions: ctx.recurringSuggestions ?? [],
     ...derived,
     addTransaction: ctx.addTransaction,
     updateTransaction: ctx.updateTransaction,

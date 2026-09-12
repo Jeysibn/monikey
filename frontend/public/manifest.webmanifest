@@ -1,0 +1,10 @@
+{
+  "name": "MoniKey Personal Finance",
+  "short_name": "MoniKey",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "description": "Privacy-first self-hosted personal finance.",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

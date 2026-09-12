@@ -20,6 +20,7 @@ import {
   transferFeeReconciliationLabel,
 } from './financeSelectors'
 import { DEMO_TODAY_ISO } from '../utils/clock'
+import type { RecurringItem } from '../domain/recurring'
 
 // TR-001: every time-dependent selector takes an explicit `todayIso` (or a
 // `ReportingPeriod` derived from one). These tests pin it to the demo clock
@@ -223,6 +224,7 @@ describe('categoriesForTransactionType (SR-006)', () => {
 })
 
 describe('safeToSpendBreakdown (SR-008)', () => {
+  const recurring: RecurringItem = { id: 'rent', merchant: 'Rent', amount: 1200, frequency: 'monthly', nextDueDate: '2026-09-05', accountId: 'checking', categoryId: 'housing', autopay: false, status: 'active' }
   const asset: Account = {
     id: 'checking',
     name: 'Checking',
@@ -269,6 +271,13 @@ describe('safeToSpendBreakdown (SR-008)', () => {
   function makeMoneyState(overrides: Partial<FinanceState> = {}): FinanceState {
     return { ...makeState([]), accounts: [asset], creditCards: [card], goals: [activeGoal, completedGoal], ...overrides }
   }
+
+  it('subtracts active recurring bills due within the 30-day horizon', () => {
+    const breakdown = safeToSpendBreakdown(makeMoneyState(), TODAY, [recurring])
+    expect(breakdown.upcomingRecurringBills).toBe(1200)
+    expect(breakdown.recurringBillsCount).toBe(1)
+    expect(breakdown.safeToSpend).toBe(8000)
+  })
 
   it('reconciles exactly: safeToSpend = availableCash - upcomingCreditMinimums - plannedGoalContributions', () => {
     const breakdown = safeToSpendBreakdown(makeMoneyState(), TODAY)

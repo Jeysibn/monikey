@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Reports } from './Reports'
 import { FinanceProvider } from '../state/FinanceProvider'
 import { fixedClock, DEMO_TODAY_ISO } from '../utils/clock'
@@ -41,18 +41,20 @@ describe('Reports page', () => {
     expect(caption?.textContent).toBe('2026')
   })
 
-  it('renders a disabled Custom pill marked coming soon, never a working custom range', () => {
+  it('opens a deterministic custom date range picker', () => {
     renderReports()
     const custom = screen.getByRole('button', { name: /Custom/ }) as HTMLButtonElement
-    expect(custom.disabled).toBe(true)
-    expect(within(custom).getByText('Coming soon')).toBeDefined()
+    expect(custom.disabled).toBe(false)
+    fireEvent.click(custom)
+    expect(screen.getByLabelText('From')).toBeDefined()
+    expect(screen.getByLabelText('To')).toBeDefined()
   })
 
-  it('renders disabled CSV/PDF export buttons marked coming soon rather than a working export', () => {
+  it('provides a working CSV export while keeping PDF explicitly unavailable', () => {
     renderReports()
     const csv = screen.getByRole('button', { name: /Export CSV/ }) as HTMLButtonElement
     const pdf = screen.getByRole('button', { name: /Export PDF/ }) as HTMLButtonElement
-    expect(csv.disabled).toBe(true)
+    expect(csv.disabled).toBe(false)
     expect(pdf.disabled).toBe(true)
   })
 

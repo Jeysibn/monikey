@@ -15,6 +15,11 @@ const NAV_ITEMS = [
 
 const MORE_ITEMS = [
   { to: '/recurring', label: 'Recurring & Bills', sub: 'Subscriptions & due dates' },
+  { to: '/rules', label: 'Transaction Rules', sub: 'Automate imported transactions' },
+  { to: '/reconciliation', label: 'Reconciliation', sub: 'Match statements to ledger' },
+  { to: '/imports', label: 'Imports', sub: 'Review CSV transactions' },
+  { to: '/security', label: 'Sessions & Security', sub: 'Password and active sessions' },
+  { to: '/tags', label: 'Tags', sub: 'Transaction context' },
   { to: '/reports', label: 'Reports', sub: 'Trends over time' },
 ]
 

@@ -71,6 +71,7 @@ export interface Transaction {
    * not two live transactions.
    */
   reversedTransactionId?: string
+  tags?: string[]
 }
 
 export interface Category {

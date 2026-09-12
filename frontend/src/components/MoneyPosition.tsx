@@ -9,9 +9,8 @@ import './MoneyPosition.css'
  * SR-008 for the "Estimated" qualifier, placement, and breakdown wording.
  *
  * The label is "Estimated safe to spend" rather than a bare "Safe to
- * spend" because the inputs are known to be incomplete: recurring bills
- * (rent, subscriptions, utilities) have no data source in this app yet
- * and are excluded, not assumed to be zero.
+ * spend" because the inputs are known to be incomplete: future income and
+ * obligations not recorded in this app are excluded, not assumed to be zero.
  */
 export function MoneyPosition() {
   const finance = useFinance()
@@ -26,6 +25,11 @@ export function MoneyPosition() {
       // TR-003: "due soon" is a real, documented date filter — the next 30
       // days — not a figure of speech.
       hint: `Minimum payments on ${cardsDueCount} card${cardsDueCount === 1 ? '' : 's'} due in the next 30 days`,
+    },
+    {
+      label: 'Upcoming bills',
+      value: upcomingRecurringBills,
+      hint: `${recurringBillsCount} active recurring item${recurringBillsCount === 1 ? '' : 's'} due in the next 30 days`,
     },
     {
       label: 'Planned goal contributions',

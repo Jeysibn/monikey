@@ -4,7 +4,7 @@ import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { dueStateOf, monthlyEquivalent, useRecurring } from '../hooks/useRecurring'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMinorUnits } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { formatDateLabel, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import type { AddRecurringItemInput, RecurringDueState, RecurringFrequency } from '../domain/recurring'
@@ -521,7 +521,7 @@ export function Recurring() {
             {suggestions.map((suggestion) => {
               const key = `${suggestion.merchant}|${suggestion.amountMinor}`
               return <li className="rec-row" key={key}>
-                <div className="rec-row-main"><strong>{suggestion.merchant}</strong><div className="faint">{formatMoney(Number(suggestion.amountMinor) / 100)} monthly · {suggestion.explanation}</div></div>
+                <div className="rec-row-main"><strong>{suggestion.merchant}</strong><div className="faint">{formatMinorUnits(suggestion.amountMinor)} monthly · {suggestion.explanation}</div></div>
                 <div className="rec-row-actions">
                   <button type="button" className="btn btn--primary btn--compact" onClick={() => { setFormOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Confirm &amp; add</button>
                   <button type="button" className="btn btn--ghost btn--compact" onClick={() => setIgnoredSuggestions((current) => [...current, key])}>Ignore</button>

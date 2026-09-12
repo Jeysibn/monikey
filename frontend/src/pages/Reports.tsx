@@ -16,7 +16,7 @@ import {
   type IllustrativeTrendPoint,
   type ReportView,
 } from '../state/reportsSelectors'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMinorUnits } from '../utils/currency'
 import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
 import { useBackendAuthOptional } from '../components/BackendAuthContext'
@@ -147,7 +147,7 @@ export function Reports() {
 
         {backend && <Card>
           <CardTitle action={<span className="faint">{periodLabel}</span>}>Spending by Tag</CardTitle>
-          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>#{tag.tagName}</a><span className="num">{formatMoney(Number(tag.spent) / 100, { withCents: false })}</span></li>)}</ul>}
+          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>#{tag.tagName}</a><span className="num">{formatMinorUnits(tag.spent, { withCents: false })}</span></li>)}</ul>}
         </Card>}
         <Card>
           <div className="eyebrow">Expenses</div>

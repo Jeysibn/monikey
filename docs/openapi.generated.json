@@ -4499,16 +4499,177 @@
     },
     "/reconciliations": {
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accountId",
+                  "statementDate",
+                  "statementBalanceMinor"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "statementDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "statementBalanceMinor": {
+                    "type": "string",
+                    "pattern": "^-?\\d+$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "accountId",
+                    "statementDate",
+                    "statementBalanceMinor",
+                    "calculatedBalanceMinor",
+                    "differenceMinor",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "accountId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "statementDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "statementBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "calculatedBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "differenceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "reconciled",
+                        "unreconciled"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
       "get": {
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "userId",
+                      "accountId",
+                      "statementDate",
+                      "statementBalanceMinor",
+                      "calculatedBalanceMinor",
+                      "differenceMinor",
+                      "status"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "accountId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "statementDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "statementBalanceMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "calculatedBalanceMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "differenceMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "reconciled",
+                          "unreconciled"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4518,7 +4679,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
             "in": "path",
             "name": "id",
@@ -4527,7 +4689,71 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "accountId",
+                    "statementDate",
+                    "statementBalanceMinor",
+                    "calculatedBalanceMinor",
+                    "differenceMinor",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "accountId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "statementDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "statementBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "calculatedBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "differenceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "reconciled",
+                        "unreconciled"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }

@@ -20,8 +20,9 @@ Frontend types are generated from that snapshot with
 committed artifact. The generated types form a contract boundary; feature
 gateways may still map them into domain models for UI-specific behavior.
 
-The accounts, budgets, goals, and recurring slices publish explicit request and
-response schemas; the transaction mutation slice is also fully described.
+The accounts, budgets, goals, recurring, and reconciliation slices publish
+explicit request and response schemas; the transaction mutation slice is also
+fully described.
 `ApiFinanceGateway` and `ApiRecurringGateway`
 imports generated types for those responses and maps them into frontend domain
 models. A real-PostgreSQL contract test verifies

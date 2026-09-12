@@ -3440,7 +3440,23 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: date */
+                            statementDate: string;
+                            statementBalanceMinor: string;
+                            calculatedBalanceMinor: string;
+                            differenceMinor: string;
+                            /** @enum {string} */
+                            status: "reconciled" | "unreconciled";
+                        }[];
+                    };
                 };
             };
         };
@@ -3452,14 +3468,58 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        accountId: string;
+                        /** Format: date */
+                        statementDate: string;
+                        statementBalanceMinor: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: date */
+                            statementDate: string;
+                            statementBalanceMinor: string;
+                            calculatedBalanceMinor: string;
+                            differenceMinor: string;
+                            /** @enum {string} */
+                            status: "reconciled" | "unreconciled";
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
                 };
             };
         };
@@ -3492,7 +3552,32 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            /** Format: uuid */
+                            accountId: string;
+                            /** Format: date */
+                            statementDate: string;
+                            statementBalanceMinor: string;
+                            calculatedBalanceMinor: string;
+                            differenceMinor: string;
+                            /** @enum {string} */
+                            status: "reconciled" | "unreconciled";
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
                 };
             };
         };

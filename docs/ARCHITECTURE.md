@@ -96,10 +96,10 @@ parity, and tests must explicitly choose the intended mode.
 
 `domain/` holds types and frontend validation; `state/financeSelectors.ts` holds
 shared derived calculations; `hooks/` exposes those values to pages. Recurring
-and settings features also have dedicated domain/hooks/gateway code. Crypto V1
-is active at `/investments`; broader investment accounting is partial.
-The actual nine-route table is `frontend/src/App.tsx`; none of those routes uses
-`Placeholder.tsx`.
+and settings features also have dedicated domain/hooks/gateway code. Crypto is
+active at `/investments`; broader investment accounting is partial. The current
+route table is `frontend/src/App.tsx`; none of those routes uses the removed
+placeholder page.
 
 ## Clock, dates and currency
 

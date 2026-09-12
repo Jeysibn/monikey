@@ -10,3 +10,7 @@ is an explicit idempotent operation; demo data requires both
 `MONIKEY_DEMO_MODE=true` and the non-production safety policy (or an explicit
 override for controlled environments). Never store real secrets in this file,
 the repository, or the project knowledge base.
+
+The frontend container owns browser security headers, including CSP. The
+external HTTPS ingress remains responsible for TLS termination and may add
+transport headers such as HSTS at that boundary.

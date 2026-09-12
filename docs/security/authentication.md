@@ -16,5 +16,6 @@ Production disables both unless `PUBLIC_API_DOCS=true` is explicitly chosen at
 the deployment boundary.
 
 The API adds `X-Content-Type-Options`, `Referrer-Policy`, and restrictive
-`Permissions-Policy` headers. HSTS is emitted only for HTTPS production origins;
-HTTP local development is not given an HSTS policy.
+`Permissions-Policy` headers. The web nginx layer additionally emits a
+same-origin Content Security Policy and frame policy. HSTS is emitted only for
+HTTPS production origins; HTTP local development is not given an HSTS policy.

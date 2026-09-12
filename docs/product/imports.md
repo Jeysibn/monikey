@@ -15,6 +15,10 @@ Rule-generated tag names are upserted as user-owned tags and assigned to the
 resulting ledger transaction when valid. See [Transaction tags](tags.md).
 The current UI targets CSV; OFX, QFX, and CAMT.053 remain future adapters.
 
+Receipt OCR totals are parsed into exact integer minor-unit strings. The review
+form may display a major-unit value for editing, but receipt commit sends the
+validated minor-unit string to the ledger.
+
 ## Related
 
 - [Transaction rules](transaction-rules.md)

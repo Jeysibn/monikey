@@ -7,7 +7,7 @@
 export interface ReceiptDraft {
   merchant?: string
   date?: string
-  totalMinor?: number
+  totalMinor?: string
   category?: string
   confidence?: number
 }
@@ -33,6 +33,13 @@ function normalizeDate(value: string): string | undefined {
     }
   }
   return undefined
+}
+
+function parseMinorUnits(value: string): string | undefined {
+  const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/)
+  if (!match) return undefined
+  const cents = (match[2] ?? '').padEnd(2, '0')
+  return `${BigInt(match[1]! ) * 100n + BigInt(cents)}`
 }
 
 /**
@@ -91,10 +98,12 @@ export function parseReceiptOcr(ocrText: string): ReceiptDraft {
     const match = ocrText.match(pattern)
     if (match && match[1]) {
       const amountStr = match[1].replace(/,/g, '')
-      const amountMajor = parseFloat(amountStr)
-      if (!Number.isNaN(amountMajor) && amountMajor > 0) {
+      const amountMinor = parseMinorUnits(amountStr)
+      if (amountMinor !== undefined && BigInt(amountMinor) > 0n) {
         // Convert to minor units (centavos, assuming PHP with 2 decimal places)
-        draft.totalMinor = Math.round(amountMajor * 100)
+        // using integer arithmetic so OCR values never cross a floating-point
+        // monetary boundary.
+        draft.totalMinor = amountMinor
         totalConfidence += 85
         confidenceCount += 1
         break

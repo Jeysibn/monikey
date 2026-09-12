@@ -31,3 +31,14 @@ rewritten and the provider sync path has been verified; then remove it from the
 deployment secret store. Take a verified database backup before applying the
 rotation. The update is row-by-row and can be safely re-run with the same
 secret pair if interrupted.
+
+## Dependency security checks
+
+PR validation audits the frontend production dependency graph at high severity
+and the backend graph at critical severity. The backend audit currently reports
+the Prisma CLI development chain `@prisma/config` → `deepmerge-ts`; the runtime
+image is built with `npm ci --omit=dev`, and release validation scans the actual
+OCI image with Trivy at high/critical severity. Do not apply npm's suggested
+Prisma downgrade automatically: it would downgrade the pinned Prisma 6.19
+toolchain and is not an appropriate production fix without a compatible
+upgrade or a confirmed runtime exposure.

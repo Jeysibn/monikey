@@ -1,5 +1,9 @@
 # Disaster Recovery
 
+Reviewed against the current repository scripts and Compose configuration on
+2026-09-12. This remains a procedure reference, not evidence of a completed
+restore drill.
+
 Reviewed against the repository scripts, Dockerfile and Compose configuration on
 2026-09-08. This is a recovery procedure reference, not evidence of a completed
 restore drill or a guaranteed recovery time.
@@ -31,9 +35,10 @@ not from the host. Likewise, `/data/receipts` is normally inside the container.
 Use a compatible PostgreSQL client (the database container supplies one).
 
 The scripts have limits: receipt backup may produce an empty archive when its
-source path is missing, and the database restore script does not enable psql's
-`ON_ERROR_STOP` or explicitly select a maintenance database for its drop/create
-commands. An exit message alone is not proof of a successful, complete recovery.
+source path is missing, and restore remains destructive and interactive. The
+database restore validates gzip archives before changing state, uses the
+`postgres` maintenance database for drop/create, and enables psql's
+`ON_ERROR_STOP`; an exit message alone is still not proof of a complete recovery.
 
 ## Backing up the base Compose deployment
 
@@ -75,8 +80,9 @@ before replacing them. Never use `docker compose down -v` as a routine stop comm
    archive above, extract into `/data` and restore ownership to `monikey:monikey`
    using the matching backend image/volume.
 4. Check `_prisma_migrations` against the selected source revision. Base Compose's
-   `migrate` service runs both migration and seed; review seed behavior before
-   starting the entire stack against recovered data. Apply only intended migrations.
+   `migrate` service runs migrations only. Run the idempotent system seed explicitly
+   if required; never run the demo seed against recovered production data. Apply
+   only intended migrations.
 5. Start the selected API, worker and web deployment after validating database and
    storage configuration. Check readiness and inspect logs before accepting traffic.
 6. Verify authentication, representative account balances and transaction history,

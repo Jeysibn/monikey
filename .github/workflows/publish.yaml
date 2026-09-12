@@ -53,12 +53,12 @@ jobs:
       # once here and reused by both publish jobs below.
       image_owner: ${{ steps.owner.outputs.lowercase }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Filter changed paths
         id: filter
         if: github.event_name == 'push'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         with:
           filters: |
             backend:
@@ -94,18 +94,19 @@ jobs:
     env:
       API_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push api/worker image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: ./backend
           push: true
@@ -115,12 +116,21 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
+      - name: Record immutable image digest
+        run: echo "API_IMAGE=${{ env.API_IMAGE }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify pushed image is pullable
         run: |
           set -euo pipefail
           docker pull "${{ env.API_IMAGE }}:${{ github.sha }}"
           docker inspect "${{ env.API_IMAGE }}:${{ github.sha }}" \
             --format 'Pulled {{.RepoTags}} ({{.Id}})'
+
+      - name: Vulnerability scan
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 "${{ env.API_IMAGE }}:${{ github.sha }}"
+
+      - name: Generate SBOM
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:v1.18.1 "${{ env.API_IMAGE }}:${{ github.sha }}" -o spdx-json > api-sbom.spdx.json
 
       - name: Deployment summary
         if: success()
@@ -138,18 +148,19 @@ jobs:
     env:
       WEB_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push web image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: ./frontend
           push: true
@@ -161,12 +172,21 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
+      - name: Record immutable image digest
+        run: echo "WEB_IMAGE=${{ env.WEB_IMAGE }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify pushed image is pullable
         run: |
           set -euo pipefail
           docker pull "${{ env.WEB_IMAGE }}:${{ github.sha }}"
           docker inspect "${{ env.WEB_IMAGE }}:${{ github.sha }}" \
             --format 'Pulled {{.RepoTags}} ({{.Id}})'
+
+      - name: Vulnerability scan
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 "${{ env.WEB_IMAGE }}:${{ github.sha }}"
+
+      - name: Generate SBOM
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:v1.18.1 "${{ env.WEB_IMAGE }}:${{ github.sha }}" -o spdx-json > web-sbom.spdx.json
 
       - name: Deployment summary
         if: success()

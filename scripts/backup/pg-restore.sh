@@ -35,6 +35,10 @@ if [ ! -f "${BACKUP_FILE}" ]; then
   exit 1
 fi
 
+if [[ "${BACKUP_FILE}" == *.gz ]]; then
+  gzip -t "${BACKUP_FILE}"
+fi
+
 # Source .env if it exists
 if [ -f .env ]; then
   set -a
@@ -79,6 +83,10 @@ fi
 
 export PGPASSWORD="${DB_PASSWORD}"
 
+# Administration commands run against the maintenance database, never the
+# database being replaced. Quote the identifier after parsing it from config.
+DB_NAME_SQL=$(printf '%s' "${DB_NAME}" | sed 's/"/""/g')
+
 echo "Connecting to database at ${DB_HOST}:${DB_PORT}..."
 
 # Check if database exists and attempt to drop it
@@ -88,7 +96,9 @@ psql \
   --port="${DB_PORT}" \
   --username="${DB_USER}" \
   --no-password \
-  --command="DROP DATABASE IF EXISTS ${DB_NAME};" || true
+  --dbname="postgres" \
+  --set=ON_ERROR_STOP=1 \
+  --command="DROP DATABASE IF EXISTS \"${DB_NAME_SQL}\";"
 
 # Create fresh database
 echo "Creating fresh database..."
@@ -97,7 +107,9 @@ psql \
   --port="${DB_PORT}" \
   --username="${DB_USER}" \
   --no-password \
-  --command="CREATE DATABASE ${DB_NAME};"
+  --dbname="postgres" \
+  --set=ON_ERROR_STOP=1 \
+  --command="CREATE DATABASE \"${DB_NAME_SQL}\";"
 
 # Restore from backup
 echo "Restoring from backup..."
@@ -112,6 +124,7 @@ if [ "${BACKUP_FILE}" = "${BACKUP_FILE%.gz}" ]; then
     --username="${DB_USER}" \
     --no-password \
     --dbname="${DB_NAME}" \
+    --set=ON_ERROR_STOP=1 \
     < "${BACKUP_FILE}"
 else
   # Gzip compressed SQL file
@@ -120,7 +133,8 @@ else
     --port="${DB_PORT}" \
     --username="${DB_USER}" \
     --no-password \
-    --dbname="${DB_NAME}"
+    --dbname="${DB_NAME}" \
+    --set=ON_ERROR_STOP=1
 fi
 
 echo ""

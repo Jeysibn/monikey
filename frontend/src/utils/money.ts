@@ -12,6 +12,20 @@
 // input, and anything with stray characters are all rejected with a
 // specific message rather than silently coerced.
 export type MoneyParseResult = { ok: true; value: number } | { ok: false; error: string }
+export type MinorMoneyParseResult = { ok: true; value: bigint } | { ok: false; error: string }
+
+/** Exact minor-unit parser for API boundaries; never passes through Number. */
+export function parseMinorUnitInput(raw: string, opts: { allowNegative?: boolean } = {}): MinorMoneyParseResult {
+  const trimmed = raw.trim().replace(/,/g, '')
+  const negative = trimmed.startsWith('-')
+  const unsigned = negative ? trimmed.slice(1) : trimmed
+  if (!unsigned || (negative && !opts.allowNegative) || !/^\d+(?:\.\d{0,2})?$/.test(unsigned)) {
+    return { ok: false, error: negative ? 'Amount can’t be negative.' : 'Enter a valid amount.' }
+  }
+  const [whole, fraction = ''] = unsigned.split('.')
+  const value = BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, '0') || '0')
+  return { ok: true, value: negative ? -value : value }
+}
 
 export function parseMoneyInput(raw: string, opts: { allowNegative?: boolean } = {}): MoneyParseResult {
   const allowNegative = opts.allowNegative ?? false

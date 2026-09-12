@@ -1,12 +1,7 @@
-// Phase 1 seed stub (QA Attempt 1, Finding 12: `db:seed:demo` pointed at a
-// missing file). This intentionally seeds ONLY the stable system categories
-// the plan asks for ("Seed stable category IDs compatible with the current
-// demo state" — plan §13) — no users/accounts/cards/transactions yet, since
-// LedgerModule and account/card creation don't exist until Phase 3. Phase 3
-// must extend this file with the rest of the demo dataset (accounts, cards,
-// historical transactions, budgets, goals) rather than replace it wholesale.
-//
-// Idempotent: safe to run against an already-seeded database (upsert by id).
+// Explicit, idempotent demo seed. It creates the complete local demonstration
+// dataset and is intentionally guarded by MONIKEY_DEMO_MODE (with an
+// additional production override) so production migration startup cannot
+// create demo users or financial records.
 import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
 import { createLedgerModule } from '../src/modules/ledger/ledger.module.js'

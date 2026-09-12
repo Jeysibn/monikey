@@ -14,6 +14,7 @@ Repository documentation is the canonical reference for the shipped system.
 - [Operations: configuration](operations/configuration.md)
 - [Operations: observability](operations/observability.md)
 - [Operations: deployment contract](operations/deployment-contract.md)
+- [Operations: restore drill — 2026-09-13](operations/restore-drill-2026-09-13.md)
 - [CI/CD operations](CI-CD-Operations.md)
 - [Disaster recovery](Disaster-Recovery.md)
 - [Security: authentication](security/authentication.md)

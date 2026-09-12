@@ -1,8 +1,9 @@
 # Disaster Recovery
 
 Reviewed against the current repository scripts and Compose configuration on
-2026-09-12. This remains a procedure reference, not evidence of a completed
-restore drill.
+2026-09-13. A local isolated database-and-receipt drill is recorded in
+[Restore drill — 2026-09-13](operations/restore-drill-2026-09-13.md); it is not
+a production RPO/RTO certification.
 
 ## What must be recovered
 

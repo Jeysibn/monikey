@@ -221,7 +221,8 @@ checks from the jobs actually enabled in [CI](CI-CD-Operations.md).
 
 - Investment account selectors, FX-unavailable UI treatment, historical currency
   capture and fully converted mixed-currency aggregate returns remain unfinished.
-- Plaid access-token storage still has encryption TODOs; very large import amounts
+- Plaid access tokens are encrypted through the versioned AES-GCM credential
+  envelope before persistence; very large import amounts
   have an explicit bigint-to-Number precision FIXME.
 - Expired sessions are rejected/opportunistically removed, but a periodic cleanup
   sweep remains unimplemented.

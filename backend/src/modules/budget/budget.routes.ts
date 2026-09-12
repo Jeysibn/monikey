@@ -18,6 +18,12 @@ const categoryIdParamSchema = z.object({ id: z.string().uuid('Invalid category I
 
 type PeriodWithAllocations = { id: string; userId: string; periodStart: Date; periodEnd: Date; incomePoolMinor: bigint; createdAt: Date; updatedAt: Date; allocations: Array<{ id: string; budgetPeriodId: string; categoryId: string; allocatedMinor: bigint; createdAt: Date; updatedAt: Date }> }
 
+const minorJson = { type: 'string', pattern: '^-?\\d+$' } as const
+const allocationJson = { type: 'object', required: ['id', 'budgetPeriodId', 'categoryId', 'allocatedMinor', 'spentMinor', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, budgetPeriodId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, allocatedMinor: minorJson, spentMinor: minorJson, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const periodJson = { type: 'object', required: ['id', 'userId', 'periodStart', 'periodEnd', 'incomePoolMinor', 'createdAt', 'updatedAt', 'allocations'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, periodStart: { type: 'string', format: 'date-time' }, periodEnd: { type: 'string', format: 'date-time' }, incomePoolMinor: minorJson, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' }, allocations: { type: 'array', items: allocationJson } } } as const
+const periodBodyJson = { type: 'object', required: ['periodStart', 'periodEnd'], additionalProperties: false, properties: { periodStart: { type: 'string', format: 'date' }, periodEnd: { type: 'string', format: 'date' }, incomePoolMinor: minorJson } } as const
+const allocationBodyJson = { type: 'object', required: ['categoryId', 'allocatedMinor'], additionalProperties: false, properties: { categoryId: { type: 'string', format: 'uuid' }, allocatedMinor: minorJson } } as const
+
 // Computes a server-authoritative `spentMinor` per allocation by summing
 // qualifying cleared expense transactions in that category for the period's
 // date range. Card payments, income, and goal funding are never counted here
@@ -108,11 +114,11 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     }
     return reply.code(204).send()
   })
-  app.get('/budgets', async (request) => {
+  app.get('/budgets', { schema: { response: { 200: { type: 'array', items: periodJson } } } }, async (request) => {
     const periods = await prisma.budgetPeriod.findMany({ where: { userId: request.user!.id }, include: { allocations: true }, orderBy: { periodStart: 'desc' } })
     return Promise.all(periods.map((period) => attachSpentMinor(prisma, request.user!.id, period)))
   })
-  app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { body: periodBodyJson, response: { 201: periodJson } } }, async (request, reply) => {
     const input = periodSchema.parse(request.body)
     const userTimezone = request.user!.timezone
 
@@ -128,7 +134,7 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC } }, create: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC, incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
     return reply.code(201).send(await attachSpentMinor(prisma, request.user!.id, period))
   })
-  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, body: allocationBodyJson, response: { 201: allocationJson } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = budgetIdParamSchema.parse(request.params)
     const input = allocationSchema.parse(request.body)

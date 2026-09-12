@@ -20,10 +20,10 @@ Frontend types are generated from that snapshot with
 committed artifact. The generated types form a contract boundary; feature
 gateways may still map them into domain models for UI-specific behavior.
 
-The accounts slice is the first adopted path: Fastify publishes explicit
-request and response schemas for account creation, credit-card creation,
-listing, and updates. `ApiFinanceGateway` imports those generated types and
-maps them into frontend domain models. A real-PostgreSQL contract test verifies
+The accounts and budgets slices publish explicit request and response schemas;
+the transaction mutation slice is also fully described. `ApiFinanceGateway`
+imports generated types for those responses and maps them into frontend domain
+models. A real-PostgreSQL contract test verifies
 that minor units remain strings and account enums survive response
 serialization. Routes that still generate `content?: never` need accurate
 backend schemas before their handwritten gateway DTOs can be safely removed.

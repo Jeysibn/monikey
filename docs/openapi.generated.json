@@ -2659,24 +2659,266 @@
       "get": {
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "userId",
+                      "periodStart",
+                      "periodEnd",
+                      "incomePoolMinor",
+                      "createdAt",
+                      "updatedAt",
+                      "allocations"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "periodStart": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "periodEnd": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "incomePoolMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "allocations": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "budgetPeriodId",
+                            "categoryId",
+                            "allocatedMinor",
+                            "spentMinor",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "budgetPeriodId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "categoryId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "allocatedMinor": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "spentMinor": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "periodStart",
+                  "periodEnd"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "periodStart": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "periodEnd": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "incomePoolMinor": {
+                    "type": "string",
+                    "pattern": "^-?\\d+$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "periodStart",
+                    "periodEnd",
+                    "incomePoolMinor",
+                    "createdAt",
+                    "updatedAt",
+                    "allocations"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "periodStart": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "periodEnd": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "incomePoolMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "allocations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "budgetPeriodId",
+                          "categoryId",
+                          "allocatedMinor",
+                          "spentMinor",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "budgetPeriodId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "categoryId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "allocatedMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "spentMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/budgets/{id}/allocations": {
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "categoryId",
+                  "allocatedMinor"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "categoryId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "allocatedMinor": {
+                    "type": "string",
+                    "pattern": "^-?\\d+$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
             "in": "path",
             "name": "id",
@@ -2684,8 +2926,54 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "budgetPeriodId",
+                    "categoryId",
+                    "allocatedMinor",
+                    "spentMinor",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "budgetPeriodId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "categoryId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "allocatedMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "spentMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

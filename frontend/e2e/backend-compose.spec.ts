@@ -52,8 +52,8 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
 
     const transactions = await page.request.get('/api/v1/transactions')
     expect(transactions.status()).toBe(200)
-    const body = await transactions.json() as { items: Array<{ title: string; amountMinor: number }> }
-    expect(body.items).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Compose API expense', amountMinor: 1234 })]))
+    const body = await transactions.json() as { items: Array<{ title: string; amountMinor: string }> }
+    expect(body.items).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Compose API expense', amountMinor: '1234' })]))
 
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible()
@@ -73,6 +73,7 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
     await page.getByLabel('Email').fill(email)
     await page.getByLabel('Password').fill('import-e2e-password')
     await page.getByRole('button', { name: 'Create account', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
 
     const accountResponse = await page.request.post('/api/v1/accounts', {
       headers: { Origin: origin },
@@ -84,16 +85,17 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
 
     const csv = 'date,description,amount,merchant\n2026-09-10,Import E2E Grocery,12.34,Market'
     await page.getByLabel('CSV file').setInputFiles({ name: 'import.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
-    await expect(page.getByRole('heading', { name: 'Review staged rows' })).toBeVisible()
+    await page.getByRole('button', { name: 'Upload and preview' }).click()
+    await expect(page.getByText('2. Review staged rows', { exact: true })).toBeVisible()
     await page.getByLabel('Post to account').selectOption(account.id)
     await page.getByRole('button', { name: 'Commit eligible rows' }).click()
     await expect(page.getByText(/Committed 1 transaction/)).toBeVisible()
 
     await page.goto('/reconciliation')
-    await page.getByLabel('Account').selectOption(account.id)
+    await page.locator('.reconciliation-form select').selectOption(account.id)
     await page.getByLabel('Statement balance').fill('487.66')
     await page.getByRole('button', { name: 'Compare balance' }).click()
     await expect(page.getByRole('status')).toContainText('Reconciled')
-    await expect(page.getByText('₱0.00')).toBeVisible()
+    await expect(page.getByRole('status')).toContainText('Difference: ₱0.00')
   })
 })

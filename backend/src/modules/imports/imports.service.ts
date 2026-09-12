@@ -111,12 +111,18 @@ export class ImportsService {
       throw new AppError('INVALID_STATE', 'Cannot add transactions to committed batch', { statusCode: 400 })
     }
 
+    // Deduplication is scoped to the owner. The database uniqueness constraint
+    // is intentionally provider+key, so include the user scope before the
+    // repository boundary; otherwise one user's CSV could suppress an
+    // unrelated user's identical transaction.
+    const scopedDedupKey = `${userId}:${input.provider}:${input.dedupKey}`
+
     // Create the imported transaction
     // May fail with unique constraint violation if this exact (provider, dedupKey) already exists
     try {
       const txn = await this.repo.createImportedTransaction({
         importBatchId: batchId,
-        dedupKey: input.dedupKey,
+        dedupKey: scopedDedupKey,
         provider: input.provider,
         providerTransactionId: input.providerTransactionId,
         title: input.title,

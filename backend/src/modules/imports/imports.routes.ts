@@ -741,27 +741,28 @@ function parseDate(dateStr: string): Date {
  * Handles various currency formats and uses safe conversion.
  * Returns 0 if parsing fails.
  */
-function parseAmount(amountStr: string): bigint {
+export function parseAmount(amountStr: string): bigint {
   if (!amountStr) return 0n
 
   // Remove whitespace and common currency symbols
   let cleaned = amountStr.trim().replace(/[$€¥₱\s]/g, '')
 
-  // Handle comma as decimal separator (e.g., European format)
-  if (cleaned.includes(',') && !cleaned.includes('.')) {
-    cleaned = cleaned.replace(',', '.')
+  // Handle comma as decimal separator when it is not a thousands group.
+  if (cleaned.includes(',') && cleaned.includes('.') && cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+    const lastComma = cleaned.lastIndexOf(',')
+    cleaned = `${cleaned.slice(0, lastComma).replace(/[.,]/g, '')}.${cleaned.slice(lastComma + 1)}`
+  } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+    const lastComma = cleaned.lastIndexOf(',')
+    const fractionalDigits = cleaned.length - lastComma - 1
+    cleaned = fractionalDigits > 0 && fractionalDigits <= 2 ? `${cleaned.slice(0, lastComma).replace(/,/g, '')}.${cleaned.slice(lastComma + 1)}` : cleaned.replace(/,/g, '')
+  } else {
+    cleaned = cleaned.replace(/,/g, '')
   }
 
-  // Remove any remaining commas (thousands separator)
-  cleaned = cleaned.replace(/,/g, '')
-
-  try {
-    const num = parseFloat(cleaned)
-    if (isNaN(num) || num <= 0) return 0n
-    return decimalToMinorUnits(num)
-  } catch {
-    return 0n
-  }
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(cleaned)
+  if (!match) return 0n
+  const value = BigInt(match[1]!) * 100n + BigInt((match[2] ?? '').padEnd(2, '0') || '0')
+  return value > 0n ? value : 0n
 }
 
 export async function registerImportsRoutes(app: FastifyInstance, options: any) {

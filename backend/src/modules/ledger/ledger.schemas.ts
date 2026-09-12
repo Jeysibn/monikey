@@ -6,7 +6,6 @@ export const transactionTypeSchema = z.enum(['income', 'expense', 'transfer']);
 export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring', 'import']);
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);
 
-export const minorUnitInput = z.union([z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string'), z.number().int().nonnegative()]).transform((value) => BigInt(value))
 /** JSON/API money input. Numbers are intentionally rejected at this boundary. */
 export const minorUnitTransportInput = z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string').transform((value) => BigInt(value))
 

@@ -14,4 +14,8 @@ describe('ledger money transport', () => {
     expect(() => postTransactionSchema.parse({ ...base, amountMinor: '1.5' })).toThrow()
     expect(() => postTransactionSchema.parse({ ...base, amountMinor: '-1' })).toThrow()
   })
+
+  it('rejects JavaScript numbers at the JSON boundary', () => {
+    expect(() => postTransactionSchema.parse({ ...base, amountMinor: 100 })).toThrow()
+  })
 })

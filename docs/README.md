@@ -8,6 +8,7 @@ Repository documentation is the canonical reference for the shipped system.
 - [Product: reconciliation](product/reconciliation.md)
 - [Product: split transactions](product/split-transactions.md)
 - [Product: reports](product/reports.md)
+- [Product: budgeting](product/budgeting.md)
 - [Product: tags](product/tags.md)
 - [Product: PWA](product/pwa.md)
 - [Operations: configuration](operations/configuration.md)

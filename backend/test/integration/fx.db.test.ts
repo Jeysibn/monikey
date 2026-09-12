@@ -1,29 +1,29 @@
 import { beforeAll, afterAll, describe, it, expect, beforeEach } from 'vitest'
 import { Decimal } from '@prisma/client/runtime/library'
-import { getPrismaClient, disconnectPrisma } from '../../src/db/client.js'
+import { createPrismaClient } from '../../src/db/client.js'
 import { createFxModule, FxRateRepository } from '../../src/modules/fx/fx.module.js'
 import { FxRatesProvider, FxRateSet } from '../../src/integrations/interfaces/fxRatesProvider.js'
 
-const prisma = getPrismaClient()
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
 const describeIfDb = databaseUrl ? describe : describe.skip
+const prisma = databaseUrl ? createPrismaClient(databaseUrl) : undefined
 
 describeIfDb('FxRateRepository and FxRateService Integration', () => {
   let repository: FxRateRepository
 
   beforeAll(async () => {
     // Ensure database is up
-    await prisma.$queryRaw`SELECT 1`
+    await prisma!.$queryRaw`SELECT 1`
   })
 
   afterAll(async () => {
-    await disconnectPrisma()
+    await prisma!.$disconnect()
   })
 
   beforeEach(async () => {
     // Clean up FX rate snapshots before each test
-    await prisma.fxRateSnapshot.deleteMany()
-    repository = new FxRateRepository(prisma)
+    await prisma!.fxRateSnapshot.deleteMany()
+    repository = new FxRateRepository(prisma!)
   })
 
   describe('FxRateRepository.save()', () => {
@@ -41,7 +41,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         fetchedAt,
       })
 
-      const snapshot = await prisma.fxRateSnapshot.findUnique({
+      const snapshot = await prisma!.fxRateSnapshot.findUnique({
         where: {
           baseCurrency_quoteCurrency_rateDate_provider: {
             baseCurrency: 'PHP',
@@ -68,7 +68,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         fetchedAt: new Date(),
       })
 
-      const snapshot = await prisma.fxRateSnapshot.findUnique({
+      const snapshot = await prisma!.fxRateSnapshot.findUnique({
         where: {
           baseCurrency_quoteCurrency_rateDate_provider: {
             baseCurrency: 'USD',
@@ -108,7 +108,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         fetchedAt: new Date('2026-08-31T18:00:00Z'),
       })
 
-      const snapshot = await prisma.fxRateSnapshot.findUnique({
+      const snapshot = await prisma!.fxRateSnapshot.findUnique({
         where: {
           baseCurrency_quoteCurrency_rateDate_provider: {
             baseCurrency: 'PHP',
@@ -144,7 +144,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         fetchedAt: new Date(),
       })
 
-      const snapshots = await prisma.fxRateSnapshot.findMany({
+      const snapshots = await prisma!.fxRateSnapshot.findMany({
         where: { baseCurrency: 'PHP', rateDate },
       })
 
@@ -289,7 +289,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
 
     it('should return distinct currencies from financial accounts', async () => {
       // Create a test user
-      const user = await prisma.user.create({
+      const user = await prisma!.user.create({
         data: {
           email: `test-fx-${Date.now()}@example.com`,
           passwordHash: 'fake-hash',
@@ -298,7 +298,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
       })
 
       // Create accounts with different currencies
-      await prisma.financialAccount.create({
+      await prisma!.financialAccount.create({
         data: {
           userId: user.id,
           name: 'PHP Account',
@@ -308,7 +308,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         },
       })
 
-      await prisma.financialAccount.create({
+      await prisma!.financialAccount.create({
         data: {
           userId: user.id,
           name: 'USD Account',
@@ -325,8 +325,8 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
       expect(currencies).toHaveLength(2)
 
       // Cleanup
-      await prisma.financialAccount.deleteMany({ where: { userId: user.id } })
-      await prisma.user.delete({ where: { id: user.id } })
+      await prisma!.financialAccount.deleteMany({ where: { userId: user.id } })
+      await prisma!.user.delete({ where: { id: user.id } })
     })
   })
 
@@ -426,7 +426,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
       }
 
       // Create user and account
-      const user = await prisma.user.create({
+      const user = await prisma!.user.create({
         data: {
           email: `test-refresh-${Date.now()}@example.com`,
           passwordHash: 'fake-hash',
@@ -434,7 +434,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
         },
       })
 
-      await prisma.financialAccount.create({
+      await prisma!.financialAccount.create({
         data: {
           userId: user.id,
           name: 'Test Account',
@@ -453,8 +453,8 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
       expect(refreshed).toBeGreaterThan(0)
 
       // Cleanup
-      await prisma.financialAccount.deleteMany({ where: { userId: user.id } })
-      await prisma.user.delete({ where: { id: user.id } })
+      await prisma!.financialAccount.deleteMany({ where: { userId: user.id } })
+      await prisma!.user.delete({ where: { id: user.id } })
     })
   })
 
@@ -493,7 +493,7 @@ describeIfDb('FxRateRepository and FxRateService Integration', () => {
 
     it('should allow call when count < maxCalls', async () => {
       // Cleanup first
-      await prisma.externalApiUsage.deleteMany({
+      await prisma!.externalApiUsage.deleteMany({
         where: { provider: 'test_provider_max1' },
       })
 

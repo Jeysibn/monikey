@@ -350,33 +350,756 @@
       "get": {
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "userId",
+                      "name",
+                      "institution",
+                      "accountType",
+                      "classification",
+                      "currencyCode",
+                      "openingBalanceMinor",
+                      "currentBalanceMinor",
+                      "lastFour",
+                      "syncStatus",
+                      "manual",
+                      "version",
+                      "archivedAt",
+                      "createdAt",
+                      "updatedAt",
+                      "creditCardDetail"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "institution": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accountType": {
+                        "type": "string",
+                        "enum": [
+                          "cash",
+                          "checking",
+                          "savings",
+                          "ewallet",
+                          "credit_card"
+                        ]
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "asset",
+                          "liability"
+                        ]
+                      },
+                      "currencyCode": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      },
+                      "openingBalanceMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "currentBalanceMinor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "lastFour": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "syncStatus": {
+                        "type": "string"
+                      },
+                      "manual": {
+                        "type": "boolean"
+                      },
+                      "version": {
+                        "type": "integer"
+                      },
+                      "archivedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "creditCardDetail": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "network",
+                              "creditLimitMinor",
+                              "dueDay",
+                              "minimumPaymentMinor",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "properties": {
+                              "network": {
+                                "type": "string",
+                                "enum": [
+                                  "visa",
+                                  "mastercard"
+                                ]
+                              },
+                              "creditLimitMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "dueDay": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 31
+                              },
+                              "minimumPaymentMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "accountType"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "institution": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "accountType": {
+                    "type": "string",
+                    "enum": [
+                      "cash",
+                      "checking",
+                      "savings",
+                      "ewallet"
+                    ]
+                  },
+                  "currencyCode": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "default": "PHP"
+                  },
+                  "openingBalanceMinor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ],
+                    "default": "0"
+                  },
+                  "lastFour": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 4,
+                        "maxLength": 4
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "name",
+                    "institution",
+                    "accountType",
+                    "classification",
+                    "currencyCode",
+                    "openingBalanceMinor",
+                    "currentBalanceMinor",
+                    "lastFour",
+                    "syncStatus",
+                    "manual",
+                    "version",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt",
+                    "creditCardDetail"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "institution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accountType": {
+                      "type": "string",
+                      "enum": [
+                        "cash",
+                        "checking",
+                        "savings",
+                        "ewallet",
+                        "credit_card"
+                      ]
+                    },
+                    "classification": {
+                      "type": "string",
+                      "enum": [
+                        "asset",
+                        "liability"
+                      ]
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    "openingBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "currentBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "lastFour": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "syncStatus": {
+                      "type": "string"
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "archivedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "creditCardDetail": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "network",
+                            "creditLimitMinor",
+                            "dueDay",
+                            "minimumPaymentMinor",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "properties": {
+                            "network": {
+                              "type": "string",
+                              "enum": [
+                                "visa",
+                                "mastercard"
+                              ]
+                            },
+                            "creditLimitMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "dueDay": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 31
+                            },
+                            "minimumPaymentMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/credit-cards": {
       "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "network",
+                  "creditLimitMinor",
+                  "dueDay"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "institution": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currencyCode": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "default": "PHP"
+                  },
+                  "openingBalanceMinor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ],
+                    "default": "0"
+                  },
+                  "lastFour": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 4,
+                        "maxLength": 4
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "network": {
+                    "type": "string",
+                    "enum": [
+                      "visa",
+                      "mastercard"
+                    ]
+                  },
+                  "creditLimitMinor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "minimumPaymentMinor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ],
+                    "default": "0"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Default Response"
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "name",
+                    "institution",
+                    "accountType",
+                    "classification",
+                    "currencyCode",
+                    "openingBalanceMinor",
+                    "currentBalanceMinor",
+                    "lastFour",
+                    "syncStatus",
+                    "manual",
+                    "version",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt",
+                    "creditCardDetail"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "institution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accountType": {
+                      "type": "string",
+                      "enum": [
+                        "cash",
+                        "checking",
+                        "savings",
+                        "ewallet",
+                        "credit_card"
+                      ]
+                    },
+                    "classification": {
+                      "type": "string",
+                      "enum": [
+                        "asset",
+                        "liability"
+                      ]
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    "openingBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "currentBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "lastFour": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "syncStatus": {
+                      "type": "string"
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "archivedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "creditCardDetail": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "network",
+                            "creditLimitMinor",
+                            "dueDay",
+                            "minimumPaymentMinor",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "properties": {
+                            "network": {
+                              "type": "string",
+                              "enum": [
+                                "visa",
+                                "mastercard"
+                              ]
+                            },
+                            "creditLimitMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "dueDay": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 31
+                            },
+                            "minimumPaymentMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/accounts/{id}": {
       "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "institution": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastFour": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 4,
+                        "maxLength": 4
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currentBalanceMinor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
             "in": "path",
             "name": "id",
@@ -385,7 +1108,172 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "name",
+                    "institution",
+                    "accountType",
+                    "classification",
+                    "currencyCode",
+                    "openingBalanceMinor",
+                    "currentBalanceMinor",
+                    "lastFour",
+                    "syncStatus",
+                    "manual",
+                    "version",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt",
+                    "creditCardDetail"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "institution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accountType": {
+                      "type": "string",
+                      "enum": [
+                        "cash",
+                        "checking",
+                        "savings",
+                        "ewallet",
+                        "credit_card"
+                      ]
+                    },
+                    "classification": {
+                      "type": "string",
+                      "enum": [
+                        "asset",
+                        "liability"
+                      ]
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    "openingBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "currentBalanceMinor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    },
+                    "lastFour": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "syncStatus": {
+                      "type": "string"
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "archivedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "creditCardDetail": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "network",
+                            "creditLimitMinor",
+                            "dueDay",
+                            "minimumPaymentMinor",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "properties": {
+                            "network": {
+                              "type": "string",
+                              "enum": [
+                                "visa",
+                                "mastercard"
+                              ]
+                            },
+                            "creditLimitMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "dueDay": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 31
+                            },
+                            "minimumPaymentMinor": {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

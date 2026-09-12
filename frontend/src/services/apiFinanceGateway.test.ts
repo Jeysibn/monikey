@@ -12,12 +12,13 @@ function response(body: unknown, status = 200): Response {
 describe('ApiFinanceGateway', () => {
   it('maps bootstrap minor units and server enums into the frontend domain', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ financeState: {
-      accounts: [account(), account({ id: 'card-1', classification: 'liability', accountType: 'credit_card', currentBalanceMinor: 146000, creditCardDetail: { network: 'visa', creditLimitMinor: 500000, dueDay: 15, minimumPaymentMinor: 7500 } })],
+      accounts: [account(), account({ id: 'wallet-1', accountType: 'ewallet', name: 'GCash' }), account({ id: 'card-1', classification: 'liability', accountType: 'credit_card', currentBalanceMinor: 146000, creditCardDetail: { network: 'visa', creditLimitMinor: 500000, dueDay: 15, minimumPaymentMinor: 7500 } })],
       transactions: [{ id: 'tx-1', type: 'expense', title: 'Cafe', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-29', occurredTime: '09:14:00', amountMinor: 640, feeMinor: 0, source: 'manual', status: 'cleared', note: null }],
       categories: [{ id: 'food', name: 'Food', color: 'teal', budgetable: true, allowsIncome: false, allowsExpense: true }], budgets: [], goals: [],
     }, serverDate: '2026-08-29' }))
     const state = await new ApiFinanceGateway('/api/v1', fetcher).load()
     expect(state.accounts[0]).toMatchObject({ id: 'account-1', balance: 4120.5, type: 'checking' })
+    expect(state.accounts[1]).toMatchObject({ id: 'wallet-1', type: 'ewallet' })
     expect(state.creditCards[0]).toMatchObject({ id: 'card-1', balance: 1460, limit: 5000, dueDate: '2026-08-15' })
     expect(state.transactions[0]).toMatchObject({ amount: -6.4, accountId: 'account-1', time: '09:14' })
     expect(state.categories[0].transactionKinds).toEqual(['expense'])
@@ -34,6 +35,13 @@ describe('ApiFinanceGateway', () => {
   it('surfaces non-success API responses', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({}, 422))
     await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toMatchObject({ status: 422, code: 'INTERNAL_ERROR' })
+  })
+
+  it('uses the generated ewallet API contract', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(account({ id: 'wallet-1', accountType: 'ewallet', name: 'GCash' }), 201))
+    const result = await new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'GCash', type: 'ewallet', balance: 100 })
+    expect(result.type).toBe('ewallet')
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ accountType: 'ewallet' })
   })
 
   it('preserves the backend error envelope for domain validation', async () => {

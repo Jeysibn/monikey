@@ -13,12 +13,12 @@ import type {
   UpdateCreditCardInput,
   UpdateGoalInput,
 } from '../domain/finance'
+import type { paths } from '../api.generated'
 
-type ApiAccount = {
-  id: string; name: string; institution: string | null; accountType: Account['type'];
-  classification: Account['classification']; currentBalanceMinor: string; lastFour: string | null;
-  syncStatus: string; manual: boolean; creditCardDetail?: { network: CreditCard['network']; creditLimitMinor: string; dueDay: number; minimumPaymentMinor: string } | null;
-}
+type ApiAccount = paths['/accounts']['post']['responses'][201]['content']['application/json']
+type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']['application/json']
+type CreateCreditCardRequest = paths['/credit-cards']['post']['requestBody']['content']['application/json']
+type UpdateAccountRequest = paths['/accounts/{id}']['patch']['requestBody']['content']['application/json']
 type ApiTransaction = { id: string; type: Transaction['type']; title: string; categoryId: string | null; goalId: string | null; fromAccountId: string | null; toAccountId: string | null; occurredOn: string; occurredTime: string | null; amountMinor: string; feeMinor: string; source: Transaction['source']; status: Transaction['status']; note: string | null; reversedTransactionId?: string | null; tags?: string[] }
 type ApiGoal = { id: string; name: string; targetMinor: string; currentMinor: string; targetDate: string; completedDate: string | null; monthlyContributionMinor: string | null; status: string; active: boolean }
 type ApiBudgetAllocation = { id: string; categoryId: string; allocatedMinor: string; spentMinor: string }
@@ -128,26 +128,28 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account> {
-    const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify({ name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100), lastFour: input.lastFour ?? null }) })
+    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100), lastFour: input.lastFour ?? null }
+    const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify(payload) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
-    const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify({ name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100), creditLimitMinor: Math.round(input.limit * 100), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100) }) })
+    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100), creditLimitMinor: Math.round(input.limit * 100), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100) }
+    const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify(payload) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
   }
 
   async updateAccount(accountId: string, input: UpdateAccountInput, signal?: AbortSignal): Promise<Account> {
     const { balance, ...rest } = input
-    const body = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
     const account = await this.request<ApiAccount>(`/accounts/${accountId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async updateCreditCard(cardId: string, input: UpdateCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
     const { balance, ...rest } = input
-    const body = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100) }) }
     const account = await this.request<ApiAccount>(`/accounts/${cardId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: `${new Date().toISOString().slice(0, 7)}-${String(detail.dueDay).padStart(2, '0')}`, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }

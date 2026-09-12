@@ -694,7 +694,43 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            institution: string | null;
+                            /** @enum {string} */
+                            accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                            /** @enum {string} */
+                            classification: "asset" | "liability";
+                            currencyCode: string;
+                            openingBalanceMinor: string;
+                            currentBalanceMinor: string;
+                            lastFour: string | null;
+                            syncStatus: string;
+                            manual: boolean;
+                            version: number;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            creditCardDetail: {
+                                /** @enum {string} */
+                                network: "visa" | "mastercard";
+                                creditLimitMinor: string;
+                                dueDay: number;
+                                minimumPaymentMinor: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                        }[];
+                    };
                 };
             };
         };
@@ -706,14 +742,64 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        institution?: string | null;
+                        /** @enum {string} */
+                        accountType: "cash" | "checking" | "savings" | "ewallet";
+                        /** @default PHP */
+                        currencyCode?: string;
+                        /** @default 0 */
+                        openingBalanceMinor?: string | number;
+                        lastFour?: string | null;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            institution: string | null;
+                            /** @enum {string} */
+                            accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                            /** @enum {string} */
+                            classification: "asset" | "liability";
+                            currencyCode: string;
+                            openingBalanceMinor: string;
+                            currentBalanceMinor: string;
+                            lastFour: string | null;
+                            syncStatus: string;
+                            manual: boolean;
+                            version: number;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            creditCardDetail: {
+                                /** @enum {string} */
+                                network: "visa" | "mastercard";
+                                creditLimitMinor: string;
+                                dueDay: number;
+                                minimumPaymentMinor: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                        };
+                    };
                 };
             };
         };
@@ -739,14 +825,68 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        institution?: string | null;
+                        /** @default PHP */
+                        currencyCode?: string;
+                        /** @default 0 */
+                        openingBalanceMinor?: string | number;
+                        lastFour?: string | null;
+                        /** @enum {string} */
+                        network: "visa" | "mastercard";
+                        creditLimitMinor: string | number;
+                        dueDay: number;
+                        /** @default 0 */
+                        minimumPaymentMinor?: string | number;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            institution: string | null;
+                            /** @enum {string} */
+                            accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                            /** @enum {string} */
+                            classification: "asset" | "liability";
+                            currencyCode: string;
+                            openingBalanceMinor: string;
+                            currentBalanceMinor: string;
+                            lastFour: string | null;
+                            syncStatus: string;
+                            manual: boolean;
+                            version: number;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            creditCardDetail: {
+                                /** @enum {string} */
+                                network: "visa" | "mastercard";
+                                creditLimitMinor: string;
+                                dueDay: number;
+                                minimumPaymentMinor: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                        };
+                    };
                 };
             };
         };
@@ -778,14 +918,59 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        institution?: string | null;
+                        lastFour?: string | null;
+                        currentBalanceMinor?: string | number;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            institution: string | null;
+                            /** @enum {string} */
+                            accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                            /** @enum {string} */
+                            classification: "asset" | "liability";
+                            currencyCode: string;
+                            openingBalanceMinor: string;
+                            currentBalanceMinor: string;
+                            lastFour: string | null;
+                            syncStatus: string;
+                            manual: boolean;
+                            version: number;
+                            archivedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            creditCardDetail: {
+                                /** @enum {string} */
+                                network: "visa" | "mastercard";
+                                creditLimitMinor: string;
+                                dueDay: number;
+                                minimumPaymentMinor: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            } | null;
+                        };
+                    };
                 };
             };
         };

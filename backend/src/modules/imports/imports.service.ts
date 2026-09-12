@@ -33,6 +33,7 @@ export interface ImportedTransactionRow {
   occurredOn: Date
   status: string
   validationErrors: string[]
+  processingError: string | null
 }
 
 export interface CommitImportBatchInput {
@@ -263,8 +264,7 @@ export class ImportsService {
 
         // Post through LedgerModule
         const occurredOnStr = importedTxn.occurredOn.toISOString().split('T')[0]
-        // The legacy ledger input is number-based. Refuse values that cannot be
-        // represented exactly instead of silently corrupting money.
+        // Keep imported money inside the exact bigint ledger boundary.
         if (importedTxn.amountMinor > BigInt(Number.MAX_SAFE_INTEGER)) {
           throw new AppError('AMOUNT_OUT_OF_RANGE', 'Imported amount exceeds the exact ledger input range.', { statusCode: 422, field: 'amountMinor' })
         }
@@ -302,19 +302,24 @@ export class ImportsService {
         committedCount++
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        await this.repo.updateImportedTransactionStatus(importedTxn.id, userId, importedTxn.status, message)
         errors.push({ txnId: importedTxn.id, error: message })
       }
     }
 
+    const totalCommittedCount = await this.prisma.importedTransaction.count({
+      where: { importBatchId: batchId, status: 'posted' },
+    })
+
     // Update batch status
     await this.repo.updateImportBatch(batchId, userId, {
       status: errors.length > 0 ? 'partially_committed' : 'committed',
-      committedCount,
+      committedCount: totalCommittedCount,
       committedAt: new Date(),
       errorMessage: errors.length > 0 ? `${errors.length} transactions failed to post` : null,
     })
 
-    return { committedCount, errors }
+    return { committedCount: totalCommittedCount, errors }
   }
 
   /**

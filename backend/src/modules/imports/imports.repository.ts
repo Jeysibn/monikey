@@ -175,7 +175,7 @@ export class ImportsRepository {
   /**
    * Update an imported transaction status.
    */
-  async updateImportedTransactionStatus(transactionId: string, userId: string, status: string) {
+  async updateImportedTransactionStatus(transactionId: string, userId: string, status: string, processingError: string | null = null) {
     // Verify ownership
     const txn = await this.getImportedTransaction(transactionId, userId)
     if (!txn) {
@@ -184,7 +184,7 @@ export class ImportsRepository {
 
     return this.prisma.importedTransaction.update({
       where: { id: transactionId },
-      data: { status },
+      data: { status, processingError },
     })
   }
 

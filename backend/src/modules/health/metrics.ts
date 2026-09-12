@@ -28,11 +28,12 @@ export function renderMetrics(): string {
 
 /** Database gauges answer operational questions without exposing user IDs. */
 export async function renderDatabaseMetrics(prisma: PrismaClient): Promise<string> {
-  const [pendingJobs, deadJobs, pendingOutbox, failedImports] = await Promise.all([
+  const [pendingJobs, deadJobs, pendingOutbox, partialImports, failedImportRows] = await Promise.all([
     prisma.workerJob.count({ where: { status: 'pending' } }),
     prisma.workerJob.count({ where: { status: 'dead' } }),
     prisma.notificationOutbox.count({ where: { status: 'pending' } }),
     prisma.importBatch.count({ where: { status: 'partially_committed' } }),
+    prisma.importedTransaction.count({ where: { processingError: { not: null }, status: { not: 'posted' } } }),
   ])
-  return `${renderMetrics()}# HELP monikey_worker_jobs_pending Current pending durable jobs.\n# TYPE monikey_worker_jobs_pending gauge\nmonikey_worker_jobs_pending ${pendingJobs}\n# HELP monikey_worker_jobs_dead Current dead durable jobs.\n# TYPE monikey_worker_jobs_dead gauge\nmonikey_worker_jobs_dead ${deadJobs}\n# HELP monikey_notification_outbox_pending Current pending notification deliveries.\n# TYPE monikey_notification_outbox_pending gauge\nmonikey_notification_outbox_pending ${pendingOutbox}\n# HELP monikey_import_batches_partial Current partially committed import batches.\n# TYPE monikey_import_batches_partial gauge\nmonikey_import_batches_partial ${failedImports}\n`
+  return `${renderMetrics()}# HELP monikey_worker_jobs_pending Current pending durable jobs.\n# TYPE monikey_worker_jobs_pending gauge\nmonikey_worker_jobs_pending ${pendingJobs}\n# HELP monikey_worker_jobs_dead Current dead durable jobs.\n# TYPE monikey_worker_jobs_dead gauge\nmonikey_worker_jobs_dead ${deadJobs}\n# HELP monikey_notification_outbox_pending Current pending notification deliveries.\n# TYPE monikey_notification_outbox_pending gauge\nmonikey_notification_outbox_pending ${pendingOutbox}\n# HELP monikey_import_batches_partial Current partially committed import batches.\n# TYPE monikey_import_batches_partial gauge\nmonikey_import_batches_partial ${partialImports}\n# HELP monikey_import_rows_failed Current unposted import rows with a processing error.\n# TYPE monikey_import_rows_failed gauge\nmonikey_import_rows_failed ${failedImportRows}\n`
 }

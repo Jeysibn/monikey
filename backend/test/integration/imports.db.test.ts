@@ -442,6 +442,75 @@ describeIfDb('Imports Module - CSV workflow', () => {
 
       expect(transactions).toHaveLength(1)
     })
+
+    it('retains row errors and retries only the unposted row with a cumulative committed count', async () => {
+      const lowBalanceAccount = await prisma.financialAccount.create({
+        data: {
+          userId,
+          name: 'Low Balance Account',
+          accountType: 'checking',
+          classification: 'asset',
+          currencyCode: 'PHP',
+          openingBalanceMinor: 1500n,
+          currentBalanceMinor: 1500n,
+          manual: true,
+        },
+      })
+      const batchRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/imports/batches',
+        payload: { sourceType: 'csv_manual' },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      const batch = JSON.parse(batchRes.body)
+
+      for (const suffix of ['first', 'second']) {
+        const addRes = await app.inject({
+          method: 'POST',
+          url: `/api/v1/imports/batches/${batch.id}/transactions`,
+          payload: {
+            dedupKey: makeUniqueDedupKey(`partial_${suffix}`),
+            provider: 'csv',
+            title: `Partial ${suffix}`,
+            amountMinor: '1000',
+            occurredOn: '2026-09-01',
+          },
+          headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+        })
+        expect(addRes.statusCode).toBe(201)
+      }
+
+      const partialRes = await app.inject({
+        method: 'POST',
+        url: `/api/v1/imports/batches/${batch.id}/commit`,
+        payload: { matchedAccountId: lowBalanceAccount.id },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      expect(partialRes.statusCode).toBe(200)
+      expect(JSON.parse(partialRes.body)).toMatchObject({ committedCount: 1 })
+      expect(JSON.parse(partialRes.body).errors).toHaveLength(1)
+
+      const partialBatch = await prisma.importBatch.findUniqueOrThrow({ where: { id: batch.id } })
+      const partialRows = await prisma.importedTransaction.findMany({ where: { importBatchId: batch.id } })
+      expect(partialBatch.status).toBe('partially_committed')
+      expect(partialRows.filter((row) => row.status === 'posted')).toHaveLength(1)
+      expect(partialRows.filter((row) => row.processingError)).toHaveLength(1)
+
+      const retryRes = await app.inject({
+        method: 'POST',
+        url: `/api/v1/imports/batches/${batch.id}/commit`,
+        payload: { matchedAccountId: accountId },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      expect(retryRes.statusCode).toBe(200)
+      expect(JSON.parse(retryRes.body)).toEqual({ committedCount: 2, errors: [] })
+
+      const retriedBatch = await prisma.importBatch.findUniqueOrThrow({ where: { id: batch.id } })
+      const retriedRows = await prisma.importedTransaction.findMany({ where: { importBatchId: batch.id } })
+      expect(retriedBatch).toMatchObject({ status: 'committed', committedCount: 2 })
+      expect(retriedRows.every((row) => row.status === 'posted' && row.processingError === null)).toBe(true)
+      expect(await prisma.posting.count({ where: { importedTransactionId: { in: retriedRows.map((row) => row.id) } } })).toBe(2)
+    })
   })
 
   describe('User isolation', () => {

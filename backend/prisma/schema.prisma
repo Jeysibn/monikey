@@ -916,6 +916,7 @@ model ImportedTransaction {
   merchantName          String?  @map("merchant_name")
   status                String   @default("pending_review") // pending_review, validated, rejected, posted
   validationErrors      String[] @map("validation_errors") // JSON array of error strings
+  processingError       String?  @map("processing_error")
   posting               Posting? @relation("ImportedTransactionPosting")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

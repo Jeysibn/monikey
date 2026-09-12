@@ -664,7 +664,7 @@ type CsvPreset = {
   amountColumns?: { debit: number; credit: number }
 }
 
-function normalizeCsvHeader(header: string): string {
+export function normalizeCsvHeader(header: string): string {
   return header.trim().toLowerCase().replace(/[\s_-]+/g, '')
 }
 
@@ -673,7 +673,7 @@ function normalizeCsvHeader(header: string): string {
  * parser presets, not live bank integrations; exports can change and users
  * still review staged rows before ledger commit.
  */
-function detectCsvPreset(headers: Map<string, number>): CsvPreset {
+export function detectCsvPreset(headers: Map<string, number>): CsvPreset {
   const find = (...names: string[]) => names.map(normalizeCsvHeader).find((name) => headers.has(name))
   const date = find('date', 'transaction date', 'transactiondate', 'posted date', 'posteddate')
   const description = find('description', 'details', 'particulars', 'merchant', 'merchant name', 'merchantname')
@@ -688,9 +688,10 @@ function detectCsvPreset(headers: Map<string, number>): CsvPreset {
     merchant: merchant === undefined ? undefined : headers.get(merchant),
   }
   const amountColumns = debit !== undefined && credit !== undefined ? { debit: headers.get(debit)!, credit: headers.get(credit)! } : undefined
-  const isPreset = amountColumns !== undefined || date !== 'date' || description !== 'description'
+  const inferredName = inferCsvPresetName(headers)
+  const isPreset = amountColumns !== undefined || date !== 'date' || description !== 'description' || inferredName !== 'custom alias'
   return {
-    name: isPreset ? inferCsvPresetName(headers) : 'generic',
+    name: isPreset ? inferredName : 'generic',
     columns,
     amountColumns,
   }

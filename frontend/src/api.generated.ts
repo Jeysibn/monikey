@@ -1285,14 +1285,46 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        targetMinor: string;
+                        /** Format: date */
+                        targetDate: string;
+                        monthlyContributionMinor?: string | null;
+                        currencyCode?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            targetMinor: string;
+                            currentMinor: string;
+                            currencyCode: string;
+                            /** Format: date-time */
+                            targetDate: string;
+                            completedDate: string | null;
+                            monthlyContributionMinor: string | null;
+                            status: string;
+                            active: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1343,14 +1375,45 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        targetMinor?: string;
+                        /** Format: date */
+                        targetDate?: string;
+                        monthlyContributionMinor?: string | null;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            name: string;
+                            targetMinor: string;
+                            currentMinor: string;
+                            currencyCode: string;
+                            /** Format: date-time */
+                            targetDate: string;
+                            completedDate: string | null;
+                            monthlyContributionMinor: string | null;
+                            status: string;
+                            active: boolean;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
                 };
             };
         };
@@ -1374,7 +1437,18 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        sourceAccountId: string;
+                        amountMinor: string;
+                        /** Format: date */
+                        occurredOn: string;
+                        idempotencyKey?: string | null;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {

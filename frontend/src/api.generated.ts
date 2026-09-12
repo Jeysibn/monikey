@@ -3113,14 +3113,44 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        sourceType: "plaid_sandbox" | "csv_manual";
+                        /** Format: uuid */
+                        plaidItemId?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            userId: string;
+                            importSourceId: string | null;
+                            /** @enum {string} */
+                            importSourceType: "plaid_sandbox" | "csv_manual";
+                            status: string;
+                            matchedAccountId: string | null;
+                            totalCount: number;
+                            committedCount: number;
+                            errorCount: number;
+                            errorMessage: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            committedAt: string | null;
+                        };
+                    };
                 };
             };
         };
@@ -3188,7 +3218,38 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            importBatchId: string;
+                            dedupKey: string;
+                            provider: string;
+                            providerTransactionId?: string | null;
+                            /** Format: date */
+                            occurredOn: string;
+                            title: string;
+                            description?: string | null;
+                            amountMinor: string;
+                            currencyCode: string;
+                            merchantName?: string | null;
+                            status: string;
+                            validationErrors: string[];
+                            processingError: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                        }[];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": Record<string, never>;
+                    };
                 };
             };
         };
@@ -3237,14 +3298,30 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        matchedAccountId: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            committedCount: number;
+                            errors: {
+                                /** Format: uuid */
+                                txnId: string;
+                                error: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };

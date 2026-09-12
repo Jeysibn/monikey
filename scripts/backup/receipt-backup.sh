@@ -16,12 +16,21 @@
 
 set -euo pipefail
 
+# Preserve explicit process-environment overrides. `.env` supplies defaults;
+# it must not redirect a scheduled backup away from its selected mount.
+receipt_path_override="${RECEIPT_STORAGE_PATH-}"
+receipt_path_was_set="${RECEIPT_STORAGE_PATH+x}"
+backup_dir_override="${BACKUP_DIR-}"
+backup_dir_was_set="${BACKUP_DIR+x}"
+
 # Source .env if it exists
 if [ -f .env ]; then
   set -a
   source .env
   set +a
 fi
+if [ -n "${receipt_path_was_set}" ]; then RECEIPT_STORAGE_PATH="${receipt_path_override}"; fi
+if [ -n "${backup_dir_was_set}" ]; then BACKUP_DIR="${backup_dir_override}"; fi
 
 # Configuration
 BACKUP_DIR="${BACKUP_DIR:-backups/receipts}"

@@ -32,12 +32,17 @@ if [ ! -f "${BACKUP_FILE}" ]; then
   exit 1
 fi
 
+# Preserve an explicit restore target; `.env` supplies only the default.
+receipt_path_override="${RECEIPT_STORAGE_PATH-}"
+receipt_path_was_set="${RECEIPT_STORAGE_PATH+x}"
+
 # Source .env if it exists
 if [ -f .env ]; then
   set -a
   source .env
   set +a
 fi
+if [ -n "${receipt_path_was_set}" ]; then RECEIPT_STORAGE_PATH="${receipt_path_override}"; fi
 
 # Configuration
 RECEIPT_STORAGE_PATH="${RECEIPT_STORAGE_PATH:-/data/receipts}"

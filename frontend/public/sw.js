@@ -1,4 +1,5 @@
 const CACHE = 'monikey-shell-v2'
+const BUILD_ASSETS = __MONIKEY_BUILD_ASSETS__
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([
     '/', '/favicon.svg', '/manifest.webmanifest', '/icons.svg',
@@ -7,6 +8,7 @@ self.addEventListener('install', (event) => {
     '/tesseract/core/tesseract-core.wasm',
     '/tesseract/lang/eng.traineddata.gz',
     '/tesseract/lang/chi_sim.traineddata.gz',
+    ...BUILD_ASSETS,
   ])))
   self.skipWaiting()
 })

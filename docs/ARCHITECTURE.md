@@ -301,3 +301,8 @@ packaged under `frontend/public/tesseract` and are available to the service
 worker cache, so an installed production build can run the selected languages
 without a network request. Full outbox conflict resolution remains follow-up
 work.
+
+The frontend build post-processes `dist/sw.js` to precache every hashed JS/CSS
+and OCR worker asset emitted by Vite. This keeps a newly installed production
+shell usable offline after the first load instead of relying on a previously
+visited route.

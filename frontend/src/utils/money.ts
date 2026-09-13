@@ -14,6 +14,28 @@
 export type MoneyParseResult = { ok: true; value: number } | { ok: false; error: string }
 export type MinorMoneyParseResult = { ok: true; value: bigint } | { ok: false; error: string }
 
+/** Read canonical minor units. The numeric fallback exists only for mock and
+ * legacy state while domains migrate; API-backed state supplies the string. */
+export function exactMinor(value: string | undefined, legacyValue: number): bigint {
+  if (value !== undefined) {
+    if (!/^-?\d+$/.test(value)) throw new TypeError('Minor units must be a decimal integer string.')
+    return BigInt(value)
+  }
+  if (!Number.isFinite(legacyValue)) throw new TypeError('Legacy money value must be finite.')
+  const minor = Math.round(legacyValue * 100)
+  if (!Number.isSafeInteger(minor)) throw new RangeError('Legacy money value exceeds the safe frontend range.')
+  return BigInt(minor)
+}
+
+/** Checked compatibility boundary for visual components that still require a
+ * major-unit number. Authoritative aggregation must happen before this call. */
+export function exactMinorToMajorNumber(value: bigint): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+    throw new RangeError('Minor-unit value exceeds the safe frontend calculation range.')
+  }
+  return Number(value) / 100
+}
+
 /**
  * Boundary for the legacy frontend domain, whose calculated money fields are
  * still JavaScript numbers. API values stay as decimal strings until this

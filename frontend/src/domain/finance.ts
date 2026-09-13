@@ -7,6 +7,8 @@
 
 export type AccountType = 'checking' | 'savings' | 'ewallet' | 'cash' | 'credit_card'
 export type AccountClassification = 'asset' | 'liability'
+/** Canonical frontend money representation: signed decimal minor units. */
+export type MinorUnits = string
 
 export interface Account {
   id: string
@@ -14,6 +16,7 @@ export interface Account {
   institution?: string
   type: AccountType
   classification: AccountClassification
+  balanceMinor?: MinorUnits
   balance: number
   lastFour?: string
   syncStatus: string
@@ -26,6 +29,9 @@ export interface CreditCard {
   name: string
   lastFour: string
   network: 'visa' | 'mastercard'
+  balanceMinor?: MinorUnits
+  limitMinor?: MinorUnits
+  minPaymentMinor?: MinorUnits
   balance: number
   limit: number
   dueDate: string
@@ -58,7 +64,9 @@ export interface Transaction {
   goalId?: string
   date: string
   time?: string
+  amountMinor?: MinorUnits
   amount: number
+  feeMinor?: MinorUnits
   fee?: number
   source: TransactionSource
   status: TransactionStatus
@@ -95,6 +103,9 @@ export type BudgetStatus = 'safe' | 'on_track' | 'near_limit' | 'over_budget'
 /** A category's budget allocation for the period. `id` references a `Category` — name/color are never duplicated here. */
 export interface BudgetCategory {
   id: string
+  allocatedMinor?: MinorUnits
+  spentMinor?: MinorUnits
+  forecastMinor?: MinorUnits
   allocated: number
   spent: number
   forecast?: number
@@ -123,6 +134,9 @@ export type GoalStatus = 'just_started' | 'on_track' | 'behind_pace' | 'goal_rea
 export interface Goal {
   id: string
   name: string
+  targetMinor?: MinorUnits
+  currentMinor?: MinorUnits
+  monthlyContributionMinor?: MinorUnits
   targetAmount: number
   currentAmount: number
   targetDate: string
@@ -184,6 +198,7 @@ export interface FinanceState {
   categories: Category[]
   transactions: Transaction[]
   budgetCategories: BudgetCategory[]
+  totalBudgetAllocatedMinor?: MinorUnits
   totalBudgetAllocated: number
   goals: Goal[]
   attentionItems: AttentionItem[]

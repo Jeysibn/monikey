@@ -19,6 +19,9 @@ import {
   monthPeriodContaining,
 } from '../utils/date'
 import { formatMoney } from '../utils/currency'
+import { exactMinor, exactMinorToMajorNumber } from '../utils/money'
+
+const major = (minor: bigint): number => exactMinorToMajorNumber(minor)
 
 // ---- Reporting period ---------------------------------------------------
 // The single definition of "this reporting month" used by every period-based
@@ -33,15 +36,15 @@ export function activeReportingPeriod(todayIso: string): ReportingPeriod {
 // ---- Accounts / credit ------------------------------------------------
 
 export function totalAvailableCash(state: FinanceState): number {
-  return state.accounts.filter((a) => a.classification === 'asset').reduce((sum, a) => sum + a.balance, 0)
+  return major(state.accounts.filter((a) => a.classification === 'asset').reduce((sum, a) => sum + exactMinor(a.balanceMinor, a.balance), 0n))
 }
 
 export function totalCreditOwed(state: FinanceState): number {
-  return state.creditCards.reduce((sum, c) => sum + c.balance, 0)
+  return major(state.creditCards.reduce((sum, c) => sum + exactMinor(c.balanceMinor, c.balance), 0n))
 }
 
 export function totalCreditLimit(state: FinanceState): number {
-  return state.creditCards.reduce((sum, c) => sum + c.limit, 0)
+  return major(state.creditCards.reduce((sum, c) => sum + exactMinor(c.limitMinor, c.limit), 0n))
 }
 
 /** Balance-weighted average of each asset account's own monthly change — not a fabricated flat figure. */
@@ -93,17 +96,15 @@ export function isCreditCardId(state: FinanceState, id?: string): boolean {
 // must not change either cash-flow total.
 
 export function totalIncome(state: FinanceState, period: ReportingPeriod): number {
-  return state.transactions
+  return major(state.transactions
     .filter((t) => t.type === 'income' && isDateInPeriod(t.date, period))
-    .reduce((s, t) => s + t.amount, 0)
+    .reduce((s, t) => s + exactMinor(t.amountMinor, t.amount), 0n))
 }
 
 export function totalExpenses(state: FinanceState, period: ReportingPeriod): number {
-  return Math.abs(
-    state.transactions
+  return major(state.transactions
       .filter((t) => t.type === 'expense' && isDateInPeriod(t.date, period))
-      .reduce((s, t) => s + t.amount, 0),
-  )
+      .reduce((s, t) => s + exactMinor(t.amountMinor, t.amount), 0n) * -1n)
 }
 
 export function netCashFlow(state: FinanceState, period: ReportingPeriod): number {
@@ -160,15 +161,13 @@ const MONTH_LABELS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'S
 
 /** Sum of expense amounts (as a positive figure) with a date in `[start, end)`, compared as local dates. */
 function expenseAmountInRange(state: FinanceState, start: Date, end: Date): number {
-  return Math.abs(
-    state.transactions
+  return major(state.transactions
       .filter((t) => t.type === 'expense')
       .filter((t) => {
         const d = localDateFromIso(t.date)
         return !!d && d.getTime() >= start.getTime() && d.getTime() < end.getTime()
       })
-      .reduce((sum, t) => sum + t.amount, 0),
-  )
+      .reduce((sum, t) => sum + exactMinor(t.amountMinor, t.amount), 0n) * -1n)
 }
 
 /** Total expenses posted on `todayIso` — the "today" figure shown next to the daily chart. */
@@ -284,19 +283,32 @@ export function budgetStatus(allocated: number, spent: number): BudgetStatus {
 }
 
 export function totalBudgetSpent(state: FinanceState): number {
-  return state.budgetCategories.reduce((s, c) => s + c.spent, 0)
+  return major(state.budgetCategories.reduce((s, c) => s + exactMinor(c.spentMinor, c.spent), 0n))
 }
 
 export function totalBudgetRemaining(state: FinanceState): number {
-  return state.totalBudgetAllocated - totalBudgetSpent(state)
+  const allocated = state.totalBudgetAllocatedMinor === undefined
+    ? BigInt(Math.round(state.totalBudgetAllocated * 100))
+    : BigInt(state.totalBudgetAllocatedMinor)
+  const spent = state.budgetCategories.reduce((s, c) => s + exactMinor(c.spentMinor, c.spent), 0n)
+  return major(allocated - spent)
 }
 
 export function budgetUsedPct(state: FinanceState): number {
-  return state.totalBudgetAllocated > 0 ? Math.round((totalBudgetSpent(state) / state.totalBudgetAllocated) * 100) : 0
+  const allocated = state.totalBudgetAllocatedMinor === undefined
+    ? BigInt(Math.round(state.totalBudgetAllocated * 100))
+    : BigInt(state.totalBudgetAllocatedMinor)
+  if (allocated <= 0n) return 0
+  const spent = state.budgetCategories.reduce((s, c) => s + exactMinor(c.spentMinor, c.spent), 0n)
+  return Number((spent * 100n + allocated / 2n) / allocated)
 }
 
 export function budgetUnallocated(state: FinanceState): number {
-  return state.totalBudgetAllocated - state.budgetCategories.reduce((s, c) => s + c.allocated, 0)
+  const allocated = state.totalBudgetAllocatedMinor === undefined
+    ? BigInt(Math.round(state.totalBudgetAllocated * 100))
+    : BigInt(state.totalBudgetAllocatedMinor)
+  const categorized = state.budgetCategories.reduce((s, c) => s + exactMinor(c.allocatedMinor, c.allocated), 0n)
+  return major(allocated - categorized)
 }
 
 function countByStatus(state: FinanceState, status: BudgetStatus): number {
@@ -326,15 +338,16 @@ export function budgetDaysRemaining(todayIso: string, period: ReportingPeriod = 
 
 /** Spend Mix derives directly from the same budget-category records as the Budget page's spent total, so the two totals can never drift apart. */
 export function spendMix(state: FinanceState): { categoryId: string; category: string; amount: number; pct: number; color: string }[] {
-  const total = totalBudgetSpent(state)
+  const totalMinor = state.budgetCategories.reduce((s, c) => s + exactMinor(c.spentMinor, c.spent), 0n)
   return state.budgetCategories
     .map((c) => {
       const cat = state.categories.find((cc) => cc.id === c.id)
+      const spentMinor = exactMinor(c.spentMinor, c.spent)
       return {
         categoryId: c.id,
         category: cat?.name ?? c.id,
-        amount: c.spent,
-        pct: total > 0 ? Math.round((c.spent / total) * 100) : 0,
+        amount: major(spentMinor),
+        pct: totalMinor > 0n ? Number((spentMinor * 100n + totalMinor / 2n) / totalMinor) : 0,
         color: cat?.color ?? 'var(--text-dim)',
       }
     })
@@ -356,12 +369,12 @@ export function completedGoals(state: FinanceState): Goal[] {
 }
 
 export function totalGoalSavings(state: FinanceState): number {
-  return state.goals.reduce((s, g) => s + g.currentAmount, 0)
+  return major(state.goals.reduce((s, g) => s + exactMinor(g.currentMinor, g.currentAmount), 0n))
 }
 
 /** Total of every ACTIVE goal's *planned* monthly contribution. Planned, not automated: nothing moves this money until the user funds the goal (TR-004). */
 export function plannedMonthlyContributionTotal(state: FinanceState): number {
-  return activeGoals(state).reduce((s, g) => s + (g.monthlyContribution ?? 0), 0)
+  return major(activeGoals(state).reduce((s, g) => s + exactMinor(g.monthlyContributionMinor, g.monthlyContribution ?? 0), 0n))
 }
 
 /** Average progress across ACTIVE goals only — a completed goal at 100% would otherwise inflate this. */
@@ -401,7 +414,7 @@ export const COMMITMENT_HORIZON_DAYS = 30
 export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): CreditCard[] {
   const horizonEnd = addDaysToIso(todayIso, COMMITMENT_HORIZON_DAYS)
   return state.creditCards.filter(
-    (c) => c.balance > 0 && isIsoDateWithinInclusive(c.dueDate, todayIso, horizonEnd)
+    (c) => exactMinor(c.balanceMinor, c.balance) > 0n && isIsoDateWithinInclusive(c.dueDate, todayIso, horizonEnd)
   )
 }
 
@@ -449,10 +462,10 @@ export function recurringBillsDueWithinHorizon(items: RecurringItem[], todayIso:
 export function safeToSpendBreakdown(state: FinanceState, todayIso: string, recurringItems: RecurringItem[] = []): SafeToSpendBreakdown {
   const availableCash = totalAvailableCash(state)
   const dueCards = cardsDueWithinHorizon(state, todayIso)
-  const upcomingCreditMinimums = dueCards.reduce((sum, c) => sum + c.minPayment, 0)
+  const upcomingCreditMinimums = major(dueCards.reduce((sum, c) => sum + exactMinor(c.minPaymentMinor, c.minPayment), 0n))
   const plannedGoalContributions = plannedMonthlyContributionTotal(state)
   const dueRecurring = recurringBillsDueWithinHorizon(recurringItems, todayIso)
-  const upcomingRecurringBills = dueRecurring.reduce((sum, item) => sum + item.amount, 0)
+  const upcomingRecurringBills = major(dueRecurring.reduce((sum, item) => sum + exactMinor(item.amountMinor, item.amount), 0n))
   const safeToSpend = Math.max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions - upcomingRecurringBills)
   return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length, upcomingRecurringBills, recurringBillsCount: dueRecurring.length }
 }

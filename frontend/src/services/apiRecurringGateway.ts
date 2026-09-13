@@ -55,5 +55,5 @@ export class ApiRecurringGateway implements RecurringGateway {
     await this.request<void>(`/recurring/${id}`, { method: 'DELETE' })
   }
   async suggestions(): Promise<RecurringSuggestion[]> { return (await this.request<paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']>('/recurring/suggestions')).suggestions }
-  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, lastPaidDate: item.lastPaidDate ?? undefined, amount: minorUnitsToMajorNumber(item.amountMinor) })
+  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, amountMinor: item.amountMinor, lastPaidDate: item.lastPaidDate ?? undefined, amount: minorUnitsToMajorNumber(item.amountMinor) })
 }

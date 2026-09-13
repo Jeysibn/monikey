@@ -17,10 +17,10 @@ describe('ApiFinanceGateway', () => {
       categories: [{ id: 'food', name: 'Food', color: 'teal', budgetable: true, allowsIncome: false, allowsExpense: true }], budgets: [], goals: [],
     }, serverDate: '2026-08-29' }))
     const state = await new ApiFinanceGateway('/api/v1', fetcher).load()
-    expect(state.accounts[0]).toMatchObject({ id: 'account-1', balance: 4120.5, type: 'checking' })
+    expect(state.accounts[0]).toMatchObject({ id: 'account-1', balanceMinor: '412050', balance: 4120.5, type: 'checking' })
     expect(state.accounts[1]).toMatchObject({ id: 'wallet-1', type: 'ewallet' })
-    expect(state.creditCards[0]).toMatchObject({ id: 'card-1', balance: 1460, limit: 5000, dueDate: '2026-08-15' })
-    expect(state.transactions[0]).toMatchObject({ amount: -6.4, accountId: 'account-1', time: '09:14' })
+    expect(state.creditCards[0]).toMatchObject({ balanceMinor: '146000', limitMinor: '500000', minPaymentMinor: '7500', balance: 1460, limit: 5000, dueDate: '2026-08-15' })
+    expect(state.transactions[0]).toMatchObject({ amountMinor: '-640', feeMinor: '0', amount: -6.4, accountId: 'account-1', time: '09:14' })
     expect(state.categories[0].transactionKinds).toEqual(['expense'])
     expect(fetcher).toHaveBeenCalledWith('/api/v1/bootstrap', expect.objectContaining({ credentials: 'include' }))
   })

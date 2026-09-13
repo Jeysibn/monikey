@@ -157,13 +157,17 @@ validator alone is not proof that an API operation preserves an invariant.
 ### Exact money boundary
 
 Authoritative ledger amounts remain PostgreSQL `BIGINT` values and cross the
-JSON boundary as decimal strings. Frontend command gateways serialize minor
-units through `frontend/src/utils/money.ts`, which rejects non-finite and unsafe
-integer values. Legacy number-based selectors are compatibility/read models:
-API minor-unit strings are checked for safe integer range before conversion,
-and bounded decimal parsing is used for crypto/report visual calculations. New
-authoritative money logic must not introduce floating-point arithmetic or an
-unvalidated `Number(...)` conversion.
+JSON boundary as decimal strings. The frontend finance domain now preserves
+canonical `*Minor` decimal strings on API-backed accounts, cards,
+transactions, budgets, goals and recurring items. Core selectors aggregate
+those values with `bigint`; legacy major-unit number fields remain a checked
+compatibility boundary for existing visual components and mock fixtures.
+Frontend command gateways serialize minor units through
+`frontend/src/utils/money.ts`, which rejects non-finite and unsafe integer
+inputs. New authoritative money logic must not introduce floating-point
+arithmetic or an unvalidated `Number(...)` conversion. Remaining work is to
+remove the compatibility major-unit fields from the legacy UI domain and make
+exact formatting the only presentation boundary.
 
 Money Position is intentionally cash-only: available liquid cash minus card
 minimums, known recurring obligations and planned goal contributions. Crypto

@@ -145,6 +145,22 @@ carry constraints/triggers not fully expressible in Prisma's schema.
 Use the regression tests and raw SQL migrations for exact edge cases; a frontend
 validator alone is not proof that an API operation preserves an invariant.
 
+### Exact money boundary
+
+Authoritative ledger amounts remain PostgreSQL `BIGINT` values and cross the
+JSON boundary as decimal strings. Frontend command gateways serialize minor
+units through `frontend/src/utils/money.ts`, which rejects non-finite and unsafe
+integer values. Legacy number-based selectors are compatibility/read models:
+API minor-unit strings are checked for safe integer range before conversion,
+and bounded decimal parsing is used for crypto/report visual calculations. New
+authoritative money logic must not introduce floating-point arithmetic or an
+unvalidated `Number(...)` conversion.
+
+Money Position is intentionally cash-only: available liquid cash minus card
+minimums, known recurring obligations and planned goal contributions. Crypto
+market value may contribute to wealth/net-worth views, but unrealized crypto
+gains are not spendable cash, ordinary income or an expense.
+
 ## Client idempotency keys
 
 Create requests carry opaque idempotency keys so retries can be recognized by the
@@ -200,6 +216,23 @@ frontend. Backend crypto routes, quote providers, FX adapters, and the
 investment-era Prisma models remain active/retained. Broader securities
 accounting, mixed-currency historical valuation, and complete cash-account
 selectors are partial; this is not yet a general brokerage ledger.
+
+Crypto trades and transfers have a shared PostgreSQL
+`crypto_activity_sequence` (`event_sequence`) in addition to their user-entered
+event date/time. Accounting orders same-timestamp activity by that persisted
+sequence, so UUID lexical order cannot change a buy/sell/transfer result.
+Existing rows are backfilled in `created_at`/UUID order during migration. New
+requests reserve a unique shared sequence value before validation and persist
+that value on success; rejected requests may leave gaps. The accounting engine exposes separate
+realized P&L, unrealized P&L, remaining cost basis, average cost and a
+lifetime-invested denominator, rather than treating remaining cost basis as a
+lifetime-return denominator after a position is closed.
+
+Cash-linked crypto creation and reversal use the ledger transaction boundary;
+idempotency keys cover the crypto activity and linked cash movement together.
+Missing historical FX is an explicit unavailable/error state, never zero.
+Provider failure removes only quote-dependent fields and preserves locally
+derived quantity, cost basis, locations, activity and realized P&L.
 
 ## UI and accessibility
 

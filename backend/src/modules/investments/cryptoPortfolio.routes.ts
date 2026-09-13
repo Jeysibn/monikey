@@ -55,6 +55,11 @@ const coinHistoryJson = { type: 'object', additionalProperties: false, required:
 
 function time(value: string | null | undefined): Date | null { return value ? new Date(`1970-01-01T${value}:00Z`) : null }
 function eventTime(date: Date, occurredTime: Date | null): Date { return new Date(`${date.toISOString().slice(0, 10)}T${occurredTime ? occurredTime.toISOString().slice(11, 19) : '00:00:00'}Z`) }
+async function reserveCryptoActivitySequence(prisma: PrismaClient): Promise<bigint> {
+  const row = (await prisma.$queryRaw<Array<{ sequence: bigint }>>(Prisma.sql`SELECT nextval('crypto_activity_sequence') AS sequence`))[0]
+  if (!row) throw new Error('Crypto activity sequence did not return a value.')
+  return row.sequence
+}
 
 export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string; catalog: CoinGeckoCryptoCatalog; ledgerService: LedgerService }) {
   const requireAuth = authGuard({ prisma: options.prisma })
@@ -169,15 +174,15 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
   app.get('/crypto/activities', { preValidation: requireAuth, schema: { querystring: activityQueryJson, response: { 200: activitiesResponseJson } } }, async (request) => {
     const { type, q, instrumentId } = activityQuery.parse(request.query); const userId = request.user!.id; const query = q.toLowerCase()
     const [trades, transfers] = await Promise.all([
-      type === 'transfer' ? [] : options.prisma.investmentTrade.findMany({ where: { userId, instrument: { assetType: 'crypto' }, ...(instrumentId ? { instrumentId } : {}), ...(type === 'all' ? {} : { type }) }, include: { instrument: true, location: true }, orderBy: [{ occurredOn: 'desc' }, { occurredTime: 'desc' }, { createdAt: 'desc' }] }),
-      type === 'buy' || type === 'sell' ? [] : options.prisma.cryptoTransfer.findMany({ where: { userId, ...(instrumentId ? { instrumentId } : {}) }, include: { instrument: true, fromLocation: true, toLocation: true }, orderBy: [{ occurredOn: 'desc' }, { occurredTime: 'desc' }, { createdAt: 'desc' }] }),
+      type === 'transfer' ? [] : options.prisma.investmentTrade.findMany({ where: { userId, instrument: { assetType: 'crypto' }, ...(instrumentId ? { instrumentId } : {}), ...(type === 'all' ? {} : { type }) }, include: { instrument: true, location: true }, orderBy: [{ occurredOn: 'desc' }, { occurredTime: 'desc' }, { eventSequence: 'desc' }] }),
+      type === 'buy' || type === 'sell' ? [] : options.prisma.cryptoTransfer.findMany({ where: { userId, ...(instrumentId ? { instrumentId } : {}) }, include: { instrument: true, fromLocation: true, toLocation: true }, orderBy: [{ occurredOn: 'desc' }, { occurredTime: 'desc' }, { eventSequence: 'desc' }] }),
     ])
     const activities = [
-      ...trades.map((trade) => ({ id: trade.id, type: trade.type, instrumentId: trade.instrumentId, symbol: trade.instrument.ticker, name: trade.instrument.name, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), currencyCode: trade.currencyCode, location: trade.location?.name ?? null, occurredOn: trade.occurredOn.toISOString().slice(0, 10), occurredTime: trade.occurredTime?.toISOString().slice(11, 16) ?? null, note: trade.note, createdAt: trade.createdAt.toISOString() })),
-      ...transfers.map((transfer) => ({ id: transfer.id, type: 'transfer' as const, instrumentId: transfer.instrumentId, symbol: transfer.instrument.ticker, name: transfer.instrument.name, units: transfer.units.toString(), networkFeeUnits: transfer.networkFeeUnits.toString(), fromLocation: transfer.fromLocation.name, toLocation: transfer.toLocation.name, occurredOn: transfer.occurredOn.toISOString().slice(0, 10), occurredTime: transfer.occurredTime?.toISOString().slice(11, 16) ?? null, note: transfer.note, createdAt: transfer.createdAt.toISOString() })),
+      ...trades.map((trade) => ({ id: trade.id, type: trade.type, instrumentId: trade.instrumentId, symbol: trade.instrument.ticker, name: trade.instrument.name, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), currencyCode: trade.currencyCode, location: trade.location?.name ?? null, occurredOn: trade.occurredOn.toISOString().slice(0, 10), occurredTime: trade.occurredTime?.toISOString().slice(11, 16) ?? null, note: trade.note, createdAt: trade.createdAt.toISOString(), eventSequence: trade.eventSequence })),
+      ...transfers.map((transfer) => ({ id: transfer.id, type: 'transfer' as const, instrumentId: transfer.instrumentId, symbol: transfer.instrument.ticker, name: transfer.instrument.name, units: transfer.units.toString(), networkFeeUnits: transfer.networkFeeUnits.toString(), fromLocation: transfer.fromLocation.name, toLocation: transfer.toLocation.name, occurredOn: transfer.occurredOn.toISOString().slice(0, 10), occurredTime: transfer.occurredTime?.toISOString().slice(11, 16) ?? null, note: transfer.note, createdAt: transfer.createdAt.toISOString(), eventSequence: transfer.eventSequence })),
     ].filter((activity) => !query || `${activity.symbol} ${activity.name} ${activity.note ?? ''}`.toLowerCase().includes(query))
-      .sort((a, b) => `${b.occurredOn}T${b.occurredTime ?? '00:00'}`.localeCompare(`${a.occurredOn}T${a.occurredTime ?? '00:00'}`) || b.createdAt.localeCompare(a.createdAt))
-    return { activities }
+      .sort((a, b) => `${b.occurredOn}T${b.occurredTime ?? '00:00'}`.localeCompare(`${a.occurredOn}T${a.occurredTime ?? '00:00'}`) || (a.eventSequence < b.eventSequence ? 1 : a.eventSequence > b.eventSequence ? -1 : b.createdAt.localeCompare(a.createdAt)))
+    return { activities: activities.map(({ eventSequence: _eventSequence, ...activity }) => activity) }
   })
 
   // Duplicate is intentionally a read-only prefill command. The caller must
@@ -232,14 +237,14 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const instrument = await options.prisma.instrument.findFirst({ where: { id, userId, assetType: 'crypto' } })
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     const [trades, transfers, locations] = await Promise.all([
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: id }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: id }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: id }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: id }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
       options.prisma.cryptoLocation.findMany({ where: { userId }, select: { id: true, name: true, type: true } }),
     ])
     try {
       const balances = calculateCryptoLocationBalances(
-        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
+        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })),
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })),
       )
       const byId = new Map(locations.map((location) => [location.id, location]))
       return { coin: { instrumentId: instrument.id, symbol: instrument.ticker, name: instrument.name, whereHeld: [...balances.entries()].filter(([, units]) => units.greaterThan(0)).map(([locationId, units]) => ({ locationId, name: byId.get(locationId)?.name ?? 'Unknown location', type: byId.get(locationId)?.type ?? 'other', units: units.toString() })) } }
@@ -275,26 +280,26 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const [instrument, location, existingTrades, transfers, cashAccount] = await Promise.all([
       options.prisma.instrument.findFirst({ where: { id: input.instrumentId, userId, assetType: 'crypto', tracked: true } }),
       options.prisma.cryptoLocation.findFirst({ where: { id: input.locationId, userId, active: true } }),
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, priceAmount: true, feeAmount: true, fxRateToBase: true, currencyCode: true, occurredOn: true, occurredTime: true, createdAt: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, priceAmount: true, feeAmount: true, fxRateToBase: true, currencyCode: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
       input.cashAccountId ? options.prisma.financialAccount.findFirst({ where: { id: input.cashAccountId, userId } }) : null,
     ])
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     if (!location) return reply.code(404).send({ error: { code: 'CRYPTO_LOCATION_NOT_FOUND', message: 'Location not found.', field: 'locationId', requestId: request.id } })
     if (input.cashAccountId && !cashAccount) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Funding account not found.', field: 'cashAccountId', requestId: request.id } })
     if (cashAccount && cashAccount.currencyCode !== baseCurrency) return reply.code(422).send({ error: { code: 'CRYPTO_HISTORICAL_FX_UNAVAILABLE', message: 'Cash-linked crypto trades currently require an account in your portfolio base currency.', field: 'cashAccountId', requestId: request.id } })
-    // A candidate that has not been persisted yet has no createdAt. `new Date()`
-    // here is guaranteed to be earlier than the createdAt the trade receives if
-    // this validation passes and the create below proceeds, so it sorts after
-    // every existing same-`occurredAt` event and before nothing — consistent
-    // with "this is being recorded now".
+    // Reserve the actual shared sequence value before validation. This avoids
+    // two concurrent same-time submissions both validating against the same
+    // max+1 candidate. A rejected request may leave a harmless sequence gap;
+    // it must never make two persisted activities share an order value.
     const now = new Date()
+    const reservedEventSequence = await reserveCryptoActivitySequence(options.prisma)
     try {
       for (const trade of existingTrades) if (!trade.fxRateToBase && trade.currencyCode !== baseCurrency) throw new CryptoHistoricalFxUnavailableError(trade.id)
-      calculateCryptoPosition([...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, units: trade.units, priceAmount: trade.priceAmount, feeAmount: trade.feeAmount, fxRateToBase: trade.fxRateToBase ?? '1', occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), { id: 'candidate', type: input.type, units, priceAmount: price, feeAmount: fee, fxRateToBase: fxRate, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now }])
+      calculateCryptoPosition([...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, units: trade.units, priceAmount: trade.priceAmount, feeAmount: trade.feeAmount, fxRateToBase: trade.fxRateToBase ?? '1', occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })), { id: 'candidate', type: input.type, units, priceAmount: price, feeAmount: fee, fxRateToBase: fxRate, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now, eventSequence: reservedEventSequence }])
       calculateCryptoLocationBalances(
-        [...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), { id: 'candidate', type: input.type, locationId: input.locationId, units, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now }],
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
+        [...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })), { id: 'candidate', type: input.type, locationId: input.locationId, units, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now, eventSequence: reservedEventSequence }],
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })),
       )
     } catch (error) {
       if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(422).send({ error: { code: error.code, message: error.message, field: 'units', requestId: request.id } })
@@ -305,7 +310,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const priceMinor = BigInt(basePrice.times(100).toDecimalPlaces(0).toString()); const feeMinor = BigInt(baseFee.times(100).toDecimalPlaces(0).toString())
     const grossBase = units.times(basePrice); const cashMinor = BigInt((input.type === 'buy' ? grossBase.plus(baseFee) : grossBase.minus(baseFee)).times(100).toDecimalPlaces(0).toFixed(0))
     const linkKey = input.cashAccountId ? (input.idempotencyKey ?? randomUUID()) : (input.idempotencyKey ?? null)
-    const create = async (tx: Prisma.TransactionClient | PrismaClient) => tx.investmentTrade.create({ data: { userId, instrumentId: input.instrumentId, type: input.type, units, priceMinor, priceAmount: price, currencyCode: input.currencyCode, feeMinor, feeAmount: fee, fxRateToBase: fxRate, locationId: input.locationId, cashAccountId: input.cashAccountId ?? null, settlementAmountMinor: input.cashAccountId ? cashMinor : null, settlementCurrencyCode: input.cashAccountId ? baseCurrency : null, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), occurredTime: time(input.occurredTime), note: input.note ?? null, idempotencyKey: linkKey } })
+    const create = async (tx: Prisma.TransactionClient | PrismaClient) => tx.investmentTrade.create({ data: { userId, instrumentId: input.instrumentId, type: input.type, units, priceMinor, priceAmount: price, currencyCode: input.currencyCode, feeMinor, feeAmount: fee, fxRateToBase: fxRate, locationId: input.locationId, cashAccountId: input.cashAccountId ?? null, settlementAmountMinor: input.cashAccountId ? cashMinor : null, settlementCurrencyCode: input.cashAccountId ? baseCurrency : null, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), occurredTime: time(input.occurredTime), note: input.note ?? null, idempotencyKey: linkKey, eventSequence: reservedEventSequence } })
     const trade = input.cashAccountId
       ? await options.ledgerService.postTransactionWithCallback(userId, { type: 'transfer', title: `Crypto ${input.type} · ${instrument.ticker}`, categoryId: null, goalId: null, fromAccountId: input.type === 'buy' ? input.cashAccountId : null, toAccountId: input.type === 'sell' ? input.cashAccountId : null, occurredOn: input.occurredOn, occurredTime: input.occurredTime ?? null, amountMinor: cashMinor, feeMinor: 0n, currencyCode: baseCurrency, source: 'manual', status: 'cleared', note: null, idempotencyKey: linkKey! }, create)
       : await create(options.prisma)
@@ -323,8 +328,8 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     try {
       positionFor(existing.instrumentId, remainingTrades, transfers, request.user!.baseCurrency)
       calculateCryptoLocationBalances(
-        remainingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
+        remainingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })),
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })),
       )
     } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This trade is required by later crypto activity and cannot be deleted.', requestId: request.id } }); if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(409).send({ error: { code: error.code, message: 'A trade for this coin is missing its historical FX rate and cannot be safely recalculated.', requestId: request.id } }); throw error }
     if (existing.cashAccountId) {
@@ -352,20 +357,21 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const [instrument, source, destination, trades, transfers] = await Promise.all([
       options.prisma.instrument.findFirst({ where: { id: input.instrumentId, userId, assetType: 'crypto' } }),
       options.prisma.cryptoLocation.findFirst({ where: { id: input.fromLocationId, userId, active: true } }), options.prisma.cryptoLocation.findFirst({ where: { id: input.toLocationId, userId, active: true } }),
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true, eventSequence: true } }),
     ])
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     if (!source || !destination) return reply.code(404).send({ error: { code: 'CRYPTO_LOCATION_NOT_FOUND', message: 'Source or destination location not found.', requestId: request.id } })
+    const reservedEventSequence = await reserveCryptoActivitySequence(options.prisma)
     try {
-      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })))
-      const candidate = { id: 'candidate', fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: new Date() }
-      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), [...transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })), candidate])
+      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })), transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })))
+      const candidate = { id: 'candidate', fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: new Date(), eventSequence: reservedEventSequence }
+      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })), [...transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })), candidate])
     } catch (error) {
       if (error instanceof CryptoLocationInsufficientUnitsError || error instanceof CryptoTransferSameLocationError) return reply.code(422).send({ error: { code: error.code, message: error.message, requestId: request.id } })
       throw error
     }
-    const transfer = await options.prisma.cryptoTransfer.create({ data: { userId, instrumentId: input.instrumentId, fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), occurredTime: time(input.occurredTime), note: input.note ?? null, idempotencyKey: input.idempotencyKey ?? null } })
+    const transfer = await options.prisma.cryptoTransfer.create({ data: { userId, instrumentId: input.instrumentId, fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredOn: new Date(`${input.occurredOn}T00:00:00Z`), occurredTime: time(input.occurredTime), note: input.note ?? null, idempotencyKey: input.idempotencyKey ?? null, eventSequence: reservedEventSequence } })
     return reply.code(201).send({ transfer: serializeTransfer(transfer) })
   })
 
@@ -380,8 +386,8 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     try {
       positionFor(existing.instrumentId, trades, remainingTransfers, request.user!.baseCurrency)
       calculateCryptoLocationBalances(
-        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
-        remainingTransfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
+        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence })),
+        remainingTransfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })),
       )
     } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This transfer is required by later crypto activity and cannot be deleted.', requestId: request.id } }); if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(409).send({ error: { code: error.code, message: 'A trade for this coin is missing its historical FX rate and cannot be safely recalculated.', requestId: request.id } }); throw error }
     await options.prisma.cryptoTransfer.delete({ where: { id } })
@@ -403,14 +409,14 @@ export class CryptoHistoricalFxUnavailableError extends Error {
   }
 }
 
-function positionFor(instrumentId: string, trades: Array<{ id: string; instrumentId: string; type: 'buy' | 'sell'; units: { toString(): string }; priceAmount: { toString(): string }; feeAmount: { toString(): string }; fxRateToBase: { toString(): string } | null; currencyCode: string; occurredOn: Date; occurredTime: Date | null; createdAt: Date }>, transfers: Array<{ id: string; instrumentId: string; networkFeeUnits: { toString(): string }; occurredOn: Date; occurredTime: Date | null; createdAt: Date }>, baseCurrency: string, through?: Date) {
+function positionFor(instrumentId: string, trades: Array<{ id: string; instrumentId: string; type: 'buy' | 'sell'; units: { toString(): string }; priceAmount: { toString(): string }; feeAmount: { toString(): string }; fxRateToBase: { toString(): string } | null; currencyCode: string; occurredOn: Date; occurredTime: Date | null; createdAt: Date; eventSequence: bigint }>, transfers: Array<{ id: string; instrumentId: string; networkFeeUnits: { toString(): string }; occurredOn: Date; occurredTime: Date | null; createdAt: Date; eventSequence: bigint }>, baseCurrency: string, through?: Date) {
   return calculateCryptoPosition(
     trades.filter((trade) => trade.instrumentId === instrumentId && (!through || eventTime(trade.occurredOn, trade.occurredTime) <= through)).map((trade) => {
       const fxRateToBase = trade.fxRateToBase?.toString() ?? (trade.currencyCode === baseCurrency ? '1' : null)
       if (fxRateToBase === null) throw new CryptoHistoricalFxUnavailableError(trade.id)
-      return { id: trade.id, type: trade.type, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), fxRateToBase, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt }
+      return { id: trade.id, type: trade.type, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), fxRateToBase, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt, eventSequence: trade.eventSequence }
     }),
-    transfers.filter((transfer) => transfer.instrumentId === instrumentId && (!through || eventTime(transfer.occurredOn, transfer.occurredTime) <= through)).map((transfer) => ({ id: transfer.id, networkFeeUnits: transfer.networkFeeUnits.toString(), occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
+    transfers.filter((transfer) => transfer.instrumentId === instrumentId && (!through || eventTime(transfer.occurredOn, transfer.occurredTime) <= through)).map((transfer) => ({ id: transfer.id, networkFeeUnits: transfer.networkFeeUnits.toString(), occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt, eventSequence: transfer.eventSequence })),
   )
 }
 

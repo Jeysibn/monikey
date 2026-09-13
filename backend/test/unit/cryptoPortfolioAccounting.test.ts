@@ -61,6 +61,16 @@ describe('crypto location accounting', () => {
     expect(balances.get('binance')!.toString()).toBe('0.005')
     expect(balances.get('ledger')!.toString()).toBe('0.005')
   })
+
+  it('uses the shared persisted sequence when timestamps and persistence timestamps tie', () => {
+    const sameTime = at('09:15:00')
+    const position = calculateCryptoPosition([
+      { id: 'aaa-sell', type: 'sell', units: '1', priceAmount: '150', feeAmount: '0', fxRateToBase: '1', occurredAt: sameTime, createdAt: created(1), eventSequence: 2n },
+      { id: 'zzz-buy', type: 'buy', units: '1', priceAmount: '100', feeAmount: '0', fxRateToBase: '1', occurredAt: sameTime, createdAt: created(2), eventSequence: 1n },
+    ])
+    expect(position.units.toString()).toBe('0')
+    expect(position.realizedPnlBase.toString()).toBe('50')
+  })
 })
 
 describe('crypto portfolio accounting — total invested (P&L % denominator)', () => {

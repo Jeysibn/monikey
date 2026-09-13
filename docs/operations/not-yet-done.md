@@ -8,6 +8,12 @@ documentation is authoritative when this list and an older note disagree.
 
 ## Incomplete: finish before calling the platform production-ready
 
+- **Same-time crypto activity ordering.** **Completed 2026-09-13:** trades and
+  transfers now use a shared persisted PostgreSQL activity sequence rather than
+  UUID lexical order or a cross-table timestamp tie-breaker. Existing rows are
+  backfilled by migration and the accounting unit/integration suites cover the
+  invariant.
+
 - **Complete the money read-model audit.** **Completed for the current API
   surface 2026-09-13:** command serialization uses a checked helper across
   transactions, accounts, cards, goals, budgets and recurring items; all API

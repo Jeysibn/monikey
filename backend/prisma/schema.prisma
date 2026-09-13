@@ -606,6 +606,7 @@ model InvestmentTrade {
 
   note           String?
   idempotencyKey String?  @map("idempotency_key")
+  eventSequence  BigInt    @default(dbgenerated("nextval('crypto_activity_sequence'::regclass)")) @map("event_sequence")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -614,6 +615,7 @@ model InvestmentTrade {
   location    CryptoLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
+  @@index([instrumentId, eventSequence])
   @@index([userId, instrumentId, occurredOn, occurredTime])
   @@map("investment_trades")
 }
@@ -649,6 +651,7 @@ model CryptoTransfer {
   occurredTime    DateTime? @map("occurred_time") @db.Time
   note            String?
   idempotencyKey  String?   @map("idempotency_key")
+  eventSequence   BigInt    @default(dbgenerated("nextval('crypto_activity_sequence'::regclass)")) @map("event_sequence")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -657,6 +660,7 @@ model CryptoTransfer {
   toLocation   CryptoLocation @relation("CryptoTransferTo", fields: [toLocationId], references: [id], onDelete: Restrict)
 
   @@unique([userId, idempotencyKey])
+  @@index([instrumentId, eventSequence])
   @@index([userId, instrumentId, occurredOn, occurredTime])
   @@index([userId, fromLocationId])
   @@index([userId, toLocationId])

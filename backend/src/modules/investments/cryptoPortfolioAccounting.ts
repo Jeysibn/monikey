@@ -19,6 +19,8 @@ export type CryptoLocationTrade = {
    * share a recorded timestamp.
    */
   createdAt: Date
+  /** Shared database sequence; stable across trades and transfers. */
+  eventSequence?: bigint | number
 }
 
 /** A buy/sell with values retained in its trade currency and its event-time FX. */
@@ -32,11 +34,24 @@ export type CryptoTradeAccountingEvent = {
   occurredAt: Date
   /** See {@link CryptoLocationTrade.createdAt}. */
   createdAt: Date
+  /** Shared database sequence; stable across trades and transfers. */
+  eventSequence?: bigint | number
 }
 
-/** Deterministic financial ordering: recorded time, then persistence order. */
-function sequenceCompare(a: { occurredAt: Date; createdAt: Date; id: string }, b: { occurredAt: Date; createdAt: Date; id: string }): number {
-  return a.occurredAt.getTime() - b.occurredAt.getTime() || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)
+/** Deterministic financial ordering: user event time, then one shared persisted sequence. */
+function sequenceCompare(a: { occurredAt: Date; createdAt: Date; id: string; eventSequence?: bigint | number }, b: { occurredAt: Date; createdAt: Date; id: string; eventSequence?: bigint | number }): number {
+  const occurred = a.occurredAt.getTime() - b.occurredAt.getTime()
+  if (occurred !== 0) return occurred
+  if (a.eventSequence !== undefined && b.eventSequence !== undefined) {
+    const left = BigInt(a.eventSequence)
+    const right = BigInt(b.eventSequence)
+    if (left < right) return -1
+    if (left > right) return 1
+    return 0
+  }
+  // Compatibility fallback for pure unit callers that predate the persisted
+  // sequence. Database-backed paths always provide eventSequence.
+  return a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)
 }
 
 export type CryptoPosition = {
@@ -57,7 +72,7 @@ export type CryptoPosition = {
 }
 
 /** A network fee paid in the coin itself is a zero-proceeds disposal. */
-export type CryptoTransferFeeEvent = { id: string; networkFeeUnits: DecimalValue; occurredAt: Date; createdAt: Date }
+export type CryptoTransferFeeEvent = { id: string; networkFeeUnits: DecimalValue; occurredAt: Date; createdAt: Date; eventSequence?: bigint | number }
 
 export class CryptoInsufficientUnitsError extends Error {
   readonly code = 'CRYPTO_INSUFFICIENT_UNITS' as const
@@ -75,6 +90,7 @@ export type CryptoTransferEvent = {
   occurredAt: Date
   /** See {@link CryptoLocationTrade.createdAt}. */
   createdAt: Date
+  eventSequence?: bigint | number
 }
 
 export class CryptoLocationInsufficientUnitsError extends Error {

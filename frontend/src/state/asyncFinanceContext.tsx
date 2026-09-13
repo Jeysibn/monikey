@@ -7,6 +7,7 @@ import { ApiRecurringGateway } from '../services/apiRecurringGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
 import { localFirstStore } from '../services/localFirstStore'
+import { syncPendingOutbox } from '../services/outboxSync'
 
 export type FinanceBootStatus = 'loading' | 'ready' | 'error'
 
@@ -70,6 +71,9 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
       if (!controller.signal.aborted) {
         setState(next); setOffline(false); setStatus('ready')
         void localFirstStore.saveSnapshot({ key: 'latest', value: next, syncedAt: new Date().toISOString() }).catch(() => undefined)
+        void syncPendingOutbox(stableGateway).then((result) => {
+          if (result.synced > 0) void stableGateway.load().then(setState).catch(() => undefined)
+        }).catch(() => undefined)
       }
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) {

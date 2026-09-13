@@ -68,12 +68,24 @@ async function all<T>(storeName: string): Promise<T[]> {
   return value
 }
 
+async function remove(storeName: string, key: IDBValidKey): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite')
+    transaction.objectStore(storeName).delete(key)
+    transaction.onerror = () => reject(transaction.error ?? new Error('Local storage delete failed'))
+    transaction.oncomplete = () => resolve()
+  })
+  db.close()
+}
+
 export const localFirstStore = {
   saveSnapshot(snapshot: LocalFinanceSnapshot): Promise<void> { return put('snapshots', snapshot) },
   latestSnapshot(): Promise<LocalFinanceSnapshot | undefined> { return get('snapshots', 'latest') },
   enqueue(operation: SyncOutboxOperation): Promise<void> { return put('outbox', operation) },
   outbox(): Promise<SyncOutboxOperation[]> { return all('outbox') },
   updateOperation(operation: SyncOutboxOperation): Promise<void> { return put('outbox', operation) },
+  removeOperation(operationId: string): Promise<void> { return remove('outbox', operationId) },
   saveReceiptFile(value: { operationId: string; blob: Blob }): Promise<void> { return put('receiptFiles', value) },
   receiptFile(operationId: string): Promise<{ operationId: string; blob: Blob } | undefined> { return get('receiptFiles', operationId) },
 }

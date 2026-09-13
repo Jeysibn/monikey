@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 const origin = process.env.PLAYWRIGHT_TEST_BASE_URL ?? 'http://localhost:8080'
 
-test('offline snapshot and transaction outbox replay through Compose @offline-compose', async ({ page }) => {
+test('offline snapshot and transaction outbox replay through Compose @backend-compose @offline-compose', async ({ page }) => {
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`
   const email = `offline-compose-${unique}@monikey.test`
   const headers = { Origin: origin }

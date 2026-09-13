@@ -145,6 +145,7 @@ export function Reports() {
     : netWorthTrendSample(state, todayIso).map(chartPoint)
   const balanceTrend = accountBalanceTrendSample(state, todayIso).map(chartPoint)
   const debtTrend = debtTrendSample(state, todayIso).map(chartPoint)
+  const inclusivePeriodEnd = addDaysToIso(period.end, -1)
   function exportCsv() {
     const rows = [['Date', 'Title', 'Type', 'Amount', 'Currency', 'Category'], ...state.transactions.filter((transaction) => transaction.date >= period.start && transaction.date < period.end).map((transaction) => [transaction.date, transaction.title, transaction.type, String(Math.abs(transaction.amount)), 'PHP', categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'])]
     const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n')
@@ -186,7 +187,7 @@ export function Reports() {
 
         {backend && <Card>
           <CardTitle action={<span className="faint">{periodLabel}</span>}>Spending by Tag</CardTitle>
-          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>#{tag.tagName}</a><span className="num">{formatMinorUnits(tag.spent, { withCents: false })}</span></li>)}</ul>}
+          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${encodeURIComponent(period.start)}&to=${encodeURIComponent(inclusivePeriodEnd)}`}>#{tag.tagName}</a><span className="num">{formatMinorUnits(tag.spent, { withCents: false })}</span></li>)}</ul>}
         </Card>}
         <Card>
           <div className="eyebrow">Expenses</div>
@@ -274,7 +275,7 @@ export function Reports() {
             {finance.spendMix.map((s) => (
               <li key={s.categoryId} className="rp-cat-row">
                 <div className="rp-cat-row-top">
-                  <a href={`/transactions?category=${encodeURIComponent(s.categoryId)}&from=${period.start}&to=${addDaysToIso(period.end, -1)}`}>
+                  <a href={`/transactions?category=${encodeURIComponent(s.categoryId)}&from=${encodeURIComponent(period.start)}&to=${encodeURIComponent(inclusivePeriodEnd)}`}>
                     <span><span className="swatch" style={{ background: s.color }} /> {s.category}</span>
                     <span className="num">{formatMoney(s.amount, { withCents: false })} · {s.pct}%</span>
                   </a>

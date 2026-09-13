@@ -20,15 +20,25 @@ FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN addgroup -S monikey && adduser -S monikey -G monikey
+# Refresh Alpine packages before installing the app so the final image carries
+# fixed OpenSSL and other OS packages even if the base tag has not been rebuilt.
+RUN apk upgrade --no-cache \
+  && addgroup -S monikey \
+  && adduser -S monikey -G monikey
 
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev && npm cache clean --force
+# Prisma is an optional peer of @prisma/client, so npm can install the Prisma
+# CLI/config chain even with --omit=dev. Generate the client in the build stage,
+# then remove build-only tooling and npm itself from the runtime image.
+RUN npm ci --omit=dev \
+  && npm cache clean --force \
+  && rm -rf node_modules/prisma node_modules/@prisma/config node_modules/deepmerge-ts \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY prisma ./prisma
 COPY scripts ./scripts
 

@@ -15,6 +15,9 @@ RUN npm run build
 
 # ---- runtime: Nginx serving the static build + /api proxy -------------
 FROM nginx:1.27-alpine AS runtime
+# Refresh packages from the pinned Alpine release so published security fixes
+# are present even when the upstream nginx tag has not been rebuilt yet.
+RUN apk upgrade --no-cache
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/resolve-nginx-dns.sh /docker-entrypoint.d/05-resolve-nginx-dns.sh
 RUN chmod +x /docker-entrypoint.d/05-resolve-nginx-dns.sh

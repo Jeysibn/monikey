@@ -5,7 +5,7 @@ import { useFinance } from '../hooks/useFinance'
 import { useSettings, type UseSettingsResult } from '../hooks/useSettings'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { showToast } from '../hooks/toastBus'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import type { NotificationPreferences } from '../domain/settings'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { ApiSettingsGateway } from '../services/apiSettingsGateway'
@@ -459,7 +459,7 @@ function ConnectedAccountsSection({ settings }: Pick<UseSettingsResult, 'setting
               {a.lastFour ? ` ••${a.lastFour}` : ''}
               {a.institution ? <span className="faint"> · {a.institution}</span> : null}
             </span>
-            <span className="num">{formatMoney(a.balance, moneyOpts)}</span>
+            <span className="num">{formatMoneyValue(a.balance, a.balanceMinor, moneyOpts)}</span>
           </li>
         ))}
         {creditCards.map((c) => (
@@ -469,7 +469,7 @@ function ConnectedAccountsSection({ settings }: Pick<UseSettingsResult, 'setting
               <span className="faint"> · {c.network === 'visa' ? 'Visa' : 'Mastercard'}</span>
             </span>
             <span className="num" style={{ color: 'var(--amber)' }}>
-              {formatMoney(c.balance, moneyOpts)}
+              {formatMoneyValue(c.balance, c.balanceMinor, moneyOpts)}
             </span>
           </li>
         ))}

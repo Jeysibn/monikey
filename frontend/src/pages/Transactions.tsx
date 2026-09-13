@@ -3,7 +3,7 @@ import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import type { TransactionType, Transaction } from '../domain/finance'
 import type { paths } from '../api.generated'
@@ -235,7 +235,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                   <Tag tone={t.type}>{TYPE_LABEL[t.type]}</Tag>
                 </span>
                 <span role="cell" className={`num tx-col-right ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
-                  {formatMoney(t.amount)}
+                  {formatMoneyValue(t.amount, t.amountMinor)}
                 </span>
                 <span role="cell">
                   <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
@@ -300,7 +300,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                   )}
                 </div>
                 <span className={`num tx-mobile-amt ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
-                  {formatMoney(t.amount)}
+                  {formatMoneyValue(t.amount, t.amountMinor)}
                 </span>
               </div>
               <div className="tx-mobile-meta">

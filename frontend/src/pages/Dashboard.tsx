@@ -5,7 +5,7 @@ import { Sparkline } from '../components/Sparkline'
 import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
-import { formatDecimalMoney, formatMoney } from '../utils/currency'
+import { formatDecimalMoney, formatMoney, formatMoneyValue } from '../utils/currency'
 import { boundedDecimalToNumber } from '../utils/money'
 import { formatDateLabel, formatDueDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
@@ -113,7 +113,7 @@ export function Dashboard() {
                   </div>
                   <div className="bal-acct-type faint">{a.institution ?? a.type}</div>
                 </div>
-                <div className="bal-acct-amt num">{formatMoney(a.balance, { withCents: false })}</div>
+                <div className="bal-acct-amt num">{formatMoneyValue(a.balance, a.balanceMinor, { withCents: false })}</div>
               </div>
             ))}
             <Link to="/accounts" className="see-all">
@@ -263,7 +263,7 @@ export function Dashboard() {
                     {c.name} ••{c.lastFour}
                   </div>
                   <div className="dash-meta">
-                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
+                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoneyValue(c.minPayment, c.minPaymentMinor, { withCents: false })}
                   </div>
                   <ProgressBar
                     pct={(c.balance / c.limit) * 100}
@@ -272,7 +272,7 @@ export function Dashboard() {
                     valueText={`${Math.round((c.balance / c.limit) * 100)}% used, ${formatMoney(c.balance, { withCents: false })} of ${formatMoney(c.limit, { withCents: false })}`}
                   />
                   <div className="dash-meta">
-                    {formatMoney(c.balance, { withCents: false })} used of {formatMoney(c.limit, { withCents: false })}
+                    {formatMoneyValue(c.balance, c.balanceMinor, { withCents: false })} used of {formatMoneyValue(c.limit, c.limitMinor, { withCents: false })}
                   </div>
                 </div>
               </div>
@@ -364,7 +364,7 @@ export function Dashboard() {
                       <span className="faint">{finance.transactionAccountLabel(t)}</span>
                     </span>
                   </td>
-                  <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoney(t.amount)}</td>
+                  <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoneyValue(t.amount, t.amountMinor)}</td>
                 </tr>
               ))}
             </tbody>

@@ -49,6 +49,12 @@ export function formatMoney(value: number, opts: { withCents?: boolean } = {}): 
   }).format(value)
 }
 
+/** Format an API-backed domain amount from canonical minor units when present;
+ * mock/legacy entities use the checked major-unit compatibility value. */
+export function formatMoneyValue(value: number, minorValue?: string, opts: { withCents?: boolean } = {}): string {
+  return minorValue === undefined ? formatMoney(value, opts) : formatMinorUnits(minorValue, opts)
+}
+
 /** Format a major-unit decimal string without narrowing it through Number. */
 export function formatDecimalMoney(value: string, currency = currencyConfig.currency): string {
   const match = value.trim().match(/^(-?)(\d+)(?:\.(\d+))?$/)

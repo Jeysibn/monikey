@@ -5,7 +5,7 @@ import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { FinanceValidationError } from '../domain/financeRules'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
@@ -91,7 +91,7 @@ export function Budget() {
     const budgetCategory = budgetCategories.find((bc) => bc.id === categoryId)
     if (budgetCategory) {
       setEditingId(categoryId)
-      setEditAllocated(formatMoney(budgetCategory.allocated, { withCents: false }).replace(/[^\d.]/g, ''))
+      setEditAllocated(formatMoneyValue(budgetCategory.allocated, budgetCategory.allocatedMinor, { withCents: false }).replace(/[^\d.]/g, ''))
       editClear()
     }
   }
@@ -295,7 +295,7 @@ export function Budget() {
                       <div className="budget-row-top">
                         <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
                         <span className="budget-meta">
-                          {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
+                          {formatMoneyValue(c.spent, c.spentMinor, { withCents: false })} / {formatMoneyValue(c.allocated, c.allocatedMinor, { withCents: false })}
                         </span>
                       </div>
                       <ProgressBar

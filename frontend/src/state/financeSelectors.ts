@@ -454,6 +454,11 @@ export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): Cr
  * application remain outside this estimate.
  */
 export interface SafeToSpendBreakdown {
+  availableCashMinor: string
+  upcomingCreditMinimumsMinor: string
+  plannedGoalContributionsMinor: string
+  safeToSpendMinor: string
+  upcomingRecurringBillsMinor: string
   availableCash: number
   upcomingCreditMinimums: number
   plannedGoalContributions: number
@@ -470,14 +475,19 @@ export function recurringBillsDueWithinHorizon(items: RecurringItem[], todayIso:
 }
 
 export function safeToSpendBreakdown(state: FinanceState, todayIso: string, recurringItems: RecurringItem[] = []): SafeToSpendBreakdown {
-  const availableCash = totalAvailableCash(state)
+  const availableCashMinor = state.accounts.filter((a) => a.classification === 'asset').reduce((sum, a) => sum + exactMinor(a.balanceMinor, a.balance), 0n)
+  const availableCash = major(availableCashMinor)
   const dueCards = cardsDueWithinHorizon(state, todayIso)
-  const upcomingCreditMinimums = major(dueCards.reduce((sum, c) => sum + exactMinor(c.minPaymentMinor, c.minPayment), 0n))
-  const plannedGoalContributions = plannedMonthlyContributionTotal(state)
+  const upcomingCreditMinimumsMinor = dueCards.reduce((sum, c) => sum + exactMinor(c.minPaymentMinor, c.minPayment), 0n)
+  const upcomingCreditMinimums = major(upcomingCreditMinimumsMinor)
+  const plannedGoalContributionsMinor = activeGoals(state).reduce((sum, g) => sum + exactMinor(g.monthlyContributionMinor, g.monthlyContribution ?? 0), 0n)
+  const plannedGoalContributions = major(plannedGoalContributionsMinor)
   const dueRecurring = recurringBillsDueWithinHorizon(recurringItems, todayIso)
-  const upcomingRecurringBills = major(dueRecurring.reduce((sum, item) => sum + exactMinor(item.amountMinor, item.amount), 0n))
-  const safeToSpend = Math.max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions - upcomingRecurringBills)
-  return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length, upcomingRecurringBills, recurringBillsCount: dueRecurring.length }
+  const upcomingRecurringBillsMinor = dueRecurring.reduce((sum, item) => sum + exactMinor(item.amountMinor, item.amount), 0n)
+  const upcomingRecurringBills = major(upcomingRecurringBillsMinor)
+  const safeToSpendMinor = availableCashMinor - upcomingCreditMinimumsMinor - plannedGoalContributionsMinor - upcomingRecurringBillsMinor
+  const safeToSpend = major(safeToSpendMinor > 0n ? safeToSpendMinor : 0n)
+  return { availableCashMinor: availableCashMinor.toString(), upcomingCreditMinimumsMinor: upcomingCreditMinimumsMinor.toString(), plannedGoalContributionsMinor: plannedGoalContributionsMinor.toString(), safeToSpendMinor: (safeToSpendMinor > 0n ? safeToSpendMinor : 0n).toString(), upcomingRecurringBillsMinor: upcomingRecurringBillsMinor.toString(), availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length, upcomingRecurringBills, recurringBillsCount: dueRecurring.length }
 }
 
 // ---- Transaction list helpers ---------------------------------------------

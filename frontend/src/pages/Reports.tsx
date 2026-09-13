@@ -16,7 +16,7 @@ import {
   type IllustrativeTrendPoint,
   type ReportView,
 } from '../state/reportsSelectors'
-import { formatMoney, formatMinorUnits } from '../utils/currency'
+import { formatMoney, formatMoneyValue, formatMinorUnits } from '../utils/currency'
 import { minorUnitsToMajorNumber } from '../utils/money'
 import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
@@ -257,7 +257,7 @@ export function Reports() {
                 <div className="rp-flagged-row" key={c.id}>
                   <span>{c.name}</span>
                   <span className="num">
-                    {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
+                    {formatMoneyValue(c.spent, c.spentMinor, { withCents: false })} / {formatMoneyValue(c.allocated, c.allocatedMinor, { withCents: false })}
                   </span>
                 </div>
               ))}
@@ -334,7 +334,7 @@ export function Reports() {
                 </div>
                 <ProgressBar pct={finance.goalProgressPct(g)} label={`${g.name} progress`} />
                 <div className="budget-meta faint">
-                  {formatMoney(g.currentAmount, { withCents: false })} of {formatMoney(g.targetAmount, { withCents: false })} · target{' '}
+                  {formatMoneyValue(g.currentAmount, g.currentMinor, { withCents: false })} of {formatMoneyValue(g.targetAmount, g.targetMinor, { withCents: false })} · target{' '}
                   {formatGoalDate(g.targetDate)}
                 </div>
               </li>

@@ -4,7 +4,7 @@ import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { dueStateOf, monthlyEquivalent, useRecurring } from '../hooks/useRecurring'
-import { formatMoney, formatMinorUnits } from '../utils/currency'
+import { formatMoney, formatMoneyValue, formatMinorUnits } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { formatDateLabel, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import type { AddRecurringItemInput, RecurringDueState, RecurringFrequency } from '../domain/recurring'
@@ -468,7 +468,7 @@ export function Recurring() {
                   </div>
                 </div>
 
-                <div className="num rec-row-amt">{formatMoney(item.amount)}</div>
+                <div className="num rec-row-amt">{formatMoneyValue(item.amount, item.amountMinor)}</div>
 
                 <DueBadge state={dueState} />
 

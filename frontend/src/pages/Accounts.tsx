@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { Card } from '../components/Card'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { formatDueDateLabel } from '../utils/date'
 import { parseMoneyInput } from '../utils/money'
 import { FinanceValidationError } from '../domain/financeRules'
@@ -502,7 +502,7 @@ export function Accounts() {
                     </div>
                   </div>
                   <div className="acct-amt">
-                    <div className="num">{formatMoney(a.balance)}</div>
+                    <div className="num">{formatMoneyValue(a.balance, a.balanceMinor)}</div>
                     {typeof a.monthlyChangePct === 'number' && (
                       <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
                         {a.monthlyChangePct >= 0 ? '+' : ''}
@@ -552,7 +552,7 @@ export function Accounts() {
                     <div className="acct-meta">{a.syncStatus}</div>
                   </div>
                   <div className="acct-amt">
-                    <div className="num">{formatMoney(a.balance)}</div>
+                    <div className="num">{formatMoneyValue(a.balance, a.balanceMinor)}</div>
                     {typeof a.monthlyChangePct === 'number' && (
                       <div className={a.monthlyChangePct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
                         {a.monthlyChangePct >= 0 ? '+' : ''}
@@ -592,14 +592,14 @@ export function Accounts() {
                       {c.name} ••{c.lastFour}
                     </div>
                     <div className="acct-meta">
-                      Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
+                      Due {formatDueDateLabel(c.dueDate)} · min {formatMoneyValue(c.minPayment, c.minPaymentMinor, { withCents: false })}
                     </div>
                   </div>
                   <div className="acct-amt">
                     <div className="num" style={{ color: 'var(--amber)' }}>
-                      {formatMoney(c.balance)}
+                      {formatMoneyValue(c.balance, c.balanceMinor)}
                     </div>
-                    <div className="acct-meta">of {formatMoney(c.limit, { withCents: false })}</div>
+                    <div className="acct-meta">of {formatMoneyValue(c.limit, c.limitMinor, { withCents: false })}</div>
                   </div>
                   {asyncFinance && (
                     <div className="rec-row-actions">
@@ -631,7 +631,7 @@ export function Accounts() {
                       style={{ width: `${finance.totalAvailableCash > 0 ? (a.balance / finance.totalAvailableCash) * 100 : 0}%` }}
                     />
                   </div>
-                  <span className="num alloc-amt">{formatMoney(a.balance, { withCents: false })}</span>
+              <span className="num alloc-amt">{formatMoneyValue(a.balance, a.balanceMinor, { withCents: false })}</span>
                 </div>
               ))}
             </div>

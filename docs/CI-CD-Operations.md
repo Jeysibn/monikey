@@ -1,6 +1,6 @@
 # CI/CD Operations
 
-Reviewed against `.github/workflows/` on 2026-09-08. The project workflow is
+Reviewed against `.github/workflows/` on 2026-09-13. The project workflow is
 **push to dev → PR from dev to protected main → merge → image publication**.
 Main protection is the owner's stated policy; its remote settings were not
 independently verified because GitHub CLI was unauthenticated during this review.
@@ -56,15 +56,27 @@ check set.
 
 | Job | Actual scope |
 | --- | --- |
-| Frontend | Node 24, install, oxlint, typecheck, build, Vitest with `NODE_ENV=test`, and mock-mode Playwright browser tests |
-| Backend | Node 24, PostgreSQL 16, install, lint, typecheck, generate Prisma, migrations, and `npm run test` |
+| Frontend | Node 24, install, oxlint, typecheck, build, local-font privacy assertion, Vitest with `NODE_ENV=test`, and mock-mode Playwright browser tests |
+| Backend | Node 24, PostgreSQL 18, install, lint, typecheck, generate Prisma, migrations, and `npm run test` |
 | Secret scan | TruffleHog verified-secret scan |
 
 Validation concurrency cancels an older run for the same ref.
 The required workflow deliberately does not build Docker images, scan images,
-start Compose, or run backend-mode browser tests. Those full-stack checks remain
-available for deliberate local verification before a release. Do not describe
-these workflows as a complete release certification.
+start Compose, or run backend-mode browser tests. Those responsibilities belong
+to the separate `full-stack.yaml` release/nightly/manual tier. Do not describe
+the fast workflow as complete release certification.
+
+`full-stack.yaml` validates `docker compose config`, builds and starts a
+disposable PostgreSQL 18/migration/API/worker/nginx topology, checks readiness,
+runs the explicit system-category seed required by browser fixtures, then runs
+the worker-isolated backend regression suite, backend-mode Playwright journeys,
+and the shared finance contract against the Compose API (serialized because
+registration flows share the rate-limit bucket), captures logs on failure, and
+tears down volumes. CI uses the stub
+provider settings from `.env.example`; it never calls real external providers.
+The disposable HTTP localhost edge explicitly sets `COMPOSE_NODE_ENV=test`;
+normal Compose and deployment defaults remain production and still require an
+HTTPS `APP_ORIGIN`.
 
 ## Publication: publish.yaml
 
@@ -74,13 +86,28 @@ uses the selected target. Publication does not rerun validation; choose the
 intended reviewed main ref for a manual release.
 
 Images are built from each package directory, published to GHCR as
-`ghcr.io/<lowercase-owner>/monikey-api` and `monikey-web`, and tagged with the
-commit SHA and `latest`. The web build sets `VITE_FINANCE_BACKEND=true`.
-Each publication pulls the SHA-tagged image back to verify it is retrievable and
-writes the resulting OCI digest to the workflow summary. GitOps should deploy
-the digest form (`image@sha256:...`) rather than relying on `latest`.
-Publication also scans the exact SHA image with Trivy for unfixed HIGH/CRITICAL
-vulnerabilities and generates an SPDX SBOM with Syft before reporting success.
+`ghcr.io/<lowercase-owner>/monikey-api`, `monikey-migration`, and
+`monikey-web`, and tagged with the commit SHA and `latest`. The migration image
+uses the dedicated Dockerfile `migration` target and retains npm/npx/Prisma for
+schema deployment; the API/worker runtime remains hardened and omits them. The
+Compose services and backend publication explicitly select the `runtime`
+Dockerfile target; the migration target is never the default application image.
+The
+web build sets `VITE_FINANCE_BACKEND=true`. Each publication pulls the
+SHA-tagged images back to verify they are retrievable and writes their OCI
+digests to the workflow summary. GitOps should deploy the digest form
+(`image@sha256:...`) rather than relying on `latest`.
+Publication also scans the exact SHA images with Trivy for unfixed
+HIGH/CRITICAL vulnerabilities and generates SPDX SBOMs with Syft before
+reporting success. The migration-image scan has narrowly scoped exceptions
+for Prisma 6.19.3's `deepmerge-ts` advisory (`CVE-2026-40345`) and four
+vulnerabilities currently bundled inside Node 24's npm CLI
+(`CVE-2026-14257`, `CVE-2026-69152`, `CVE-2026-69192`, and
+`CVE-2026-73566`). The Prisma fix requires a major upgrade; the npm findings
+are confined to the migration toolchain required by the current `npx` contract.
+All exceptions are recorded in `.trivyignore-migration` and must be
+re-evaluated on Prisma/Node upgrades. The dependencies are absent from the
+API/worker runtime image.
 Publication runs are queued rather than cancelled mid-push.
 
 These workflows publish images; they contain no step that updates a GitOps
@@ -105,8 +132,9 @@ is source evidence; check the Actions UI for actual run results.
 ## Local release verification
 
 See [README](../README.md#verification-commands) for package checks and browser tests.
-Use a disposable migrated database. Local Compose uses PostgreSQL 18, while the
-CI services currently use PostgreSQL 16; results apply to the version exercised.
+Use a disposable migrated database. Local Compose and CI use PostgreSQL 18,
+matching the supported deployment major. This keeps fresh migration, locking,
+import/reconciliation, and worker claim tests aligned with the runtime database.
 
 ```bash
 npm run test:backend:compose

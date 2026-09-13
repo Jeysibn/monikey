@@ -69,7 +69,8 @@ The browser loads a React SPA from nginx (`web`). In backend mode its same-origi
 Compose gates both backend processes on the one-shot `migrate` service, which
 runs `prisma migrate deploy` only. Demo data is never seeded by production
 startup; use the explicit `db:seed:demo` workflow with opt-in flags. Only web port 8080 is
-published by the base Compose file. Local PostgreSQL is version 18; CI uses 16.
+published by the base Compose file. PostgreSQL 18 is the supported major in
+both Compose and CI integration validation.
 
 `compose.dev.yaml` changes the API and worker to source mounts and `tsx watch`.
 `compose.observability.yaml` contains optional monitoring infrastructure.
@@ -114,10 +115,9 @@ with inclusive start and exclusive end.
 API mode receives the authenticated user's calendar date as `serverDate` from
 bootstrap. `ApiFinanceGateway` retains that date for the `FinanceContext` bridge,
 goal-fund defaults, and current-budget-period creation. Backend bootstrap derives it
-with the user's IANA timezone rather than UTC truncation. The durable worker still
-uses one process date for its batch schedule; per-user worker calendars remain an
-operations follow-up and must be addressed before claiming full cross-user calendar
-consistency.
+with the user's IANA timezone rather than UTC truncation. The durable worker also
+evaluates user-scoped recurring, notification, summary and snapshot work in each
+user's configured timezone; provider refresh jobs remain process-level work.
 
 The durable worker now evaluates recurring payments, due-bill notifications,
 weekly summaries and daily snapshots per user timezone. Quote/FX refreshes are

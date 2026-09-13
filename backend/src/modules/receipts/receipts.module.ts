@@ -13,6 +13,7 @@ import { TesseractOcrAdapter } from '../../integrations/adapters/tesseract/tesse
 import { FilesystemObjectStoreAdapter } from '../../integrations/adapters/filesystem-object-store/filesystem.adapter.js'
 import { receiptsRoutes, type ReceiptsRoutesOptions } from './receipts.routes.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
+import type { FastifyInstance } from 'fastify'
 
 /**
  * Creates and initializes the receipts module.
@@ -44,7 +45,7 @@ export function createReceiptsModule(
     basePath: env.RECEIPT_STORAGE_PATH,
   })
 
-  const registerRoutes = async (app: any, appOrigin: string) => {
+  const registerRoutes = async (app: FastifyInstance, appOrigin: string) => {
     await app.register(receiptsRoutes, {
       prisma,
       objectStore,

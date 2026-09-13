@@ -7,14 +7,14 @@
  * - Plaid token encryption/decryption
  */
 
-import type { PrismaClient, ImportBatch, ImportedTransaction } from '@prisma/client'
+import { Prisma, type PrismaClient, type ImportBatch, type ImportedTransaction } from '@prisma/client'
 import { ImportsRepository } from './imports.repository.js'
 import type { LedgerService } from '../ledger/ledger.service.js'
 import type { PostTransactionInput } from '../ledger/ledger.schemas.js'
 import type { Env } from '../../config/env.js'
 import { AppError } from '../../common/errors/appError.js'
 import { encryptForUser, decryptForUser } from '../../common/crypto/encryption.js'
-import { applyRuleActions, matchesRule, type RuleActions, type RuleConditions } from '../rules/rules.engine.js'
+import { applyRuleActions, matchesRule, type RuleActions, type RuleConditions, type RuleTransaction } from '../rules/rules.engine.js'
 
 export interface ImportBatchSummary {
   id: string
@@ -143,13 +143,13 @@ export class ImportsService {
       })
 
       return txn
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if this is a unique constraint violation on (provider, dedup_key)
       if (
         // This create has no other expected uniqueness failure: either the
         // batch-local or global provider/dedup key constraint identifies a
         // replay. Prisma reports these targets with version-dependent names.
-        error?.code === 'P2002'
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
       ) {
         throw new AppError('DUPLICATE_IMPORT', 'This transaction was already imported', { statusCode: 409 })
       }
@@ -256,9 +256,13 @@ export class ImportsService {
         // Determine transaction type, then apply the user's deterministic rules
         // in priority order. Rules never perform arithmetic or external calls.
         const initialType = this.determineTransactionType(importedTxn)
-        let ruled: any = { title: importedTxn.title, description: importedTxn.description, merchantName: importedTxn.merchantName, amountMinor: importedTxn.amountMinor, accountId: matchedAccountId, type: initialType, source: 'import', currencyCode: importedTxn.currencyCode, tags: [] as string[] }
+        let ruled: RuleTransaction & { tags: string[]; categoryId?: string; note?: string } = { title: importedTxn.title, description: importedTxn.description, merchantName: importedTxn.merchantName, amountMinor: importedTxn.amountMinor, accountId: matchedAccountId, type: initialType, source: 'import', currencyCode: importedTxn.currencyCode, tags: [] }
         for (const rule of rules) {
-          if (matchesRule(ruled, rule.conditions as unknown as RuleConditions)) ruled = { ...ruled, ...applyRuleActions(ruled, rule.actions as unknown as RuleActions), title: (rule.actions as any).normalizedMerchant ?? ruled.title, tags: [...ruled.tags, ...((rule.actions as any).addTags ?? [])] }
+          const actions = rule.actions as unknown as RuleActions
+          if (matchesRule(ruled, rule.conditions as unknown as RuleConditions)) {
+            const applied = applyRuleActions(ruled, actions)
+            ruled = { ...ruled, ...applied, title: actions.normalizedMerchant ?? ruled.title, tags: [...ruled.tags, ...(actions.addTags ?? [])] }
+          }
         }
         const type: 'income' | 'expense' | 'transfer' = ruled.type as 'income' | 'expense' | 'transfer'
 
@@ -271,7 +275,7 @@ export class ImportsService {
         const postInput: PostTransactionInput = {
           type,
           title: ruled.title,
-          categoryId: (() => { const categoryId = (rules.find((rule) => matchesRule(ruled, rule.conditions as unknown as RuleConditions))?.actions as any)?.categoryId; return categoryId && ownedCategoryIds.has(categoryId) ? categoryId : null })(),
+          categoryId: (() => { const categoryId = (rules.find((rule) => matchesRule(ruled, rule.conditions as unknown as RuleConditions))?.actions as unknown as RuleActions | undefined)?.categoryId; return categoryId && ownedCategoryIds.has(categoryId) ? categoryId : null })(),
           goalId: null,
           fromAccountId: type === 'expense' || type === 'transfer' ? matchedAccountId : null,
           toAccountId: type === 'income' || type === 'transfer' ? matchedAccountId : null,

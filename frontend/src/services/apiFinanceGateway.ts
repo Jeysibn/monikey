@@ -20,6 +20,7 @@ type ApiAccount = paths['/accounts']['post']['responses'][201]['content']['appli
 type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']['application/json']
 type CreateCreditCardRequest = paths['/credit-cards']['post']['requestBody']['content']['application/json']
 type UpdateAccountRequest = paths['/accounts/{id}']['patch']['requestBody']['content']['application/json']
+type UpdateTransactionRequest = paths['/transactions/{id}']['patch']['requestBody']['content']['application/json']
 type ApiTransaction = paths['/transactions']['post']['responses'][201]['content']['application/json']['transaction']
 type TransactionMutationResponse = paths['/transactions']['post']['responses'][201]['content']['application/json']
 type ReverseTransactionResponse = paths['/transactions/{id}/reverse']['post']['responses'][201]['content']['application/json']
@@ -120,7 +121,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async updateTransaction(transactionId: string, input: Partial<AddTransactionInput>, signal?: AbortSignal): Promise<Transaction> {
-    const updatePayload: Record<string, any> = {}
+    const updatePayload: UpdateTransactionRequest = {}
     if (input.title !== undefined) updatePayload.title = input.title
     if (input.categoryId !== undefined) updatePayload.categoryId = input.categoryId
     if (input.date !== undefined) updatePayload.occurredOn = input.date

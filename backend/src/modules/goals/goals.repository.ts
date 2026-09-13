@@ -1,8 +1,9 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import type { GoalView, CreateGoalInput, UpdateGoalInput } from './goals.schemas.js'
 import { AppError } from '../../common/errors/appError.js'
 
 type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+type GoalRecord = Prisma.GoalGetPayload<{}>
 
 export class GoalsRepository {
   constructor(private prisma: PrismaClient) {}
@@ -56,7 +57,7 @@ export class GoalsRepository {
     })
   }
 
-  private mapGoal(goal: any): GoalView {
+  private mapGoal(goal: GoalRecord): GoalView {
     return {
       id: goal.id,
       userId: goal.userId,

@@ -10,7 +10,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
-import type { Logger } from 'pino'
+import type { FastifyBaseLogger } from 'fastify'
 import type { AiProvider } from '../../integrations/interfaces/aiProvider.js'
 import { buildPrivacySafeFinancialContext } from './contextBuilder.js'
 import { tryConsumeApiQuota, dailyPeriod, type QuotaTrackingClient } from '../../integrations/quota/quota.js'
@@ -20,7 +20,7 @@ import { monthSummaryInsightSchema, budgetAnalysisSchema, spendingTrendsSchema, 
 export interface InsightsServiceConfig {
   aiProvider: AiProvider
   prisma: PrismaClient
-  logger: Logger
+  logger: FastifyBaseLogger
   maxCallsPerDay: number
   maxCallsPerMonth: number
 }
@@ -28,7 +28,7 @@ export interface InsightsServiceConfig {
 export class InsightsService {
   private aiProvider: AiProvider
   private prisma: PrismaClient
-  private logger: Logger
+  private logger: FastifyBaseLogger
   private maxCallsPerDay: number
   private maxCallsPerMonth: number
 

@@ -252,6 +252,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
         // persist the image locally and run the privacy-preserving worker OCR.
         const operationId = newOperationId()
         await localFirstStore.saveReceiptFile({ operationId, blob: file })
+        await localFirstStore.enqueue({ operationId, idempotencyKey: newOperationId(), operationType: 'capture_receipt', payload: { operationId, filename: file.name, mimeType: file.type }, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
         localOcrRef.current ??= createBrowserReceiptOcr()
         const local = await localOcrRef.current.recognizeReceipt(file, { onProgress: () => undefined })
         if (local.status !== 'complete') throw serverError

@@ -4,6 +4,7 @@ import { boundedDecimalToNumber } from '../utils/money'
 import { createIdempotencyKey } from '../utils/idempotencyKey'
 import type { paths } from '../api.generated'
 import { cryptoApi } from '../services/cryptoApiGateway'
+import { localFirstStore, newOperationId } from '../services/localFirstStore'
 import './Crypto.css'
 
 type Coin = { instrumentId?: string; providerAssetId: string | null; symbol: string; name: string; imageUrl: string | null; marketCapRank: number | null; quantity?: string; currentPrice?: string | null; marketValue?: string | null; averageCost?: string; costBasis?: string; realizedPnl?: string; unrealizedPnl?: string | null; totalPnl?: string | null; allocationPct?: string }
@@ -221,7 +222,16 @@ function CryptoTransactionDialog({ coin, prefill, locations, baseCurrency, onClo
       ? { instrumentId: coin.instrumentId, fromLocationId: locationId, toLocationId: String(data.get('toLocationId') ?? ''), units, networkFeeUnits: String(data.get('networkFeeUnits') ?? '0'), occurredOn: String(data.get('occurredOn')), occurredTime: String(data.get('occurredTime') || '') || null, note: String(data.get('note') || '') || null, idempotencyKey }
       : { instrumentId: coin.instrumentId, type: kind, units, priceAmount: String(data.get('priceAmount') || prefill?.priceAmount || ''), feeAmount: String(data.get('feeAmount') || prefill?.feeAmount || '0'), currencyCode: baseCurrency, locationId, occurredOn: String(data.get('occurredOn') || prefill?.occurredOn || ''), occurredTime: String(data.get('occurredTime') || prefill?.occurredTime || '') || null, note: String(data.get('note') || prefill?.note || '') || null, idempotencyKey }
     setPending(true)
-    try { await cryptoApi.post(`/crypto/${kind === 'transfer' ? 'transfers' : 'trades'}`, payload); idempotencyKeyRef.current = null; onMessage(`${coin.symbol} ${kind} recorded. No order was sent.`); onRefresh(); onClose() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not record this transaction.') } finally { setPending(false) }
+    try { await cryptoApi.post(`/crypto/${kind === 'transfer' ? 'transfers' : 'trades'}`, payload); idempotencyKeyRef.current = null; onMessage(`${coin.symbol} ${kind} recorded. No order was sent.`); onRefresh(); onClose() } catch (cause) {
+      if (cause instanceof TypeError) {
+        try {
+          await localFirstStore.enqueue({ operationId: newOperationId(), idempotencyKey, operationType: 'crypto_activity', payload: { path: `/crypto/${kind === 'transfer' ? 'transfers' : 'trades'}`, body: payload }, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
+          idempotencyKeyRef.current = null
+          onMessage(`${coin.symbol} ${kind} queued for sync while the server is unavailable.`)
+          onClose()
+        } catch { setError('Server unavailable and local storage is unavailable. Retry without closing this form.') }
+      } else setError(cause instanceof Error ? cause.message : 'Could not record this transaction.')
+    } finally { setPending(false) }
   }
   const calculateQuantityFromAmount = (event: ChangeEvent<HTMLInputElement>) => {
     const form = event.currentTarget.form

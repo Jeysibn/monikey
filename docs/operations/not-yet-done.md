@@ -11,9 +11,10 @@ documentation is authoritative when this list and an older note disagree.
 - **Completed:** IndexedDB snapshot fallback, receipt Blob persistence, server
   reachability probing, an idempotent pending transaction outbox record, and a
   browser Tesseract worker seam.
-- **Not yet done:** authenticated outbox replay through authoritative gateway
-  mutations, conflict resolution/Sync Center, and preinstalled offline
-  language-data verification for English and Simplified Chinese OCR.
+- **Not yet done:** full conflict-resolution workflows for operations rejected by
+  the authoritative server. Transaction, crypto-activity and receipt-capture
+  intentions now replay through their normal gateway paths with stable
+  idempotency keys.
 
 ## Incomplete: finish before calling the platform production-ready
 

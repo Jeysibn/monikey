@@ -69,6 +69,7 @@ export function useFinance() {
     setCategoryBudget: ctx.setCategoryBudget,
     deleteCategory: ctx.deleteCategory,
     createGoal: ctx.createGoal,
+    updateGoal: ctx.updateGoal,
     addGoalFunds: ctx.addGoalFunds,
     // Pass-through helpers that need extra args, kept as selectors rather
     // than baked into the memoized object above.

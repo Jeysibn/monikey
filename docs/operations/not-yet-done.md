@@ -78,8 +78,10 @@ documentation is authoritative when this list and an older note disagree.
 - **Reports currently prioritize reliable tables, drill-down and CSV.** PDF
   export and any report that cannot be calculated reliably from stored data are
   not shipped.
-- **The PWA is an installable/read-only shell.** Offline ledger writes,
-  synchronization and conflict resolution are not implemented.
+- **The PWA has a bounded local-first write model.** Offline transaction and
+  crypto-activity creation, receipt capture, replay, and explicit retry/discard
+  conflict handling are implemented. Offline edit/delete merge workflows are
+  intentionally not supported in V1.
 - **Observability code exists, but production alert wiring is not fully
   demonstrated.** Deployment-specific dashboards, alert routes and provider
   health checks still need verification in the target environment.

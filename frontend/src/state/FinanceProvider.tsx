@@ -150,6 +150,15 @@ export function FinanceProvider({ children, clock = demoClock, repository, recur
     [store, activeRepository],
   )
 
+  const updateGoal = useCallback(
+    (goalId: string, input: Parameters<FinanceRepository['updateGoal']>[2]) =>
+      store.run((s) => {
+        const { state: next, goal } = activeRepository.updateGoal(s, goalId, input)
+        return { state: next, result: goal }
+      }),
+    [store, activeRepository],
+  )
+
   // Memoized so consumers don't re-render on unrelated parent renders — the
   // value changes only when the finance state or a mutation identity does.
   const value = useMemo<FinanceContextValue>(
@@ -167,6 +176,7 @@ export function FinanceProvider({ children, clock = demoClock, repository, recur
       setCategoryBudget,
       deleteCategory,
       createGoal,
+      updateGoal,
       addGoalFunds,
     }),
     [
@@ -183,6 +193,7 @@ export function FinanceProvider({ children, clock = demoClock, repository, recur
       setCategoryBudget,
       deleteCategory,
       createGoal,
+      updateGoal,
       addGoalFunds,
     ],
   )

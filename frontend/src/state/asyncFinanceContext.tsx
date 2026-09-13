@@ -262,8 +262,9 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     setCategoryBudget,
     deleteCategory: (categoryId) => deleteCategory(categoryId),
     createGoal,
+    updateGoal,
     addGoalFunds: (goalId, sourceAccountId, amount) => addGoalFunds(goalId, sourceAccountId, amount, stableGateway.todayIso ?? new Date().toISOString().slice(0, 10)),
-  }), [state, recurringItems, recurringSuggestions, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, addCategory, updateCategory, setCategoryBudget, deleteCategory, createGoal, addGoalFunds])
+  }), [state, recurringItems, recurringSuggestions, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, addCategory, updateCategory, setCategoryBudget, deleteCategory, createGoal, updateGoal, addGoalFunds])
   return <AsyncFinanceContext.Provider value={value}><FinanceContext.Provider value={financeValue}>{children}</FinanceContext.Provider></AsyncFinanceContext.Provider>
 }
 

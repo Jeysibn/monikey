@@ -12,6 +12,7 @@ import type {
   FinanceState,
   Goal,
   Transaction,
+  UpdateGoalInput,
 } from '../domain/finance'
 import type { RecurringItem } from '../domain/recurring'
 import type { RecurringSuggestion } from '../services/apiRecurringGateway'
@@ -42,6 +43,7 @@ export interface FinanceContextValue {
   /** Settings: delete a category outright. */
   deleteCategory: (categoryId: string) => void | Promise<void>
   createGoal: (input: CreateGoalInput) => Goal | Promise<Goal>
+  updateGoal: (goalId: string, input: UpdateGoalInput) => Goal | Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number) => Goal | Promise<Goal>
 }
 

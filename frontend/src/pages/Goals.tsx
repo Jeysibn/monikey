@@ -188,8 +188,7 @@ function CreateGoalForm({ onClose, editingGoal }: { onClose: () => void; editing
       } else if (asyncFinance) {
         await asyncFinance.createGoal(input)
       } else if (editingGoal) {
-        // Sync path - not implemented for edit
-        throw new Error('Edit not supported in sync mode')
+        finance.updateGoal(editingGoal.id, input)
       } else {
         finance.createGoal(input)
       }

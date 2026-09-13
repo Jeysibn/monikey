@@ -43,7 +43,8 @@ compact menu before it can wrap at tablet widths.
 - `npm run typecheck --prefix frontend` — passed.
 - `npm run test --prefix frontend -- --run` — 263 unit/component tests passed.
 - `npm run test:e2e:mock --prefix frontend -- --workers=1` — 100 mock E2E tests passed.
-- Route accessibility invariants cover all 15 routes, including `/sync`.
+- Route accessibility invariants and axe checks cover all 15 routes, including
+  `/sync`.
 - Browser geometry audit reported no horizontal overflow or page errors at the
   requested viewports.
 - `npm run lint --prefix frontend` — passed with existing warnings in the

@@ -70,6 +70,7 @@ export function Dashboard() {
 
   return (
     <div className="dashboard">
+      <h1 className="sr-only">Dashboard</h1>
       <MoneyPosition />
 
       <div className="dash-grid">

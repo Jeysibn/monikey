@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test'
 test.describe('Primary navigation', () => {
   test('all five main pages are reachable from the nav', async ({ page }) => {
     await page.goto('/')
-    // Dashboard has no page <h1>; assert via a known widget instead.
+    // The dashboard heading is visually hidden so the Money Position widget
+    // can remain the visual lead while the page still has a document title.
     await expect(page.getByText('Available Cash', { exact: true })).toBeVisible()
 
     await page.getByRole('link', { name: 'Transactions', exact: true }).click()

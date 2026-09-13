@@ -11,10 +11,10 @@ documentation is authoritative when this list and an older note disagree.
 - **Completed:** IndexedDB snapshot fallback, receipt Blob persistence, server
   reachability probing, an idempotent pending transaction outbox record, and a
   browser Tesseract worker seam.
-- **Not yet done:** full conflict-resolution workflows for operations rejected by
-  the authoritative server. Transaction, crypto-activity and receipt-capture
-  intentions now replay through their normal gateway paths with stable
-  idempotency keys.
+- **Completed:** rejected operations are surfaced in Sync Center and require an
+  explicit retry-with-same-idempotency-key or confirmed discard choice.
+  Transaction, crypto-activity and receipt-capture intentions replay through
+  their normal gateway paths.
 
 ## Incomplete: finish before calling the platform production-ready
 

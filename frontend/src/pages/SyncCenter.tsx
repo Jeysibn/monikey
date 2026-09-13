@@ -20,10 +20,14 @@ export function SyncCenter() {
   const retryOperation = (operation: SyncOutboxOperation) => {
     void localFirstStore.updateOperation({ ...operation, status: 'pending', lastError: null }).then(() => { refresh(); asyncFinance?.retry() })
   }
+  const discardOperation = (operation: SyncOutboxOperation) => {
+    if (!window.confirm('Discard this local operation? It will not be posted to the ledger.')) return
+    void localFirstStore.removeOperation(operation.operationId).then(refresh)
+  }
   return <div className="page-stack">
     <div className="page-heading"><div><p className="eyebrow">LOCAL-FIRST</p><h1>Sync Center</h1><p className="muted">PostgreSQL remains authoritative. Local data is a fallback and pending intentions are replayed through normal finance mutations.</p></div><button className="btn btn--ghost" type="button" onClick={() => { asyncFinance?.retry(); refresh() }}>Retry sync</button></div>
     <Card><CardTitle>Connection</CardTitle><p role="status">{offline ? 'Server unreachable — using the latest local snapshot.' : 'Connected to Monikey'}</p><p className="muted">Last synced: {snapshotDate ? new Date(snapshotDate).toLocaleString() : 'Not available'}</p></Card>
-    <Card><CardTitle>Pending operations</CardTitle><p>{pending} waiting · {failed} needing attention</p>{operations.length === 0 ? <p className="muted">No local operations.</p> : <ul>{operations.map((operation) => <li key={operation.operationId}>{operation.operationType.replaceAll('_', ' ')} · <strong>{operation.status}</strong>{operation.lastError ? ` · ${operation.lastError}` : ''}{(operation.status === 'failed' || operation.status === 'conflict') && <button type="button" className="crypto-text-action" onClick={() => retryOperation(operation)}>Retry</button>}</li>)}</ul>}</Card>
+    <Card><CardTitle>Pending operations</CardTitle><p>{pending} waiting · {failed} needing attention</p>{operations.length === 0 ? <p className="muted">No local operations.</p> : <ul>{operations.map((operation) => <li key={operation.operationId}>{operation.operationType.replaceAll('_', ' ')} · <strong>{operation.status}</strong>{operation.lastError ? ` · ${operation.lastError}` : ''}{(operation.status === 'failed' || operation.status === 'conflict') && <><button type="button" className="crypto-text-action" onClick={() => retryOperation(operation)}>Retry</button><button type="button" className="crypto-text-action" onClick={() => discardOperation(operation)}>Discard</button></>}</li>)}</ul>}</Card>
     <Card><CardTitle>Receipt OCR</CardTitle><p className="muted">Receipt images can be stored locally and processed in a browser worker. OCR results are suggestions only and require review before ledger entry.</p></Card>
   </div>
 }

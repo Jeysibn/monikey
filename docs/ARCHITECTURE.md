@@ -299,8 +299,10 @@ the existing server OCR adapter remains available when the homelab is reachable.
 The worker runtime, WASM core and English/Simplified Chinese language data are
 packaged under `frontend/public/tesseract` and are available to the service
 worker cache, so an installed production build can run the selected languages
-without a network request. Full outbox conflict resolution remains follow-up
-work.
+without a network request. Conflict states require an explicit Sync Center
+choice: retry with the same idempotency key or discard the local intention after
+confirmation. There is no silent last-write-wins behavior and no offline
+edit/delete support in V1.
 
 The frontend build post-processes `dist/sw.js` to precache every hashed JS/CSS
 and OCR worker asset emitted by Vite. This keeps a newly installed production

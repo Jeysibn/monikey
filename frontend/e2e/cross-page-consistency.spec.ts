@@ -74,11 +74,10 @@ test.describe('Cross-page data consistency', () => {
 
   test('Average goal progress is computed from active goals only, not inflated by completed ones', async ({ page }) => {
     await page.goto('/goals')
-    // Travel 53% + New Laptop 91% + Car Down Payment 0% (13/5000, rounds to
-    // 0) averaged over 3 active goals = 48%, not diluted upward by the two
-    // completed (100%+) goals. Scope the assertion to the KPI card so an
-    // unrelated percentage elsewhere on the page cannot satisfy the test.
+    // Exact active-goal progress is 53.13% + 90.69% + 0.26% = 144.08%;
+    // averaged across three active goals and rounded to basis-point precision
+    // that is 48.03%. Completed goals must not contribute to this KPI.
     const averageProgressCard = page.getByText('Avg Progress · active goals').locator('..')
-    await expect(averageProgressCard).toContainText('48%')
+    await expect(averageProgressCard).toContainText('48.03%')
   })
 })

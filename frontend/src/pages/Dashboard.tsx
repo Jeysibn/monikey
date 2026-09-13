@@ -5,7 +5,8 @@ import { Sparkline } from '../components/Sparkline'
 import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
-import { formatMoney } from '../utils/currency'
+import { formatDecimalMoney, formatMoney } from '../utils/currency'
+import { boundedDecimalToNumber } from '../utils/money'
 import { formatDateLabel, formatDueDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
 
@@ -18,6 +19,8 @@ const DEMO_CRYPTO_COINS: CryptoCoinPreview[] = [
 ]
 const DEMO_CRYPTO_SUMMARY: CryptoSummaryPreview = { portfolioValue: '3361728.12', totalPnl: '28819.82', totalPnlPct: '18.5' }
 function backendEnabled() { return import.meta.env.VITE_FINANCE_BACKEND === 'true' }
+function isNegativeDecimal(value: string) { return /^-/.test(value.trim()) && !/^-0+(?:\.0+)?$/.test(value.trim()) }
+const cryptoPreviewNumber = (value: string) => boundedDecimalToNumber(value, { min: -1_000_000_000_000_000, max: 1_000_000_000_000_000 })
 
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
 const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
@@ -62,7 +65,7 @@ export function Dashboard() {
     return () => controller.abort()
   }, [])
   const topCryptoCoins = [...cryptoCoins]
-    .sort((a, b) => Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0))
+    .sort((a, b) => cryptoPreviewNumber(b.marketValue ?? '0') - cryptoPreviewNumber(a.marketValue ?? '0'))
     .slice(0, 4)
 
   return (
@@ -281,13 +284,13 @@ export function Dashboard() {
           <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
           {cryptoSummary ? (
             <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
-              {formatMoney(Number(cryptoSummary.portfolioValue), { withCents: true })} total
+              {formatDecimalMoney(cryptoSummary.portfolioValue)} total
               {cryptoSummary.totalPnlPct != null && (
                 <>
                   {' · '}
-                  <span className={Number(cryptoSummary.totalPnl) >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                    {Number(cryptoSummary.totalPnl) >= 0 ? '+' : ''}
-                    {Number(cryptoSummary.totalPnlPct).toFixed(1)}% all-time
+                  <span className={!isNegativeDecimal(cryptoSummary.totalPnl) ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                    {!isNegativeDecimal(cryptoSummary.totalPnl) ? '+' : ''}
+                    {boundedDecimalToNumber(cryptoSummary.totalPnlPct, { min: -1_000_000, max: 1_000_000 }).toFixed(1)}% all-time
                   </span>
                 </>
               )}
@@ -302,7 +305,7 @@ export function Dashboard() {
               {topCryptoCoins.map((coin) => (
                 <div className="portfolio-tile" key={coin.instrumentId ?? coin.symbol}>
                   <div className="num" style={{ fontWeight: 700 }}>
-                    {coin.currentPrice ? formatMoney(Number(coin.currentPrice), { withCents: true }) : '—'}
+                    {coin.currentPrice ? formatDecimalMoney(coin.currentPrice) : '—'}
                   </div>
                   {typeof coin.change24hPct === 'number' && (
                     <div className={coin.change24hPct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>

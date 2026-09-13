@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Card, CardTitle } from '../components/Card'
 import { useBackendAuthOptional } from '../components/BackendAuthContext'
+import type { paths } from '../api.generated'
 import './Rules.css'
 
-type Rule = { id: string; name: string; enabled: boolean; priority: number; conditions: Record<string, unknown>; actions: Record<string, unknown> }
+type Rule = paths['/rules']['get']['responses'][200]['content']['application/json'][number]
+type CreateRuleRequest = paths['/rules']['post']['requestBody']['content']['application/json']
 const initial = { name: '', merchantContains: '', normalizedMerchant: '', addTags: '', note: '' }
 
 export function Rules() {
@@ -11,12 +13,13 @@ export function Rules() {
   const [rules, setRules] = useState<Rule[]>([])
   const [form, setForm] = useState(initial)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => { if (!backend) return; fetch('/api/v1/rules', { credentials: 'include' }).then((r) => r.json()).then((body: Rule[]) => setRules(body)).catch(() => setError('Could not load transaction rules.')) }, [backend])
+  useEffect(() => { if (!backend) return; fetch('/api/v1/rules', { credentials: 'include' }).then(async (response) => { if (!response.ok) throw new Error('rules unavailable'); return response.json() as Promise<Rule[]> }).then(setRules).catch(() => setError('Could not load transaction rules.')) }, [backend])
   async function createRule(event: React.FormEvent) {
     event.preventDefault(); setError(null)
     if (!form.name.trim() || !form.merchantContains.trim()) { setError('Name and merchant condition are required.'); return }
     if (!backend) { setError('Rules are available in backend mode.'); return }
-    const response = await fetch('/api/v1/rules', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: form.name.trim(), conditions: { merchantContains: form.merchantContains.trim() }, actions: { normalizedMerchant: form.normalizedMerchant.trim() || undefined, addTags: form.addTags.split(',').map((tag) => tag.trim()).filter(Boolean), note: form.note.trim() || undefined } }) })
+    const payload: CreateRuleRequest = { name: form.name.trim(), conditions: { merchantContains: form.merchantContains.trim() }, actions: { normalizedMerchant: form.normalizedMerchant.trim() || undefined, addTags: form.addTags.split(',').map((tag) => tag.trim()).filter(Boolean), note: form.note.trim() || undefined } }
+    const response = await fetch('/api/v1/rules', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
     if (!response.ok) { setError('Could not save rule.'); return }
     const created = await response.json() as Rule
     setRules((current) => [...current, created]); setForm(initial)

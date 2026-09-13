@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiFinanceGateway, FinanceApiError } from './apiFinanceGateway'
 
 const account = (overrides: Record<string, unknown> = {}) => ({
-  id: 'account-1', name: 'Checking', institution: 'BPI', accountType: 'checking', classification: 'asset', currentBalanceMinor: 412050, lastFour: '4471', syncStatus: 'manual', manual: true, ...overrides,
+  id: 'account-1', name: 'Checking', institution: 'BPI', accountType: 'checking', classification: 'asset', currentBalanceMinor: '412050', lastFour: '4471', syncStatus: 'manual', manual: true, ...overrides,
 })
 
 function response(body: unknown, status = 200): Response {
@@ -12,8 +12,8 @@ function response(body: unknown, status = 200): Response {
 describe('ApiFinanceGateway', () => {
   it('maps bootstrap minor units and server enums into the frontend domain', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ financeState: {
-      accounts: [account(), account({ id: 'wallet-1', accountType: 'ewallet', name: 'GCash' }), account({ id: 'card-1', classification: 'liability', accountType: 'credit_card', currentBalanceMinor: 146000, creditCardDetail: { network: 'visa', creditLimitMinor: 500000, dueDay: 15, minimumPaymentMinor: 7500 } })],
-      transactions: [{ id: 'tx-1', type: 'expense', title: 'Cafe', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-29', occurredTime: '09:14:00', amountMinor: 640, feeMinor: 0, source: 'manual', status: 'cleared', note: null }],
+      accounts: [account(), account({ id: 'wallet-1', accountType: 'ewallet', name: 'GCash' }), account({ id: 'card-1', classification: 'liability', accountType: 'credit_card', currentBalanceMinor: '146000', creditCardDetail: { network: 'visa', creditLimitMinor: '500000', dueDay: 15, minimumPaymentMinor: '7500' } })],
+      transactions: [{ id: 'tx-1', type: 'expense', title: 'Cafe', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-29', occurredTime: '09:14:00', amountMinor: '640', feeMinor: '0', source: 'manual', status: 'cleared', note: null }],
       categories: [{ id: 'food', name: 'Food', color: 'teal', budgetable: true, allowsIncome: false, allowsExpense: true }], budgets: [], goals: [],
     }, serverDate: '2026-08-29' }))
     const state = await new ApiFinanceGateway('/api/v1', fetcher).load()
@@ -26,7 +26,7 @@ describe('ApiFinanceGateway', () => {
   })
 
   it('posts positive minor-unit amounts and maps an expense response', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ transaction: { id: 'tx-2', type: 'expense', title: 'Lunch', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: 1234, feeMinor: 50, source: 'manual', status: 'cleared', note: 'test' } }))
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ transaction: { id: 'tx-2', type: 'expense', title: 'Lunch', categoryId: 'food', goalId: null, fromAccountId: 'account-1', toAccountId: null, occurredOn: '2026-08-31', occurredTime: null, amountMinor: '1234', feeMinor: '50', source: 'manual', status: 'cleared', note: 'test' } }))
     const result = await new ApiFinanceGateway('/api/v1', fetcher).addTransaction({ type: 'expense', title: 'Lunch', categoryId: 'food', accountId: 'account-1', date: '2026-08-31', amount: 12.34, fee: 0.5, idempotencyKey: 'submit-1' })
     expect(result).toMatchObject({ amount: -12.34, fee: 0.5 })
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: '1234', feeMinor: '50', fromAccountId: 'account-1', toAccountId: null, idempotencyKey: 'submit-1' })
@@ -53,13 +53,27 @@ describe('ApiFinanceGateway', () => {
 
   it('uses minor units for budget period and allocation commands', async () => {
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-08-01', periodEnd: '2026-09-01', incomePoolMinor: 250000, allocations: [] }))
-      .mockResolvedValueOnce(response({ id: 'allocation-1', categoryId: 'food', allocatedMinor: 160000 }))
+      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-08-01', periodEnd: '2026-09-01', incomePoolMinor: '250000', allocations: [] }))
+      .mockResolvedValueOnce(response({ id: 'allocation-1', categoryId: 'food', allocatedMinor: '160000', spentMinor: '0' }))
     const api = new ApiFinanceGateway('/api/v1', fetcher)
     await api.createBudgetPeriod('2026-08-01', '2026-09-01', 2500)
     const allocation = await api.setBudgetAllocation('period-1', 'food', 1600)
     expect(allocation).toMatchObject({ id: 'food', allocated: 1600 })
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ incomePoolMinor: '250000' })
     expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ allocatedMinor: '160000' })
+  })
+
+  it('uses generated goal contracts and decimal strings for minor units', async () => {
+    const goal = { id: 'goal-1', userId: 'user-1', name: 'Emergency fund', targetMinor: '500000', currentMinor: '0', currencyCode: 'PHP', targetDate: '2027-01-01T00:00:00.000Z', completedDate: null, monthlyContributionMinor: '125050', status: 'just_started', active: true, createdAt: '2026-09-13T00:00:00.000Z', updatedAt: '2026-09-13T00:00:00.000Z' }
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response(goal, 201))
+      .mockResolvedValueOnce(response({ ...goal, targetMinor: '600000', monthlyContributionMinor: null }))
+    const api = new ApiFinanceGateway('/api/v1', fetcher)
+
+    await api.createGoal({ name: 'Emergency fund', targetAmount: 5000, targetDate: '2027-01-01', monthlyContribution: 1250.5 })
+    await api.updateGoal('goal-1', { targetAmount: 6000, monthlyContribution: null })
+
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ targetMinor: '500000', monthlyContributionMinor: '125050' })
+    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toMatchObject({ targetMinor: '600000', monthlyContributionMinor: null })
   })
 })

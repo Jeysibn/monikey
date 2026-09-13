@@ -6,6 +6,7 @@ import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { formatMoney } from '../utils/currency'
 import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import type { TransactionType, Transaction } from '../domain/finance'
+import type { paths } from '../api.generated'
 import './Transactions.css'
 
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -13,6 +14,7 @@ const TYPE_LABEL: Record<TransactionType, string> = {
   expense: 'Expense',
   transfer: 'Transfer',
 }
+type ApiTag = paths['/tags']['get']['responses'][200]['content']['application/json'][number]
 
 export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTransaction: () => void; onEditTransaction?: (tx: Transaction) => void }) {
   const finance = useFinance()
@@ -26,10 +28,10 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
   const [toFilter] = useState(params.get('to') ?? '')
   const [tagFilter] = useState(params.get('tag') ?? '')
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [availableTags, setAvailableTags] = useState<Array<{ id: string; name: string }>>([])
+  const [availableTags, setAvailableTags] = useState<ApiTag[]>([])
   useEffect(() => {
     if (!asyncFinance) return
-    fetch('/api/v1/tags', { credentials: 'include' }).then((response) => response.ok ? response.json() : Promise.reject(new Error('tags unavailable'))).then(setAvailableTags).catch(() => undefined)
+    fetch('/api/v1/tags', { credentials: 'include' }).then((response) => response.ok ? response.json() as Promise<ApiTag[]> : Promise.reject(new Error('tags unavailable'))).then(setAvailableTags).catch(() => undefined)
   }, [asyncFinance])
 
   // A "deleted" transaction isn't hard-removed on the backend — it's reversed

@@ -20,6 +20,7 @@ import { formatMoney, formatMinorUnits } from '../utils/currency'
 import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
 import { useBackendAuthOptional } from '../components/BackendAuthContext'
+import type { paths } from '../api.generated'
 
 const VIEWS: ReportView[] = ['monthly', 'quarterly', 'yearly']
 const VIEW_LABEL: Record<ReportView, string> = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
@@ -31,6 +32,7 @@ const TREND_UNIT_FOR_VIEW: Record<ReportView, ExpensesTrendUnit> = {
   quarterly: 'weekly',
   yearly: 'monthly',
 }
+type TagSpend = paths['/reports/spending-by-tag']['get']['responses'][200]['content']['application/json'][number]
 
 /** Plain-div bar chart for an illustrative or real trend — matches the app's no-charting-library convention (see Budget.tsx's `.bva-bars`). */
 function TrendBarChart({
@@ -73,14 +75,14 @@ export function Reports() {
   const [custom, setCustom] = useState(false)
   const [customFrom, setCustomFrom] = useState(todayIso)
   const [customTo, setCustomTo] = useState(todayIso)
-  const [tagSpend, setTagSpend] = useState<Array<{ tagId: string; tagName: string; spent: string }>>([])
+  const [tagSpend, setTagSpend] = useState<TagSpend[]>([])
 
   const period = useMemo(() => custom ? { start: customFrom, end: customTo >= customFrom ? addDaysToIso(customTo, 1) : customFrom } : reportingPeriodForView(todayIso, view), [custom, customFrom, customTo, todayIso, view])
   const periodLabel = custom ? `${customFrom} to ${customTo}` : reportPeriodLabel(todayIso, view)
   useEffect(() => {
     if (!backend) return
     fetch(`/api/v1/reports/spending-by-tag?from=${period.start}&to=${addDaysToIso(period.end, -1)}`, { credentials: 'include' })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('tag report unavailable')))
+      .then((response) => response.ok ? response.json() as Promise<TagSpend[]> : Promise.reject(new Error('tag report unavailable')))
       .then(setTagSpend)
       .catch(() => setTagSpend([]))
   }, [backend, period.start, period.end])

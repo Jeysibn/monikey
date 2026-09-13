@@ -84,7 +84,7 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
       method: 'POST',
       url: '/api/v1/recurring',
       headers: { origin: APP_ORIGIN, cookie },
-      payload: { merchant: 'Netflix', amountMinor: 5000, frequency: 'monthly', nextDueDate: '2026-09-15', accountId, categoryId },
+      payload: { merchant: 'Netflix', amountMinor: '5000', frequency: 'monthly', nextDueDate: '2026-09-15', accountId, categoryId },
     })
     expect(res.statusCode).toBe(201)
     const body = res.json()
@@ -103,7 +103,7 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
       method: 'POST',
       url: '/api/v1/recurring',
       headers: { origin: APP_ORIGIN, cookie: attacker.cookie },
-      payload: { merchant: 'Stolen bill', amountMinor: 5000, frequency: 'monthly', nextDueDate: '2026-09-15', accountId: ownerAccountId, categoryId },
+      payload: { merchant: 'Stolen bill', amountMinor: '5000', frequency: 'monthly', nextDueDate: '2026-09-15', accountId: ownerAccountId, categoryId },
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('UNKNOWN_ACCOUNT')
@@ -119,7 +119,7 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
       method: 'POST',
       url: '/api/v1/recurring',
       headers: { origin: APP_ORIGIN, cookie: attacker.cookie },
-      payload: { merchant: 'Stolen category', amountMinor: 5000, frequency: 'monthly', nextDueDate: '2026-09-15', accountId, categoryId: ownerCategoryId },
+      payload: { merchant: 'Stolen category', amountMinor: '5000', frequency: 'monthly', nextDueDate: '2026-09-15', accountId, categoryId: ownerCategoryId },
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('UNKNOWN_CATEGORY')

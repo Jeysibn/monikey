@@ -78,6 +78,12 @@ const commitBatchSchema = z.object({
 const importRowJson = { type: 'object', required: ['id', 'importBatchId', 'dedupKey', 'provider', 'occurredOn', 'title', 'amountMinor', 'currencyCode', 'status', 'validationErrors', 'processingError', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, importBatchId: { type: 'string', format: 'uuid' }, dedupKey: { type: 'string' }, provider: { type: 'string' }, providerTransactionId: { anyOf: [{ type: 'string' }, { type: 'null' }] }, occurredOn: { type: 'string', format: 'date' }, title: { type: 'string' }, description: { anyOf: [{ type: 'string' }, { type: 'null' }] }, amountMinor: { type: 'string', pattern: '^\\d+$' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3 }, merchantName: { anyOf: [{ type: 'string' }, { type: 'null' }] }, status: { type: 'string' }, validationErrors: { type: 'array', items: { type: 'string' } }, processingError: { anyOf: [{ type: 'string' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' } } } as const
 const importBatchJson = { type: 'object', required: ['id', 'userId', 'importSourceId', 'importSourceType', 'status', 'matchedAccountId', 'totalCount', 'committedCount', 'errorCount', 'errorMessage', 'createdAt', 'updatedAt', 'committedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, importSourceId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, importSourceType: { type: 'string', enum: ['plaid_sandbox', 'csv_manual'] }, status: { type: 'string' }, matchedAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, totalCount: { type: 'integer' }, committedCount: { type: 'integer' }, errorCount: { type: 'integer' }, errorMessage: { anyOf: [{ type: 'string' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' }, committedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] } } } as const
 const commitResultJson = { type: 'object', required: ['committedCount', 'errors'], properties: { committedCount: { type: 'integer', minimum: 0 }, errors: { type: 'array', items: { type: 'object', required: ['txnId', 'error'], properties: { txnId: { type: 'string', format: 'uuid' }, error: { type: 'string' } } } } } } as const
+const csvUploadResultJson = { type: 'object', additionalProperties: false, required: ['batchId', 'fileName', 'totalRows', 'addedCount', 'duplicateCount', 'status', 'sourceProfile', 'message'], properties: { batchId: { type: 'string', format: 'uuid' }, fileName: { type: 'string' }, totalRows: { type: 'integer', minimum: 0 }, addedCount: { type: 'integer', minimum: 0 }, duplicateCount: { type: 'integer', minimum: 0 }, errors: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['row', 'error'], properties: { row: { type: 'integer', minimum: 1 }, error: { type: 'string' } } } }, status: { type: 'string', enum: ['duplicate', 'reviewing'] }, sourceProfile: { type: 'string' }, message: { type: 'string' } } } as const
+const importErrorJson = { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['code', 'message'], properties: { code: { type: 'string' }, message: { type: 'string' } } } } } as const
+const batchParamsJson = { type: 'object', additionalProperties: false, required: ['batchId'], properties: { batchId: { type: 'string', format: 'uuid' } } } as const
+const batchListQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' } } } as const
+const stagedRowsQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' }, limit: { type: 'string', pattern: '^\\d+$' }, offset: { type: 'string', pattern: '^\\d+$' } } } as const
+const addRowBodyJson = { type: 'object', additionalProperties: false, required: ['dedupKey', 'provider', 'title', 'amountMinor', 'occurredOn'], properties: { dedupKey: { type: 'string', minLength: 1 }, provider: { type: 'string', minLength: 1 }, providerTransactionId: { type: 'string' }, title: { type: 'string', minLength: 1, maxLength: 255 }, description: { type: 'string' }, amountMinor: { type: 'string', pattern: '^\\d+$' }, occurredOn: { type: 'string', format: 'date' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3, default: 'PHP' }, merchantName: { type: 'string' } } } as const
 
 const plaidExchangeTokenSchema = z.object({
   publicToken: z.string().min(1),
@@ -108,7 +114,7 @@ export async function createImportsRoutes(
    */
   app.post<{ Body: z.infer<typeof createImportBatchSchema> }>(
     '/batches',
-    { preHandler: requireOrigin, schema: { body: { type: 'object', required: ['sourceType'], properties: { sourceType: { type: 'string', enum: ['plaid_sandbox', 'csv_manual'] }, plaidItemId: { type: 'string', format: 'uuid' } } }, response: { 201: importBatchJson } } },
+    { preValidation: [requireOrigin, requireAuth], schema: { body: { type: 'object', required: ['sourceType'], properties: { sourceType: { type: 'string', enum: ['plaid_sandbox', 'csv_manual'] }, plaidItemId: { type: 'string', format: 'uuid' } } }, response: { 201: importBatchJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const input = createImportBatchSchema.parse(request.body)
       const userId = request.user!.id
@@ -129,6 +135,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Querystring: { status?: string } }>(
     '/batches',
+    { preValidation: requireAuth, schema: { querystring: batchListQueryJson, response: { 200: { type: 'array', items: importBatchJson } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const status = (request.query as any).status as string | undefined
@@ -144,6 +151,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string } }>(
     '/batches/:batchId',
+    { preValidation: requireAuth, schema: { params: batchParamsJson, response: { 200: importBatchJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -163,7 +171,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof addImportedTransactionSchema>
   }>(
     '/batches/:batchId/transactions',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { params: batchParamsJson, body: addRowBodyJson, response: { 201: importRowJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -195,7 +203,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
     '/batches/:batchId/transactions',
-    { schema: { params: { type: 'object', required: ['batchId'], properties: { batchId: { type: 'string', format: 'uuid' } } }, response: { 200: { type: 'array', items: importRowJson }, 404: { type: 'object' } } } },
+    { preValidation: requireAuth, schema: { params: batchParamsJson, querystring: stagedRowsQueryJson, response: { 200: { type: 'array', items: importRowJson }, 404: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -233,7 +241,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof commitBatchSchema>
   }>(
     '/batches/:batchId/commit',
-    { preHandler: requireOrigin, schema: { params: { type: 'object', required: ['batchId'], properties: { batchId: { type: 'string', format: 'uuid' } } }, body: { type: 'object', required: ['matchedAccountId'], properties: { matchedAccountId: { type: 'string', format: 'uuid' } } }, response: { 200: commitResultJson } } },
+    { preValidation: [requireOrigin, requireAuth], schema: { params: batchParamsJson, body: { type: 'object', required: ['matchedAccountId'], properties: { matchedAccountId: { type: 'string', format: 'uuid' } } }, response: { 200: commitResultJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -477,7 +485,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/csv/upload',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { response: { 200: csvUploadResultJson, 201: csvUploadResultJson, 400: importErrorJson, 413: importErrorJson, 500: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
 

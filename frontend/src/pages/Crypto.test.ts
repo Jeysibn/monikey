@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney } from './Crypto'
+import { formatDecimalMoney as formatMoney } from '../utils/currency'
 
 describe('crypto money formatting', () => {
   it('preserves large decimal strings without Number conversion', () => {

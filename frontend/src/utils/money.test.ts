@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseMinorUnitInput } from './money'
+import { boundedDecimalToNumber, minorUnitsToMajorNumber, parseMinorUnitInput } from './money'
 import { formatMinorUnits } from './currency'
 
 describe('parseMinorUnitInput', () => {
@@ -14,5 +14,30 @@ describe('parseMinorUnitInput', () => {
 
   it('formats large API minor-unit values without narrowing them to Number', () => {
     expect(formatMinorUnits('900719925474099123')).toContain('₱9,007,199,254,740,991.23')
+  })
+})
+
+describe('minorUnitsToMajorNumber', () => {
+  it('converts API decimal strings only inside the exact integer range', () => {
+    expect(minorUnitsToMajorNumber('125050')).toBe(1250.5)
+    expect(minorUnitsToMajorNumber('-640')).toBe(-6.4)
+    expect(minorUnitsToMajorNumber(String(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER / 100)
+  })
+
+  it('fails closed instead of silently rounding unsafe or malformed values', () => {
+    expect(() => minorUnitsToMajorNumber('9007199254740992')).toThrow(RangeError)
+    expect(() => minorUnitsToMajorNumber('12.34')).toThrow(TypeError)
+    expect(() => minorUnitsToMajorNumber('not-money')).toThrow(TypeError)
+  })
+})
+
+describe('boundedDecimalToNumber', () => {
+  it('allows explicitly bounded visual calculations', () => {
+    expect(boundedDecimalToNumber('18.5', { min: -100, max: 100 })).toBe(18.5)
+  })
+
+  it('rejects non-decimal and out-of-range visual values', () => {
+    expect(() => boundedDecimalToNumber('Infinity', { min: 0, max: 100 })).toThrow(TypeError)
+    expect(() => boundedDecimalToNumber('101', { min: 0, max: 100 })).toThrow(RangeError)
   })
 })

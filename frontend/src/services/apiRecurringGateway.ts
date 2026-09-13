@@ -1,6 +1,7 @@
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import { FinanceApiError } from './apiFinanceGateway'
 import type { paths } from '../api.generated'
+import { minorUnitsToMajorNumber } from '../utils/money'
 
 type ApiRecurringItem = paths['/recurring']['post']['responses'][201]['content']['application/json']
 export type RecurringSuggestion = paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']['suggestions'][number]
@@ -54,5 +55,5 @@ export class ApiRecurringGateway implements RecurringGateway {
     await this.request<void>(`/recurring/${id}`, { method: 'DELETE' })
   }
   async suggestions(): Promise<RecurringSuggestion[]> { return (await this.request<paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']>('/recurring/suggestions')).suggestions }
-  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, lastPaidDate: item.lastPaidDate ?? undefined, amount: Number(item.amountMinor) / 100 })
+  private map = (item: ApiRecurringItem): RecurringItem => ({ ...item, lastPaidDate: item.lastPaidDate ?? undefined, amount: minorUnitsToMajorNumber(item.amountMinor) })
 }

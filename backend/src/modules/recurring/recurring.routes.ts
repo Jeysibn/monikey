@@ -20,6 +20,7 @@ function view(item: any) {
 }
 
 const minorJson = { type: 'string', pattern: '^\\d+$' } as const
+const validationErrorJson = { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['code', 'message', 'requestId'], properties: { code: { type: 'string' }, message: { type: 'string' }, field: { type: 'string' }, requestId: { type: 'string' } } } } } as const
 const recurringJson = { type: 'object', required: ['id', 'userId', 'merchant', 'amountMinor', 'frequency', 'nextDueDate', 'accountId', 'categoryId', 'autopay', 'status', 'lastPaidDate', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, merchant: { type: 'string' }, amountMinor: minorJson, frequency: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] }, nextDueDate: { type: 'string', format: 'date' }, accountId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, autopay: { type: 'boolean' }, status: { type: 'string', enum: ['active', 'paused'] }, lastPaidDate: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
 const recurringBody = { type: 'object', required: ['merchant', 'amountMinor', 'frequency', 'nextDueDate', 'accountId', 'categoryId'], additionalProperties: false, properties: { merchant: { type: 'string', minLength: 1, maxLength: 160 }, amountMinor: minorJson, frequency: { type: 'string', enum: ['weekly', 'monthly', 'yearly'] }, nextDueDate: { type: 'string', format: 'date' }, accountId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, autopay: { type: 'boolean' } } } as const
 const recurringUpdateBody = { ...recurringBody, required: [], properties: { ...recurringBody.properties, merchant: { type: 'string', minLength: 1, maxLength: 160 } } } as const
@@ -36,7 +37,7 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     const rows = await options.prisma.transaction.findMany({ where: { userId: request.user!.id, type: 'expense', status: 'cleared', occurredOn: { gte: since } }, select: { title: true, amountMinor: true, occurredOn: true }, orderBy: { occurredOn: 'asc' } })
     return { suggestions: detectMonthlyCandidates(rows) }
   })
-  app.post('/recurring', { preHandler: [requireOrigin, requireAuth], schema: { body: recurringBody, response: { 201: recurringJson, 422: { type: 'object' } } } }, async (request, reply) => {
+  app.post('/recurring', { preHandler: [requireOrigin, requireAuth], schema: { body: recurringBody, response: { 201: recurringJson, 422: validationErrorJson } } }, async (request, reply) => {
     const input = createSchema.parse(request.body)
     const [account, category] = await Promise.all([
       options.prisma.financialAccount.findFirst({ where: { id: input.accountId, userId: request.user!.id, archivedAt: null } }),

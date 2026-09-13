@@ -49,6 +49,20 @@ export function formatMoney(value: number, opts: { withCents?: boolean } = {}): 
   }).format(value)
 }
 
+/** Format a major-unit decimal string without narrowing it through Number. */
+export function formatDecimalMoney(value: string, currency = currencyConfig.currency): string {
+  const match = value.trim().match(/^(-?)(\d+)(?:\.(\d+))?$/)
+  if (!match) return `${currency} ${value}`
+  const negative = match[1] === '-'
+  const whole = match[2]!
+  const fraction = (match[3] ?? '').padEnd(2, '0').slice(0, 2)
+  const parts = new Intl.NumberFormat(currencyConfig.locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).formatToParts(0)
+  const currencyPart = parts.find((part) => part.type === 'currency')?.value ?? currency
+  const decimal = new Intl.NumberFormat(currencyConfig.locale).formatToParts(1.1).find((part) => part.type === 'decimal')?.value ?? '.'
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${negative ? '-' : ''}${currencyPart}${grouped}${decimal}${fraction}`
+}
+
 /** Format API minor-unit strings without converting them through Number. */
 export function formatMinorUnits(value: string | bigint, opts: { withCents?: boolean } = {}): string {
   const withCents = opts.withCents ?? true

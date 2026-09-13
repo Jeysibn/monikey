@@ -1,31 +1,42 @@
 import { FinanceApiError } from './apiFinanceGateway'
+import type { paths } from '../api.generated'
 
-async function receiptRequest(path: string, body: unknown) {
+async function receiptRequest<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`/api/v1/receipts${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { message?: string } } | undefined
     throw new FinanceApiError(response.status, 'RECEIPT_ERROR', payload?.error?.message ?? 'Could not process receipt.')
   }
-  return response.json() as Promise<any>
+  return response.json() as Promise<T>
 }
+
+type ReceiptUploadBody = paths['/receipts']['post']['requestBody']['content']['application/json']
+type ReceiptUploadResponse = paths['/receipts']['post']['responses'][201]['content']['application/json']
+type ReceiptProcessResponse = paths['/receipts/{id}/process']['post']['responses'][200]['content']['application/json']
 
 export async function uploadAndProcessReceipt(file: File) {
   const data = await file.arrayBuffer()
   const encoded = btoa(String.fromCharCode(...new Uint8Array(data)))
-  const uploaded = await receiptRequest('', { filename: file.name, mimeType: file.type, data: encoded })
-  return receiptRequest(`/${uploaded.receipt.id}/process`, {})
+  const payload: ReceiptUploadBody = { filename: file.name, mimeType: file.type, data: encoded }
+  const uploaded = await receiptRequest<ReceiptUploadResponse>('', payload)
+  return receiptRequest<ReceiptProcessResponse>(`/${uploaded.receipt.id}/process`, {})
 }
 
 export type AuthMode = 'register' | 'login'
+type AuthRequest = paths['/auth/register']['post']['requestBody']['content']['application/json']
+type LoginRequest = paths['/auth/login']['post']['requestBody']['content']['application/json']
+type ForgotPasswordRequest = paths['/auth/forgot-password']['post']['requestBody']['content']['application/json']
+type ResetPasswordRequest = paths['/auth/reset-password']['post']['requestBody']['content']['application/json']
 
 export async function authenticate(mode: AuthMode, input: { email: string; password: string; displayName?: string }): Promise<void> {
+  const payload: AuthRequest | LoginRequest = mode === 'register'
+    ? { email: input.email, password: input.password, displayName: input.displayName ?? '' }
+    : { email: input.email, password: input.password }
   const response = await fetch(`/api/v1/auth/${mode}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(mode === 'register'
-      ? { email: input.email, password: input.password, displayName: input.displayName }
-      : { email: input.email, password: input.password }),
+    body: JSON.stringify(payload),
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
@@ -38,7 +49,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email } satisfies ForgotPasswordRequest),
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
@@ -51,7 +62,7 @@ export async function resetPassword(token: string, password: string): Promise<vo
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, password } satisfies ResetPasswordRequest),
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined

@@ -14,6 +14,30 @@
 export type MoneyParseResult = { ok: true; value: number } | { ok: false; error: string }
 export type MinorMoneyParseResult = { ok: true; value: bigint } | { ok: false; error: string }
 
+/**
+ * Boundary for the legacy frontend domain, whose calculated money fields are
+ * still JavaScript numbers. API values stay as decimal strings until this
+ * check proves their minor-unit integer can be represented without loss.
+ */
+export function minorUnitsToMajorNumber(value: string): number {
+  if (!/^-?\d+$/.test(value)) throw new TypeError('Minor units must be a decimal integer string.')
+  const minor = BigInt(value)
+  if (minor > BigInt(Number.MAX_SAFE_INTEGER) || minor < BigInt(Number.MIN_SAFE_INTEGER)) {
+    throw new RangeError('Minor-unit value exceeds the safe frontend calculation range.')
+  }
+  return Number(minor) / 100
+}
+
+/** Numeric boundary for percentages, chart coordinates, and form previews. */
+export function boundedDecimalToNumber(value: string, bounds: { min: number; max: number }): number {
+  if (!/^-?\d+(?:\.\d+)?$/.test(value.trim())) throw new TypeError('Value must be a plain decimal string.')
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < bounds.min || numeric > bounds.max) {
+    throw new RangeError('Decimal value exceeds the allowed UI calculation range.')
+  }
+  return numeric
+}
+
 /** Exact minor-unit parser for API boundaries; never passes through Number. */
 export function parseMinorUnitInput(raw: string, opts: { allowNegative?: boolean } = {}): MinorMoneyParseResult {
   const trimmed = raw.trim().replace(/,/g, '')

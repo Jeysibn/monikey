@@ -17,6 +17,37 @@ const tradeInput = z.object({ instrumentId: z.string().uuid(), type: z.enum(['bu
 const activityQuery = z.object({ type: z.enum(['all', 'buy', 'sell', 'transfer']).default('all'), q: z.string().trim().max(120).default(''), instrumentId: z.string().uuid().optional() })
 const historyQuery = z.object({ range: z.enum(['1d', '7d', '1m', '3m', '1y', 'all']).default('1m') })
 const coinIdParam = z.object({ id: z.string().uuid() })
+const decimalJson = { type: 'string', pattern: '^-?\\d+(?:\\.\\d+)?$' } as const
+const nullable = <T>(schema: T) => ({ anyOf: [schema, { type: 'null' }] } as const)
+const errorJson = { type: 'object', additionalProperties: false, required: ['error'], properties: { error: { type: 'object', additionalProperties: false, required: ['code', 'message', 'requestId'], properties: { code: { type: 'string' }, message: { type: 'string' }, field: { type: 'string' }, requestId: { type: 'string' } } } } } as const
+const uuidParamsJson = { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } as const
+const searchQueryJson = { type: 'object', additionalProperties: false, properties: { q: { type: 'string', maxLength: 120, default: '' } } } as const
+const historyQueryJson = { type: 'object', additionalProperties: false, properties: { range: { type: 'string', enum: ['1d', '7d', '1m', '3m', '1y', 'all'], default: '1m' } } } as const
+const activityQueryJson = { type: 'object', additionalProperties: false, properties: { type: { type: 'string', enum: ['all', 'buy', 'sell', 'transfer'], default: 'all' }, q: { type: 'string', maxLength: 120, default: '' }, instrumentId: { type: 'string', format: 'uuid' } } } as const
+const catalogCoinJson = { type: 'object', additionalProperties: false, required: ['providerAssetId', 'symbol', 'name', 'imageUrl', 'marketCapRank'], properties: { providerAssetId: { type: 'string' }, symbol: { type: 'string' }, name: { type: 'string' }, imageUrl: nullable({ type: 'string' }), marketCapRank: nullable({ type: 'number' }) } } as const
+const searchResponseJson = { type: 'object', additionalProperties: false, required: ['coins'], properties: { coins: { type: 'array', items: catalogCoinJson } } } as const
+const locationJson = { type: 'object', additionalProperties: false, required: ['id', 'userId', 'name', 'type', 'active', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['exchange', 'wallet', 'other'] }, active: { type: 'boolean' }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const locationsResponseJson = { type: 'object', additionalProperties: false, required: ['locations'], properties: { locations: { type: 'array', items: locationJson } } } as const
+const holdingJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'providerAssetId', 'symbol', 'name', 'tracked', 'quantity', 'currentPrice', 'marketValue', 'averageCost', 'costBasis', 'realizedPnl', 'unrealizedPnl', 'totalPnl', 'change1hPct', 'change24hPct', 'change7dPct', 'imageUrl', 'marketCapRank', 'quoteFetchedAt', 'quoteStale', 'marketDataLinkRequired', 'allocationPct', 'totalPnlPct'], properties: { instrumentId: { type: 'string', format: 'uuid' }, providerAssetId: nullable({ type: 'string' }), symbol: { type: 'string' }, name: { type: 'string' }, tracked: { type: 'boolean' }, quantity: decimalJson, currentPrice: nullable(decimalJson), marketValue: nullable(decimalJson), averageCost: decimalJson, costBasis: decimalJson, realizedPnl: decimalJson, unrealizedPnl: nullable(decimalJson), totalPnl: nullable(decimalJson), change1hPct: nullable({ type: 'number' }), change24hPct: nullable({ type: 'number' }), change7dPct: nullable({ type: 'number' }), imageUrl: nullable({ type: 'string' }), marketCapRank: nullable({ type: 'number' }), quoteFetchedAt: nullable({ type: 'string', format: 'date-time' }), quoteStale: { type: 'boolean' }, marketDataLinkRequired: { type: 'boolean' }, allocationPct: decimalJson, totalPnlPct: nullable(decimalJson) } } as const
+const portfolioResponseJson = { type: 'object', additionalProperties: false, required: ['baseCurrency', 'summary', 'coins'], properties: { baseCurrency: { type: 'string', minLength: 3, maxLength: 3 }, summary: { type: 'object', additionalProperties: false, required: ['portfolioValue', 'change24h', 'change24hPct', 'costBasis', 'realizedPnl', 'unrealizedPnl', 'totalPnl', 'totalPnlPct'], properties: { portfolioValue: decimalJson, change24h: decimalJson, change24hPct: nullable(decimalJson), costBasis: decimalJson, realizedPnl: decimalJson, unrealizedPnl: decimalJson, totalPnl: decimalJson, totalPnlPct: nullable(decimalJson) } }, coins: { type: 'array', items: holdingJson } } } as const
+const stalePortfolioResponseJson = { type: 'object', additionalProperties: false, required: ['baseCurrency', 'coins', 'marketStatus'], properties: { baseCurrency: { type: 'string', minLength: 3, maxLength: 3 }, coins: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['instrumentId', 'providerAssetId', 'symbol', 'name', 'tracked', 'market', 'marketDataLinkRequired'], properties: { instrumentId: { type: 'string', format: 'uuid' }, providerAssetId: nullable({ type: 'string' }), symbol: { type: 'string' }, name: { type: 'string' }, tracked: { type: 'boolean' }, market: { type: 'null' }, marketDataLinkRequired: { type: 'boolean' } } } }, marketStatus: { type: 'object', additionalProperties: false, required: ['stale', 'code'], properties: { stale: { const: true }, code: { const: 'CRYPTO_PROVIDER_UNAVAILABLE' } } } } } as const
+const historyResponseJson = { type: 'object', additionalProperties: false, required: ['baseCurrency', 'points'], properties: { baseCurrency: { type: 'string', minLength: 3, maxLength: 3 }, points: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['timestamp', 'valueAmount'], properties: { timestamp: { type: 'string', format: 'date-time' }, valueAmount: decimalJson } } } } } as const
+const tradeActivityJson = { type: 'object', additionalProperties: false, required: ['id', 'type', 'instrumentId', 'symbol', 'name', 'units', 'priceAmount', 'feeAmount', 'currencyCode', 'location', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, type: { type: 'string', enum: ['buy', 'sell'] }, instrumentId: { type: 'string', format: 'uuid' }, symbol: { type: 'string' }, name: { type: 'string' }, units: decimalJson, priceAmount: decimalJson, feeAmount: decimalJson, currencyCode: { type: 'string' }, location: nullable({ type: 'string' }), occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string' }), createdAt: { type: 'string', format: 'date-time' } } } as const
+const transferActivityJson = { type: 'object', additionalProperties: false, required: ['id', 'type', 'instrumentId', 'symbol', 'name', 'units', 'networkFeeUnits', 'fromLocation', 'toLocation', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, type: { const: 'transfer' }, instrumentId: { type: 'string', format: 'uuid' }, symbol: { type: 'string' }, name: { type: 'string' }, units: decimalJson, networkFeeUnits: decimalJson, fromLocation: { type: 'string' }, toLocation: { type: 'string' }, occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string' }), createdAt: { type: 'string', format: 'date-time' } } } as const
+const activitiesResponseJson = { type: 'object', additionalProperties: false, required: ['activities'], properties: { activities: { type: 'array', items: { oneOf: [tradeActivityJson, transferActivityJson] } } } } as const
+const coinBodyJson = { type: 'object', additionalProperties: false, required: ['providerAssetId'], properties: { providerAssetId: { type: 'string', minLength: 1, maxLength: 160 } } } as const
+const locationBodyJson = { type: 'object', additionalProperties: false, required: ['name', 'type'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, type: { type: 'string', enum: ['exchange', 'wallet', 'other'] } } } as const
+const nullableUuidJson = nullable({ type: 'string', format: 'uuid' })
+const decimalInputJson = { type: 'string', pattern: '^\\d+(?:\\.\\d{1,18})?$' } as const
+const tradeBodyJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'type', 'units', 'priceAmount', 'locationId', 'occurredOn'], properties: { instrumentId: { type: 'string', format: 'uuid' }, type: { type: 'string', enum: ['buy', 'sell'] }, units: decimalInputJson, priceAmount: decimalInputJson, feeAmount: decimalInputJson, currencyCode: { type: 'string', pattern: '^[A-Za-z]{3}$' }, fxRateToBase: nullable({ type: 'string', pattern: '^\\d+(?:\\.\\d{1,10})?$' }), locationId: { type: 'string', format: 'uuid' }, cashAccountId: nullableUuidJson, occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string', maxLength: 500 }), idempotencyKey: nullable({ type: 'string', maxLength: 128 }) } } as const
+const transferBodyJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'fromLocationId', 'toLocationId', 'units', 'occurredOn'], properties: { instrumentId: { type: 'string', format: 'uuid' }, fromLocationId: { type: 'string', format: 'uuid' }, toLocationId: { type: 'string', format: 'uuid' }, units: decimalInputJson, networkFeeUnits: decimalInputJson, occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string', maxLength: 500 }), idempotencyKey: nullable({ type: 'string', maxLength: 128 }) } } as const
+const trackedCoinJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'providerAssetId', 'symbol', 'name', 'tracked'], properties: { instrumentId: { type: 'string', format: 'uuid' }, providerAssetId: nullable({ type: 'string' }), symbol: { type: 'string' }, name: { type: 'string' }, tracked: { type: 'boolean' } } } as const
+const tradeJson = { type: 'object', additionalProperties: false, required: ['id', 'instrumentId', 'type', 'units', 'priceAmount', 'feeAmount', 'currencyCode', 'fxRateToBase', 'locationId', 'cashAccountId', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, instrumentId: { type: 'string', format: 'uuid' }, type: { type: 'string', enum: ['buy', 'sell'] }, units: decimalJson, priceAmount: decimalJson, feeAmount: decimalJson, currencyCode: { type: 'string' }, fxRateToBase: nullable(decimalJson), locationId: nullableUuidJson, cashAccountId: nullableUuidJson, occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string' }), createdAt: { type: 'string', format: 'date-time' } } } as const
+const transferJson = { type: 'object', additionalProperties: false, required: ['id', 'instrumentId', 'fromLocationId', 'toLocationId', 'units', 'networkFeeUnits', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, instrumentId: { type: 'string', format: 'uuid' }, fromLocationId: { type: 'string', format: 'uuid' }, toLocationId: { type: 'string', format: 'uuid' }, units: decimalJson, networkFeeUnits: decimalJson, occurredOn: { type: 'string', format: 'date' }, occurredTime: nullable({ type: 'string', pattern: '^\\d{2}:\\d{2}$' }), note: nullable({ type: 'string' }), createdAt: { type: 'string', format: 'date-time' } } } as const
+const tradePrefillJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'type', 'units', 'priceAmount', 'feeAmount', 'currencyCode', 'fxRateToBase', 'locationId', 'cashAccountId', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: tradeJson.properties } as const
+const transferPrefillJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'fromLocationId', 'toLocationId', 'units', 'networkFeeUnits', 'occurredOn', 'occurredTime', 'note', 'createdAt'], properties: transferJson.properties } as const
+const coinDetailJson = { type: 'object', additionalProperties: false, required: ['coin'], properties: { coin: { type: 'object', additionalProperties: false, required: ['instrumentId', 'symbol', 'name', 'whereHeld'], properties: { instrumentId: { type: 'string', format: 'uuid' }, symbol: { type: 'string' }, name: { type: 'string' }, whereHeld: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['locationId', 'name', 'type', 'units'], properties: { locationId: { type: 'string', format: 'uuid' }, name: { type: 'string' }, type: { type: 'string', enum: ['exchange', 'wallet', 'other'] }, units: decimalJson } } } } } } } as const
+const coinHistoryJson = { type: 'object', additionalProperties: false, required: ['instrumentId', 'providerAssetId', 'baseCurrency', 'points'], properties: { instrumentId: { type: 'string', format: 'uuid' }, providerAssetId: { type: 'string' }, baseCurrency: { type: 'string' }, points: historyResponseJson.properties.points } } as const
 
 function time(value: string | null | undefined): Date | null { return value ? new Date(`1970-01-01T${value}:00Z`) : null }
 function eventTime(date: Date, occurredTime: Date | null): Date { return new Date(`${date.toISOString().slice(0, 10)}T${occurredTime ? occurredTime.toISOString().slice(11, 19) : '00:00:00'}Z`) }
@@ -25,13 +56,13 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
   const requireAuth = authGuard({ prisma: options.prisma })
   const requireOrigin = originCheckPreHandler({ APP_ORIGIN: options.appOrigin })
 
-  app.get('/crypto/search', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/crypto/search', { preValidation: requireAuth, schema: { querystring: searchQueryJson, response: { 200: searchResponseJson, 503: errorJson } } }, async (request, reply) => {
     const { q } = searchQuery.parse(request.query)
     try { return { coins: await options.catalog.searchCoins(q) } }
     catch (error) { if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
   })
 
-  app.get('/crypto', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/crypto', { preValidation: requireAuth, schema: { response: { 200: { oneOf: [portfolioResponseJson, stalePortfolioResponseJson] } } } }, async (request, reply) => {
     const instruments = await options.prisma.instrument.findMany({ where: { userId: request.user!.id, assetType: 'crypto', tracked: true }, orderBy: { ticker: 'asc' } })
     const [trades, transfers] = await Promise.all([
       options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id, instrumentId: { in: instruments.map((instrument) => instrument.id) } } }),
@@ -79,7 +110,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     }
   })
 
-  app.post('/crypto/coins', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post('/crypto/coins', { preValidation: [requireOrigin, requireAuth], schema: { body: coinBodyJson, response: { 201: { type: 'object', additionalProperties: false, required: ['coin'], properties: { coin: trackedCoinJson } }, 404: errorJson, 409: errorJson, 503: errorJson } } }, async (request, reply) => {
     const { providerAssetId } = coinInput.parse(request.body)
     const userId = request.user!.id
     let market
@@ -96,7 +127,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
 
   // Removing a coin only changes the portfolio view. Its immutable activity
   // history remains available and is restored if the same CoinGecko id is added.
-  app.delete<{ Params: { id: string } }>('/crypto/coins/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/crypto/coins/:id', { preValidation: [requireOrigin, requireAuth], schema: { params: uuidParamsJson, response: { 204: { type: 'null' } } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params)
     const instrument = await options.prisma.instrument.findFirst({ where: { id, userId: request.user!.id, assetType: 'crypto' } })
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
@@ -104,9 +135,9 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     return reply.code(204).send()
   })
 
-  app.get('/crypto/locations', { preHandler: requireAuth }, async (request) => ({ locations: await options.prisma.cryptoLocation.findMany({ where: { userId: request.user!.id }, orderBy: [{ active: 'desc' }, { name: 'asc' }] }) }))
+  app.get('/crypto/locations', { preValidation: requireAuth, schema: { response: { 200: locationsResponseJson } } }, async (request) => ({ locations: await options.prisma.cryptoLocation.findMany({ where: { userId: request.user!.id }, orderBy: [{ active: 'desc' }, { name: 'asc' }] }) }))
 
-  app.get('/crypto/activities', { preHandler: requireAuth }, async (request) => {
+  app.get('/crypto/activities', { preValidation: requireAuth, schema: { querystring: activityQueryJson, response: { 200: activitiesResponseJson } } }, async (request) => {
     const { type, q, instrumentId } = activityQuery.parse(request.query); const userId = request.user!.id; const query = q.toLowerCase()
     const [trades, transfers] = await Promise.all([
       type === 'transfer' ? [] : options.prisma.investmentTrade.findMany({ where: { userId, instrument: { assetType: 'crypto' }, ...(instrumentId ? { instrumentId } : {}), ...(type === 'all' ? {} : { type }) }, include: { instrument: true, location: true }, orderBy: [{ occurredOn: 'desc' }, { occurredTime: 'desc' }, { createdAt: 'desc' }] }),
@@ -122,21 +153,21 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
 
   // Duplicate is intentionally a read-only prefill command. The caller must
   // submit the returned values through the normal idempotent create endpoint.
-  app.post<{ Params: { id: string } }>('/crypto/trades/:id/duplicate', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/crypto/trades/:id/duplicate', { preValidation: [requireOrigin, requireAuth], schema: { params: uuidParamsJson, response: { 200: { type: 'object', additionalProperties: false, required: ['trade'], properties: { trade: tradePrefillJson } }, 404: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params)
     const trade = await options.prisma.investmentTrade.findFirst({ where: { id, userId: request.user!.id, instrument: { assetType: 'crypto' } } })
     if (!trade) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Crypto trade not found.', requestId: request.id } })
     return { trade: { ...serializeTrade(trade), id: undefined, idempotencyKey: undefined } }
   })
 
-  app.post<{ Params: { id: string } }>('/crypto/transfers/:id/duplicate', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/crypto/transfers/:id/duplicate', { preValidation: [requireOrigin, requireAuth], schema: { params: uuidParamsJson, response: { 200: { type: 'object', additionalProperties: false, required: ['transfer'], properties: { transfer: transferPrefillJson } }, 404: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params)
     const transfer = await options.prisma.cryptoTransfer.findFirst({ where: { id, userId: request.user!.id } })
     if (!transfer) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Crypto transfer not found.', requestId: request.id } })
     return { transfer: { ...serializeTransfer(transfer), id: undefined, idempotencyKey: undefined } }
   })
 
-  app.get('/crypto/history', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/crypto/history', { preValidation: requireAuth, schema: { querystring: historyQueryJson, response: { 200: historyResponseJson, 503: errorJson } } }, async (request, reply) => {
     const { range } = historyQuery.parse(request.query); const userId = request.user!.id; const baseCurrency = request.user!.baseCurrency
     const instruments = await options.prisma.instrument.findMany({ where: { userId, assetType: 'crypto', tracked: true, providerAssetId: { not: null } } })
     if (instruments.length === 0) return { baseCurrency, points: [] }
@@ -161,7 +192,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     } catch (error) { if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
   })
 
-  app.get<{ Params: { id: string } }>('/crypto/coins/:id', { preHandler: requireAuth }, async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/crypto/coins/:id', { preValidation: requireAuth, schema: { params: uuidParamsJson, response: { 200: coinDetailJson, 404: errorJson, 422: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params); const userId = request.user!.id
     const instrument = await options.prisma.instrument.findFirst({ where: { id, userId, assetType: 'crypto' } })
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
@@ -180,7 +211,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     } catch (error) { if (error instanceof CryptoLocationInsufficientUnitsError) return reply.code(422).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
   })
 
-  app.get<{ Params: { id: string } }>('/crypto/coins/:id/history', { preHandler: requireAuth }, async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/crypto/coins/:id/history', { preValidation: requireAuth, schema: { params: uuidParamsJson, querystring: historyQueryJson, response: { 200: coinHistoryJson, 404: errorJson, 503: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params); const { range } = historyQuery.parse(request.query)
     const instrument = await options.prisma.instrument.findFirst({ where: { id, userId: request.user!.id, assetType: 'crypto', providerAssetId: { not: null } } })
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
@@ -190,13 +221,13 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     } catch (error) { if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
   })
 
-  app.post('/crypto/locations', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post('/crypto/locations', { preValidation: [requireOrigin, requireAuth], schema: { body: locationBodyJson, response: { 201: { type: 'object', additionalProperties: false, required: ['location'], properties: { location: locationJson } }, 409: errorJson } } }, async (request, reply) => {
     const input = locationInput.parse(request.body)
     try { return reply.code(201).send({ location: await options.prisma.cryptoLocation.create({ data: { userId: request.user!.id, ...input } }) }) }
     catch (error: any) { if (error?.code === 'P2002') return reply.code(409).send({ error: { code: 'CRYPTO_LOCATION_ALREADY_EXISTS', message: 'A location with this name already exists.', field: 'name', requestId: request.id } }); throw error }
   })
 
-  app.post('/crypto/trades', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post('/crypto/trades', { preValidation: [requireOrigin, requireAuth], schema: { body: tradeBodyJson, response: { 200: { type: 'object', additionalProperties: false, required: ['trade'], properties: { trade: tradeJson } }, 201: { type: 'object', additionalProperties: false, required: ['trade'], properties: { trade: tradeJson } }, 404: errorJson, 409: errorJson, 422: errorJson } } }, async (request, reply) => {
     const input = tradeInput.parse(request.body); const userId = request.user!.id; const baseCurrency = request.user!.baseCurrency
     const fxRate = input.currencyCode === baseCurrency ? new Prisma.Decimal(1) : input.fxRateToBase ? new Prisma.Decimal(input.fxRateToBase) : null
     if (!fxRate) return reply.code(422).send({ error: { code: 'CRYPTO_HISTORICAL_FX_UNAVAILABLE', message: 'Provide the historical exchange rate for this trade currency.', field: 'fxRateToBase', requestId: request.id } })
@@ -234,7 +265,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     return reply.code(201).send({ trade: serializeTrade(trade) })
   })
 
-  app.delete<{ Params: { id: string } }>('/crypto/trades/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/crypto/trades/:id', { preValidation: [requireOrigin, requireAuth], schema: { params: uuidParamsJson, response: { 204: { type: 'null' }, 404: errorJson, 409: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params); const userId = request.user!.id
     const existing = await options.prisma.investmentTrade.findFirst({ where: { id, userId, instrument: { assetType: 'crypto' } } })
     if (!existing) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Crypto trade not found.', requestId: request.id } })
@@ -258,7 +289,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     return reply.code(204).send()
   })
 
-  app.post('/crypto/transfers', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.post('/crypto/transfers', { preValidation: [requireOrigin, requireAuth], schema: { body: transferBodyJson, response: { 200: { type: 'object', additionalProperties: false, required: ['transfer'], properties: { transfer: transferJson } }, 201: { type: 'object', additionalProperties: false, required: ['transfer'], properties: { transfer: transferJson } }, 404: errorJson, 409: errorJson, 422: errorJson } } }, async (request, reply) => {
     const input = transferInput.parse(request.body); const userId = request.user!.id
     if (input.fromLocationId === input.toLocationId) return reply.code(422).send({ error: { code: 'CRYPTO_TRANSFER_SAME_LOCATION', message: 'Choose different source and destination locations.', field: 'toLocationId', requestId: request.id } })
     const duplicate = input.idempotencyKey ? await options.prisma.cryptoTransfer.findFirst({ where: { userId, idempotencyKey: input.idempotencyKey } }) : null
@@ -283,7 +314,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     return reply.code(201).send({ transfer: serializeTransfer(transfer) })
   })
 
-  app.delete<{ Params: { id: string } }>('/crypto/transfers/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/crypto/transfers/:id', { preValidation: [requireOrigin, requireAuth], schema: { params: uuidParamsJson, response: { 204: { type: 'null' }, 404: errorJson, 409: errorJson } } }, async (request, reply) => {
     const { id } = coinIdParam.parse(request.params); const userId = request.user!.id
     const existing = await options.prisma.cryptoTransfer.findFirst({ where: { id, userId } })
     if (!existing) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Crypto transfer not found.', requestId: request.id } })

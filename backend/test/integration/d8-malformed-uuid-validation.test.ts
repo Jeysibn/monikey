@@ -53,10 +53,10 @@ describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATIO
     { method: 'POST', path: '/accounts/{id}/archive', body: {} },
 
     // Goals module
-    { method: 'POST', path: '/goals/{id}/fund', body: { sourceAccountId: '550e8400-e29b-41d4-a716-446655440000', amountMinor: 1000, occurredOn: '2026-09-01' } },
+    { method: 'POST', path: '/goals/{id}/fund', body: { sourceAccountId: '550e8400-e29b-41d4-a716-446655440000', amountMinor: '1000', occurredOn: '2026-09-01' } },
 
     // Budget module
-    { method: 'POST', path: '/budgets/{id}/allocations', body: { categoryId: '550e8400-e29b-41d4-a716-446655440000', allocatedMinor: 1000 } },
+    { method: 'POST', path: '/budgets/{id}/allocations', body: { categoryId: '550e8400-e29b-41d4-a716-446655440000', allocatedMinor: '1000' } },
 
     // Recurring module
     { method: 'PATCH', path: '/recurring/{id}/status', body: { status: 'active' } },
@@ -65,13 +65,13 @@ describeIfDb('D8 Regression: Malformed UUID Path Parameters Return 400 VALIDATIO
     // Imports module
     { method: 'GET', path: '/imports/batches/{batchId}', body: null },
     { method: 'GET', path: '/imports/batches/{batchId}/transactions', body: null },
-    { method: 'POST', path: '/imports/batches/{batchId}/transactions', body: { dedupKey: 'test', provider: 'test', title: 'Test', amountMinor: 100, occurredOn: '2026-09-01' } },
+    { method: 'POST', path: '/imports/batches/{batchId}/transactions', body: { dedupKey: 'test', provider: 'test', title: 'Test', amountMinor: '100', occurredOn: '2026-09-01' } },
     { method: 'POST', path: '/imports/batches/{batchId}/commit', body: { matchedAccountId: '550e8400-e29b-41d4-a716-446655440000' } },
 
     // Receipts module
     { method: 'GET', path: '/receipts/{id}', body: null },
     { method: 'POST', path: '/receipts/{id}/process', body: {} },
-    { method: 'POST', path: '/receipts/{id}/commit', body: { title: 'Test', fromAccountId: '550e8400-e29b-41d4-a716-446655440000', amountMinor: 100, occurredOn: '2026-09-01' } },
+    { method: 'POST', path: '/receipts/{id}/commit', body: { title: 'Test', fromAccountId: '550e8400-e29b-41d4-a716-446655440000', amountMinor: '100', occurredOn: '2026-09-01' } },
     { method: 'DELETE', path: '/receipts/{id}', body: null },
 
     // Ledger module

@@ -34,6 +34,7 @@ type ApiDividend = { id: string; ticker: string; amountMinor: string; occurredOn
 type Bootstrap = { financeState: { accounts: ApiAccount[]; transactions: ApiTransaction[]; categories: Array<{ id: string; name: string; color: string; budgetable: boolean; allowsIncome: boolean; allowsExpense: boolean }>; budgets: unknown[]; goals: ApiGoal[] }; investmentActivity?: { trades: ApiInvestmentTrade[]; dividends: ApiDividend[] }; serverDate?: string }
 
 export interface FinanceGateway {
+  readonly todayIso?: string
   load(signal?: AbortSignal): Promise<FinanceState>
   addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction>
   updateTransaction(transactionId: string, input: Partial<AddTransactionInput>, signal?: AbortSignal): Promise<Transaction>
@@ -77,6 +78,8 @@ const minor = minorUnitsToMajorNumber
 export class ApiFinanceGateway implements FinanceGateway {
   private readonly baseUrl: string
   private readonly fetcher: typeof fetch
+  private _todayIso: string | undefined
+  get todayIso(): string | undefined { return this._todayIso }
   constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args)) { this.baseUrl = baseUrl; this.fetcher = fetcher }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -93,6 +96,7 @@ export class ApiFinanceGateway implements FinanceGateway {
     const { financeState } = bootstrap
     const accounts: Account[] = financeState.accounts.filter((a) => a.classification === 'asset').map((a) => ({ id: a.id, name: a.name, institution: a.institution ?? undefined, type: a.accountType, classification: a.classification, balance: minor(a.currentBalanceMinor), lastFour: a.lastFour ?? undefined, syncStatus: a.syncStatus, manual: a.manual }))
     const serverDate = bootstrap.serverDate && /^\d{4}-\d{2}-\d{2}$/.test(bootstrap.serverDate) ? bootstrap.serverDate : new Date().toISOString().slice(0, 10)
+    this._todayIso = serverDate
     const dueDatePrefix = serverDate.slice(0, 7)
     const creditCards: CreditCard[] = financeState.accounts.filter((a) => a.classification === 'liability' && a.creditCardDetail).map((a) => ({ id: a.id, name: a.name, lastFour: a.lastFour ?? '', network: a.creditCardDetail!.network, balance: minor(a.currentBalanceMinor), limit: minor(a.creditCardDetail!.creditLimitMinor), dueDate: `${dueDatePrefix}-${String(a.creditCardDetail!.dueDay).padStart(2, '0')}`, minPayment: minor(a.creditCardDetail!.minimumPaymentMinor), manual: a.manual }))
     const trades = bootstrap.investmentActivity?.trades ?? []
@@ -220,9 +224,11 @@ export class ApiFinanceGateway implements FinanceGateway {
   // budget period's allocations, so setting it means resolving (or creating)
   // this month's period, then upserting the allocation on it.
   private async resolveCurrentBudgetPeriod(signal?: AbortSignal): Promise<ApiBudgetPeriod> {
-    const now = new Date()
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+    const today = this._todayIso ?? new Date().toISOString().slice(0, 10)
+    const [year, month] = today.split('-').map(Number)
+    const start = `${year}-${String(month).padStart(2, '0')}-01`
+    const endDate = new Date(Date.UTC(year, month, 1))
+    const end = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-01`
     return this.createBudgetPeriod(start, end, 0, signal)
   }
 

@@ -3,6 +3,7 @@ import { LedgerService } from '../ledger/ledger.service.js';
 import { AccountsService } from '../accounts/accounts.service.js';
 import type { AccountView } from '../accounts/accounts.schemas.js';
 import type { TransactionView } from '../ledger/ledger.schemas.js';
+import { localDateIso } from '../../common/timezone.js';
 
 export interface FinanceState {
   accounts: AccountView[];
@@ -183,7 +184,7 @@ export class BootstrapService {
         externalOcrEnabled: preferences?.externalOcrEnabled ?? false,
         detailedAiContextEnabled: preferences?.detailedAiContextEnabled ?? false,
       },
-      serverDate: new Date().toISOString().split('T')[0]!,
+      serverDate: localDateIso(user.timezone),
       dataVersion: '1.0',
     };
   }

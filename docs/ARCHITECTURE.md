@@ -111,9 +111,13 @@ Mock mode injects `AppClock`, defaults to `2026-08-29`, and accepts a validated
 `?today=YYYY-MM-DD` override. Calendar helpers use ISO dates and reporting periods
 with inclusive start and exclusive end.
 
-API mode does not receive that injected clock. Its `FinanceContext` bridge derives
-`todayIso` from `new Date().toISOString().slice(0, 10)`; backend bootstrap and workers
-handle dates separately. Do not claim a single injected clock across the full stack.
+API mode receives the authenticated user's calendar date as `serverDate` from
+bootstrap. `ApiFinanceGateway` retains that date for the `FinanceContext` bridge,
+goal-fund defaults, and current-budget-period creation. Backend bootstrap derives it
+with the user's IANA timezone rather than UTC truncation. The durable worker still
+uses one process date for its batch schedule; per-user worker calendars remain an
+operations follow-up and must be addressed before claiming full cross-user calendar
+consistency.
 
 The shared money formatter uses module-level `en-PH`/`PHP` configuration.
 `setCurrencyConfig` does not cause React rerenders; the existing Settings page

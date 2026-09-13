@@ -12,9 +12,9 @@ test.describe('Period boundaries (SR-001) — past/future dated transactions', (
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('40')
     await page.getByPlaceholder('e.g. Grab Grocery').fill('Old Purchase')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
-    await page.locator('input[type="date"]').fill('2026-06-01')
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
+    await page.locator('.tx-modal input[type="date"]').fill('2026-06-01')
     await page.getByRole('button', { name: 'Save Expense' }).click()
     await expect(page.getByText('Expense saved')).toBeVisible()
     await expect(page.getByText('₱144.65')).toBeVisible() // unchanged
@@ -23,9 +23,9 @@ test.describe('Period boundaries (SR-001) — past/future dated transactions', (
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('60')
     await page.getByPlaceholder('e.g. Grab Grocery').fill('Future Purchase')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
-    await page.locator('input[type="date"]').fill('2026-10-01')
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
+    await page.locator('.tx-modal input[type="date"]').fill('2026-10-01')
     await page.getByRole('button', { name: 'Save Expense' }).click()
     await expect(page.getByText('Expense saved')).toBeVisible()
     await expect(page.getByText('₱144.65')).toBeVisible() // still unchanged
@@ -40,9 +40,9 @@ test.describe('Period boundaries (SR-001) — past/future dated transactions', (
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('33')
     await page.getByPlaceholder('e.g. Grab Grocery').fill('Today Snack')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
-    await page.locator('input[type="date"]').fill('2026-08-29') // DEMO_TODAY_ISO
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
+    await page.locator('.tx-modal input[type="date"]').fill('2026-08-29') // DEMO_TODAY_ISO
     await page.getByRole('button', { name: 'Save Expense' }).click()
     await expect(page.getByText('Expense saved')).toBeVisible()
 

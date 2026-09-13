@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const ROUTES = ['/', '/transactions', '/accounts', '/budget', '/goals', '/crypto', '/recurring', '/reports', '/imports', '/rules', '/reconciliation', '/tags', '/security', '/settings']
+const ROUTES = ['/', '/transactions', '/accounts', '/budget', '/goals', '/crypto', '/recurring', '/reports', '/imports', '/rules', '/reconciliation', '/tags', '/sync', '/security', '/settings']
 
 test.describe('route accessibility audit', () => {
   for (const route of ROUTES) {

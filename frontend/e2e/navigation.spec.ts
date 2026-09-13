@@ -60,6 +60,20 @@ test.describe('Primary navigation', () => {
     await expect(settingsLink).toBeHidden()
   })
 
+  test('secondary route keeps More active and transaction filters stay in the URL', async ({ page }) => {
+    await page.goto('/settings')
+    await expect(page.getByRole('button', { name: /More/ })).toHaveClass(/pill--active/)
+
+    await page.goto('/transactions?type=expense&from=2026-08-01&tag=work')
+    await expect(page.getByLabel('Filter by type')).toHaveValue('expense')
+    await expect(page.getByLabel('Transaction from date')).toHaveValue('2026-08-01')
+    await expect(page.getByLabel('Transaction tag filter')).toHaveValue('work')
+    await expect(page.getByRole('button', { name: /Type: Expense/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Clear all' }).click()
+    await expect(page).toHaveURL(/\/transactions$/)
+    await expect(page.getByLabel('Filter by type')).toHaveValue('all')
+  })
+
   test('notification bell shows a badge count and lists attention items', async ({ page }) => {
     await page.goto('/')
     const bellButton = page.getByRole('button', { name: /Notifications, \d+ need attention/ })

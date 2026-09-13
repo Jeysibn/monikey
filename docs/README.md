@@ -3,6 +3,7 @@
 Repository documentation is the canonical reference for the shipped system.
 
 - [Architecture](ARCHITECTURE.md)
+- [Frontend layout normalization — 2026-09-14](frontend-layout-normalization-2026-09-14.md)
 - [Product: imports](product/imports.md)
 - [Product: transaction rules](product/transaction-rules.md)
 - [Product: reconciliation](product/reconciliation.md)

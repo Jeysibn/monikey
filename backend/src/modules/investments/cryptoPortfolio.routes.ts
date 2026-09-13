@@ -66,7 +66,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     catch (error) { if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
   })
 
-  app.get('/crypto', { preValidation: requireAuth, schema: { response: { 200: { oneOf: [portfolioResponseJson, stalePortfolioResponseJson] } } } }, async (request, reply) => {
+  app.get('/crypto', { preValidation: requireAuth, schema: { response: { 200: { oneOf: [portfolioResponseJson, stalePortfolioResponseJson] }, 422: errorJson } } }, async (request, reply) => {
     const instruments = await options.prisma.instrument.findMany({ where: { userId: request.user!.id, assetType: 'crypto', tracked: true }, orderBy: { ticker: 'asc' } })
     const [trades, transfers] = await Promise.all([
       options.prisma.investmentTrade.findMany({ where: { userId: request.user!.id, instrumentId: { in: instruments.map((instrument) => instrument.id) } } }),
@@ -113,16 +113,27 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
         coins,
       }
     } catch (error) {
-      if (error instanceof CryptoProviderUnavailableError) return {
-        baseCurrency: request.user!.baseCurrency,
-        // A provider outage only removes provider-dependent fields (price,
-        // market value, 24h change). Quantity/cost basis/realized P&L are
-        // derived purely from local trades/transfers and must still show.
-        coins: instruments.map((instrument) => {
-          const position = positionFor(instrument.id, trades, transfers, request.user!.baseCurrency)
-          return { instrumentId: instrument.id, providerAssetId: instrument.providerAssetId, symbol: instrument.ticker, name: instrument.name, tracked: instrument.tracked, quantity: position.units.toString(), averageCost: position.averageCostBase.toString(), costBasis: position.costBasisBase.toString(), realizedPnl: position.realizedPnlBase.toString(), market: null, marketDataLinkRequired: instrument.providerAssetId === null }
-        }),
-        marketStatus: { stale: true, code: error.code },
+      // A missing historical FX rate is a data problem the user must fix
+      // (same fail-closed contract as the trade/transfer routes below) —
+      // it must never fall through to a generic, unactionable 500.
+      if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(422).send({ error: { code: error.code, message: 'An earlier trade for this coin has no recorded historical FX rate; it must be corrected before this portfolio can be valued.', requestId: request.id } })
+      if (error instanceof CryptoProviderUnavailableError) {
+        try {
+          return {
+            baseCurrency: request.user!.baseCurrency,
+            // A provider outage only removes provider-dependent fields (price,
+            // market value, 24h change). Quantity/cost basis/realized P&L are
+            // derived purely from local trades/transfers and must still show.
+            coins: instruments.map((instrument) => {
+              const position = positionFor(instrument.id, trades, transfers, request.user!.baseCurrency)
+              return { instrumentId: instrument.id, providerAssetId: instrument.providerAssetId, symbol: instrument.ticker, name: instrument.name, tracked: instrument.tracked, quantity: position.units.toString(), averageCost: position.averageCostBase.toString(), costBasis: position.costBasisBase.toString(), realizedPnl: position.realizedPnlBase.toString(), market: null, marketDataLinkRequired: instrument.providerAssetId === null }
+            }),
+            marketStatus: { stale: true, code: error.code },
+          }
+        } catch (innerError) {
+          if (innerError instanceof CryptoHistoricalFxUnavailableError) return reply.code(422).send({ error: { code: innerError.code, message: 'An earlier trade for this coin has no recorded historical FX rate; it must be corrected before this portfolio can be valued.', requestId: request.id } })
+          throw innerError
+        }
       }
       throw error
     }

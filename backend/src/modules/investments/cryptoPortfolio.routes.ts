@@ -78,10 +78,18 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
         const currentPrice = market?.currentPrice ? new Prisma.Decimal(market.currentPrice) : null
         const marketValue = currentPrice ? currentPrice.times(position.units) : null
         const unrealizedPnl = marketValue ? marketValue.minus(position.costBasisBase) : null
-        return { instrumentId: instrument.id, providerAssetId: instrument.providerAssetId, symbol: instrument.ticker, name: instrument.name, tracked: instrument.tracked, quantity: position.units.toString(), currentPrice: currentPrice?.toString() ?? null, marketValue: marketValue?.toString() ?? null, averageCost: position.averageCostBase.toString(), costBasis: position.costBasisBase.toString(), realizedPnl: position.realizedPnlBase.toString(), unrealizedPnl: unrealizedPnl?.toString() ?? null, totalPnl: unrealizedPnl ? unrealizedPnl.plus(position.realizedPnlBase).toString() : null, change1hPct: market?.change1hPct ?? null, change24hPct: market?.change24hPct ?? null, change7dPct: market?.change7dPct ?? null, imageUrl: market?.imageUrl ?? null, marketCapRank: market?.marketCapRank ?? null, quoteFetchedAt: market?.fetchedAt ?? null, quoteStale: !market, marketDataLinkRequired: instrument.providerAssetId === null }
+        // totalInvestedBase (lifetime buy cost, never reduced by sells) is
+        // the denominator for total-return %; it is stripped from the coin
+        // response below and used only to compute totalPnlPct correctly.
+        return { instrumentId: instrument.id, providerAssetId: instrument.providerAssetId, symbol: instrument.ticker, name: instrument.name, tracked: instrument.tracked, quantity: position.units.toString(), currentPrice: currentPrice?.toString() ?? null, marketValue: marketValue?.toString() ?? null, averageCost: position.averageCostBase.toString(), costBasis: position.costBasisBase.toString(), totalInvestedBase: position.totalInvestedBase.toString(), realizedPnl: position.realizedPnlBase.toString(), unrealizedPnl: unrealizedPnl?.toString() ?? null, totalPnl: unrealizedPnl ? unrealizedPnl.plus(position.realizedPnlBase).toString() : null, change1hPct: market?.change1hPct ?? null, change24hPct: market?.change24hPct ?? null, change7dPct: market?.change7dPct ?? null, imageUrl: market?.imageUrl ?? null, marketCapRank: market?.marketCapRank ?? null, quoteFetchedAt: market?.fetchedAt ?? null, quoteStale: !market, marketDataLinkRequired: instrument.providerAssetId === null }
       })
       const portfolioValue = holdings.reduce((sum, holding) => sum.plus(holding.marketValue ?? 0), new Prisma.Decimal(0))
       const totalCostBasis = holdings.reduce((sum, holding) => sum.plus(holding.costBasis), new Prisma.Decimal(0))
+      // Lifetime invested cost is the correct denominator for total-return %:
+      // `totalCostBasis` (remaining, open-position cost) goes to zero for a
+      // fully-closed coin, which would hide a real realized gain/loss behind
+      // a null percentage.
+      const totalInvested = holdings.reduce((sum, holding) => sum.plus(holding.totalInvestedBase), new Prisma.Decimal(0))
       const realizedPnl = holdings.reduce((sum, holding) => sum.plus(holding.realizedPnl), new Prisma.Decimal(0))
       const unrealizedPnl = holdings.reduce((sum, holding) => sum.plus(holding.unrealizedPnl ?? 0), new Prisma.Decimal(0))
       // CoinGecko supplies a percentage, not an account-level quote. Revalue
@@ -94,10 +102,10 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
       }, new Prisma.Decimal(0))
       const valuedFor24hChange = holdings.filter((holding) => holding.marketValue && holding.change24hPct !== null).reduce((sum, holding) => sum.plus(holding.marketValue!), new Prisma.Decimal(0))
       const change24h = valuedFor24hChange.minus(value24hAgo)
-      const coins = holdings.map((holding) => ({ ...holding, allocationPct: holding.marketValue && !portfolioValue.isZero() ? new Prisma.Decimal(holding.marketValue).dividedBy(portfolioValue).times(100).toString() : '0', totalPnlPct: !new Prisma.Decimal(holding.costBasis).isZero() && holding.totalPnl ? new Prisma.Decimal(holding.totalPnl).dividedBy(holding.costBasis).times(100).toString() : null }))
+      const coins = holdings.map(({ totalInvestedBase, ...holding }) => ({ ...holding, allocationPct: holding.marketValue && !portfolioValue.isZero() ? new Prisma.Decimal(holding.marketValue).dividedBy(portfolioValue).times(100).toString() : '0', totalPnlPct: !new Prisma.Decimal(totalInvestedBase).isZero() && holding.totalPnl ? new Prisma.Decimal(holding.totalPnl).dividedBy(totalInvestedBase).times(100).toString() : null }))
       return {
         baseCurrency: request.user!.baseCurrency,
-        summary: { portfolioValue: portfolioValue.toString(), change24h: change24h.toString(), change24hPct: !value24hAgo.isZero() ? change24h.dividedBy(value24hAgo).times(100).toString() : null, costBasis: totalCostBasis.toString(), realizedPnl: realizedPnl.toString(), unrealizedPnl: unrealizedPnl.toString(), totalPnl: realizedPnl.plus(unrealizedPnl).toString(), totalPnlPct: !totalCostBasis.isZero() ? realizedPnl.plus(unrealizedPnl).dividedBy(totalCostBasis).times(100).toString() : null },
+        summary: { portfolioValue: portfolioValue.toString(), change24h: change24h.toString(), change24hPct: !value24hAgo.isZero() ? change24h.dividedBy(value24hAgo).times(100).toString() : null, costBasis: totalCostBasis.toString(), realizedPnl: realizedPnl.toString(), unrealizedPnl: unrealizedPnl.toString(), totalPnl: realizedPnl.plus(unrealizedPnl).toString(), totalPnlPct: !totalInvested.isZero() ? realizedPnl.plus(unrealizedPnl).dividedBy(totalInvested).times(100).toString() : null },
         coins,
       }
     } catch (error) {
@@ -197,14 +205,14 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const instrument = await options.prisma.instrument.findFirst({ where: { id, userId, assetType: 'crypto' } })
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     const [trades, transfers, locations] = await Promise.all([
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: id }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: id }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: id }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: id }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
       options.prisma.cryptoLocation.findMany({ where: { userId }, select: { id: true, name: true, type: true } }),
     ])
     try {
       const balances = calculateCryptoLocationBalances(
-        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })),
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })),
+        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
       )
       const byId = new Map(locations.map((location) => [location.id, location]))
       return { coin: { instrumentId: instrument.id, symbol: instrument.ticker, name: instrument.name, whereHeld: [...balances.entries()].filter(([, units]) => units.greaterThan(0)).map(([locationId, units]) => ({ locationId, name: byId.get(locationId)?.name ?? 'Unknown location', type: byId.get(locationId)?.type ?? 'other', units: units.toString() })) } }
@@ -234,26 +242,38 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const price = new Prisma.Decimal(input.priceAmount); const fee = new Prisma.Decimal(input.feeAmount); const units = new Prisma.Decimal(input.units)
     if (price.lessThanOrEqualTo(0)) return reply.code(422).send({ error: { code: 'CRYPTO_INVALID_PRICE', message: 'Price must be greater than zero.', field: 'priceAmount', requestId: request.id } })
     if (units.lessThanOrEqualTo(0)) return reply.code(422).send({ error: { code: 'CRYPTO_INVALID_QUANTITY', message: 'Quantity must be greater than zero.', field: 'units', requestId: request.id } })
+    if (input.type === 'sell' && fee.greaterThan(price.times(units))) return reply.code(422).send({ error: { code: 'CRYPTO_FEE_EXCEEDS_PROCEEDS', message: 'Fee cannot exceed gross sale proceeds.', field: 'feeAmount', requestId: request.id } })
     const duplicate = input.idempotencyKey ? await options.prisma.investmentTrade.findFirst({ where: { userId, idempotencyKey: input.idempotencyKey } }) : null
     if (duplicate) return reply.send({ trade: serializeTrade(duplicate) })
     const [instrument, location, existingTrades, transfers, cashAccount] = await Promise.all([
       options.prisma.instrument.findFirst({ where: { id: input.instrumentId, userId, assetType: 'crypto', tracked: true } }),
       options.prisma.cryptoLocation.findFirst({ where: { id: input.locationId, userId, active: true } }),
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, priceAmount: true, feeAmount: true, fxRateToBase: true, currencyCode: true, occurredOn: true, occurredTime: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, priceAmount: true, feeAmount: true, fxRateToBase: true, currencyCode: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
       input.cashAccountId ? options.prisma.financialAccount.findFirst({ where: { id: input.cashAccountId, userId } }) : null,
     ])
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     if (!location) return reply.code(404).send({ error: { code: 'CRYPTO_LOCATION_NOT_FOUND', message: 'Location not found.', field: 'locationId', requestId: request.id } })
     if (input.cashAccountId && !cashAccount) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Funding account not found.', field: 'cashAccountId', requestId: request.id } })
     if (cashAccount && cashAccount.currencyCode !== baseCurrency) return reply.code(422).send({ error: { code: 'CRYPTO_HISTORICAL_FX_UNAVAILABLE', message: 'Cash-linked crypto trades currently require an account in your portfolio base currency.', field: 'cashAccountId', requestId: request.id } })
+    // A candidate that has not been persisted yet has no createdAt. `new Date()`
+    // here is guaranteed to be earlier than the createdAt the trade receives if
+    // this validation passes and the create below proceeds, so it sorts after
+    // every existing same-`occurredAt` event and before nothing — consistent
+    // with "this is being recorded now".
+    const now = new Date()
     try {
-      calculateCryptoPosition([...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, units: trade.units, priceAmount: trade.priceAmount, feeAmount: trade.feeAmount, fxRateToBase: trade.fxRateToBase ?? (trade.currencyCode === baseCurrency ? '1' : '0'), occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })), { id: 'candidate', type: input.type, units, priceAmount: price, feeAmount: fee, fxRateToBase: fxRate, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)) }])
+      for (const trade of existingTrades) if (!trade.fxRateToBase && trade.currencyCode !== baseCurrency) throw new CryptoHistoricalFxUnavailableError(trade.id)
+      calculateCryptoPosition([...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, units: trade.units, priceAmount: trade.priceAmount, feeAmount: trade.feeAmount, fxRateToBase: trade.fxRateToBase ?? '1', occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), { id: 'candidate', type: input.type, units, priceAmount: price, feeAmount: fee, fxRateToBase: fxRate, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now }])
       calculateCryptoLocationBalances(
-        [...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })), { id: 'candidate', type: input.type, locationId: input.locationId, units, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)) }],
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })),
+        [...existingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), { id: 'candidate', type: input.type, locationId: input.locationId, units, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: now }],
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
       )
-    } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(422).send({ error: { code: error.code, message: error.message, field: 'units', requestId: request.id } }); throw error }
+    } catch (error) {
+      if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(422).send({ error: { code: error.code, message: error.message, field: 'units', requestId: request.id } })
+      if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(422).send({ error: { code: error.code, message: 'An earlier trade for this coin has no recorded historical FX rate; it must be corrected before new activity can be validated.', requestId: request.id } })
+      throw error
+    }
     const basePrice = price.times(fxRate); const baseFee = fee.times(fxRate)
     const priceMinor = BigInt(basePrice.times(100).toDecimalPlaces(0).toString()); const feeMinor = BigInt(baseFee.times(100).toDecimalPlaces(0).toString())
     const grossBase = units.times(basePrice); const cashMinor = BigInt((input.type === 'buy' ? grossBase.plus(baseFee) : grossBase.minus(baseFee)).times(100).toDecimalPlaces(0).toFixed(0))
@@ -276,16 +296,24 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     try {
       positionFor(existing.instrumentId, remainingTrades, transfers, request.user!.baseCurrency)
       calculateCryptoLocationBalances(
-        remainingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })),
-        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })),
+        remainingTrades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
+        transfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
       )
-    } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This trade is required by later crypto activity and cannot be deleted.', requestId: request.id } }); throw error }
+    } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This trade is required by later crypto activity and cannot be deleted.', requestId: request.id } }); if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(409).send({ error: { code: error.code, message: 'A trade for this coin is missing its historical FX rate and cannot be safely recalculated.', requestId: request.id } }); throw error }
     if (existing.cashAccountId) {
       const linked = existing.idempotencyKey ? await options.prisma.transaction.findFirst({ where: { userId, idempotencyKey: existing.idempotencyKey, reversedTransactionId: null } }) : null
       if (!linked) return reply.code(409).send({ error: { code: 'TRADE_CASH_LINK_UNRESOLVED', message: 'The linked cash transaction could not be found for reversal.', requestId: request.id } })
-      await options.ledgerService.reverseTransaction(userId, linked.id, {})
+      // The cash reversal and the crypto trade deletion must commit together:
+      // reversing cash and then separately deleting the trade risks leaving
+      // cash reversed with the trade still on record (or the reverse) if the
+      // second statement fails. reverseTransactionWithCallback runs both in
+      // the ledger's own transaction.
+      await options.ledgerService.reverseTransactionWithCallback(userId, linked.id, {}, async (tx) => {
+        await tx.investmentTrade.delete({ where: { id } })
+      })
+    } else {
+      await options.prisma.investmentTrade.delete({ where: { id } })
     }
-    await options.prisma.investmentTrade.delete({ where: { id } })
     return reply.code(204).send()
   })
 
@@ -297,15 +325,15 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     const [instrument, source, destination, trades, transfers] = await Promise.all([
       options.prisma.instrument.findFirst({ where: { id: input.instrumentId, userId, assetType: 'crypto' } }),
       options.prisma.cryptoLocation.findFirst({ where: { id: input.fromLocationId, userId, active: true } }), options.prisma.cryptoLocation.findFirst({ where: { id: input.toLocationId, userId, active: true } }),
-      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true } }),
-      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true } }),
+      options.prisma.investmentTrade.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, type: true, locationId: true, units: true, occurredOn: true, occurredTime: true, createdAt: true } }),
+      options.prisma.cryptoTransfer.findMany({ where: { userId, instrumentId: input.instrumentId }, select: { id: true, fromLocationId: true, toLocationId: true, units: true, networkFeeUnits: true, occurredOn: true, occurredTime: true, createdAt: true } }),
     ])
     if (!instrument) return reply.code(404).send({ error: { code: 'CRYPTO_COIN_NOT_FOUND', message: 'Tracked crypto coin not found.', requestId: request.id } })
     if (!source || !destination) return reply.code(404).send({ error: { code: 'CRYPTO_LOCATION_NOT_FOUND', message: 'Source or destination location not found.', requestId: request.id } })
     try {
-      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })), transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })))
-      const candidate = { id: 'candidate', fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)) }
-      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })), [...transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })), candidate])
+      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })))
+      const candidate = { id: 'candidate', fromLocationId: input.fromLocationId, toLocationId: input.toLocationId, units: input.units, networkFeeUnits: input.networkFeeUnits, occurredAt: eventTime(new Date(`${input.occurredOn}T00:00:00Z`), time(input.occurredTime)), createdAt: new Date() }
+      calculateCryptoLocationBalances(trades.map((trade) => ({ ...trade, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })), [...transfers.map((transfer) => ({ ...transfer, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })), candidate])
     } catch (error) {
       if (error instanceof CryptoLocationInsufficientUnitsError || error instanceof CryptoTransferSameLocationError) return reply.code(422).send({ error: { code: error.code, message: error.message, requestId: request.id } })
       throw error
@@ -325,19 +353,37 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     try {
       positionFor(existing.instrumentId, trades, remainingTransfers, request.user!.baseCurrency)
       calculateCryptoLocationBalances(
-        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })),
-        remainingTransfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })),
+        trades.map((trade) => ({ id: trade.id, type: trade.type, locationId: trade.locationId, units: trade.units, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt })),
+        remainingTransfers.map((transfer) => ({ id: transfer.id, fromLocationId: transfer.fromLocationId, toLocationId: transfer.toLocationId, units: transfer.units, networkFeeUnits: transfer.networkFeeUnits, occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
       )
-    } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This transfer is required by later crypto activity and cannot be deleted.', requestId: request.id } }); throw error }
+    } catch (error) { if (error instanceof CryptoInsufficientUnitsError || error instanceof CryptoLocationInsufficientUnitsError) return reply.code(409).send({ error: { code: 'CRYPTO_ACTIVITY_DEPENDENCY', message: 'This transfer is required by later crypto activity and cannot be deleted.', requestId: request.id } }); if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(409).send({ error: { code: error.code, message: 'A trade for this coin is missing its historical FX rate and cannot be safely recalculated.', requestId: request.id } }); throw error }
     await options.prisma.cryptoTransfer.delete({ where: { id } })
     return reply.code(204).send()
   })
 }
 
-function positionFor(instrumentId: string, trades: Array<{ id: string; instrumentId: string; type: 'buy' | 'sell'; units: { toString(): string }; priceAmount: { toString(): string }; feeAmount: { toString(): string }; fxRateToBase: { toString(): string } | null; currencyCode: string; occurredOn: Date; occurredTime: Date | null }>, transfers: Array<{ id: string; instrumentId: string; networkFeeUnits: { toString(): string }; occurredOn: Date; occurredTime: Date | null }>, baseCurrency: string, through?: Date) {
+/**
+ * A trade's historical FX must never be fabricated. Every currently-created
+ * trade requires an explicit rate (see the 422 in POST /crypto/trades), so a
+ * null value here can only come from a legacy/imported row. Treat that as
+ * "cost basis unavailable" rather than inventing a rate of zero, which would
+ * silently zero out cost basis and manufacture fake realized gains on sale.
+ */
+export class CryptoHistoricalFxUnavailableError extends Error {
+  readonly code = 'CRYPTO_HISTORICAL_FX_UNAVAILABLE' as const
+  constructor(readonly tradeId: string) {
+    super(`Trade ${tradeId} has no recorded FX rate to the portfolio base currency.`)
+  }
+}
+
+function positionFor(instrumentId: string, trades: Array<{ id: string; instrumentId: string; type: 'buy' | 'sell'; units: { toString(): string }; priceAmount: { toString(): string }; feeAmount: { toString(): string }; fxRateToBase: { toString(): string } | null; currencyCode: string; occurredOn: Date; occurredTime: Date | null; createdAt: Date }>, transfers: Array<{ id: string; instrumentId: string; networkFeeUnits: { toString(): string }; occurredOn: Date; occurredTime: Date | null; createdAt: Date }>, baseCurrency: string, through?: Date) {
   return calculateCryptoPosition(
-    trades.filter((trade) => trade.instrumentId === instrumentId && (!through || eventTime(trade.occurredOn, trade.occurredTime) <= through)).map((trade) => ({ id: trade.id, type: trade.type, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), fxRateToBase: trade.fxRateToBase?.toString() ?? (trade.currencyCode === baseCurrency ? '1' : '0'), occurredAt: eventTime(trade.occurredOn, trade.occurredTime) })),
-    transfers.filter((transfer) => transfer.instrumentId === instrumentId && (!through || eventTime(transfer.occurredOn, transfer.occurredTime) <= through)).map((transfer) => ({ id: transfer.id, networkFeeUnits: transfer.networkFeeUnits.toString(), occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime) })),
+    trades.filter((trade) => trade.instrumentId === instrumentId && (!through || eventTime(trade.occurredOn, trade.occurredTime) <= through)).map((trade) => {
+      const fxRateToBase = trade.fxRateToBase?.toString() ?? (trade.currencyCode === baseCurrency ? '1' : null)
+      if (fxRateToBase === null) throw new CryptoHistoricalFxUnavailableError(trade.id)
+      return { id: trade.id, type: trade.type, units: trade.units.toString(), priceAmount: trade.priceAmount.toString(), feeAmount: trade.feeAmount.toString(), fxRateToBase, occurredAt: eventTime(trade.occurredOn, trade.occurredTime), createdAt: trade.createdAt }
+    }),
+    transfers.filter((transfer) => transfer.instrumentId === instrumentId && (!through || eventTime(transfer.occurredOn, transfer.occurredTime) <= through)).map((transfer) => ({ id: transfer.id, networkFeeUnits: transfer.networkFeeUnits.toString(), occurredAt: eventTime(transfer.occurredOn, transfer.occurredTime), createdAt: transfer.createdAt })),
   )
 }
 

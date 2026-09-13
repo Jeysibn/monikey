@@ -25,6 +25,21 @@ export class LedgerService {
     });
   }
 
+  /**
+   * Reverses a cash movement and lets the caller delete/adjust the
+   * non-ledger record that caused it (e.g. a crypto trade) inside the SAME
+   * database transaction. Both must succeed or neither does — a caller must
+   * never call `reverseTransaction` and then separately delete its own
+   * record, because a failure between two independent transactions leaves
+   * cash reversed with the originating record still intact (or vice versa).
+   */
+  async reverseTransactionWithCallback<T>(userId: string, transactionId: string, input: ReverseTransactionInput, callback: (tx: Prisma.TransactionClient, result: ReverseTransactionResult) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await this.repo.reverseTransaction(tx as any, userId, transactionId, input.idempotencyKey ?? undefined);
+      return callback(tx, result);
+    });
+  }
+
   async updateTransaction(userId: string, transactionId: string, input: UpdateTransactionInput): Promise<UpdateTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
       return this.repo.updateTransaction(tx as any, userId, transactionId, input);

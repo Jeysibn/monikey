@@ -45,12 +45,12 @@ export class AlphaVantageQuoteProvider implements QuoteProvider {
   }
 }
 
-// Bug: the frontend's "top coin" preset pills (Investments.tsx) offer BNB,
+// Keep this mapping aligned with the frontend's Crypto top-coin presets, which
+// offer BNB,
 // SOL, XRP, DOGE, ADA, TRX alongside these — but only BTC/ETH/USDT/USDC had
 // an id here, so logging any of the other six could never get a live quote:
 // `latestPriceMinor` stayed null forever, and the holding row fell back to
-// displaying its entered average cost as if it were the market value (see
-// the comment on that fallback in useInvestments.ts) while the authoritative
+// displaying its entered average cost as if it were the market value while the authoritative
 // backend summary correctly counted it as 0 — the mismatch behind the
 // "1222222200.0%" allocation bug. Keep this list in sync with
 // TOP_CRYPTO_PRESETS on the frontend.

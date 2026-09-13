@@ -20,12 +20,11 @@ export interface ResolveSessionResult {
  * site so a client cannot distinguish "no such session" from "expired
  * session" from "malformed cookie".
  *
- * Expired sessions are opportunistically deleted here rather than left for
- * the (not-yet-built, Phase 5/JobModule) scheduled cleanup worker — this is
- * a correctness measure (an expired session must never authenticate, and
- * expiry is re-checked on every resolution), not a replacement for that
- * worker, which still needs to exist to bound table growth from sessions
- * that are never resolved again after expiring.
+ * Expired sessions are opportunistically deleted here as well as by the
+ * durable worker cleanup job. This is a correctness measure (an expired
+ * session must never authenticate, and expiry is re-checked on every
+ * resolution), while the scheduled job bounds growth from sessions that are
+ * never resolved again after expiring.
  */
 export async function resolveSession(
   prisma: PrismaClient,

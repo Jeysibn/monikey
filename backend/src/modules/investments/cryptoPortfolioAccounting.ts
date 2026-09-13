@@ -11,6 +11,16 @@ export type CryptoLocationTrade = {
   locationId: string | null
   units: DecimalValue
   occurredAt: Date
+  /**
+   * When the record was actually persisted. Same-`occurredAt` activity is
+   * never ordered by its (random) id — that would let unrelated database
+   * identifiers silently decide financial sequence. Persistence order is the
+   * only stable proxy for "what actually happened first" once two events
+   * share a recorded timestamp.
+   */
+  createdAt: Date
+  /** Shared database sequence; stable across trades and transfers. */
+  eventSequence?: bigint | number
 }
 
 /** A buy/sell with values retained in its trade currency and its event-time FX. */
@@ -22,6 +32,26 @@ export type CryptoTradeAccountingEvent = {
   feeAmount: DecimalValue
   fxRateToBase: DecimalValue
   occurredAt: Date
+  /** See {@link CryptoLocationTrade.createdAt}. */
+  createdAt: Date
+  /** Shared database sequence; stable across trades and transfers. */
+  eventSequence?: bigint | number
+}
+
+/** Deterministic financial ordering: user event time, then one shared persisted sequence. */
+function sequenceCompare(a: { occurredAt: Date; createdAt: Date; id: string; eventSequence?: bigint | number }, b: { occurredAt: Date; createdAt: Date; id: string; eventSequence?: bigint | number }): number {
+  const occurred = a.occurredAt.getTime() - b.occurredAt.getTime()
+  if (occurred !== 0) return occurred
+  if (a.eventSequence !== undefined && b.eventSequence !== undefined) {
+    const left = BigInt(a.eventSequence)
+    const right = BigInt(b.eventSequence)
+    if (left < right) return -1
+    if (left > right) return 1
+    return 0
+  }
+  // Compatibility fallback for pure unit callers that predate the persisted
+  // sequence. Database-backed paths always provide eventSequence.
+  return a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)
 }
 
 export type CryptoPosition = {
@@ -29,10 +59,20 @@ export type CryptoPosition = {
   costBasisBase: Decimal
   realizedPnlBase: Decimal
   averageCostBase: Decimal
+  /**
+   * Total cost ever invested (sum of every buy's cost, including fees) —
+   * never reduced by sells or transfer-fee disposals. This is the correct
+   * denominator for a "total return %" figure: `costBasisBase` alone goes to
+   * zero for a fully-closed position, which would make total-return % appear
+   * as "undefined" for a coin the user sold entirely, hiding a real gain or
+   * loss. It is only ever a lifetime input, so it is safe to sum across
+   * holdings the same way costBasisBase is.
+   */
+  totalInvestedBase: Decimal
 }
 
 /** A network fee paid in the coin itself is a zero-proceeds disposal. */
-export type CryptoTransferFeeEvent = { id: string; networkFeeUnits: DecimalValue; occurredAt: Date }
+export type CryptoTransferFeeEvent = { id: string; networkFeeUnits: DecimalValue; occurredAt: Date; createdAt: Date; eventSequence?: bigint | number }
 
 export class CryptoInsufficientUnitsError extends Error {
   readonly code = 'CRYPTO_INSUFFICIENT_UNITS' as const
@@ -48,6 +88,9 @@ export type CryptoTransferEvent = {
   units: DecimalValue
   networkFeeUnits: DecimalValue
   occurredAt: Date
+  /** See {@link CryptoLocationTrade.createdAt}. */
+  createdAt: Date
+  eventSequence?: bigint | number
 }
 
 export class CryptoLocationInsufficientUnitsError extends Error {
@@ -80,10 +123,11 @@ export function calculateCryptoPosition(events: CryptoTradeAccountingEvent[], tr
   const ordered = [
     ...events.map((event) => ({ kind: 'trade' as const, event, occurredAt: event.occurredAt })),
     ...transferFees.map((event) => ({ kind: 'fee' as const, event, occurredAt: event.occurredAt })),
-  ].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.event.id.localeCompare(b.event.id))
+  ].sort((a, b) => sequenceCompare(a.event, b.event))
   let units = new Decimal(0)
   let costBasisBase = new Decimal(0)
   let realizedPnlBase = new Decimal(0)
+  let totalInvestedBase = new Decimal(0)
   for (const item of ordered) {
     if (item.kind === 'fee') {
       const feeUnits = decimal(item.event.networkFeeUnits)
@@ -100,7 +144,9 @@ export function calculateCryptoPosition(events: CryptoTradeAccountingEvent[], tr
     const feeBase = decimal(event.feeAmount).times(decimal(event.fxRateToBase))
     if (event.type === 'buy') {
       units = units.plus(eventUnits)
-      costBasisBase = costBasisBase.plus(eventUnits.times(unitPriceBase)).plus(feeBase)
+      const cost = eventUnits.times(unitPriceBase).plus(feeBase)
+      costBasisBase = costBasisBase.plus(cost)
+      totalInvestedBase = totalInvestedBase.plus(cost)
       continue
     }
     if (eventUnits.greaterThan(units)) throw new CryptoInsufficientUnitsError(units, eventUnits)
@@ -111,7 +157,7 @@ export function calculateCryptoPosition(events: CryptoTradeAccountingEvent[], tr
     units = units.minus(eventUnits)
     costBasisBase = units.isZero() ? new Decimal(0) : Decimal.max(0, costBasisBase.minus(disposedBasis))
   }
-  return { units, costBasisBase, realizedPnlBase, averageCostBase: units.isZero() ? new Decimal(0) : costBasisBase.dividedBy(units) }
+  return { units, costBasisBase, realizedPnlBase, totalInvestedBase, averageCostBase: units.isZero() ? new Decimal(0) : costBasisBase.dividedBy(units) }
 }
 
 /**
@@ -127,7 +173,7 @@ export function calculateCryptoLocationBalances(
   const events = [
     ...trades.filter((trade) => trade.locationId !== null).map((trade) => ({ kind: 'trade' as const, event: trade, occurredAt: trade.occurredAt })),
     ...transfers.map((transfer) => ({ kind: 'transfer' as const, event: transfer, occurredAt: transfer.occurredAt })),
-  ].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.event.id.localeCompare(b.event.id))
+  ].sort((a, b) => sequenceCompare(a.event, b.event))
 
   const balances = new Map<string, Decimal>()
   for (const item of events) {

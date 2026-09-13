@@ -1,78 +1,55 @@
 import { describe, expect, it } from 'vitest'
-import { parseMoneyInput } from './money'
+import { boundedDecimalToNumber, majorNumberToMinorUnits, minorUnitsToMajorNumber, parseMinorUnitInput } from './money'
+import { formatMinorUnits } from './currency'
 
-describe('parseMoneyInput', () => {
-  it('rejects blank input', () => {
-    expect(parseMoneyInput('')).toEqual({ ok: false, error: 'Enter an amount.' })
-    expect(parseMoneyInput('   ')).toEqual({ ok: false, error: 'Enter an amount.' })
+describe('parseMinorUnitInput', () => {
+  it('preserves values beyond the safe JavaScript integer range', () => {
+    expect(parseMinorUnitInput('9007199254740991.23')).toEqual({ ok: true, value: 900719925474099123n })
   })
 
-  it('rejects a signed-negative value by default', () => {
-    const result = parseMoneyInput('-5')
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toBe('Amount can’t be negative.')
+  it('accepts grouped input and rejects excess precision', () => {
+    expect(parseMinorUnitInput('1,250.50')).toEqual({ ok: true, value: 125050n })
+    expect(parseMinorUnitInput('1.234').ok).toBe(false)
   })
 
-  it('allows a negative value when explicitly opted in', () => {
-    expect(parseMoneyInput('-5', { allowNegative: true })).toEqual({ ok: true, value: -5 })
+  it('formats large API minor-unit values without narrowing them to Number', () => {
+    expect(formatMinorUnits('900719925474099123')).toContain('₱9,007,199,254,740,991.23')
+  })
+})
+
+describe('minorUnitsToMajorNumber', () => {
+  it('converts API decimal strings only inside the exact integer range', () => {
+    expect(minorUnitsToMajorNumber('125050')).toBe(1250.5)
+    expect(minorUnitsToMajorNumber('-640')).toBe(-6.4)
+    expect(minorUnitsToMajorNumber(String(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER / 100)
   })
 
-  it('rejects scientific notation', () => {
-    const result = parseMoneyInput('1e6')
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toMatch(/scientific notation/i)
+  it('fails closed instead of silently rounding unsafe or malformed values', () => {
+    expect(() => minorUnitsToMajorNumber('9007199254740992')).toThrow(RangeError)
+    expect(() => minorUnitsToMajorNumber('12.34')).toThrow(TypeError)
+    expect(() => minorUnitsToMajorNumber('not-money')).toThrow(TypeError)
+  })
+})
+
+describe('majorNumberToMinorUnits', () => {
+  it('serializes finite numeric domain values as exact decimal strings', () => {
+    expect(majorNumberToMinorUnits(1250.5)).toBe('125050')
+    expect(majorNumberToMinorUnits(19.99)).toBe('1999')
   })
 
-  it('rejects non-finite values', () => {
-    expect(parseMoneyInput('Infinity').ok).toBe(false)
-    expect(parseMoneyInput('NaN').ok).toBe(false)
+  it('rejects non-finite and unsafe transport values', () => {
+    expect(() => majorNumberToMinorUnits(Number.NaN)).toThrow(TypeError)
+    expect(() => majorNumberToMinorUnits(Number.MAX_SAFE_INTEGER)).toThrow(RangeError)
+  })
+})
+
+describe('boundedDecimalToNumber', () => {
+  it('allows explicitly bounded visual calculations', () => {
+    expect(boundedDecimalToNumber('18.5', { min: -100, max: 100 })).toBe(18.5)
   })
 
-  it('rejects multiple decimal separators', () => {
-    const result = parseMoneyInput('1.2.3')
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toMatch(/single decimal point/i)
-  })
-
-  it('rejects more than two decimal places', () => {
-    const result = parseMoneyInput('1.234')
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toMatch(/decimal places/i)
-  })
-
-  it('rejects malformed comma grouping', () => {
-    expect(parseMoneyInput('1,25.75').ok).toBe(false)
-    expect(parseMoneyInput('12,3').ok).toBe(false)
-  })
-
-  it('rejects stray characters', () => {
-    expect(parseMoneyInput('$50').ok).toBe(false)
-    expect(parseMoneyInput('50abc').ok).toBe(false)
-    expect(parseMoneyInput('- -5').ok).toBe(false)
-  })
-
-  it('accepts whole numbers', () => {
-    expect(parseMoneyInput('500')).toEqual({ ok: true, value: 500 })
-  })
-
-  it('accepts a single decimal place, normalized to a number', () => {
-    expect(parseMoneyInput('0.5')).toEqual({ ok: true, value: 0.5 })
-  })
-
-  it('accepts exactly two decimal places', () => {
-    expect(parseMoneyInput('0.50')).toEqual({ ok: true, value: 0.5 })
-  })
-
-  it('accepts comma thousands separators', () => {
-    expect(parseMoneyInput('1,250.75')).toEqual({ ok: true, value: 1250.75 })
-    expect(parseMoneyInput('1,000,000')).toEqual({ ok: true, value: 1000000 })
-  })
-
-  it('accepts large finite values', () => {
-    expect(parseMoneyInput('9999999.99')).toEqual({ ok: true, value: 9999999.99 })
-  })
-
-  it('accepts a leading decimal point with no leading zero', () => {
-    expect(parseMoneyInput('.5')).toEqual({ ok: true, value: 0.5 })
+  it('rejects non-decimal and out-of-range visual values', () => {
+    expect(() => boundedDecimalToNumber('Infinity', { min: 0, max: 100 })).toThrow(TypeError)
+    expect(() => boundedDecimalToNumber('101', { min: 0, max: 100 })).toThrow(RangeError)
   })
 })

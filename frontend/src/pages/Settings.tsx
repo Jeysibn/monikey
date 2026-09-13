@@ -5,7 +5,7 @@ import { useFinance } from '../hooks/useFinance'
 import { useSettings, type UseSettingsResult } from '../hooks/useSettings'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { showToast } from '../hooks/toastBus'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import type { NotificationPreferences } from '../domain/settings'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { ApiSettingsGateway } from '../services/apiSettingsGateway'
@@ -188,20 +188,11 @@ function DisplayPreferencesSection({
   return (
     <Card>
       <CardTitle>Display Preferences</CardTitle>
-      <div className="settings-field-row">
-        <label className="new-category-field" style={{ flex: 1 }}>
-          <span className="tx-label">
-            Currency &amp; locale <span className="coming-soon-tag">Coming soon</span>
-          </span>
-          <select className="tx-input" disabled title="Coming soon" defaultValue="PHP">
-            <option value="PHP">Philippine Peso (₱) · en-PH</option>
-          </select>
-        </label>
-      </div>
       <p className="form-help">
-        Currency formatting is shared app-wide from a single, non-reactive module (see <code>utils/currency.ts</code>) — switching it live
-        needs a currency provider that re-renders every screen, which doesn’t exist yet. Changing it here would silently leave half the app in
-        the old currency, so it stays disabled until that’s built.
+        Monikey currently uses Philippine Peso (₱) and <code>en-PH</code>
+        formatting consistently across the application. Multi-currency display
+        preferences are planned once the setting can be applied atomically to
+        every financial view.
       </p>
       <div className="settings-toggle-list">
         <Toggle
@@ -468,7 +459,7 @@ function ConnectedAccountsSection({ settings }: Pick<UseSettingsResult, 'setting
               {a.lastFour ? ` ••${a.lastFour}` : ''}
               {a.institution ? <span className="faint"> · {a.institution}</span> : null}
             </span>
-            <span className="num">{formatMoney(a.balance, moneyOpts)}</span>
+            <span className="num">{formatMoneyValue(a.balance, a.balanceMinor, moneyOpts)}</span>
           </li>
         ))}
         {creditCards.map((c) => (
@@ -478,7 +469,7 @@ function ConnectedAccountsSection({ settings }: Pick<UseSettingsResult, 'setting
               <span className="faint"> · {c.network === 'visa' ? 'Visa' : 'Mastercard'}</span>
             </span>
             <span className="num" style={{ color: 'var(--amber)' }}>
-              {formatMoney(c.balance, moneyOpts)}
+              {formatMoneyValue(c.balance, c.balanceMinor, moneyOpts)}
             </span>
           </li>
         ))}
@@ -533,12 +524,10 @@ function SecuritySection() {
     <Card>
       <CardTitle>Security</CardTitle>
       <p className="form-help">
-        Authentication is handled by the backend session. Password changes and two-factor authentication are planned controls.
+        Authentication is handled by the backend session. Manage your password and active sessions from the security page.
       </p>
       <div className="new-category-actions" style={{ justifyContent: 'flex-start', gap: 10 }}>
-        <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-          Change password <span className="coming-soon-tag">Coming soon</span>
-        </button>
+        <a className="btn btn--primary" href="/security">Manage security</a>
         <button type="button" className="btn btn--ghost" disabled title="Coming soon">
           Enable two-factor authentication <span className="coming-soon-tag">Coming soon</span>
         </button>

@@ -50,3 +50,10 @@ export function getUTCDateForLocalDateTime(
 
   return new Date(Math.round((low + high) / 2))
 }
+
+/** Return today's ISO calendar date in the supplied IANA timezone. */
+export function localDateIso(timezone: string, instant = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant)
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])) as Record<string, string>
+  return `${values.year}-${values.month}-${values.day}`
+}

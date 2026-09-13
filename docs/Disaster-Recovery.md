@@ -1,8 +1,9 @@
 # Disaster Recovery
 
-Reviewed against the repository scripts, Dockerfile and Compose configuration on
-2026-09-08. This is a recovery procedure reference, not evidence of a completed
-restore drill or a guaranteed recovery time.
+Reviewed against the current repository scripts and Compose configuration on
+2026-09-13. A local isolated database-and-receipt drill is recorded in
+[Restore drill — 2026-09-13](operations/restore-drill-2026-09-13.md); it is not
+a production RPO/RTO certification.
 
 ## What must be recovered
 
@@ -22,18 +23,19 @@ automatically host paths or host-resolvable database addresses.
 | --- | --- |
 | `scripts/backup/pg-backup.sh` | Runs host `pg_dump` against configured connection values; writes compressed plain SQL to `backups/pg` by default |
 | `scripts/backup/pg-restore.sh` | Prompts, attempts to drop/recreate the configured database, then imports SQL; requires host `psql` and a reachable database |
-| `scripts/backup/receipt-backup.sh` | Archives the configured local receipt path into `backups/receipts`; it does not discover or mount a Compose volume |
+| `scripts/backup/receipt-backup.sh` | Archives the configured local receipt path into `backups/receipts`; it fails if the source path is missing and does not discover or mount a Compose volume |
 | `scripts/backup/receipt-restore.sh` | Prompts, deletes the configured local receipt directory, then extracts the archive into its parent |
+| `scripts/backup/verify.sh` | Read-only gzip/tar validation for database and receipt archives; suitable as a scheduler post-check |
 
 Run helpers from the repository root so `.env` and relative backup directories
 resolve as intended. A DATABASE_URL using `db` is valid inside Compose but usually
 not from the host. Likewise, `/data/receipts` is normally inside the container.
 Use a compatible PostgreSQL client (the database container supplies one).
 
-The scripts have limits: receipt backup may produce an empty archive when its
-source path is missing, and the database restore script does not enable psql's
-`ON_ERROR_STOP` or explicitly select a maintenance database for its drop/create
-commands. An exit message alone is not proof of a successful, complete recovery.
+The scripts have limits: restore remains destructive and interactive. The
+database restore validates gzip archives before changing state, uses the
+`postgres` maintenance database for drop/create, and enables psql's
+`ON_ERROR_STOP`; an exit message alone is still not proof of a complete recovery.
 
 ## Backing up the base Compose deployment
 
@@ -50,6 +52,7 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 docker compose exec -T api tar czf - -C /data receipts > "backups/receipts/receipts-${backup_stamp}.tar.gz"
 gzip -t "backups/pg/monikey-${backup_stamp}.sql.gz"
 tar tzf "backups/receipts/receipts-${backup_stamp}.tar.gz"
+scripts/backup/verify.sh "backups/pg/monikey-${backup_stamp}.sql.gz" "backups/receipts/receipts-${backup_stamp}.tar.gz"
 ```
 
 `-T` avoids allocating a terminal for binary archive output. The receipt archive
@@ -75,8 +78,9 @@ before replacing them. Never use `docker compose down -v` as a routine stop comm
    archive above, extract into `/data` and restore ownership to `monikey:monikey`
    using the matching backend image/volume.
 4. Check `_prisma_migrations` against the selected source revision. Base Compose's
-   `migrate` service runs both migration and seed; review seed behavior before
-   starting the entire stack against recovered data. Apply only intended migrations.
+   `migrate` service runs migrations only. Run the idempotent system seed explicitly
+   if required; never run the demo seed against recovered production data. Apply
+   only intended migrations.
 5. Start the selected API, worker and web deployment after validating database and
    storage configuration. Check readiness and inspect logs before accepting traffic.
 6. Verify authentication, representative account balances and transaction history,
@@ -94,6 +98,8 @@ database version, record/balance checks, receipt checks, errors and elapsed time
 Set RPO/RTO and backup retention based on that measured process; no fixed numbers
 are certified here. The repository contains backup helpers but base Compose has
 no scheduled backup service. Configure scheduling/off-host retention explicitly
-and monitor archive integrity, missing backups and storage capacity.
+and run `scripts/backup/verify.sh` as a post-backup check. Monitor archive
+integrity, missing backups and storage capacity. The repository does not own the
+scheduler or off-host copy; those belong to the deployment/GitOps layer.
 
 For deployment and branch workflow, see [CI/CD operations](CI-CD-Operations.md).

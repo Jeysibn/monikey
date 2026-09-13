@@ -1,0 +1,9 @@
+.reconciliation-page { display: grid; gap: 1.25rem; max-width: 760px; }
+.reconciliation-form { display: grid; gap: .85rem; }
+.reconciliation-form label { display: grid; gap: .35rem; font-size: .85rem; color: var(--text-muted); }
+.reconciliation-form input, .reconciliation-form select { width: 100%; box-sizing: border-box; }
+.reconciliation-result { display: grid; gap: .3rem; margin-top: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: .6rem; }
+.reconciliation-result--reconciled { border-color: var(--teal); }
+.reconciliation-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.reconciliation-list li { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: .75rem 0; }
+.reconciliation-list small { display: block; color: var(--text-muted); margin-top: .25rem; }

@@ -22,6 +22,8 @@ import { generateSessionToken, hashSessionToken } from '../../src/common/auth/se
 const SESSION_COOKIE_NAME = 'monikey_session'
 const APP_ORIGIN = 'http://localhost:8080'
 const TEST_RUN_ID = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
+const describeIfDb = databaseUrl ? describe : describe.skip
 
 /**
  * Generate a unique dedup key for this test run to avoid UNIQUE constraint violations
@@ -52,13 +54,12 @@ async function createTestSessionCookie(prisma: PrismaClient, userId: string): Pr
   return `${SESSION_COOKIE_NAME}=${rawToken}`
 }
 
-describe('Imports Module - Phase 11', () => {
+describeIfDb('Imports Module - CSV workflow', () => {
   let app: any
   let prisma: PrismaClient
   let env: any
 
   beforeAll(async () => {
-    const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
     env = loadEnv({
       ...process.env,
       DATABASE_URL: databaseUrl,
@@ -156,7 +157,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('csv_row_1'),
           provider: 'csv',
           title: 'Coffee Shop',
-          amountMinor: 15050, // PHP 150.50
+          amountMinor: '15050', // PHP 150.50
           occurredOn: '2026-09-01',
           currencyCode: 'PHP',
           merchantName: 'Cafe Noir',
@@ -170,7 +171,7 @@ describe('Imports Module - Phase 11', () => {
       expect(txnRes.statusCode).toBe(201)
       const txn = JSON.parse(txnRes.body)
       expect(txn.title).toBe('Coffee Shop')
-      expect(txn.amountMinor).toBe(15050)
+      expect(txn.amountMinor).toBe('15050')
       expect(txn.status).toBe('pending_review')
     })
   })
@@ -227,7 +228,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('same_dedup_key'),
           provider: 'csv',
           title: 'Transaction 1',
-          amountMinor: 50000,
+          amountMinor: '50000',
           occurredOn: '2026-09-01',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -243,7 +244,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('same_dedup_key'),
           provider: 'csv',
           title: 'Transaction 2',
-          amountMinor: 60000,
+          amountMinor: '60000',
           occurredOn: '2026-09-02',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -278,7 +279,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('global_dedup_key'),
           provider: 'csv',
           title: 'Transaction',
-          amountMinor: 50000,
+          amountMinor: '50000',
           occurredOn: '2026-09-01',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -294,7 +295,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('global_dedup_key'),
           provider: 'csv',
           title: 'Same Transaction Again',
-          amountMinor: 50000,
+          amountMinor: '50000',
           occurredOn: '2026-09-01',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -356,7 +357,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('expense_1'),
           provider: 'csv',
           title: 'Grocery Store',
-          amountMinor: 150000, // PHP 1,500
+          amountMinor: '150000', // PHP 1,500
           occurredOn: '2026-09-01',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -408,7 +409,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('expense_idempotent'),
           provider: 'csv',
           title: 'Expense',
-          amountMinor: 100000,
+          amountMinor: '100000',
           occurredOn: '2026-09-01',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },
@@ -440,6 +441,75 @@ describe('Imports Module - Phase 11', () => {
       })
 
       expect(transactions).toHaveLength(1)
+    })
+
+    it('retains row errors and retries only the unposted row with a cumulative committed count', async () => {
+      const lowBalanceAccount = await prisma.financialAccount.create({
+        data: {
+          userId,
+          name: 'Low Balance Account',
+          accountType: 'checking',
+          classification: 'asset',
+          currencyCode: 'PHP',
+          openingBalanceMinor: 1500n,
+          currentBalanceMinor: 1500n,
+          manual: true,
+        },
+      })
+      const batchRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/imports/batches',
+        payload: { sourceType: 'csv_manual' },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      const batch = JSON.parse(batchRes.body)
+
+      for (const suffix of ['first', 'second']) {
+        const addRes = await app.inject({
+          method: 'POST',
+          url: `/api/v1/imports/batches/${batch.id}/transactions`,
+          payload: {
+            dedupKey: makeUniqueDedupKey(`partial_${suffix}`),
+            provider: 'csv',
+            title: `Partial ${suffix}`,
+            amountMinor: '1000',
+            occurredOn: '2026-09-01',
+          },
+          headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+        })
+        expect(addRes.statusCode).toBe(201)
+      }
+
+      const partialRes = await app.inject({
+        method: 'POST',
+        url: `/api/v1/imports/batches/${batch.id}/commit`,
+        payload: { matchedAccountId: lowBalanceAccount.id },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      expect(partialRes.statusCode).toBe(200)
+      expect(JSON.parse(partialRes.body)).toMatchObject({ committedCount: 1 })
+      expect(JSON.parse(partialRes.body).errors).toHaveLength(1)
+
+      const partialBatch = await prisma.importBatch.findUniqueOrThrow({ where: { id: batch.id } })
+      const partialRows = await prisma.importedTransaction.findMany({ where: { importBatchId: batch.id } })
+      expect(partialBatch.status).toBe('partially_committed')
+      expect(partialRows.filter((row) => row.status === 'posted')).toHaveLength(1)
+      expect(partialRows.filter((row) => row.processingError)).toHaveLength(1)
+
+      const retryRes = await app.inject({
+        method: 'POST',
+        url: `/api/v1/imports/batches/${batch.id}/commit`,
+        payload: { matchedAccountId: accountId },
+        headers: { origin: APP_ORIGIN, cookie: sessionCookie },
+      })
+      expect(retryRes.statusCode).toBe(200)
+      expect(JSON.parse(retryRes.body)).toEqual({ committedCount: 2, errors: [] })
+
+      const retriedBatch = await prisma.importBatch.findUniqueOrThrow({ where: { id: batch.id } })
+      const retriedRows = await prisma.importedTransaction.findMany({ where: { importBatchId: batch.id } })
+      expect(retriedBatch).toMatchObject({ status: 'committed', committedCount: 2 })
+      expect(retriedRows.every((row) => row.status === 'posted' && row.processingError === null)).toBe(true)
+      expect(await prisma.posting.count({ where: { importedTransactionId: { in: retriedRows.map((row) => row.id) } } })).toBe(2)
     })
   })
 
@@ -577,7 +647,7 @@ describe('Imports Module - Phase 11', () => {
           dedupKey: makeUniqueDedupKey('bad_date'),
           provider: 'csv',
           title: 'Transaction',
-          amountMinor: 50000,
+          amountMinor: '50000',
           occurredOn: 'not-a-date',
         },
         headers: { origin: APP_ORIGIN, cookie: sessionCookie },

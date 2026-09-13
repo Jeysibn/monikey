@@ -48,3 +48,38 @@ export function formatMoney(value: number, opts: { withCents?: boolean } = {}): 
     maximumFractionDigits: withCents ? 2 : 0,
   }).format(value)
 }
+
+/** Format an API-backed domain amount from canonical minor units when present;
+ * mock/legacy entities use the checked major-unit compatibility value. */
+export function formatMoneyValue(value: number, minorValue?: string, opts: { withCents?: boolean } = {}): string {
+  return minorValue === undefined ? formatMoney(value, opts) : formatMinorUnits(minorValue, opts)
+}
+
+/** Format a major-unit decimal string without narrowing it through Number. */
+export function formatDecimalMoney(value: string, currency = currencyConfig.currency): string {
+  const match = value.trim().match(/^(-?)(\d+)(?:\.(\d+))?$/)
+  if (!match) return `${currency} ${value}`
+  const negative = match[1] === '-'
+  const whole = match[2]!
+  const fraction = (match[3] ?? '').padEnd(2, '0').slice(0, 2)
+  const parts = new Intl.NumberFormat(currencyConfig.locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).formatToParts(0)
+  const currencyPart = parts.find((part) => part.type === 'currency')?.value ?? currency
+  const decimal = new Intl.NumberFormat(currencyConfig.locale).formatToParts(1.1).find((part) => part.type === 'decimal')?.value ?? '.'
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${negative ? '-' : ''}${currencyPart}${grouped}${decimal}${fraction}`
+}
+
+/** Format API minor-unit strings without converting them through Number. */
+export function formatMinorUnits(value: string | bigint, opts: { withCents?: boolean } = {}): string {
+  const withCents = opts.withCents ?? true
+  const minor = typeof value === 'bigint' ? value : BigInt(value)
+  const negative = minor < 0n
+  const absolute = negative ? -minor : minor
+  const whole = absolute / 100n
+  const cents = (absolute % 100n).toString().padStart(2, '0')
+  const parts = new Intl.NumberFormat(currencyConfig.locale, { style: 'currency', currency: currencyConfig.currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).formatToParts(whole)
+  const rendered = parts.map((part) => part.type === 'integer' ? part.value : part.value).join('')
+  const decimal = new Intl.NumberFormat(currencyConfig.locale).formatToParts(1.1).find((part) => part.type === 'decimal')?.value ?? '.'
+  const withFraction = withCents ? `${rendered}${decimal}${cents}` : rendered
+  return negative ? withFraction.replace(/^(\D)/, '$1-') : withFraction
+}

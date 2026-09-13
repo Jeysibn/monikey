@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { useBackendAuthOptional } from './BackendAuthContext'
 import './AppShell.css'
+import { probeMonikeyServer, type ServerConnectionState } from '../services/serverReachability'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true },
@@ -10,12 +11,18 @@ const NAV_ITEMS = [
   { to: '/accounts', label: 'Accounts' },
   { to: '/budget', label: 'Budget' },
   { to: '/goals', label: 'Goals' },
-  { to: '/investments', label: 'Crypto' },
+  { to: '/crypto', label: 'Crypto' },
 ]
 
 const MORE_ITEMS = [
   { to: '/recurring', label: 'Recurring & Bills', sub: 'Subscriptions & due dates' },
+  { to: '/rules', label: 'Transaction Rules', sub: 'Automate imported transactions' },
+  { to: '/reconciliation', label: 'Reconciliation', sub: 'Match statements to ledger' },
+  { to: '/imports', label: 'Imports', sub: 'Review CSV transactions' },
+  { to: '/security', label: 'Sessions & Security', sub: 'Password and active sessions' },
+  { to: '/tags', label: 'Tags', sub: 'Transaction context' },
   { to: '/reports', label: 'Reports', sub: 'Trends over time' },
+  { to: '/sync', label: 'Sync Center', sub: 'Offline changes and local cache' },
 ]
 
 function BrandMark() {
@@ -220,6 +227,15 @@ function MobileNav() {
 
 export function AppShell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction?: () => void }) {
   const backendAuth = useBackendAuthOptional()
+  const [connection, setConnection] = useState<ServerConnectionState>('checking')
+  useEffect(() => {
+    if (import.meta.env.VITE_FINANCE_BACKEND !== 'true') { setConnection('connected'); return }
+    let active = true
+    const check = async () => { const result = await probeMonikeyServer(); if (active) setConnection(result) }
+    void check()
+    const timer = window.setInterval(() => void check(), 30_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -254,6 +270,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
           )}
         </div>
       </header>
+      {connection === 'unreachable' && <div className="offline-banner" role="status">Server unreachable · showing available local data. New changes remain pending until Monikey reconnects.</div>}
       <main className="page-main">{children}</main>
     </div>
   )

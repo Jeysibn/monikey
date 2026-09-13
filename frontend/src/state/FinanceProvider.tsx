@@ -9,6 +9,7 @@ import type {
 import type { FinanceRepository } from '../services/financeRepository'
 import { createMockFinanceRepository } from '../services/mockFinanceRepository'
 import type { AppClock } from '../utils/clock'
+import type { RecurringItem } from '../domain/recurring'
 import { demoClock } from '../utils/clock'
 import { createFinanceStore } from './financeStore'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
@@ -31,6 +32,7 @@ export interface FinanceProviderProps {
    * freeze or advance time.
    */
   clock?: AppClock
+  recurringItems?: RecurringItem[]
 }
 
 /**
@@ -39,7 +41,7 @@ export interface FinanceProviderProps {
  * — no ref is written or read during render to keep mutations fresh, and no
  * non-component value is exported from this module.
  */
-export function FinanceProvider({ children, clock = demoClock, repository }: FinanceProviderProps) {
+export function FinanceProvider({ children, clock = demoClock, repository, recurringItems = [] }: FinanceProviderProps) {
   // Falling back to a mock built from THIS provider's clock keeps the one
   // clock rule intact even when no repository is injected.
   const [defaultRepository] = useState(() => createMockFinanceRepository(clock))
@@ -148,11 +150,21 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
     [store, activeRepository],
   )
 
+  const updateGoal = useCallback(
+    (goalId: string, input: Parameters<FinanceRepository['updateGoal']>[2]) =>
+      store.run((s) => {
+        const { state: next, goal } = activeRepository.updateGoal(s, goalId, input)
+        return { state: next, result: goal }
+      }),
+    [store, activeRepository],
+  )
+
   // Memoized so consumers don't re-render on unrelated parent renders — the
   // value changes only when the finance state or a mutation identity does.
   const value = useMemo<FinanceContextValue>(
     () => ({
       state,
+      recurringItems,
       todayIso: clock.todayIso(),
       addTransaction,
       updateTransaction,
@@ -164,10 +176,12 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
       setCategoryBudget,
       deleteCategory,
       createGoal,
+      updateGoal,
       addGoalFunds,
     }),
     [
       state,
+      recurringItems,
       clock,
       addTransaction,
       updateTransaction,
@@ -179,6 +193,7 @@ export function FinanceProvider({ children, clock = demoClock, repository }: Fin
       setCategoryBudget,
       deleteCategory,
       createGoal,
+      updateGoal,
       addGoalFunds,
     ],
   )

@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import type { TransactionType, Transaction } from '../domain/finance'
+import type { paths } from '../api.generated'
 import './Transactions.css'
 
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -13,14 +14,25 @@ const TYPE_LABEL: Record<TransactionType, string> = {
   expense: 'Expense',
   transfer: 'Transfer',
 }
+type ApiTag = paths['/tags']['get']['responses'][200]['content']['application/json'][number]
 
 export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTransaction: () => void; onEditTransaction?: (tx: Transaction) => void }) {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const { transactions } = finance.state
-  const [search, setSearch] = useState('')
+  const params = new URLSearchParams(window.location.search)
+  const [search, setSearch] = useState(params.get('q') ?? '')
   const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>('all')
+  const [categoryFilter] = useState(params.get('category') ?? '')
+  const [fromFilter] = useState(params.get('from') ?? '')
+  const [toFilter] = useState(params.get('to') ?? '')
+  const [tagFilter] = useState(params.get('tag') ?? '')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [availableTags, setAvailableTags] = useState<ApiTag[]>([])
+  useEffect(() => {
+    if (!asyncFinance) return
+    fetch('/api/v1/tags', { credentials: 'include' }).then((response) => response.ok ? response.json() as Promise<ApiTag[]> : Promise.reject(new Error('tags unavailable'))).then(setAvailableTags).catch(() => undefined)
+  }, [asyncFinance])
 
   // A "deleted" transaction isn't hard-removed on the backend — it's reversed
   // by creating a compensating entry that nets it to zero (audit trail). Hide
@@ -41,10 +53,14 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
     return transactions.filter((t) => {
       if (reversalPairIds.has(t.id)) return false
       if (typeFilter !== 'all' && t.type !== typeFilter) return false
+      if (categoryFilter && t.categoryId !== categoryFilter) return false
+      if (fromFilter && t.date < fromFilter) return false
+      if (toFilter && t.date > toFilter) return false
+      if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false
       if (search && !finance.transactionMatchesSearch(t, search)) return false
       return true
     })
-  }, [transactions, search, typeFilter, finance, reversalPairIds])
+  }, [transactions, search, typeFilter, categoryFilter, fromFilter, toFilter, tagFilter, finance, reversalPairIds])
 
   const handleEdit = (transaction: typeof transactions[0]) => {
     if (onEditTransaction) {
@@ -69,6 +85,21 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
     } finally {
       setBusyId(null)
     }
+  }
+
+  async function handleTags(transaction: Transaction) {
+    if (!asyncFinance) return
+    const value = window.prompt(`Tags for ${transaction.title} (comma-separated):`, (transaction.tags ?? []).join(', '))
+    if (value === null) return
+    const names = [...new Set(value.split(',').map((name) => name.trim()).filter(Boolean))]
+    const tagIds = names.map((name) => availableTags.find((tag) => tag.name === name)?.id).filter((id): id is string => Boolean(id))
+    if (tagIds.length !== names.length) { window.alert('Create each tag first from the Tags page.'); return }
+    setBusyId(transaction.id)
+    try {
+      const response = await fetch(`/api/v1/transactions/${transaction.id}/tags`, { method: 'PUT', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tagIds }) })
+      if (!response.ok) throw new Error('Could not update tags')
+      window.location.reload()
+    } catch { window.alert('Could not update transaction tags.') } finally { setBusyId(null) }
   }
 
   return (
@@ -204,13 +235,14 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                   <Tag tone={t.type}>{TYPE_LABEL[t.type]}</Tag>
                 </span>
                 <span role="cell" className={`num tx-col-right ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
-                  {formatMoney(t.amount)}
+                  {formatMoneyValue(t.amount, t.amountMinor)}
                 </span>
                 <span role="cell">
                   <Tag tone={t.status}>{t.status === 'cleared' ? 'Cleared' : 'Pending'}</Tag>
                 </span>
                 <span role="cell" className="tx-col-center">
                   <div className="tx-row-actions">
+                    {asyncFinance && <button type="button" className="btn btn--ghost btn--compact tx-icon-btn" disabled={busyId === t.id} onClick={() => void handleTags(t)} title="Edit tags" aria-label="Edit tags">#</button>}
                     <button
                       type="button"
                       className="btn btn--ghost btn--compact tx-icon-btn"
@@ -268,7 +300,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                   )}
                 </div>
                 <span className={`num tx-mobile-amt ${t.type === 'transfer' ? 'tx-amt-neutral' : t.amount < 0 ? 'tx-amt-out' : 'tx-amt-in'}`}>
-                  {formatMoney(t.amount)}
+                  {formatMoneyValue(t.amount, t.amountMinor)}
                 </span>
               </div>
               <div className="tx-mobile-meta">
@@ -288,6 +320,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                 <span className="faint">{finance.transactionAccountLabel(t)}</span>
               </div>
               <div className="tx-mobile-actions">
+                {asyncFinance && <button type="button" className="btn btn--ghost btn--compact" disabled={busyId === t.id} onClick={() => void handleTags(t)}>Edit tags</button>}
                 <button
                   type="button"
                   className="btn btn--ghost btn--compact"

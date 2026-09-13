@@ -5,7 +5,8 @@ import { Sparkline } from '../components/Sparkline'
 import { MoneyPosition } from '../components/MoneyPosition'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
-import { formatMoney } from '../utils/currency'
+import { formatDecimalMoney, formatMoney, formatMoneyValue } from '../utils/currency'
+import { boundedDecimalToNumber } from '../utils/money'
 import { formatDateLabel, formatDueDateLabel, formatTimeLabel } from '../utils/date'
 import './Dashboard.css'
 
@@ -18,6 +19,8 @@ const DEMO_CRYPTO_COINS: CryptoCoinPreview[] = [
 ]
 const DEMO_CRYPTO_SUMMARY: CryptoSummaryPreview = { portfolioValue: '3361728.12', totalPnl: '28819.82', totalPnlPct: '18.5' }
 function backendEnabled() { return import.meta.env.VITE_FINANCE_BACKEND === 'true' }
+function isNegativeDecimal(value: string) { return /^-/.test(value.trim()) && !/^-0+(?:\.0+)?$/.test(value.trim()) }
+const cryptoPreviewNumber = (value: string) => boundedDecimalToNumber(value, { min: -1_000_000_000_000_000, max: 1_000_000_000_000_000 })
 
 type ExpensesPeriod = 'daily' | 'weekly' | 'monthly'
 const PERIOD_LABEL: Record<ExpensesPeriod, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }
@@ -62,7 +65,7 @@ export function Dashboard() {
     return () => controller.abort()
   }, [])
   const topCryptoCoins = [...cryptoCoins]
-    .sort((a, b) => Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0))
+    .sort((a, b) => cryptoPreviewNumber(b.marketValue ?? '0') - cryptoPreviewNumber(a.marketValue ?? '0'))
     .slice(0, 4)
 
   return (
@@ -110,7 +113,7 @@ export function Dashboard() {
                   </div>
                   <div className="bal-acct-type faint">{a.institution ?? a.type}</div>
                 </div>
-                <div className="bal-acct-amt num">{formatMoney(a.balance, { withCents: false })}</div>
+                <div className="bal-acct-amt num">{formatMoneyValue(a.balance, a.balanceMinor, { withCents: false })}</div>
               </div>
             ))}
             <Link to="/accounts" className="see-all">
@@ -244,20 +247,6 @@ export function Dashboard() {
           </ul>
         </Card>
 
-        <Card className="area-ai">
-          <CardTitle action={<span className="faint">preview</span>}>AI Assistant Preview</CardTitle>
-          <div className="ai-chat">
-            <div className="ai-msg ai-msg--user">What&apos;s my highest expense?</div>
-            <div className="ai-msg ai-msg--bot">Your highest is Shopping. Need details?</div>
-          </div>
-          <div className="dash-meta" style={{ marginTop: 8 }}>
-            Sample conversation only — a real AI assistant is planned for a future release.
-          </div>
-          <button type="button" className="ai-input" disabled>
-            <span className="faint">Ask a question — coming soon</span>
-          </button>
-        </Card>
-
         <Card className="area-credit">
           <CardTitle action={<span className="faint">{creditCards.length} cards · {formatMoney(finance.totalCreditOwed, { withCents: false })} owed</span>}>
             Credit Cards
@@ -274,7 +263,7 @@ export function Dashboard() {
                     {c.name} ••{c.lastFour}
                   </div>
                   <div className="dash-meta">
-                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoney(c.minPayment, { withCents: false })}
+                    Due {formatDueDateLabel(c.dueDate)} · min {formatMoneyValue(c.minPayment, c.minPaymentMinor, { withCents: false })}
                   </div>
                   <ProgressBar
                     pct={(c.balance / c.limit) * 100}
@@ -283,7 +272,7 @@ export function Dashboard() {
                     valueText={`${Math.round((c.balance / c.limit) * 100)}% used, ${formatMoney(c.balance, { withCents: false })} of ${formatMoney(c.limit, { withCents: false })}`}
                   />
                   <div className="dash-meta">
-                    {formatMoney(c.balance, { withCents: false })} used of {formatMoney(c.limit, { withCents: false })}
+                    {formatMoneyValue(c.balance, c.balanceMinor, { withCents: false })} used of {formatMoneyValue(c.limit, c.limitMinor, { withCents: false })}
                   </div>
                 </div>
               </div>
@@ -292,16 +281,16 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-portfolio">
-          <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
+          <CardTitle action={<Link to="/crypto" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
           {cryptoSummary ? (
             <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
-              {formatMoney(Number(cryptoSummary.portfolioValue), { withCents: true })} total
+              {formatDecimalMoney(cryptoSummary.portfolioValue)} total
               {cryptoSummary.totalPnlPct != null && (
                 <>
                   {' · '}
-                  <span className={Number(cryptoSummary.totalPnl) >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
-                    {Number(cryptoSummary.totalPnl) >= 0 ? '+' : ''}
-                    {Number(cryptoSummary.totalPnlPct).toFixed(1)}% all-time
+                  <span className={!isNegativeDecimal(cryptoSummary.totalPnl) ? 'kpi-delta--up' : 'kpi-delta--down'}>
+                    {!isNegativeDecimal(cryptoSummary.totalPnl) ? '+' : ''}
+                    {boundedDecimalToNumber(cryptoSummary.totalPnlPct, { min: -1_000_000, max: 1_000_000 }).toFixed(1)}% all-time
                   </span>
                 </>
               )}
@@ -316,7 +305,7 @@ export function Dashboard() {
               {topCryptoCoins.map((coin) => (
                 <div className="portfolio-tile" key={coin.instrumentId ?? coin.symbol}>
                   <div className="num" style={{ fontWeight: 700 }}>
-                    {coin.currentPrice ? formatMoney(Number(coin.currentPrice), { withCents: true }) : '—'}
+                    {coin.currentPrice ? formatDecimalMoney(coin.currentPrice) : '—'}
                   </div>
                   {typeof coin.change24hPct === 'number' && (
                     <div className={coin.change24hPct >= 0 ? 'kpi-delta--up' : 'kpi-delta--down'}>
@@ -332,7 +321,7 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <Link to="/investments" className="see-all" style={{ display: 'block', textAlign: 'left' }}>
+            <Link to="/crypto" className="see-all" style={{ display: 'block', textAlign: 'left' }}>
               Add your first coin →
             </Link>
           )}
@@ -375,7 +364,7 @@ export function Dashboard() {
                       <span className="faint">{finance.transactionAccountLabel(t)}</span>
                     </span>
                   </td>
-                  <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoney(t.amount)}</td>
+                  <td className={`num tx-amt tx-amt--${t.amount < 0 ? 'out' : 'in'}`}>{formatMoneyValue(t.amount, t.amountMinor)}</td>
                 </tr>
               ))}
             </tbody>

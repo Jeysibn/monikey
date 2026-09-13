@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/generate-sw-assets.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "lint": "oxlint",
     "preview": "vite preview --port 4173 --strictPort",
@@ -13,14 +13,16 @@
     "test:e2e:mock": "playwright test --grep-invert @backend-compose",
     "test:e2e:backend": "playwright test --grep @backend-compose",
     "test:backend:compose": "cd .. && bash scripts/test-compose-backend-regression.sh",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "api:generate": "npx --yes --package=openapi-typescript@7.13.0 openapi-typescript ../docs/openapi.generated.json -o src/api.generated.ts"
   },
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.3"
+    "react-router-dom": "^7.18.3",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -30,6 +32,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",

@@ -65,7 +65,7 @@ const addImportedTransactionSchema = z.object({
   providerTransactionId: z.string().optional(),
   title: z.string().min(1).max(255),
   description: z.string().optional(),
-  amountMinor: z.number().int().positive(),
+  amountMinor: z.string().regex(/^\d+$/, 'amountMinor must be a non-negative integer string').transform((value) => BigInt(value)),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   currencyCode: z.string().length(3).default('PHP'),
   merchantName: z.string().optional(),
@@ -74,6 +74,22 @@ const addImportedTransactionSchema = z.object({
 const commitBatchSchema = z.object({
   matchedAccountId: z.string().uuid(),
 })
+
+const importRowJson = { type: 'object', required: ['id', 'importBatchId', 'dedupKey', 'provider', 'occurredOn', 'title', 'amountMinor', 'currencyCode', 'status', 'validationErrors', 'processingError', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, importBatchId: { type: 'string', format: 'uuid' }, dedupKey: { type: 'string' }, provider: { type: 'string' }, providerTransactionId: { anyOf: [{ type: 'string' }, { type: 'null' }] }, occurredOn: { type: 'string', format: 'date' }, title: { type: 'string' }, description: { anyOf: [{ type: 'string' }, { type: 'null' }] }, amountMinor: { type: 'string', pattern: '^\\d+$' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3 }, merchantName: { anyOf: [{ type: 'string' }, { type: 'null' }] }, status: { type: 'string' }, validationErrors: { type: 'array', items: { type: 'string' } }, processingError: { anyOf: [{ type: 'string' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' } } } as const
+const importBatchJson = { type: 'object', required: ['id', 'userId', 'importSourceId', 'importSourceType', 'status', 'matchedAccountId', 'totalCount', 'committedCount', 'errorCount', 'errorMessage', 'createdAt', 'updatedAt', 'committedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, importSourceId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, importSourceType: { type: 'string', enum: ['plaid_sandbox', 'csv_manual'] }, status: { type: 'string' }, matchedAccountId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, totalCount: { type: 'integer' }, committedCount: { type: 'integer' }, errorCount: { type: 'integer' }, errorMessage: { anyOf: [{ type: 'string' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' }, committedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] } } } as const
+const commitResultJson = { type: 'object', required: ['committedCount', 'errors'], properties: { committedCount: { type: 'integer', minimum: 0 }, errors: { type: 'array', items: { type: 'object', required: ['txnId', 'error'], properties: { txnId: { type: 'string', format: 'uuid' }, error: { type: 'string' } } } } } } as const
+const csvUploadResultJson = { type: 'object', additionalProperties: false, required: ['batchId', 'fileName', 'totalRows', 'addedCount', 'duplicateCount', 'status', 'sourceProfile', 'message'], properties: { batchId: { type: 'string', format: 'uuid' }, fileName: { type: 'string' }, totalRows: { type: 'integer', minimum: 0 }, addedCount: { type: 'integer', minimum: 0 }, duplicateCount: { type: 'integer', minimum: 0 }, errors: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['row', 'error'], properties: { row: { type: 'integer', minimum: 1 }, error: { type: 'string' } } } }, status: { type: 'string', enum: ['duplicate', 'reviewing'] }, sourceProfile: { type: 'string' }, message: { type: 'string' } } } as const
+const importErrorJson = { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['code', 'message'], properties: { code: { type: 'string' }, message: { type: 'string' } } } } } as const
+const batchParamsJson = { type: 'object', additionalProperties: false, required: ['batchId'], properties: { batchId: { type: 'string', format: 'uuid' } } } as const
+const batchListQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' } } } as const
+const stagedRowsQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' }, limit: { type: 'string', pattern: '^\\d+$' }, offset: { type: 'string', pattern: '^\\d+$' } } } as const
+const addRowBodyJson = { type: 'object', additionalProperties: false, required: ['dedupKey', 'provider', 'title', 'amountMinor', 'occurredOn'], properties: { dedupKey: { type: 'string', minLength: 1 }, provider: { type: 'string', minLength: 1 }, providerTransactionId: { type: 'string' }, title: { type: 'string', minLength: 1, maxLength: 255 }, description: { type: 'string' }, amountMinor: { type: 'string', pattern: '^\\d+$' }, occurredOn: { type: 'string', format: 'date' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3, default: 'PHP' }, merchantName: { type: 'string' } } } as const
+const plaidLinkTokenBodyJson = { type: 'object', additionalProperties: false, required: ['linkToken'], properties: { linkToken: { type: 'string', minLength: 1 } } } as const
+const plaidExchangeBodyJson = { type: 'object', additionalProperties: false, required: ['publicToken', 'linkToken'], properties: { publicToken: { type: 'string', minLength: 1 }, linkToken: { type: 'string', minLength: 1 } } } as const
+const plaidExchangeResultJson = { type: 'object', additionalProperties: false, required: ['itemId', 'accountIds'], properties: { itemId: { type: 'string' }, accountIds: { type: 'array', items: { type: 'string' } } } } as const
+const plaidItemJson = { type: 'object', additionalProperties: false, required: ['id', 'itemId', 'institutionName', 'accountIds', 'status', 'lastSyncedAt', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, itemId: { type: 'string' }, institutionName: { anyOf: [{ type: 'string' }, { type: 'null' }] }, accountIds: { type: 'array', items: { type: 'string' } }, status: { type: 'string' }, lastSyncedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' } } } as const
+const plaidWebhookBodyJson = { type: 'object', additionalProperties: true, required: ['webhook_type', 'item_id'], properties: { webhook_type: { type: 'string' }, item_id: { type: 'string' }, error: { type: 'object', additionalProperties: true } } } as const
+const plaidWebhookResultJson = { type: 'object', additionalProperties: false, required: ['ok'], properties: { ok: { type: 'boolean' } } } as const
 
 const plaidExchangeTokenSchema = z.object({
   publicToken: z.string().min(1),
@@ -104,7 +120,7 @@ export async function createImportsRoutes(
    */
   app.post<{ Body: z.infer<typeof createImportBatchSchema> }>(
     '/batches',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { body: { type: 'object', required: ['sourceType'], properties: { sourceType: { type: 'string', enum: ['plaid_sandbox', 'csv_manual'] }, plaidItemId: { type: 'string', format: 'uuid' } } }, response: { 201: importBatchJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const input = createImportBatchSchema.parse(request.body)
       const userId = request.user!.id
@@ -125,6 +141,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Querystring: { status?: string } }>(
     '/batches',
+    { preValidation: requireAuth, schema: { querystring: batchListQueryJson, response: { 200: { type: 'array', items: importBatchJson } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const status = (request.query as any).status as string | undefined
@@ -140,6 +157,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string } }>(
     '/batches/:batchId',
+    { preValidation: requireAuth, schema: { params: batchParamsJson, response: { 200: importBatchJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -159,7 +177,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof addImportedTransactionSchema>
   }>(
     '/batches/:batchId/transactions',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { params: batchParamsJson, body: addRowBodyJson, response: { 201: importRowJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -172,7 +190,7 @@ export async function createImportsRoutes(
         providerTransactionId: input.providerTransactionId,
         title: input.title,
         description: input.description,
-        amountMinor: BigInt(input.amountMinor),
+        amountMinor: input.amountMinor,
         occurredOn: new Date(`${input.occurredOn}T00:00:00Z`),
         currencyCode: input.currencyCode,
         merchantName: input.merchantName,
@@ -180,7 +198,7 @@ export async function createImportsRoutes(
 
       return reply.code(201).send({
         ...txn,
-        amountMinor: Number(txn.amountMinor),
+        amountMinor: txn.amountMinor.toString(),
       })
     }
   )
@@ -191,6 +209,7 @@ export async function createImportsRoutes(
    */
   app.get<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
     '/batches/:batchId/transactions',
+    { preValidation: requireAuth, schema: { params: batchParamsJson, querystring: stagedRowsQueryJson, response: { 200: { type: 'array', items: importRowJson }, 404: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -213,7 +232,7 @@ export async function createImportsRoutes(
       return reply.send(
         txns.map((txn) => ({
           ...txn,
-          amountMinor: Number(txn.amountMinor),
+          amountMinor: txn.amountMinor.toString(),
         }))
       )
     }
@@ -228,7 +247,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof commitBatchSchema>
   }>(
     '/batches/:batchId/commit',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { params: batchParamsJson, body: { type: 'object', required: ['matchedAccountId'], properties: { matchedAccountId: { type: 'string', format: 'uuid' } } }, response: { 200: commitResultJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -246,7 +265,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/plaid/link-token',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { response: { 201: plaidLinkTokenBodyJson, 503: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
 
@@ -277,7 +296,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof plaidExchangeTokenSchema>
   }>(
     '/plaid/exchange-token',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { body: plaidExchangeBodyJson, response: { 201: plaidExchangeResultJson, 400: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const input = plaidExchangeTokenSchema.parse(request.body)
@@ -289,12 +308,12 @@ export async function createImportsRoutes(
         // Exchange public token
         const result = await bankProvider.exchangePublicToken(userId, input.publicToken)
 
-        // TODO: Encrypt access token before storage
-        // For Phase 11, we'll store it as-is (future: use user_id + server key for encryption)
+        // The service encrypts the provider credential before persistence;
+        // plaintext access tokens never enter the repository layer.
         await importsService.createPlaidItem(
           userId,
           result.itemId,
-          result.accessToken, // TODO: encrypt this
+          result.accessToken,
           result.accountIds,
           result.institutionName
         )
@@ -324,6 +343,7 @@ export async function createImportsRoutes(
    */
   app.get(
     '/plaid/items',
+    { schema: { response: { 200: { type: 'array', items: plaidItemJson } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const items = await importsService.listPlaidItems(userId)
@@ -349,6 +369,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/plaid/webhook',
+    { schema: { body: plaidWebhookBodyJson, response: { 200: plaidWebhookResultJson, 400: importErrorJson, 401: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const signature = request.headers['plaid-verification'] as string
 
@@ -472,7 +493,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/csv/upload',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { response: { 200: csvUploadResultJson, 201: csvUploadResultJson, 400: importErrorJson, 413: importErrorJson, 500: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
 
@@ -518,12 +539,14 @@ export async function createImportsRoutes(
         // Parse header (first line)
         const headerLine = lines[0]!
         const headers = parseCSVLine(headerLine)
-        const headerMap = new Map(headers.map((h, i) => [h.toLowerCase(), i]))
+        const headerMap = new Map(headers.map((h, i) => [normalizeCsvHeader(h), i]))
+        const preset = detectCsvPreset(headerMap)
 
         // Validate required columns
-        const requiredColumns = ['date', 'amount', 'description']
+        const requiredColumns = ['date', 'amount', 'description'] as const
         for (const col of requiredColumns) {
-          if (!headerMap.has(col)) {
+          const available = col === 'amount' && preset.amountColumns !== undefined ? true : preset.columns[col] >= 0
+          if (!available) {
             return reply.code(400).send({
               error: {
                 code: 'MISSING_COLUMNS',
@@ -546,10 +569,12 @@ export async function createImportsRoutes(
 
           try {
             const fields = parseCSVLine(lines[i]!)
-            const date = fields[headerMap.get('date') || 0] || ''
-            const amountStr = fields[headerMap.get('amount') || 0] || ''
-            const description = fields[headerMap.get('description') || 0] || ''
-            const merchant = fields[headerMap.get('merchant') || 0]
+            const date = fields[preset.columns.date] || ''
+            const amountStr = preset.amountColumns
+              ? fields[preset.amountColumns.debit] || fields[preset.amountColumns.credit] || ''
+              : fields[preset.columns.amount] || ''
+            const description = fields[preset.columns.description] || ''
+            const merchant = preset.columns.merchant === undefined ? undefined : fields[preset.columns.merchant]
 
             // Validate date
             const dateObj = parseDate(date)
@@ -610,6 +635,7 @@ export async function createImportsRoutes(
           duplicateCount,
           errors: errors.length > 0 ? errors : undefined,
           status: allRowsWereDuplicates ? 'duplicate' : 'reviewing',
+          sourceProfile: preset.name,
           message: allRowsWereDuplicates
             ? 'CSV upload contained only transactions that were already imported.'
             : `CSV import created with ${addedCount} transactions${duplicateCount > 0 ? `; ${duplicateCount} duplicates skipped` : ''}. Please review and commit.`,
@@ -653,6 +679,56 @@ function parseCSVLine(line: string): string[] {
   return fields
 }
 
+type CsvPreset = {
+  name: string
+  columns: { date: number; amount: number; description: number; merchant?: number }
+  amountColumns?: { debit: number; credit: number }
+}
+
+export function normalizeCsvHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s_-]+/g, '')
+}
+
+/**
+ * Header-only templates for common Philippine export shapes. These are
+ * parser presets, not live bank integrations; exports can change and users
+ * still review staged rows before ledger commit.
+ */
+export function detectCsvPreset(headers: Map<string, number>): CsvPreset {
+  const find = (...names: string[]) => names.map(normalizeCsvHeader).find((name) => headers.has(name))
+  const date = find('date', 'transaction date', 'transactiondate', 'posted date', 'posteddate')
+  const description = find('description', 'details', 'particulars', 'merchant', 'merchant name', 'merchantname')
+  const merchant = find('merchant', 'merchant name', 'merchantname', 'payee')
+  const amount = find('amount', 'transaction amount', 'transactionamount', 'value')
+  const debit = find('debit', 'debit amount', 'debitamount', 'withdrawal', 'withdrawals')
+  const credit = find('credit', 'credit amount', 'creditamount', 'deposit', 'deposits')
+  const columns = {
+    date: date === undefined ? -1 : headers.get(date)!,
+    amount: amount === undefined ? -1 : headers.get(amount) ?? -1,
+    description: description === undefined ? -1 : headers.get(description) ?? -1,
+    merchant: merchant === undefined ? undefined : headers.get(merchant),
+  }
+  const amountColumns = debit !== undefined && credit !== undefined ? { debit: headers.get(debit)!, credit: headers.get(credit)! } : undefined
+  const inferredName = inferCsvPresetName(headers)
+  const isPreset = amountColumns !== undefined || date !== 'date' || description !== 'description' || inferredName !== 'custom alias'
+  return {
+    name: isPreset ? inferredName : 'generic',
+    columns,
+    amountColumns,
+  }
+}
+
+function inferCsvPresetName(headers: Map<string, number>): string {
+  const text = [...headers.keys()].join(' ')
+  if (text.includes('gcash')) return 'GCash'
+  if (text.includes('maya') || text.includes('paymaya')) return 'Maya'
+  if (text.includes('bpi')) return 'BPI'
+  if (text.includes('bdo')) return 'BDO'
+  if (text.includes('unionbank')) return 'UnionBank'
+  if (headers.has('debit') && headers.has('credit')) return 'bank debit/credit'
+  return 'custom alias'
+}
+
 /**
  * Parse a date string in formats: YYYY-MM-DD, MM/DD/YYYY, or DD/MM/YYYY (inferred).
  */
@@ -686,27 +762,28 @@ function parseDate(dateStr: string): Date {
  * Handles various currency formats and uses safe conversion.
  * Returns 0 if parsing fails.
  */
-function parseAmount(amountStr: string): bigint {
+export function parseAmount(amountStr: string): bigint {
   if (!amountStr) return 0n
 
   // Remove whitespace and common currency symbols
   let cleaned = amountStr.trim().replace(/[$€¥₱\s]/g, '')
 
-  // Handle comma as decimal separator (e.g., European format)
-  if (cleaned.includes(',') && !cleaned.includes('.')) {
-    cleaned = cleaned.replace(',', '.')
+  // Handle comma as decimal separator when it is not a thousands group.
+  if (cleaned.includes(',') && cleaned.includes('.') && cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+    const lastComma = cleaned.lastIndexOf(',')
+    cleaned = `${cleaned.slice(0, lastComma).replace(/[.,]/g, '')}.${cleaned.slice(lastComma + 1)}`
+  } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+    const lastComma = cleaned.lastIndexOf(',')
+    const fractionalDigits = cleaned.length - lastComma - 1
+    cleaned = fractionalDigits > 0 && fractionalDigits <= 2 ? `${cleaned.slice(0, lastComma).replace(/,/g, '')}.${cleaned.slice(lastComma + 1)}` : cleaned.replace(/,/g, '')
+  } else {
+    cleaned = cleaned.replace(/,/g, '')
   }
 
-  // Remove any remaining commas (thousands separator)
-  cleaned = cleaned.replace(/,/g, '')
-
-  try {
-    const num = parseFloat(cleaned)
-    if (isNaN(num) || num <= 0) return 0n
-    return decimalToMinorUnits(num)
-  } catch {
-    return 0n
-  }
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(cleaned)
+  if (!match) return 0n
+  const value = BigInt(match[1]!) * 100n + BigInt((match[2] ?? '').padEnd(2, '0') || '0')
+  return value > 0n ? value : 0n
 }
 
 export async function registerImportsRoutes(app: FastifyInstance, options: any) {

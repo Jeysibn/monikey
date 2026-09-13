@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, CardTitle } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
@@ -16,9 +16,12 @@ import {
   type IllustrativeTrendPoint,
   type ReportView,
 } from '../state/reportsSelectors'
-import { formatMoney } from '../utils/currency'
-import { formatGoalDate } from '../utils/date'
+import { formatMoney, formatMoneyValue, formatMinorUnits } from '../utils/currency'
+import { minorUnitsToMajorNumber } from '../utils/money'
+import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
+import { useBackendAuthOptional } from '../components/BackendAuthContext'
+import type { paths } from '../api.generated'
 
 const VIEWS: ReportView[] = ['monthly', 'quarterly', 'yearly']
 const VIEW_LABEL: Record<ReportView, string> = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
@@ -30,6 +33,15 @@ const TREND_UNIT_FOR_VIEW: Record<ReportView, ExpensesTrendUnit> = {
   quarterly: 'weekly',
   yearly: 'monthly',
 }
+type TagSpend = paths['/reports/spending-by-tag']['get']['responses'][200]['content']['application/json'][number]
+type CashFlowReport = paths['/reports/cash-flow']['get']['responses'][200]['content']['application/json']
+type NetWorthReport = paths['/reports/net-worth']['get']['responses'][200]['content']['application/json']
+type ChartPoint = { label: string; value: number; day: string; amount: number; startIso: string; endIso: string; rangeLabel: string }
+type MockExpensePoint = { day: string; amount: number; startIso: string; endIso: string; rangeLabel: string }
+function chartPoint(point: IllustrativeTrendPoint | MockExpensePoint): ChartPoint {
+  if ('value' in point) return { label: point.label, value: point.value, day: point.label, amount: point.value, startIso: point.label, endIso: point.label, rangeLabel: point.label }
+  return { label: point.day, value: point.amount, ...point }
+}
 
 /** Plain-div bar chart for an illustrative or real trend — matches the app's no-charting-library convention (see Budget.tsx's `.bva-bars`). */
 function TrendBarChart({
@@ -37,7 +49,7 @@ function TrendBarChart({
   color,
   formatValue,
 }: {
-  points: IllustrativeTrendPoint[]
+  points: ChartPoint[]
   color: string
   formatValue: (v: number) => string
 }) {
@@ -66,11 +78,46 @@ function IllustrativeNote({ children }: { children: ReactNode }) {
 
 export function Reports() {
   const finance = useFinance()
+  const backend = useBackendAuthOptional()
   const { state, todayIso } = finance
   const [view, setView] = useState<ReportView>('monthly')
+  const [custom, setCustom] = useState(false)
+  const [customFrom, setCustomFrom] = useState(todayIso)
+  const [customTo, setCustomTo] = useState(todayIso)
+  const [tagSpend, setTagSpend] = useState<TagSpend[]>([])
+  const [cashFlowReport, setCashFlowReport] = useState<CashFlowReport>([])
+  const [netWorthReport, setNetWorthReport] = useState<NetWorthReport>([])
 
-  const period = useMemo(() => reportingPeriodForView(todayIso, view), [todayIso, view])
-  const periodLabel = reportPeriodLabel(todayIso, view)
+  const period = useMemo(() => custom ? { start: customFrom, end: customTo >= customFrom ? addDaysToIso(customTo, 1) : customFrom } : reportingPeriodForView(todayIso, view), [custom, customFrom, customTo, todayIso, view])
+  const periodLabel = custom ? `${customFrom} to ${customTo}` : reportPeriodLabel(todayIso, view)
+  useEffect(() => {
+    if (!backend) return
+    fetch(`/api/v1/reports/spending-by-tag?from=${period.start}&to=${addDaysToIso(period.end, -1)}`, { credentials: 'include' })
+      .then((response) => response.ok ? response.json() as Promise<TagSpend[]> : Promise.reject(new Error('tag report unavailable')))
+      .then(setTagSpend)
+      .catch(() => setTagSpend([]))
+  }, [backend, period.start, period.end])
+
+  useEffect(() => {
+    if (!backend) return
+    const controller = new AbortController()
+    const query = `from=${period.start}&to=${addDaysToIso(period.end, -1)}`
+    void Promise.all([
+      fetch(`/api/v1/reports/cash-flow?${query}`, { credentials: 'include', signal: controller.signal }),
+      fetch(`/api/v1/reports/net-worth?${query}`, { credentials: 'include', signal: controller.signal }),
+    ]).then(async ([cashFlowResponse, netWorthResponse]) => {
+      if (!cashFlowResponse.ok || !netWorthResponse.ok) throw new Error('Historical report data is unavailable.')
+      setCashFlowReport(await cashFlowResponse.json() as CashFlowReport)
+      setNetWorthReport(await netWorthResponse.json() as NetWorthReport)
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setCashFlowReport([])
+        setNetWorthReport([])
+        setTagSpend([])
+      }
+    })
+    return () => controller.abort()
+  }, [backend, period.start, period.end])
 
   const income = totalIncome(state, period)
   const expenses = totalExpenses(state, period)
@@ -79,9 +126,12 @@ export function Reports() {
   const hasIncome = income > 0
 
   const trendUnit = TREND_UNIT_FOR_VIEW[view]
-  const trendPoints = finance.expensesTrend(trendUnit)
-  const trendTitle = finance.expensesTrendTitle(trendUnit)
-  const trendRange = finance.expensesTrendRangeLabel(trendPoints)
+  const mockTrendPoints = finance.expensesTrend(trendUnit)
+  const trendPoints: ChartPoint[] = backend
+    ? cashFlowReport.map((point) => ({ label: point.date, day: point.date.slice(5), startIso: point.date, endIso: point.date, value: minorUnitsToMajorNumber(point.expenses), amount: minorUnitsToMajorNumber(point.expenses), rangeLabel: point.date }))
+    : mockTrendPoints.map(chartPoint)
+  const trendTitle = backend ? 'Daily actuals' : finance.expensesTrendTitle(trendUnit)
+  const trendRange = backend ? (cashFlowReport.length ? `${cashFlowReport[0]!.date} to ${cashFlowReport.at(-1)!.date}` : 'No recorded activity') : finance.expensesTrendRangeLabel(mockTrendPoints)
   const trendMax = Math.max(1, ...trendPoints.map((p) => p.amount))
 
   const { categories, budgetCategories, creditCards } = state
@@ -90,23 +140,24 @@ export function Reports() {
     .map((c) => ({ ...c, name: categories.find((cc) => cc.id === c.id)?.name ?? c.id }))
 
   const netWorth = netWorthNow(state)
-  const netWorthTrend = netWorthTrendSample(state, todayIso)
-  const balanceTrend = accountBalanceTrendSample(state, todayIso)
-  const debtTrend = debtTrendSample(state, todayIso)
+  const netWorthTrend = backend
+    ? netWorthReport.map((point) => ({ label: point.date, day: point.date.slice(5), startIso: point.date, endIso: point.date, value: minorUnitsToMajorNumber(point.netWorth), amount: minorUnitsToMajorNumber(point.netWorth), rangeLabel: point.date }))
+    : netWorthTrendSample(state, todayIso).map(chartPoint)
+  const balanceTrend = accountBalanceTrendSample(state, todayIso).map(chartPoint)
+  const debtTrend = debtTrendSample(state, todayIso).map(chartPoint)
+  const inclusivePeriodEnd = addDaysToIso(period.end, -1)
+  function exportCsv() {
+    const rows = [['Date', 'Title', 'Type', 'Amount', 'Currency', 'Category'], ...state.transactions.filter((transaction) => transaction.date >= period.start && transaction.date < period.end).map((transaction) => [transaction.date, transaction.title, transaction.type, String(Math.abs(transaction.amount)), 'PHP', categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'])]
+    const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `monikey-report-${todayIso}.csv`; anchor.click(); URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="reports-page">
       <div className="page-head">
         <h1 className="page-title">Reports</h1>
         <div className="reports-actions">
-          <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-            Export CSV
-            <span className="coming-soon-tag">Coming soon</span>
-          </button>
-          <button type="button" className="btn btn--ghost" disabled title="Coming soon">
-            Export PDF
-            <span className="coming-soon-tag">Coming soon</span>
-          </button>
+          <button type="button" className="btn btn--ghost" onClick={exportCsv}>Export CSV</button>
         </div>
       </div>
 
@@ -122,11 +173,9 @@ export function Reports() {
             {VIEW_LABEL[v]}
           </button>
         ))}
-        <button type="button" className="pill" disabled title="Coming soon" aria-disabled="true">
-          Custom
-          <span className="coming-soon-tag">Coming soon</span>
-        </button>
+        <button type="button" className={`pill${custom ? ' pill--active' : ''}`} aria-pressed={custom} onClick={() => setCustom((value) => !value)}>Custom</button>
       </div>
+      {custom && <div className="reports-custom-range"><label>From<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label><label>To<input type="date" value={customTo} min={customFrom} onChange={(event) => setCustomTo(event.target.value)} /></label></div>}
       <div className="faint rp-period-caption">{periodLabel}</div>
 
       <div className="kpi-row">
@@ -135,6 +184,11 @@ export function Reports() {
           <div className="num kpi-val">{formatMoney(income, { withCents: false })}</div>
           <div className="budget-meta faint">{periodLabel}</div>
         </Card>
+
+        {backend && <Card>
+          <CardTitle action={<span className="faint">{periodLabel}</span>}>Spending by Tag</CardTitle>
+          {tagSpend.length === 0 ? <p className="faint">No tagged spending in this period.</p> : <ul className="mini-list">{tagSpend.map((tag) => <li key={tag.tagId}><a href={`/transactions?tag=${encodeURIComponent(tag.tagName)}&from=${encodeURIComponent(period.start)}&to=${encodeURIComponent(inclusivePeriodEnd)}`}>#{tag.tagName}</a><span className="num">{formatMinorUnits(tag.spent, { withCents: false })}</span></li>)}</ul>}
+        </Card>}
         <Card>
           <div className="eyebrow">Expenses</div>
           <div className="num kpi-val">{formatMoney(expenses, { withCents: false })}</div>
@@ -204,7 +258,7 @@ export function Reports() {
                 <div className="rp-flagged-row" key={c.id}>
                   <span>{c.name}</span>
                   <span className="num">
-                    {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
+                    {formatMoneyValue(c.spent, c.spentMinor, { withCents: false })} / {formatMoneyValue(c.allocated, c.allocatedMinor, { withCents: false })}
                   </span>
                 </div>
               ))}
@@ -221,12 +275,10 @@ export function Reports() {
             {finance.spendMix.map((s) => (
               <li key={s.categoryId} className="rp-cat-row">
                 <div className="rp-cat-row-top">
-                  <span>
-                    <span className="swatch" style={{ background: s.color }} /> {s.category}
-                  </span>
-                  <span className="num">
-                    {formatMoney(s.amount, { withCents: false })} · {s.pct}%
-                  </span>
+                  <a href={`/transactions?category=${encodeURIComponent(s.categoryId)}&from=${encodeURIComponent(period.start)}&to=${encodeURIComponent(inclusivePeriodEnd)}`}>
+                    <span><span className="swatch" style={{ background: s.color }} /> {s.category}</span>
+                    <span className="num">{formatMoney(s.amount, { withCents: false })} · {s.pct}%</span>
+                  </a>
                 </div>
                 <ProgressBar pct={s.pct} color={s.color} label={`${s.category} share of spend`} />
               </li>
@@ -245,7 +297,7 @@ export function Reports() {
               Liabilities <span className="num">{formatMoney(netWorth.liabilities, { withCents: false })}</span>
             </li>
           </ul>
-          <IllustrativeNote>Illustrative 6-month trend — Monikey does not yet track historical net worth; only today&apos;s figure is real.</IllustrativeNote>
+          {backend ? <p className="rp-illustrative-note">Recorded net-worth snapshots for the selected period.</p> : <IllustrativeNote>Illustrative 6-month trend — Monikey does not yet track historical net worth; only today&apos;s figure is real.</IllustrativeNote>}
           <TrendBarChart points={netWorthTrend} color="var(--cyan)" formatValue={(v) => formatMoney(v, { withCents: false })} />
         </Card>
 
@@ -283,7 +335,7 @@ export function Reports() {
                 </div>
                 <ProgressBar pct={finance.goalProgressPct(g)} label={`${g.name} progress`} />
                 <div className="budget-meta faint">
-                  {formatMoney(g.currentAmount, { withCents: false })} of {formatMoney(g.targetAmount, { withCents: false })} · target{' '}
+                  {formatMoneyValue(g.currentAmount, g.currentMinor, { withCents: false })} of {formatMoneyValue(g.targetAmount, g.targetMinor, { withCents: false })} · target{' '}
                   {formatGoalDate(g.targetDate)}
                 </div>
               </li>

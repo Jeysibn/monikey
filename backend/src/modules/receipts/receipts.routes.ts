@@ -19,6 +19,15 @@ import { ReceiptsService } from './receipts.service.js'
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const receiptIdParamSchema = z.object({ id: z.string().uuid('Invalid receipt ID format') })
+const receiptStatuses = ['uploaded', 'processing', 'ready', 'failed', 'committed'] as const
+const receiptIdParamsJson = { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } as const
+const receiptDraftJson = { type: 'object', additionalProperties: false, properties: { merchant: { type: 'string' }, date: { type: 'string', format: 'date' }, totalMinor: { type: 'string', pattern: '^\\d+$' }, category: { type: 'string' }, confidence: { type: 'number' } } } as const
+const uploadBodyJson = { type: 'object', additionalProperties: false, required: ['filename', 'mimeType', 'data'], properties: { filename: { type: 'string', minLength: 1, maxLength: 255 }, mimeType: { type: 'string', minLength: 1 }, data: { type: 'string', minLength: 1 } } } as const
+const commitBodyJson = { type: 'object', additionalProperties: false, required: ['title', 'fromAccountId', 'amountMinor', 'occurredOn'], properties: { title: { type: 'string', minLength: 1, maxLength: 255 }, categoryId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, fromAccountId: { type: 'string', format: 'uuid' }, amountMinor: { type: 'string', pattern: '^\\d+$' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3, default: 'PHP' }, occurredOn: { type: 'string', format: 'date' }, note: { anyOf: [{ type: 'string' }, { type: 'null' }] } } } as const
+const uploadedReceiptJson = { type: 'object', additionalProperties: false, required: ['receipt'], properties: { receipt: { type: 'object', additionalProperties: false, required: ['id', 'status'], properties: { id: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: receiptStatuses } } } } } as const
+const receiptMetadataJson = { type: 'object', additionalProperties: false, required: ['receipt'], properties: { receipt: { type: 'object', additionalProperties: false, required: ['id', 'status', 'storageKey', 'originalFilename', 'mimeType', 'sizeBytes', 'sha256', 'ocrProvider', 'ocrText', 'parsedPayload', 'transactionId', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: receiptStatuses }, storageKey: { type: 'string' }, originalFilename: { type: 'string' }, mimeType: { type: 'string' }, sizeBytes: { type: 'string', pattern: '^\\d+$' }, sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, ocrProvider: { anyOf: [{ type: 'string' }, { type: 'null' }] }, ocrText: { anyOf: [{ type: 'string' }, { type: 'null' }] }, parsedPayload: { anyOf: [receiptDraftJson, { type: 'null' }] }, transactionId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } } } as const
+const processedReceiptJson = { type: 'object', additionalProperties: false, required: ['receipt'], properties: { receipt: { type: 'object', additionalProperties: false, required: ['id', 'status', 'draft', 'ocrText'], properties: { id: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: receiptStatuses }, draft: receiptDraftJson, ocrText: { type: 'string' } } } } } as const
+const committedReceiptJson = { type: 'object', additionalProperties: false, required: ['transaction', 'receipt'], properties: { transaction: { type: 'object', additionalProperties: false, required: ['id', 'status'], properties: { id: { type: 'string', format: 'uuid' }, status: { type: 'string' } } }, receipt: { type: 'object', additionalProperties: false, required: ['id', 'status'], properties: { id: { type: 'string', format: 'uuid' }, status: { const: 'committed' } } } } } as const
 
 export interface ReceiptsRoutesOptions {
   prisma: PrismaClient
@@ -50,7 +59,7 @@ export async function receiptsRoutes(
     data: z.string().min(1), // base64-encoded file content
   })
 
-  app.post('/receipts', { preHandler: requireOrigin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/receipts', { preValidation: requireAuth, preHandler: requireOrigin, schema: { body: uploadBodyJson, response: { 201: uploadedReceiptJson } } }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = request.user!.id
 
     const body = uploadSchema.parse(request.body)
@@ -75,6 +84,7 @@ export async function receiptsRoutes(
    */
   app.get<{ Params: { id: string } }>(
     '/receipts/:id',
+    { preValidation: requireAuth, schema: { params: receiptIdParamsJson, response: { 200: receiptMetadataJson } } },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -107,7 +117,7 @@ export async function receiptsRoutes(
    */
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/process',
-    { preHandler: requireOrigin },
+    { preValidation: requireAuth, preHandler: requireOrigin, schema: { params: receiptIdParamsJson, response: { 200: processedReceiptJson } } },
     async (request: FastifyRequest<{ Params: { id: string } }>) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -136,7 +146,10 @@ export async function receiptsRoutes(
     title: z.string().min(1).max(255),
     categoryId: z.string().uuid().nullable().optional(),
     fromAccountId: z.string().uuid(),
-    amountMinor: z.number().int().positive(),
+    // Money crosses the JSON boundary as a decimal string. Accepting a
+    // JavaScript number here would create an avoidable precision boundary
+    // before the ledger receives its canonical bigint value.
+    amountMinor: z.string().regex(/^\d+$/, 'amountMinor must be a non-negative integer string').transform((value) => BigInt(value)).pipe(z.bigint().positive()),
     currencyCode: z.string().length(3).default('PHP'),
     occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     note: z.string().nullable().optional(),
@@ -144,7 +157,7 @@ export async function receiptsRoutes(
 
   app.post<{ Params: { id: string } }>(
     '/receipts/:id/commit',
-    { preHandler: requireOrigin },
+    { preValidation: requireAuth, preHandler: requireOrigin, schema: { params: receiptIdParamsJson, body: commitBodyJson, response: { 201: committedReceiptJson } } },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
@@ -169,7 +182,7 @@ export async function receiptsRoutes(
           categoryId: body.categoryId ?? null,
           fromAccountId: body.fromAccountId,
           amountMinor: body.amountMinor,
-          feeMinor: 0,
+          feeMinor: 0n,
           currencyCode: body.currencyCode,
           occurredOn: body.occurredOn,
           source: 'ocr',
@@ -200,7 +213,7 @@ export async function receiptsRoutes(
    */
   app.delete<{ Params: { id: string } }>(
     '/receipts/:id',
-    { preHandler: requireOrigin },
+    { preValidation: requireAuth, preHandler: requireOrigin, schema: { params: receiptIdParamsJson, response: { 204: { type: 'null' } } } },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter

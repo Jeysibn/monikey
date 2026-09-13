@@ -62,6 +62,29 @@ test.describe('Add Transaction modal', () => {
     await expect(page.getByRole('dialog')).toBeVisible()
   })
 
+  test('receipt OCR fills a draft for review before saving', async ({ page }) => {
+    await page.route('**/api/v1/receipts', async (route) => {
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ receipt: { id: 'receipt-playwright' } }) })
+    })
+    await page.route('**/api/v1/receipts/receipt-playwright/process', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ receipt: { id: 'receipt-playwright', status: 'ready', draft: { merchant: 'OCR Cafe', totalMinor: '4250', date: '2026-08-28' }, ocrText: 'OCR Cafe 42.50' } }),
+      })
+    })
+
+    await page.goto('/transactions')
+    await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
+    await page.getByLabel('Receipt attachment').setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: Buffer.from('fake receipt') })
+
+    await expect(page.getByText('Scanned: receipt.png')).toBeVisible()
+    await expect(page.getByPlaceholder('e.g. Grab Grocery')).toHaveValue('OCR Cafe')
+    await expect(page.locator('.tx-amount-input')).toHaveValue('42.50')
+    await expect(page.locator('input[type="date"]').first()).toHaveValue('2026-08-28')
+    await expect(page.getByText(/review the fields before saving/i)).toBeVisible()
+  })
+
   test('a valid expense can be entered and saved, and updates totals without reloading', async ({ page }) => {
     await page.goto('/transactions')
     await expect(page.getByText('₱144.65')).toBeVisible() // starting Expenses this month

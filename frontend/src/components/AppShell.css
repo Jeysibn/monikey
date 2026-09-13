@@ -7,6 +7,15 @@
     var(--bg);
 }
 
+.offline-banner {
+  padding: 9px 16px;
+  background: oklch(35% 0.08 75 / 0.9);
+  border-bottom: 1px solid oklch(70% 0.12 75 / 0.35);
+  color: var(--text);
+  font-size: 12px;
+  text-align: center;
+}
+
 .topbar {
   display: flex;
   align-items: center;

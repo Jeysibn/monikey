@@ -192,9 +192,9 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
 
       const summary = await computeReportSummary(prisma, userId, periodStart, periodEnd, 'Asia/Manila')
 
-      expect(summary.income).toBe(500000)
-      expect(summary.expenses).toBe(80000)
-      expect(summary.netCashFlow).toBe(420000)
+      expect(summary.income).toBe('500000')
+      expect(summary.expenses).toBe('80000')
+      expect(summary.netCashFlow).toBe('420000')
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.$disconnect()
@@ -223,17 +223,17 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       const sep5 = cashFlow.find((c) => c.date === '2026-09-05')
       const sep10 = cashFlow.find((c) => c.date === '2026-09-10')
 
-      expect(sep1?.income).toBe(500000)
-      expect(sep1?.expenses).toBe(0)
-      expect(sep1?.netFlow).toBe(500000)
+      expect(sep1?.income).toBe('500000')
+      expect(sep1?.expenses).toBe('0')
+      expect(sep1?.netFlow).toBe('500000')
 
-      expect(sep5?.income).toBe(0)
-      expect(sep5?.expenses).toBe(250000)
-      expect(sep5?.netFlow).toBe(-250000)
+      expect(sep5?.income).toBe('0')
+      expect(sep5?.expenses).toBe('250000')
+      expect(sep5?.netFlow).toBe('-250000')
 
-      expect(sep10?.income).toBe(100000)
-      expect(sep10?.expenses).toBe(0)
-      expect(sep10?.netFlow).toBe(100000)
+      expect(sep10?.income).toBe('100000')
+      expect(sep10?.expenses).toBe('0')
+      expect(sep10?.netFlow).toBe('100000')
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.$disconnect()
@@ -263,8 +263,8 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       const food = spending.find((s) => s.categoryId === foodCategoryId)
       const transport = spending.find((s) => s.categoryId === transportCategoryId)
 
-      expect(food?.spent).toBe(70000)
-      expect(transport?.spent).toBe(30000)
+      expect(food?.spent).toBe('70000')
+      expect(transport?.spent).toBe('30000')
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.$disconnect()
@@ -319,11 +319,11 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
 
       expect(trend).toHaveLength(3)
       expect(trend[0].date).toBe('2026-09-01')
-      expect(trend[0].netWorth).toBe(100000)
+      expect(trend[0].netWorth).toBe('100000')
       expect(trend[1].date).toBe('2026-09-02')
-      expect(trend[1].netWorth).toBe(150000)
+      expect(trend[1].netWorth).toBe('150000')
       expect(trend[2].date).toBe('2026-09-03')
-      expect(trend[2].netWorth).toBe(120000)
+      expect(trend[2].netWorth).toBe('120000')
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.$disconnect()
@@ -380,7 +380,7 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       const septCashFlow = await computeCashFlow(prisma, userId, new Date('2026-09-01T00:00:00Z'), new Date('2026-09-30T23:59:59Z'))
       const sept15 = septCashFlow.find((c) => c.date === '2026-09-15')
 
-      expect(sept15?.expenses).toBe(50000)
+      expect(sept15?.expenses).toBe('50000')
 
       // Rebuild snapshot for Sept 30 — should reflect the retroactive expense
       const sept30Snapshot = await rebuildSnapshot(prisma, userId, new Date('2026-09-30T00:00:00Z'))
@@ -440,19 +440,19 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       const food = performance!.categories.find((c) => c.categoryId === foodCategoryId)
       const transport = performance!.categories.find((c) => c.categoryId === transportCategoryId)
 
-      expect(food?.allocated).toBe(100000)
-      expect(food?.spent).toBe(60000)
-      expect(food?.remaining).toBe(40000)
+      expect(food?.allocated).toBe('100000')
+      expect(food?.spent).toBe('60000')
+      expect(food?.remaining).toBe('40000')
       expect(food?.utilization).toBe(60)
 
-      expect(transport?.allocated).toBe(50000)
-      expect(transport?.spent).toBe(40000)
-      expect(transport?.remaining).toBe(10000)
+      expect(transport?.allocated).toBe('50000')
+      expect(transport?.spent).toBe('40000')
+      expect(transport?.remaining).toBe('10000')
       expect(transport?.utilization).toBe(80)
 
-      expect(performance?.totalAllocated).toBe(150000)
-      expect(performance?.totalSpent).toBe(100000)
-      expect(performance?.totalRemaining).toBe(50000)
+      expect(performance?.totalAllocated).toBe('150000')
+      expect(performance?.totalSpent).toBe('100000')
+      expect(performance?.totalRemaining).toBe('50000')
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
       await prisma.$disconnect()
@@ -510,9 +510,9 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       expect(performance!.categories).toHaveLength(1)
 
       const food = performance!.categories.find((c) => c.categoryId === foodCategoryId)
-      expect(food?.allocated).toBe(150000)
-      expect(food?.spent).toBe(100000)
-      expect(food?.remaining).toBe(50000)
+      expect(food?.allocated).toBe('150000')
+      expect(food?.spent).toBe('100000')
+      expect(food?.remaining).toBe('50000')
       expect(food?.utilization).toBe(67)
     } finally {
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
@@ -553,14 +553,14 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
       expect(goalsReport).toHaveLength(2)
 
       const vacation = goalsReport.find((g) => g.goalId === goal1.id)
-      expect(vacation?.target).toBe(500000)
-      expect(vacation?.current).toBe(200000)
+      expect(vacation?.target).toBe('500000')
+      expect(vacation?.current).toBe('200000')
       expect(vacation?.progress).toBe(40)
       expect(vacation?.completed).toBe(false)
 
       const emergency = goalsReport.find((g) => g.goalId === goal2.id)
-      expect(emergency?.target).toBe(1000000)
-      expect(emergency?.current).toBe(1000000)
+      expect(emergency?.target).toBe('1000000')
+      expect(emergency?.current).toBe('1000000')
       expect(emergency?.progress).toBe(100)
       expect(emergency?.completed).toBe(true)
     } finally {
@@ -590,13 +590,13 @@ describeIfDb('ReportsModule (real PostgreSQL)', () => {
 
       // User A should only see their own spending
       const spendingA = await computeSpendingByCategory(prisma, userA, dateFrom, dateTo)
-      const totalSpentA = spendingA.reduce((sum, s) => sum + s.spent, 0)
-      expect(totalSpentA).toBe(50000)
+      const totalSpentA = spendingA.reduce((sum, s) => sum + BigInt(s.spent), 0n)
+      expect(totalSpentA).toBe(50000n)
 
       // User B should only see their own spending
       const spendingB = await computeSpendingByCategory(prisma, userB, dateFrom, dateTo)
-      const totalSpentB = spendingB.reduce((sum, s) => sum + s.spent, 0)
-      expect(totalSpentB).toBe(60000)
+      const totalSpentB = spendingB.reduce((sum, s) => sum + BigInt(s.spent), 0n)
+      expect(totalSpentB).toBe(60000n)
     } finally {
       await prisma.user.delete({ where: { id: userA } }).catch(() => undefined)
       await prisma.user.delete({ where: { id: userB } }).catch(() => undefined)

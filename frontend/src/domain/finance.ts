@@ -7,6 +7,8 @@
 
 export type AccountType = 'checking' | 'savings' | 'ewallet' | 'cash' | 'credit_card'
 export type AccountClassification = 'asset' | 'liability'
+/** Canonical frontend money representation: signed decimal minor units. */
+export type MinorUnits = string
 
 export interface Account {
   id: string
@@ -14,6 +16,7 @@ export interface Account {
   institution?: string
   type: AccountType
   classification: AccountClassification
+  balanceMinor?: MinorUnits
   balance: number
   lastFour?: string
   syncStatus: string
@@ -26,6 +29,9 @@ export interface CreditCard {
   name: string
   lastFour: string
   network: 'visa' | 'mastercard'
+  balanceMinor?: MinorUnits
+  limitMinor?: MinorUnits
+  minPaymentMinor?: MinorUnits
   balance: number
   limit: number
   dueDate: string
@@ -34,7 +40,7 @@ export interface CreditCard {
 }
 
 export type TransactionType = 'income' | 'expense' | 'transfer'
-export type TransactionSource = 'manual' | 'ocr' | 'recurring'
+export type TransactionSource = 'manual' | 'ocr' | 'recurring' | 'import'
 export type TransactionStatus = 'cleared' | 'pending'
 
 export interface Transaction {
@@ -58,7 +64,9 @@ export interface Transaction {
   goalId?: string
   date: string
   time?: string
+  amountMinor?: MinorUnits
   amount: number
+  feeMinor?: MinorUnits
   fee?: number
   source: TransactionSource
   status: TransactionStatus
@@ -71,6 +79,7 @@ export interface Transaction {
    * not two live transactions.
    */
   reversedTransactionId?: string
+  tags?: string[]
 }
 
 export interface Category {
@@ -94,6 +103,9 @@ export type BudgetStatus = 'safe' | 'on_track' | 'near_limit' | 'over_budget'
 /** A category's budget allocation for the period. `id` references a `Category` — name/color are never duplicated here. */
 export interface BudgetCategory {
   id: string
+  allocatedMinor?: MinorUnits
+  spentMinor?: MinorUnits
+  forecastMinor?: MinorUnits
   allocated: number
   spent: number
   forecast?: number
@@ -122,6 +134,9 @@ export type GoalStatus = 'just_started' | 'on_track' | 'behind_pace' | 'goal_rea
 export interface Goal {
   id: string
   name: string
+  targetMinor?: MinorUnits
+  currentMinor?: MinorUnits
+  monthlyContributionMinor?: MinorUnits
   targetAmount: number
   currentAmount: number
   targetDate: string
@@ -183,6 +198,7 @@ export interface FinanceState {
   categories: Category[]
   transactions: Transaction[]
   budgetCategories: BudgetCategory[]
+  totalBudgetAllocatedMinor?: MinorUnits
   totalBudgetAllocated: number
   goals: Goal[]
   attentionItems: AttentionItem[]
@@ -207,7 +223,9 @@ export interface AddTransactionInput {
   time?: string
   /** Always a positive amount; sign is derived from `type`. */
   amount: number
+  amountMinor?: MinorUnits
   fee?: number
+  feeMinor?: MinorUnits
   note?: string
   /** Stable per-submit key used by the backend to make retries safe. */
   idempotencyKey?: string
@@ -218,6 +236,7 @@ export interface AddManualAccountInput {
   type: Exclude<AccountType, 'credit_card'>
   institution?: string
   balance: number
+  balanceMinor?: MinorUnits
   lastFour?: string
 }
 
@@ -226,9 +245,12 @@ export interface AddManualCreditCardInput {
   lastFour: string
   network: 'visa' | 'mastercard'
   balance: number
+  balanceMinor?: MinorUnits
   limit: number
+  limitMinor?: MinorUnits
   dueDate: string
   minPayment: number
+  minPaymentMinor?: MinorUnits
 }
 
 export interface AddBudgetCategoryInput {
@@ -249,15 +271,19 @@ export interface AddCategoryInput {
 export interface CreateGoalInput {
   name: string
   targetAmount: number
+  targetMinor?: MinorUnits
   targetDate: string
   monthlyContribution?: number
+  monthlyContributionMinor?: MinorUnits
 }
 
 export interface UpdateGoalInput {
   name?: string
   targetAmount?: number
+  targetMinor?: MinorUnits
   targetDate?: string
   monthlyContribution?: number | null
+  monthlyContributionMinor?: MinorUnits | null
 }
 
 export interface UpdateAccountInput {

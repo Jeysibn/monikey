@@ -9,34 +9,63 @@ type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transa
 export class LedgerRepository {
   constructor(private prisma: PrismaClient) {}
 
+  private encodeCursor(row: { occurredOn: Date; createdAt: Date; id: string }): string {
+    return Buffer.from(JSON.stringify({ occurredOn: row.occurredOn.toISOString(), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url')
+  }
+
+  private decodeCursor(cursor: string): { occurredOn: Date; createdAt: Date; id: string } | null {
+    try {
+      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { occurredOn?: string; createdAt?: string; id?: string }
+      if (!parsed.occurredOn || !parsed.createdAt || !parsed.id) return null
+      return { occurredOn: new Date(parsed.occurredOn), createdAt: new Date(parsed.createdAt), id: parsed.id }
+    } catch { return null }
+  }
+
   async getTransaction(id: string, userId: string): Promise<TransactionView | null> {
     const tx = await this.prisma.transaction.findFirst({
-      where: { id, userId },
+      where: { id, userId }, include: { tags: { include: { tag: true } } },
     });
     return tx ? this.mapTransaction(tx) : null;
   }
 
   async listTransactions(query: TransactionQuery): Promise<Page<TransactionView>> {
-    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId } = query;
+    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId, tagId } = query;
 
     const where: Prisma.TransactionWhereInput = { userId };
     if (fromDate || toDate) where.occurredOn = { ...(fromDate ? { gte: new Date(fromDate) } : {}), ...(toDate ? { lte: new Date(toDate) } : {}) };
     if (type) where.type = type;
     if (categoryId) where.categoryId = categoryId;
     if (accountId) {
-      where.OR = [{ fromAccountId: accountId }, { toAccountId: accountId }];
+      where.AND = [{ OR: [{ fromAccountId: accountId }, { toAccountId: accountId }] }];
     }
-    if (cursor) where.id = { lt: cursor };
+    if (tagId) where.tags = { some: { tagId, tag: { userId } } };
+    const decodedCursor = cursor ? this.decodeCursor(cursor) : null
+    if (decodedCursor) {
+      // Cursor predicate mirrors the display order exactly: newest business
+      // date first, then creation time, then the stable UUID tie-breaker.
+      const cursorPredicate = {
+        OR: [
+        { occurredOn: { lt: decodedCursor.occurredOn } },
+        { occurredOn: decodedCursor.occurredOn, createdAt: { lt: decodedCursor.createdAt } },
+        { occurredOn: decodedCursor.occurredOn, createdAt: decodedCursor.createdAt, id: { lt: decodedCursor.id } },
+        ],
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), cursorPredicate]
+    } else if (cursor) {
+      // Preserve compatibility with pre-composite cursors while callers roll
+      // forward to the deterministic cursor format.
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { id: { lt: cursor } }]
+    }
 
     const transactions = await this.prisma.transaction.findMany({
       where,
-      orderBy: { occurredOn: 'desc' },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], include: { tags: { include: { tag: true } } },
       take: limit + 1,
     });
 
     const hasMore = transactions.length > limit;
     const items = hasMore ? transactions.slice(0, limit) : transactions;
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
+    const nextCursor = hasMore && items.length > 0 ? this.encodeCursor(items[items.length - 1]!) : null;
 
     return {
       items: items.map(this.mapTransaction),
@@ -50,7 +79,13 @@ export class LedgerRepository {
     userId: string,
     input: PostTransactionInput
   ): Promise<PostTransactionResult> {
-    const { type, title, categoryId, goalId, fromAccountId, toAccountId, occurredOn, occurredTime, amountMinor, feeMinor, currencyCode, source, status, note, idempotencyKey } = input;
+    const { type, title, categoryId, goalId, fromAccountId, toAccountId, occurredOn, occurredTime, currencyCode, source, status, note, idempotencyKey } = input;
+    // Route schemas normalize transport values before reaching the repository,
+    // but direct service callers and older integrations may still pass safe
+    // integer numbers. Normalize once at this boundary so all domain math and
+    // persistence below remain bigint-only.
+    const amountMinor = typeof input.amountMinor === 'bigint' ? input.amountMinor : BigInt(input.amountMinor);
+    const feeMinor = typeof input.feeMinor === 'bigint' ? input.feeMinor : BigInt(input.feeMinor ?? 0);
 
     if (idempotencyKey) {
       const existing = await tx.transaction.findFirst({
@@ -63,8 +98,8 @@ export class LedgerRepository {
           balanceEffects: existing.balanceEffects.map((effect) => ({
             accountId: effect.accountId,
             role: effect.role,
-            deltaMinor: Number(effect.deltaMinor),
-            balanceAfterMinor: Number(effect.balanceAfterMinor),
+            deltaMinor: effect.deltaMinor.toString(),
+            balanceAfterMinor: effect.balanceAfterMinor.toString(),
           })),
         };
       }
@@ -131,8 +166,8 @@ export class LedgerRepository {
         toAccountId,
         occurredOn: new Date(occurredOn),
         occurredTime: occurredTime ? new Date(`1970-01-01T${occurredTime}Z`) : null,
-        amountMinor: BigInt(amountMinor),
-        feeMinor: BigInt(feeMinor),
+        amountMinor,
+        feeMinor,
         currencyCode,
         source,
         status,
@@ -151,14 +186,14 @@ export class LedgerRepository {
           transactionId: transaction.id,
           accountId: effect.accountId,
           role: effect.role,
-          deltaMinor: BigInt(effect.deltaMinor),
-          balanceAfterMinor: BigInt(effect.balanceAfterMinor),
+          deltaMinor: effect.deltaMinor,
+          balanceAfterMinor: effect.balanceAfterMinor,
         },
       });
 
       await tx.financialAccount.update({
         where: { id: effect.accountId },
-        data: { currentBalanceMinor: BigInt(effect.balanceAfterMinor) },
+        data: { currentBalanceMinor: effect.balanceAfterMinor },
       });
     }
 
@@ -168,23 +203,23 @@ export class LedgerRepository {
       if (!goal) throw new AppError('UNKNOWN_GOAL', 'Goal not found.', { field: 'goalId' });
       if (!goal.active) throw new AppError('GOAL_INACTIVE', 'Goal is not active.', { field: 'goalId' });
 
-      const remaining = Number(goal.targetMinor) - Number(goal.currentMinor);
+      const remaining = goal.targetMinor - goal.currentMinor;
       if (amountMinor > remaining) {
         throw new AppError('GOAL_OVERFUNDED', 'Funding exceeds goal target.', { field: 'amountMinor' });
       }
 
       await tx.goal.update({
         where: { id: goalId },
-        data: { currentMinor: { increment: BigInt(amountMinor) } },
+        data: { currentMinor: { increment: amountMinor } },
       });
 
       if (!fromAccountId) throw new AppError('UNKNOWN_ACCOUNT', 'Goal funding requires a source account.', { field: 'fromAccountId' });
-      await tx.goalContribution.create({ data: { goalId, transactionId: transaction.id, sourceAccountId: fromAccountId, amountMinor: BigInt(amountMinor) } });
+      await tx.goalContribution.create({ data: { goalId, transactionId: transaction.id, sourceAccountId: fromAccountId, amountMinor } });
     }
 
     return {
       transaction: this.mapTransaction(transaction),
-      balanceEffects,
+      balanceEffects: this.mapEffects(balanceEffects),
     };
   }
 
@@ -245,8 +280,8 @@ export class LedgerRepository {
     // Create compensating balance effects (opposite deltas)
     const compensatingEffects = original.balanceEffects.map(e => {
       const account = accountMap.get(e.accountId)!;
-      const currentBalance = Number(account.currentBalanceMinor);
-      const delta = -Number(e.deltaMinor);
+      const currentBalance = account.currentBalanceMinor;
+      const delta = -e.deltaMinor;
       const balanceAfter = currentBalance + delta;
 
       return { ...e, deltaMinor: delta, balanceAfterMinor: balanceAfter };
@@ -258,14 +293,14 @@ export class LedgerRepository {
           transactionId: compensating.id,
           accountId: effect.accountId,
           role: effect.role,
-          deltaMinor: BigInt(effect.deltaMinor),
-          balanceAfterMinor: BigInt(effect.balanceAfterMinor),
+          deltaMinor: effect.deltaMinor,
+          balanceAfterMinor: effect.balanceAfterMinor,
         },
       });
 
       await tx.financialAccount.update({
         where: { id: effect.accountId },
-        data: { currentBalanceMinor: BigInt(effect.balanceAfterMinor) },
+        data: { currentBalanceMinor: effect.balanceAfterMinor },
       });
     }
 
@@ -293,7 +328,7 @@ export class LedgerRepository {
     return {
       reversedTransaction: this.mapTransaction(original),
       compensatingTransaction: this.mapTransaction(compensating),
-      balanceEffects: compensatingEffects,
+      balanceEffects: this.mapEffects(compensatingEffects),
     };
   }
 
@@ -314,6 +349,12 @@ export class LedgerRepository {
     if (original.reversedTransactionId) {
       throw new AppError('ALREADY_REVERSED', 'Cannot update a reversed transaction.', { field: 'id' });
     }
+    // Goal funding has a second authoritative aggregate (Goal.currentMinor and
+    // GoalContribution). Until a fully atomic contribution migration exists,
+    // permit metadata edits only; never leave the goal total out of sync.
+    if (original.goalId && (input.amountMinor !== undefined || input.feeMinor !== undefined)) {
+      throw new AppError('VALIDATION_ERROR', 'Goal-funding amount and fee cannot be edited; reverse and recreate the funding instead.', { field: 'amountMinor' });
+    }
 
     // Lock affected accounts
     const accountIds = new Set(original.balanceEffects.map(e => e.accountId));
@@ -331,8 +372,8 @@ export class LedgerRepository {
     // Reverse original balance effects
     for (const effect of original.balanceEffects) {
       const account = accountMap.get(effect.accountId)!;
-      const delta = -Number(effect.deltaMinor);
-      const newBalance = Number(account.currentBalanceMinor) + delta;
+      const delta = -effect.deltaMinor;
+      const newBalance = account.currentBalanceMinor + delta;
 
       await tx.transactionBalanceEffect.deleteMany({
         where: { transactionId: original.id },
@@ -340,20 +381,25 @@ export class LedgerRepository {
 
       await tx.financialAccount.update({
         where: { id: effect.accountId },
-        data: { currentBalanceMinor: BigInt(newBalance) },
+        data: { currentBalanceMinor: newBalance },
       });
-      accountMap.set(effect.accountId, { ...account, currentBalanceMinor: BigInt(newBalance) });
+      accountMap.set(effect.accountId, { ...account, currentBalanceMinor: newBalance });
     }
 
     // Prepare updated values (use original if not provided in input)
     const updatedTitle = input.title ?? original.title;
-    const updatedAmount = input.amountMinor ?? Number(original.amountMinor);
-    const updatedFee = input.feeMinor ?? Number(original.feeMinor);
+    const updatedAmount = input.amountMinor ?? original.amountMinor;
+    const updatedFee = input.feeMinor ?? original.feeMinor;
     const updatedCategoryId = input.categoryId !== undefined ? input.categoryId : original.categoryId;
     const updatedOccurredOn = input.occurredOn ? new Date(input.occurredOn) : original.occurredOn;
     const updatedOccurredTime = input.occurredTime ? new Date(`1970-01-01T${input.occurredTime}Z`) : original.occurredTime;
     const updatedStatus = input.status ?? original.status;
     const updatedNote = input.note !== undefined ? input.note : original.note;
+
+    // Re-run the same authoritative invariant checks used by creation against
+    // the balances after removing the original effects. This prevents an edit
+    // from bypassing overdraft, card-limit, or transfer validation.
+    this.validateInvariants(original.type, accountMap, original.fromAccountId ?? null, original.toAccountId ?? null, updatedAmount, updatedFee, Boolean(original.goalId));
 
     // Calculate new balance effects
     const newBalanceEffects = this.calculateBalanceEffects(
@@ -374,8 +420,8 @@ export class LedgerRepository {
         categoryId: updatedCategoryId,
         occurredOn: updatedOccurredOn,
         occurredTime: updatedOccurredTime,
-        amountMinor: BigInt(updatedAmount),
-        feeMinor: BigInt(updatedFee),
+        amountMinor: updatedAmount,
+        feeMinor: updatedFee,
         status: updatedStatus,
         note: updatedNote,
       },
@@ -388,14 +434,14 @@ export class LedgerRepository {
           transactionId: original.id,
           accountId: effect.accountId,
           role: effect.role,
-          deltaMinor: BigInt(effect.deltaMinor),
-          balanceAfterMinor: BigInt(effect.balanceAfterMinor),
+          deltaMinor: effect.deltaMinor,
+          balanceAfterMinor: effect.balanceAfterMinor,
         },
       });
 
       await tx.financialAccount.update({
         where: { id: effect.accountId },
-        data: { currentBalanceMinor: BigInt(effect.balanceAfterMinor) },
+        data: { currentBalanceMinor: effect.balanceAfterMinor },
       });
     }
 
@@ -405,7 +451,7 @@ export class LedgerRepository {
 
     return {
       transaction: this.mapTransaction(updatedTransaction!),
-      balanceEffects: newBalanceEffects,
+      balanceEffects: this.mapEffects(newBalanceEffects),
     };
   }
 
@@ -414,8 +460,8 @@ export class LedgerRepository {
     accountMap: Map<string, any>,
     fromAccountId: string | null,
     toAccountId: string | null,
-    amountMinor: number,
-    feeMinor: number,
+    amountMinor: bigint,
+    feeMinor: bigint,
     isGoalFunding = false
   ): void {
     const totalAmount = amountMinor + feeMinor;
@@ -425,13 +471,13 @@ export class LedgerRepository {
         if (!fromAccountId) throw new AppError('INVALID_TRANSACTION_KIND', 'Expense requires fromAccountId.', { field: 'fromAccountId' });
         const acc = accountMap.get(fromAccountId)!;
         if (acc.classification === 'liability' && acc.accountType === 'credit_card') {
-          const limit = Number(acc.creditCardDetail?.creditLimitMinor ?? 0);
-          if (!acc.creditCardDetail || Number(acc.currentBalanceMinor) + amountMinor > limit) {
+          const limit = acc.creditCardDetail?.creditLimitMinor ?? 0n;
+          if (!acc.creditCardDetail || acc.currentBalanceMinor + amountMinor > limit) {
             throw new AppError('CREDIT_LIMIT_EXCEEDED', 'This charge would exceed the credit limit.', { field: 'amountMinor' });
           }
         } else {
           if (acc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Expense must use an asset account.', { field: 'fromAccountId' });
-          if (Number(acc.currentBalanceMinor) < totalAmount) {
+          if (acc.currentBalanceMinor < totalAmount) {
             throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
         }
@@ -454,7 +500,7 @@ export class LedgerRepository {
           // moves cash out but is not ordinary spending).
           const fromAcc = accountMap.get(fromAccountId!)!;
           if (fromAcc.classification !== 'asset') throw new AppError('INVALID_TRANSACTION_KIND', 'Transfer must come from an asset account.', { field: 'fromAccountId' });
-          if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
+          if (fromAcc.currentBalanceMinor < totalAmount) {
             throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
           break;
@@ -476,20 +522,20 @@ export class LedgerRepository {
           // Card payment: from asset to card liability
           const cardDetail = toAcc.creditCardDetail;
           if (!cardDetail) throw new AppError('UNKNOWN_ACCOUNT', 'Credit card details not found.', { field: 'toAccountId' });
-          const owed = Number(toAcc.currentBalanceMinor);
-          if (owed === 0) throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card has no balance to pay.', { field: 'amountMinor' });
+          const owed = toAcc.currentBalanceMinor;
+          if (owed === 0n) throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card has no balance to pay.', { field: 'amountMinor' });
           if (amountMinor > owed) {
             throw new AppError('CARD_PAYMENT_EXCEEDS_OWED', 'Card payment cannot exceed amount owed.', { field: 'amountMinor' });
           }
           if (fromAcc.classification !== 'asset') {
             throw new AppError('INVALID_TRANSACTION_KIND', 'Card payment must come from an asset account.', { field: 'fromAccountId' });
           }
-          if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
+          if (fromAcc.currentBalanceMinor < totalAmount) {
             throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
         } else if (fromAcc.classification === 'asset' && toAcc.classification === 'asset') {
           // Asset to asset transfer
-          if (Number(fromAcc.currentBalanceMinor) < totalAmount) {
+          if (fromAcc.currentBalanceMinor < totalAmount) {
             throw new AppError('ASSET_OVERDRAFT', 'This transaction would overdraw the selected account.', { field: 'amountMinor' });
           }
         } else {
@@ -505,26 +551,26 @@ export class LedgerRepository {
     accountMap: Map<string, any>,
     fromAccountId: string | null,
     toAccountId: string | null,
-    amountMinor: number,
-    feeMinor: number,
+    amountMinor: bigint,
+    feeMinor: bigint,
     isGoalFunding = false
-  ): Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: number; balanceAfterMinor: number }> {
-    const effects: Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: number; balanceAfterMinor: number }> = [];
+  ): Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: bigint; balanceAfterMinor: bigint }> {
+    const effects: Array<{ accountId: string; role: BalanceEffectRole; deltaMinor: bigint; balanceAfterMinor: bigint }> = [];
 
     switch (type) {
       case 'expense': {
         const acc = accountMap.get(fromAccountId!)!;
         const cardCharge = acc.classification === 'liability' && acc.accountType === 'credit_card';
-        const newBalance = cardCharge ? Number(acc.currentBalanceMinor) + amountMinor : Number(acc.currentBalanceMinor) - amountMinor - feeMinor;
+        const newBalance = cardCharge ? acc.currentBalanceMinor + amountMinor : acc.currentBalanceMinor - amountMinor - feeMinor;
         effects.push({ accountId: fromAccountId!, role: cardCharge ? 'card_charge' : 'expense', deltaMinor: cardCharge ? amountMinor : -amountMinor, balanceAfterMinor: newBalance });
-        if (feeMinor > 0 && !cardCharge) effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: newBalance });
+        if (feeMinor > 0n && !cardCharge) effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: newBalance });
         break;
       }
       case 'income': {
         const acc = accountMap.get(toAccountId!)!;
-        const newBalance = Number(acc.currentBalanceMinor) + amountMinor;
+        const newBalance = acc.currentBalanceMinor + amountMinor;
         effects.push({ accountId: toAccountId!, role: 'income', deltaMinor: amountMinor, balanceAfterMinor: newBalance });
-        if (feeMinor > 0) {
+        if (feeMinor > 0n) {
           const newBalanceWithFee = newBalance - feeMinor;
           effects.push({ accountId: toAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: newBalanceWithFee });
         }
@@ -536,9 +582,9 @@ export class LedgerRepository {
           // no destination `financial_accounts` row to credit here.
           const fromAcc = accountMap.get(fromAccountId!)!;
           const totalAmount = amountMinor + feeMinor;
-          const fromNewBalance = Number(fromAcc.currentBalanceMinor) - totalAmount;
+          const fromNewBalance = fromAcc.currentBalanceMinor - totalAmount;
           effects.push({ accountId: fromAccountId!, role: 'source', deltaMinor: -amountMinor, balanceAfterMinor: fromNewBalance });
-          if (feeMinor > 0) {
+          if (feeMinor > 0n) {
             effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: fromNewBalance });
           }
           break;
@@ -547,7 +593,7 @@ export class LedgerRepository {
           // Credit-only half-transfer (investment sale proceeds): no source
           // `financial_accounts` row to debit here.
           const toAcc = accountMap.get(toAccountId)!;
-          const toNewBalance = Number(toAcc.currentBalanceMinor) + amountMinor;
+          const toNewBalance = toAcc.currentBalanceMinor + amountMinor;
           effects.push({ accountId: toAccountId, role: 'destination', deltaMinor: amountMinor, balanceAfterMinor: toNewBalance });
           break;
         }
@@ -559,20 +605,20 @@ export class LedgerRepository {
           // This shouldn't happen for transfers (card payments are handled above)
         } else if (toAcc.classification === 'liability' && toAcc.accountType === 'credit_card') {
           // Card payment: asset -> card liability
-          const fromNewBalance = Number(fromAcc.currentBalanceMinor) - totalAmount;
+          const fromNewBalance = fromAcc.currentBalanceMinor - totalAmount;
           effects.push({ accountId: fromAccountId!, role: 'card_payment', deltaMinor: -amountMinor, balanceAfterMinor: fromNewBalance });
-          if (feeMinor > 0) {
+          if (feeMinor > 0n) {
             effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: fromNewBalance });
           }
-          const toNewBalance = Number(toAcc.currentBalanceMinor) - amountMinor;
+          const toNewBalance = toAcc.currentBalanceMinor - amountMinor;
           effects.push({ accountId: toAccountId!, role: 'card_payment', deltaMinor: -amountMinor, balanceAfterMinor: toNewBalance });
         } else {
           // Asset to asset transfer
-          const fromNewBalance = Number(fromAcc.currentBalanceMinor) - totalAmount;
-          const toNewBalance = Number(toAcc.currentBalanceMinor) + amountMinor;
+          const fromNewBalance = fromAcc.currentBalanceMinor - totalAmount;
+          const toNewBalance = toAcc.currentBalanceMinor + amountMinor;
           effects.push({ accountId: fromAccountId!, role: 'source', deltaMinor: -amountMinor, balanceAfterMinor: fromNewBalance });
           effects.push({ accountId: toAccountId!, role: 'destination', deltaMinor: amountMinor, balanceAfterMinor: toNewBalance });
-          if (feeMinor > 0) {
+          if (feeMinor > 0n) {
             effects.push({ accountId: fromAccountId!, role: 'fee', deltaMinor: -feeMinor, balanceAfterMinor: fromNewBalance });
           }
         }
@@ -581,6 +627,10 @@ export class LedgerRepository {
     }
 
     return effects;
+  }
+
+  private mapEffects(effects: Array<{ accountId: string; role: string; deltaMinor: bigint; balanceAfterMinor: bigint }>) {
+    return effects.map((effect) => ({ ...effect, deltaMinor: String(effect.deltaMinor), balanceAfterMinor: String(effect.balanceAfterMinor) }))
   }
 
   private mapTransaction(tx: any): TransactionView {
@@ -595,14 +645,15 @@ export class LedgerRepository {
       toAccountId: tx.toAccountId,
       occurredOn: tx.occurredOn.toISOString().split('T')[0],
       occurredTime: tx.occurredTime ? tx.occurredTime.toISOString().split('T')[1].slice(0, 5) : null,
-      amountMinor: Number(tx.amountMinor),
-      feeMinor: Number(tx.feeMinor),
+      amountMinor: String(tx.amountMinor),
+      feeMinor: String(tx.feeMinor),
       currencyCode: tx.currencyCode,
       source: tx.source,
       status: tx.status,
       note: tx.note,
       idempotencyKey: tx.idempotencyKey,
       reversedTransactionId: tx.reversedTransactionId,
+      tags: Array.isArray(tx.tags) ? tx.tags.map((assignment: { tag: { name: string } }) => assignment.tag.name) : [],
       createdAt: tx.createdAt.toISOString(),
       updatedAt: tx.updatedAt.toISOString(),
     };

@@ -76,7 +76,11 @@ intended reviewed main ref for a manual release.
 Images are built from each package directory, published to GHCR as
 `ghcr.io/<lowercase-owner>/monikey-api` and `monikey-web`, and tagged with the
 commit SHA and `latest`. The web build sets `VITE_FINANCE_BACKEND=true`.
-Each publication pulls the SHA-tagged image back to verify it is retrievable.
+Each publication pulls the SHA-tagged image back to verify it is retrievable and
+writes the resulting OCI digest to the workflow summary. GitOps should deploy
+the digest form (`image@sha256:...`) rather than relying on `latest`.
+Publication also scans the exact SHA image with Trivy for unfixed HIGH/CRITICAL
+vulnerabilities and generates an SPDX SBOM with Syft before reporting success.
 Publication runs are queued rather than cancelled mid-push.
 
 These workflows publish images; they contain no step that updates a GitOps
@@ -85,6 +89,14 @@ this repo must be verified separately. A SHA tag is not an immutable digest;
 pin the actual digest when immutable image identity is required.
 
 ## CodeQL and dependency updates
+
+Infrastructure images use explicit version tags rather than `latest`; review and
+upgrade those versions deliberately. Release images are additionally identified
+by their published OCI digest in the workflow summary.
+
+Security-sensitive GitHub Actions are pinned to immutable commit SHAs with the
+human-readable release retained in a comment. Updating an action requires
+resolving and reviewing a new commit, not changing a mutable major tag.
 
 `codeql.yaml` runs on pushes to main/dev, PRs targeting main, and daily at 02:00 UTC.
 Dependabot configuration is in `.github/dependabot.yml`. Workflow configuration

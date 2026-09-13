@@ -11,6 +11,9 @@ import { createIdempotencyKey } from '../utils/idempotencyKey'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './AddTransactionModal.css'
 import { uploadAndProcessReceipt } from '../services/apiAuth'
+import { createBrowserReceiptOcr } from '../services/browserReceiptOcr'
+import { localFirstStore, newOperationId } from '../services/localFirstStore'
+import { FinanceApiError } from '../services/apiFinanceGateway'
 
 type TxTab = TransactionType
 
@@ -47,6 +50,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
   const fileInputRef = useRef<HTMLInputElement>(null)
   const triggerFocusRef = useRef<Element | null>(null)
   const idempotencyKeyRef = useRef<string | null>(null)
+  const localOcrRef = useRef<ReturnType<typeof createBrowserReceiptOcr> | null>(null)
   const [form, setForm] = useState(() => {
     if (editingTransaction) {
       return {
@@ -175,6 +179,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
       : `${finance.accountLabel(form.fromAccountId)} → ${finance.accountLabel(form.toAccountId)}`
     const title = form.tab === 'transfer' ? transferTitle : form.title.trim()
 
+    let offlinePayload: { idempotencyKey?: string; [key: string]: unknown } | null = null
     try {
       const input = {
         type: form.tab,
@@ -190,6 +195,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
         note: form.note.trim() || undefined,
         idempotencyKey: editingTransaction ? undefined : (idempotencyKeyRef.current ?? (idempotencyKeyRef.current = createIdempotencyKey())),
       }
+      offlinePayload = input
 
       if (editingTransaction) {
         if (asyncFinance) {
@@ -210,6 +216,14 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
         idempotencyKeyRef.current = null
       }
     } catch (err) {
+      if (asyncFinance && !(err instanceof FinanceApiError) && err instanceof TypeError && !editingTransaction) {
+        const operationId = newOperationId()
+        await localFirstStore.enqueue({ operationId, idempotencyKey: offlinePayload!.idempotencyKey ?? createIdempotencyKey(), operationType: 'create_transaction', payload: offlinePayload, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
+        showToast('Server unavailable — transaction queued for sync')
+        idempotencyKeyRef.current = null
+        handleClose()
+        return
+      }
       // The repository owns the finance invariants (TR-002); this places
       // whatever it rejected on the exact control at fault.
       const errorField = err instanceof FinanceValidationError && err.field ? (err.field as FieldName) : 'amount'
@@ -229,12 +243,30 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
     update('receiptName', file.name)
     setOcrProcessing(true)
     try {
-      const result = await uploadAndProcessReceipt(file)
-      const draft = result.receipt?.draft ?? {}
+      let draft: { merchant?: string | null; totalMinor?: string | null; date?: string | null } = {}
+      try {
+        const result = await uploadAndProcessReceipt(file)
+        draft = result.receipt?.draft ?? {}
+      } catch (serverError) {
+        // Server OCR is an enrichment path. If the homelab is unreachable,
+        // persist the image locally and run the privacy-preserving worker OCR.
+        const operationId = newOperationId()
+        await localFirstStore.saveReceiptFile({ operationId, blob: file })
+        await localFirstStore.enqueue({ operationId, idempotencyKey: newOperationId(), operationType: 'capture_receipt', payload: { operationId, filename: file.name, mimeType: file.type }, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
+        localOcrRef.current ??= createBrowserReceiptOcr()
+        const local = await localOcrRef.current.recognizeReceipt(file, { onProgress: () => undefined })
+        if (local.status !== 'complete') throw serverError
+        draft = { merchant: local.suggestedMerchant, totalMinor: local.suggestedTotalMinor, date: local.suggestedDate }
+        showToast('Receipt saved locally and scanned on this device — review before saving')
+      }
       if (draft.merchant) update('title', draft.merchant)
-      if (typeof draft.totalMinor === 'number') update('amount', (draft.totalMinor / 100).toFixed(2))
+      if (typeof draft.totalMinor === 'string') {
+        const minor = BigInt(draft.totalMinor)
+        update('amount', `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`)
+      }
       if (draft.date) update('date', draft.date)
-      showToast('Receipt scanned — review the fields before saving')
+      if (!draft.merchant && !draft.totalMinor && !draft.date) setReceiptError('Receipt saved, but no fields were confidently detected. Enter the transaction manually.')
+      else showToast('Receipt scanned — review the fields before saving')
     } catch (error) {
       setReceiptError(error instanceof Error ? error.message : 'Could not scan receipt.')
     } finally {
@@ -505,6 +537,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
                 type="file"
                 accept="image/*,.pdf"
                 className="visually-hidden"
+                aria-label="Receipt attachment"
                 onChange={(e) => { void handleReceipt(e.target.files?.[0]) }}
               />
               <button type="button" className="tx-receipt" onClick={() => fileInputRef.current?.click()}>

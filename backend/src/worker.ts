@@ -11,11 +11,13 @@ import { createQuoteProvider, refreshQuoteSnapshots, type RefreshQuoteSnapshotsP
 import { generateDailySnapshots } from './modules/reports/snapshots.worker.js'
 import { createFxModule } from './modules/fx/fx.module.js'
 import { createFxRatesProvider } from './integrations/adapters/frankfurter/index.js'
+import { claimDueJob, enqueueJob, failJob, finishJob } from './modules/worker/jobs.js'
+import { recordWorkerJob } from './modules/health/metrics.js'
+import { localDateIso } from './common/timezone.js'
 
-// Phase 1 worker process: proves out the separate-process topology (same
-// backend image, different command) required by compose.yaml. Job handlers
-// (recurring due checks, market refresh, email outbox, etc.) land in later
-// phases via JobModule — this only verifies DB connectivity and stays alive.
+// The worker runs in the same backend image as the API but owns durable job
+// claiming and processing. PostgreSQL remains the source of truth for job
+// state, retries, and scheduling.
 async function main(): Promise<void> {
   const env = loadEnv()
   const logger = pino(buildLoggerOptions(env))
@@ -27,13 +29,24 @@ async function main(): Promise<void> {
   const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger })
   const fxProvider = createFxRatesProvider(env, fetch, { prisma, logger })
   const fxService = createFxModule(prisma, fxProvider, logger)
+  const calendarUsers = async () => prisma.user.findMany({ select: { id: true, timezone: true } })
   const runRecurring = async () => {
-    const todayIso = new Date().toISOString().slice(0, 10)
-    const today = new Date(todayIso)
-    await enqueueDueBillNotifications(prisma, todayIso)
-    if (new Date(`${todayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, todayIso)
+    const users = await calendarUsers()
+    const processDate = users[0] ? localDateIso(users[0].timezone) : localDateIso('UTC')
+    const today = new Date(`${processDate}T00:00:00Z`)
+    const expiredSessions = await prisma.userSession.deleteMany({ where: { expiresAt: { lte: new Date() } } })
+    if (expiredSessions.count > 0) logger.info({ count: expiredSessions.count }, 'removed expired sessions')
+    for (const user of users) {
+      const userTodayIso = localDateIso(user.timezone)
+      await enqueueDueBillNotifications(prisma, userTodayIso, user.id)
+      if (new Date(`${userTodayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, userTodayIso, user.id)
+      const result = await processDueRecurringItems(prisma, ledger.service, userTodayIso, logger, user.id)
+      if (result.processed > 0) logger.info({ processed: result.processed, userId: user.id, todayIso: userTodayIso }, 'processed recurring payments')
+      if (result.failed > 0) logger.warn({ failed: result.failed, userId: user.id, todayIso: userTodayIso }, 'some recurring items failed and were paused')
+      const generated = await generateDailySnapshots(prisma, new Date(`${userTodayIso}T00:00:00Z`), user.id)
+      if (generated > 0) logger.info({ generated, userId: user.id, todayIso: userTodayIso }, 'generated daily finance snapshots')
+    }
     await deliverNotificationOutbox(prisma, emailProvider)
-    const { processed, failed } = await processDueRecurringItems(prisma, ledger.service, todayIso, logger)
     if (env.QUOTE_PROVIDER === 'live') {
       try {
         const refreshed = await refreshQuoteSnapshots(prisma as unknown as RefreshQuoteSnapshotsPrisma, quoteProvider)
@@ -54,19 +67,18 @@ async function main(): Promise<void> {
         logger.warn({ err }, 'FX rate refresh skipped')
       }
     }
-    try {
-      const generated = await generateDailySnapshots(prisma, today)
-      if (generated > 0) logger.info({ generated, todayIso }, 'generated daily finance snapshots')
-    } catch (err) {
-      // Snapshot generation failures are non-critical: reports fall back to
-      // computing from ledger history if snapshots are unavailable.
-      logger.warn({ err }, 'daily snapshot generation skipped')
-    }
-    if (processed > 0) logger.info({ processed, todayIso }, 'processed recurring payments')
-    if (failed > 0) logger.warn({ failed, todayIso }, 'some recurring items failed and were paused')
   }
-  await runRecurring()
-  logger.info('worker connected to database; recurring due-job runner registered')
+  const tick = async () => {
+    const users = await calendarUsers()
+    const calendarKey = users.map((user) => `${user.id}:${localDateIso(user.timezone)}`).sort().join('|') || localDateIso('UTC')
+    await enqueueJob(prisma, { type: 'daily-finance-maintenance', runAt: new Date(), dedupKey: `daily-finance-maintenance:${calendarKey}` })
+    const jobId = await claimDueJob(prisma)
+    if (!jobId) return
+    try { await runRecurring(); await finishJob(prisma, jobId); recordWorkerJob('succeeded') }
+    catch (err) { await failJob(prisma, jobId, err); recordWorkerJob('failed'); logger.error({ err, jobId }, 'worker job failed') }
+  }
+  await tick()
+  logger.info('worker connected to database; durable job runner registered')
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down')
@@ -76,8 +88,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
-  // Keep the process alive; a real scheduler/queue loop arrives with JobModule.
-  setInterval(() => { void runRecurring().catch((err) => logger.error({ err }, 'recurring due-job run failed')) }, 60_000)
+  setInterval(() => { void tick().catch((err) => logger.error({ err }, 'job scheduler tick failed')) }, 60_000)
 }
 
 main().catch((err) => {

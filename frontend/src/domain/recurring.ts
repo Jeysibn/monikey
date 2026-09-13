@@ -30,6 +30,7 @@ export interface RecurringItem {
   /** Payee/merchant name, e.g. "Netflix" or "Meralco". */
   merchant: string
   /** The amount charged each occurrence, at the item's own `frequency` (not normalized to monthly). */
+  amountMinor?: string
   amount: number
   frequency: RecurringFrequency
   /** The next date this item is due, `YYYY-MM-DD`. */

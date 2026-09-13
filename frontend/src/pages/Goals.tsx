@@ -3,7 +3,7 @@ import { Card } from '../components/Card'
 import { ProgressBar } from '../components/ProgressBar'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { formatGoalDate, isIsoDateBefore, isValidIsoDate } from '../utils/date'
 import { FinanceValidationError } from '../domain/financeRules'
@@ -82,7 +82,7 @@ function AddFundsForm({ goalId, onClose }: { goalId: string; onClose: () => void
         >
           {cashAccounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatMoney(a.balance)} available
+              {a.name} · {formatMoneyValue(a.balance, a.balanceMinor)} available
             </option>
           ))}
         </select>
@@ -188,8 +188,7 @@ function CreateGoalForm({ onClose, editingGoal }: { onClose: () => void; editing
       } else if (asyncFinance) {
         await asyncFinance.createGoal(input)
       } else if (editingGoal) {
-        // Sync path - not implemented for edit
-        throw new Error('Edit not supported in sync mode')
+        finance.updateGoal(editingGoal.id, input)
       } else {
         finance.createGoal(input)
       }
@@ -382,9 +381,9 @@ export function Goals() {
                   </div>
                   <div className="goal-nums">
                     <span className="num" style={{ fontSize: 16, fontWeight: 700 }}>
-                      {formatMoney(g.currentAmount, { withCents: false })}
+                      {formatMoneyValue(g.currentAmount, g.currentMinor, { withCents: false })}
                     </span>
-                    <span className="faint">of {formatMoney(g.targetAmount, { withCents: false })}</span>
+                    <span className="faint">of {formatMoneyValue(g.targetAmount, g.targetMinor, { withCents: false })}</span>
                   </div>
                   <ProgressBar
                     pct={pct}
@@ -399,7 +398,7 @@ export function Goals() {
                     <div className="goal-required">Need ~{formatMoney(g.requiredContribution, { withCents: false })}/mo to reach this goal on time</div>
                   )}
                   <div className="goal-foot">
-                    <span className="goal-meta">Monthly plan {formatMoney(g.monthlyContribution || 0, { withCents: false })}/mo</span>
+                    <span className="goal-meta">Monthly plan {formatMoneyValue(g.monthlyContribution || 0, g.monthlyContributionMinor, { withCents: false })}/mo</span>
                     {addFundsFor === g.id ? null : (
                       <button type="button" className="pill" onClick={() => setAddFundsFor(g.id)}>
                         + Add funds
@@ -457,21 +456,11 @@ export function Goals() {
               <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}</div>
               <div className="goal-meta">
                 Reached {formatGoalDate(g.completedDate || g.targetDate)} · {finance.goalRawProgressPct(g)}% of{' '}
-                {formatMoney(g.targetAmount, { withCents: false })}
+                {formatMoneyValue(g.targetAmount, g.targetMinor, { withCents: false })}
               </div>
             </div>
             <div className="num" style={{ fontSize: 16, fontWeight: 700 }}>
-              {formatMoney(g.currentAmount, { withCents: false })}
-            </div>
-            <div className="completed-actions">
-              <button type="button" className="btn btn--outline" disabled title="Coming soon">
-                {g.id === 'home' ? 'Continue saving' : 'Increase target'}
-                <span className="coming-soon-tag">Coming soon</span>
-              </button>
-              <button type="button" className="btn btn--muted" disabled title="Coming soon">
-                Archive
-                <span className="coming-soon-tag">Coming soon</span>
-              </button>
+              {formatMoneyValue(g.currentAmount, g.currentMinor, { withCents: false })}
             </div>
           </Card>
         ))}

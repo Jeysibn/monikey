@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { AddTransactionModal } from './components/AddTransactionModal'
 import { Toast } from './components/Toast'
@@ -13,6 +13,12 @@ import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
 import { Crypto } from './pages/Crypto'
 import type { Transaction } from './domain/finance'
+import { Rules } from './pages/Rules'
+import { Reconciliation } from './pages/Reconciliation'
+import { Imports } from './pages/Imports'
+import { Security } from './pages/Security'
+import { Tags } from './pages/Tags'
+import { SyncCenter } from './pages/SyncCenter'
 
 export default function App() {
   const [addTxOpen, setAddTxOpen] = useState(false)
@@ -42,9 +48,19 @@ export default function App() {
         <Route path="/budget" element={<Budget />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="/recurring" element={<Recurring />} />
+        <Route path="/rules" element={<Rules />} />
+        <Route path="/reconciliation" element={<Reconciliation />} />
+        <Route path="/imports" element={<Imports />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/tags" element={<Tags />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/investments" element={<Crypto />} />
+        <Route path="/crypto" element={<Crypto />} />
+        {/* Compatibility redirect: /investments was the canonical route before
+            the Crypto Portfolio feature was renamed; keep old bookmarks/links
+            working (§27) instead of silently 404ing. */}
+        <Route path="/investments" element={<Navigate to="/crypto" replace />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/sync" element={<SyncCenter />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={handleCloseModal} editingTransaction={editingTransaction ?? undefined} />
       <Toast />

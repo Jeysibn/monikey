@@ -1,5 +1,5 @@
 import { useFinance } from '../hooks/useFinance'
-import { formatMoney } from '../utils/currency'
+import { formatMinorUnits } from '../utils/currency'
 import './MoneyPosition.css'
 
 /**
@@ -9,30 +9,34 @@ import './MoneyPosition.css'
  * SR-008 for the "Estimated" qualifier, placement, and breakdown wording.
  *
  * The label is "Estimated safe to spend" rather than a bare "Safe to
- * spend" because the inputs are known to be incomplete: recurring bills
- * (rent, subscriptions, utilities) have no data source in this app yet
- * and are excluded, not assumed to be zero.
+ * spend" because the inputs are known to be incomplete: future income and
+ * obligations not recorded in this app are excluded, not assumed to be zero.
  */
 export function MoneyPosition() {
   const finance = useFinance()
-  const { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount } =
+  const { availableCashMinor, upcomingCreditMinimumsMinor, plannedGoalContributionsMinor, safeToSpendMinor, upcomingRecurringBillsMinor, cardsDueCount, recurringBillsCount } =
     finance.safeToSpendBreakdown
 
   const steps = [
-    { label: 'Available cash', value: availableCash, hint: `${finance.state.accounts.length} cash sources` },
+    { label: 'Available cash', minor: availableCashMinor, hint: `${finance.state.accounts.length} cash sources` },
     {
       label: 'Upcoming commitments',
-      value: upcomingCreditMinimums,
+      minor: upcomingCreditMinimumsMinor,
       // TR-003: "due soon" is a real, documented date filter — the next 30
       // days — not a figure of speech.
       hint: `Minimum payments on ${cardsDueCount} card${cardsDueCount === 1 ? '' : 's'} due in the next 30 days`,
     },
     {
+      label: 'Upcoming bills',
+      minor: upcomingRecurringBillsMinor,
+      hint: `${recurringBillsCount} active recurring item${recurringBillsCount === 1 ? '' : 's'} due in the next 30 days`,
+    },
+    {
       label: 'Planned goal contributions',
-      value: plannedGoalContributions,
+      minor: plannedGoalContributionsMinor,
       hint: `Your planned pace for ${finance.activePeriodLabel} across active goals — nothing is moved automatically`,
     },
-    { label: 'Estimated safe to spend', value: safeToSpend, hint: 'What’s left after known commitments', emphasis: true },
+    { label: 'Estimated safe to spend', minor: safeToSpendMinor, hint: 'What’s left after known commitments', emphasis: true },
   ]
 
   return (
@@ -42,7 +46,7 @@ export function MoneyPosition() {
         {steps.map((step, i) => (
           <div className="money-position-step-wrap" key={step.label}>
             <div className={`money-position-step${step.emphasis ? ' money-position-step--emphasis' : ''}`}>
-              <div className="money-position-amt num">{formatMoney(step.value, { withCents: false })}</div>
+              <div className="money-position-amt num">{formatMinorUnits(step.minor, { withCents: false })}</div>
               <div className="money-position-label">{step.label}</div>
               <div className="money-position-hint faint">{step.hint}</div>
             </div>
@@ -55,15 +59,14 @@ export function MoneyPosition() {
         ))}
       </div>
       <p className="money-position-summary faint">
-        You have {formatMoney(availableCash, { withCents: false })} in cash. After{' '}
-        {formatMoney(upcomingCreditMinimums, { withCents: false })} in card minimums due within 30 days and{' '}
-        {formatMoney(plannedGoalContributions, { withCents: false })} planned toward goals in {finance.activePeriodLabel} (not yet moved out
-        of your accounts), you have an <strong>estimated {formatMoney(safeToSpend, { withCents: false })} safe to spend</strong>.
+        You have {formatMinorUnits(availableCashMinor, { withCents: false })} in cash. After{' '}
+        {formatMinorUnits(upcomingCreditMinimumsMinor, { withCents: false })} in card minimums due within 30 days and{' '}
+        {formatMinorUnits(plannedGoalContributionsMinor, { withCents: false })} planned toward goals and {formatMinorUnits(upcomingRecurringBillsMinor, { withCents: false })} in {recurringBillsCount} recurring bills (not yet moved out
+        of your accounts), you have an <strong>estimated {formatMinorUnits(safeToSpendMinor, { withCents: false })} safe to spend</strong>.
       </p>
       <p className="money-position-scope faint">
-        Included: cash account balances, credit card minimum payments due in the next 30 days, and {finance.activePeriodLabel}’s planned
-        goal contributions. Excluded: recurring bills and subscriptions — Monikey doesn’t track those yet, so this estimate may be higher
-        than what’s truly free to spend.
+        Included: cash account balances, card minimums, recurring bills, and {finance.activePeriodLabel}’s planned goal contributions due in the
+        next 30 days. This remains an estimate because future income and unrecorded obligations are excluded.
       </p>
     </section>
   )

@@ -5,11 +5,20 @@ import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, formatMoneyValue } from '../utils/currency'
 import { parseMoneyInput } from '../utils/money'
 import { FinanceValidationError } from '../domain/financeRules'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Budget.css'
+
+export function projectPeriodEndSpend(spent: number, periodStart: string, periodEnd: string, todayIso: string): number {
+  const start = Date.parse(`${periodStart}T00:00:00Z`)
+  const end = Date.parse(`${periodEnd}T00:00:00Z`)
+  const today = Date.parse(`${todayIso}T00:00:00Z`)
+  const totalDays = Math.max(1, Math.round((end - start) / 86_400_000))
+  const elapsedDays = Math.min(totalDays, Math.max(1, Math.round((Math.min(today, end - 86_400_000) - start) / 86_400_000) + 1))
+  return Math.round((spent * totalDays) / elapsedDays)
+}
 
 const CATEGORY_FIELDS = ['category', 'allocated'] as const
 type CategoryField = (typeof CATEGORY_FIELDS)[number]
@@ -18,6 +27,7 @@ export function Budget() {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const { budgetCategories, categories, budgetVsActual, totalBudgetAllocated } = finance.state
+  const { activePeriod, todayIso } = finance
   // Only categories with an amount set (allocated > 0) show up as budget
   // lines here — Budget never creates, renames, or deletes a category, it
   // only sets/changes/clears the amount for one that Settings already made.
@@ -81,7 +91,7 @@ export function Budget() {
     const budgetCategory = budgetCategories.find((bc) => bc.id === categoryId)
     if (budgetCategory) {
       setEditingId(categoryId)
-      setEditAllocated(formatMoney(budgetCategory.allocated, { withCents: false }).replace(/[^\d.]/g, ''))
+      setEditAllocated(formatMoneyValue(budgetCategory.allocated, budgetCategory.allocatedMinor, { withCents: false }).replace(/[^\d.]/g, ''))
       editClear()
     }
   }
@@ -238,6 +248,7 @@ export function Budget() {
             const status = finance.budgetStatus(c.allocated, c.spent)
             const rawPct = Math.round((c.spent / c.allocated) * 100)
             const diff = c.allocated - c.spent
+            const forecast = projectPeriodEndSpend(c.spent, activePeriod.start, activePeriod.end, todayIso)
             const category = categories.find((cc) => cc.id === c.id)
             const valueText =
               diff < 0
@@ -284,7 +295,7 @@ export function Budget() {
                       <div className="budget-row-top">
                         <span style={{ fontWeight: 600, fontSize: 12.5 }}>{category?.name ?? c.id}</span>
                         <span className="budget-meta">
-                          {formatMoney(c.spent, { withCents: false })} / {formatMoney(c.allocated, { withCents: false })}
+                          {formatMoneyValue(c.spent, c.spentMinor, { withCents: false })} / {formatMoneyValue(c.allocated, c.allocatedMinor, { withCents: false })}
                         </span>
                       </div>
                       <ProgressBar
@@ -293,11 +304,11 @@ export function Budget() {
                         label={`${category?.name ?? c.id} budget used`}
                         valueText={valueText}
                       />
-                      {c.forecast && (
+                      {forecast > 0 && (
                         <div className="budget-forecast">
-                          Forecast {formatMoney(c.forecast, { withCents: false })} · projected{' '}
-                          {formatMoney(Math.abs(c.forecast - c.allocated), { withCents: false })}{' '}
-                          {c.forecast > c.allocated ? 'over' : 'under'}
+                          Projected period-end spend {formatMoney(forecast, { withCents: false })} ·{' '}
+                          {formatMoney(Math.abs(forecast - c.allocated), { withCents: false })}{' '}
+                          {forecast > c.allocated ? 'over' : 'under'} allocation
                         </div>
                       )}
                     </div>

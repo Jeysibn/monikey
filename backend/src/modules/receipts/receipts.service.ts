@@ -28,7 +28,7 @@ export interface ProcessReceiptInput {
 export interface ReceiptDraft {
   merchant?: string
   date?: string
-  totalMinor?: number
+  totalMinor?: string
   category?: string
   confidence?: number
 }

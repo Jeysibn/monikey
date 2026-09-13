@@ -22,15 +22,15 @@ export interface RecurringRunResult {
  * stops retrying against a permanently-broken link, while every other due
  * item in the same run still gets processed.
  */
-export async function processDueRecurringItems(prisma: PrismaClient, ledgerService: LedgerService, todayIso: string, logger?: RecurringWorkerLogger): Promise<RecurringRunResult> {
-  const dueItems = await prisma.recurringItem.findMany({ where: { status: 'active', nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) }, account: { archivedAt: null } }, orderBy: { nextDueDate: 'asc' } })
+export async function processDueRecurringItems(prisma: PrismaClient, ledgerService: LedgerService, todayIso: string, logger?: RecurringWorkerLogger, userId?: string): Promise<RecurringRunResult> {
+  const dueItems = await prisma.recurringItem.findMany({ where: { status: 'active', ...(userId ? { userId } : {}), nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) }, account: { archivedAt: null } }, orderBy: { nextDueDate: 'asc' } })
   let processed = 0
   let failed = 0
   for (const item of dueItems) {
     const dueDate = item.nextDueDate.toISOString().slice(0, 10)
     const idempotencyKey = `recurring:${item.id}:${dueDate}`
     try {
-      await ledgerService.postTransaction(item.userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: dueDate, occurredTime: null, amountMinor: Number(item.amountMinor), feeMinor: 0, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
+      await ledgerService.postTransaction(item.userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: dueDate, occurredTime: null, amountMinor: item.amountMinor, feeMinor: 0n, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
       await prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate: advanceDueDate(item.nextDueDate, item.frequency), lastPaidDate: item.nextDueDate } })
       processed += 1
     } catch (err) {

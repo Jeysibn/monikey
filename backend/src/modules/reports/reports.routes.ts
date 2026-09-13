@@ -7,6 +7,7 @@ import {
   computeReportSummary,
   computeCashFlow,
   computeSpendingByCategory,
+  computeSpendingByTag,
   computeNetWorthTrend,
   computeBudgetPerformance,
   computeGoalsReport,
@@ -30,6 +31,43 @@ const viewSchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}(?:-\d{2})?$/),
 })
 
+const dateJson = { type: 'string', format: 'date' } as const
+const minorUnitsJson = { type: 'string', pattern: '^-?\\d+$' } as const
+const dateRangeQueryJson = {
+  type: 'object', additionalProperties: false, required: ['from', 'to'],
+  properties: { from: dateJson, to: dateJson },
+} as const
+const periodQueryJson = {
+  type: 'object', additionalProperties: false, required: ['period'],
+  properties: { period: { type: 'string', pattern: '^\\d{4}-\\d{2}$' } },
+} as const
+const asOfQueryJson = {
+  type: 'object', additionalProperties: false, required: ['asOf'], properties: { asOf: dateJson },
+} as const
+const viewQueryJson = {
+  type: 'object', additionalProperties: false, required: ['period'],
+  properties: {
+    view: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'], default: 'monthly' },
+    period: { type: 'string', pattern: '^\\d{4}-\\d{2}(?:-\\d{2})?$' },
+  },
+} as const
+const errorJson = {
+  type: 'object', additionalProperties: false, required: ['error'],
+  properties: { error: { type: 'object', additionalProperties: false, required: ['code', 'message', 'requestId'], properties: { code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' } } } },
+} as const
+const summaryJson = { type: 'object', additionalProperties: false, required: ['income', 'expenses', 'netCashFlow', 'cardDebtChange', 'netWorthChange', 'cardDebtAtEnd', 'netWorthAtEnd'], properties: { income: minorUnitsJson, expenses: minorUnitsJson, netCashFlow: minorUnitsJson, cardDebtChange: minorUnitsJson, netWorthChange: minorUnitsJson, cardDebtAtEnd: minorUnitsJson, netWorthAtEnd: minorUnitsJson } } as const
+const cashFlowJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'income', 'expenses', 'netFlow'], properties: { date: dateJson, income: minorUnitsJson, expenses: minorUnitsJson, netFlow: minorUnitsJson } } } as const
+const categorySpendJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['categoryId', 'categoryName', 'spent'], properties: { categoryId: { type: 'string', format: 'uuid' }, categoryName: { type: 'string' }, spent: minorUnitsJson } } } as const
+const tagSpendJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['tagId', 'tagName', 'spent'], properties: { tagId: { type: 'string', format: 'uuid' }, tagName: { type: 'string' }, spent: minorUnitsJson } } } as const
+const netWorthJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'assetTotal', 'liabilityTotal', 'netWorth'], properties: { date: dateJson, assetTotal: minorUnitsJson, liabilityTotal: minorUnitsJson, netWorth: minorUnitsJson } } } as const
+const budgetPerformanceJson = { type: 'object', additionalProperties: false, required: ['periodStart', 'periodEnd', 'categories', 'totalAllocated', 'totalSpent', 'totalRemaining'], properties: { periodStart: dateJson, periodEnd: dateJson, categories: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['categoryId', 'categoryName', 'allocated', 'spent', 'remaining', 'utilization'], properties: { categoryId: { type: 'string', format: 'uuid' }, categoryName: { type: 'string' }, allocated: minorUnitsJson, spent: minorUnitsJson, remaining: minorUnitsJson, utilization: { type: 'number' } } } }, totalAllocated: minorUnitsJson, totalSpent: minorUnitsJson, totalRemaining: minorUnitsJson } } as const
+const goalsJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['goalId', 'name', 'target', 'current', 'targetDate', 'progress', 'completed'], properties: { goalId: { type: 'string', format: 'uuid' }, name: { type: 'string' }, target: minorUnitsJson, current: minorUnitsJson, targetDate: dateJson, monthlyContribution: minorUnitsJson, progress: { type: 'number' }, completed: { type: 'boolean' }, completedDate: dateJson } } } as const
+
+function addDaysToLocalDate(year: number, month: number, day: number, days: number) {
+  const date = new Date(Date.UTC(year, month - 1, day + days))
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate(), hour: 0, minute: 0, second: 0 }
+}
+
 export async function reportsRoutes(app: FastifyInstance, options: { prisma: PrismaClient }) {
   const { prisma } = options
 
@@ -40,7 +78,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
    *
    * Returns income, expenses, net cash flow, and net worth change for a period.
    */
-  app.get<{ Querystring: { view: string; period: string } }>('/summary', async (request, reply) => {
+  app.get<{ Querystring: { view?: string; period: string } }>('/summary', { schema: { querystring: viewQueryJson, response: { 200: summaryJson } } }, async (request, reply) => {
     const query = viewSchema.parse(request.query)
     const userId = request.user!.id
     const userTimezone = request.user!.timezone
@@ -54,22 +92,25 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
     let localPeriodStart: { year: number; month: number; day: number; hour: number; minute: number; second: number }
     let localPeriodEnd: { year: number; month: number; day: number; hour: number; minute: number; second: number }
 
-    if (query.view === 'daily' && day) {
-      localPeriodStart = { year, month, day, hour: 0, minute: 0, second: 0 }
-      localPeriodEnd = { year, month, day, hour: 23, minute: 59, second: 59 }
-    } else if (query.view === 'monthly' || !day) {
+    if (query.view === 'daily') {
+      const startDay = day ?? 1
+      localPeriodStart = { year, month, day: startDay, hour: 0, minute: 0, second: 0 }
+      localPeriodEnd = addDaysToLocalDate(year, month, startDay, 1)
+    } else if (query.view === 'weekly') {
+      const startDay = day ?? 1
+      localPeriodStart = { year, month, day: startDay, hour: 0, minute: 0, second: 0 }
+      localPeriodEnd = addDaysToLocalDate(year, month, startDay, 7)
+    } else if (query.view === 'quarterly') {
+      const quarterStart = (Math.ceil(month / 3) - 1) * 3 + 1
+      localPeriodStart = { year, month: quarterStart, day: 1, hour: 0, minute: 0, second: 0 }
+      localPeriodEnd = quarterStart === 10
+        ? { year: year + 1, month: 1, day: 1, hour: 0, minute: 0, second: 0 }
+        : { year, month: quarterStart + 3, day: 1, hour: 0, minute: 0, second: 0 }
+    } else if (query.view === 'monthly') {
       localPeriodStart = { year, month, day: 1, hour: 0, minute: 0, second: 0 }
       const nextMonth = month === 12 ? 1 : month + 1
       const nextYear = month === 12 ? year + 1 : year
       localPeriodEnd = { year: nextYear, month: nextMonth, day: 1, hour: 0, minute: 0, second: 0 }
-    } else if (query.view === 'quarterly') {
-      const quarter = Math.ceil(month / 3)
-      const quarterStart = (quarter - 1) * 3 + 1
-      localPeriodStart = { year, month: quarterStart, day: 1, hour: 0, minute: 0, second: 0 }
-      const quarterEnd = quarterStart + 2
-      const endMonth = quarterEnd + 1
-      const endYear = endMonth > 12 ? year + 1 : year
-      localPeriodEnd = { year: endYear, month: endMonth > 12 ? endMonth - 13 : endMonth - 1, day: 1, hour: 0, minute: 0, second: 0 }
     } else {
       // yearly
       localPeriodStart = { year, month: 1, day: 1, hour: 0, minute: 0, second: 0 }
@@ -91,7 +132,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
    *
    * Returns daily income, expenses, and net flow for the period.
    */
-  app.get<{ Querystring: Record<string, string> }>('/cash-flow', async (request, reply) => {
+  app.get<{ Querystring: Record<string, string> }>('/cash-flow', { schema: { querystring: dateRangeQueryJson, response: { 200: cashFlowJson } } }, async (request, reply) => {
     const query = dateRangeSchema.parse(request.query)
     const userId = request.user!.id
     const dateFrom = new Date(`${query.from}T00:00:00Z`)
@@ -106,7 +147,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
    *
    * Returns spending totals per category for the period.
    */
-  app.get<{ Querystring: Record<string, string> }>('/spending-by-category', async (request, reply) => {
+  app.get<{ Querystring: Record<string, string> }>('/spending-by-category', { schema: { querystring: dateRangeQueryJson, response: { 200: categorySpendJson } } }, async (request, reply) => {
     const query = dateRangeSchema.parse(request.query)
     const userId = request.user!.id
     const dateFrom = new Date(`${query.from}T00:00:00Z`)
@@ -116,12 +157,18 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
     return reply.send(spending)
   })
 
+  app.get<{ Querystring: Record<string, string> }>('/spending-by-tag', { schema: { querystring: dateRangeQueryJson, response: { 200: tagSpendJson } } }, async (request, reply) => {
+    const query = dateRangeSchema.parse(request.query)
+    const spending = await computeSpendingByTag(prisma, request.user!.id, new Date(`${query.from}T00:00:00Z`), new Date(`${query.to}T23:59:59Z`))
+    return reply.send(spending)
+  })
+
   /**
    * GET /reports/net-worth?from=2026-09-01&to=2026-09-30
    *
    * Returns daily asset, liability, and net worth trend for the period.
    */
-  app.get<{ Querystring: Record<string, string> }>('/net-worth', async (request, reply) => {
+  app.get<{ Querystring: Record<string, string> }>('/net-worth', { schema: { querystring: dateRangeQueryJson, response: { 200: netWorthJson } } }, async (request, reply) => {
     const query = dateRangeSchema.parse(request.query)
     const userId = request.user!.id
     const dateFrom = new Date(`${query.from}T00:00:00Z`)
@@ -136,7 +183,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
    *
    * Returns allocated vs spent per category for the period.
    */
-  app.get<{ Querystring: Record<string, string> }>('/budget-performance', async (request, reply) => {
+  app.get<{ Querystring: Record<string, string> }>('/budget-performance', { schema: { querystring: periodQueryJson, response: { 200: budgetPerformanceJson, 404: errorJson } } }, async (request, reply) => {
     const query = periodSchema.parse(request.query)
     const userId = request.user!.id
     const userTimezone = request.user!.timezone
@@ -168,7 +215,7 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
    *
    * Returns all active goals and their progress as of a date.
    */
-  app.get<{ Querystring: Record<string, string> }>('/goals', async (request, reply) => {
+  app.get<{ Querystring: Record<string, string> }>('/goals', { schema: { querystring: asOfQueryJson, response: { 200: goalsJson } } }, async (request, reply) => {
     const query = asOfSchema.parse(request.query)
     const userId = request.user!.id
     const asOf = new Date(`${query.asOf}T23:59:59Z`)

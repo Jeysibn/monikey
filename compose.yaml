@@ -17,7 +17,9 @@ services:
     build:
       context: ./backend
       target: build
-    command: ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed"]
+    # Schema deployment is intentionally separate from all data seeding.
+    # Production startup must never create demo users or financial records.
+    command: ["npx", "prisma", "migrate", "deploy"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
     depends_on:
@@ -84,7 +86,7 @@ services:
         condition: service_healthy
 
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.21.8
     profiles: [mail]
     ports:
       - "8025:8025"

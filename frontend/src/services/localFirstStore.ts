@@ -86,8 +86,15 @@ export const localFirstStore = {
   outbox(): Promise<SyncOutboxOperation[]> { return all('outbox') },
   updateOperation(operation: SyncOutboxOperation): Promise<void> { return put('outbox', operation) },
   removeOperation(operationId: string): Promise<void> { return remove('outbox', operationId) },
-  saveReceiptFile(value: { operationId: string; blob: Blob }): Promise<void> { return put('receiptFiles', value) },
-  receiptFile(operationId: string): Promise<{ operationId: string; blob: Blob } | undefined> { return get('receiptFiles', operationId) },
+  async saveReceiptFile(value: { operationId: string; blob: Blob }): Promise<void> {
+    // Store bytes rather than relying on browser-specific Blob structured-clone
+    // behavior; reconstructing the Blob on read also survives browser restarts.
+    await put('receiptFiles', { operationId: value.operationId, blobData: await value.blob.arrayBuffer(), mimeType: value.blob.type })
+  },
+  async receiptFile(operationId: string): Promise<{ operationId: string; blob: Blob } | undefined> {
+    const stored = await get<{ operationId: string; blobData: ArrayBuffer; mimeType: string }>('receiptFiles', operationId)
+    return stored ? { operationId: stored.operationId, blob: new Blob([stored.blobData], { type: stored.mimeType }) } : undefined
+  },
 }
 
 export function newOperationId(): string {

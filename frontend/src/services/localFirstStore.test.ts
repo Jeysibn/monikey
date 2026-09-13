@@ -23,4 +23,12 @@ describe('local-first IndexedDB persistence', () => {
     expect(snapshot?.value).toEqual({ accounts: [{ id: 'account-1', balance: '50000' }] })
     expect(operations).toEqual([expect.objectContaining({ operationId: 'operation-1', status: 'pending', idempotencyKey: 'idem-1' })])
   })
+
+  it('persists a receipt Blob independently from its sync metadata', async () => {
+    const blob = new Blob(['receipt-image'], { type: 'image/jpeg' })
+    await localFirstStore.saveReceiptFile({ operationId: 'receipt-1', blob })
+    const stored = await localFirstStore.receiptFile('receipt-1')
+    expect(stored?.blob.type).toBe('image/jpeg')
+    expect(await stored?.blob.text()).toBe('receipt-image')
+  })
 })

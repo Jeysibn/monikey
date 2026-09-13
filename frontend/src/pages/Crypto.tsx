@@ -3,6 +3,7 @@ import { formatDecimalMoney as formatMoney } from '../utils/currency'
 import { boundedDecimalToNumber } from '../utils/money'
 import { createIdempotencyKey } from '../utils/idempotencyKey'
 import type { paths } from '../api.generated'
+import { cryptoApi } from '../services/cryptoApiGateway'
 import './Crypto.css'
 
 type Coin = { instrumentId?: string; providerAssetId: string | null; symbol: string; name: string; imageUrl: string | null; marketCapRank: number | null; quantity?: string; currentPrice?: string | null; marketValue?: string | null; averageCost?: string; costBasis?: string; realizedPnl?: string; unrealizedPnl?: string | null; totalPnl?: string | null; allocationPct?: string }
@@ -51,10 +52,8 @@ export function Crypto() {
   useEffect(() => {
     if (!backendEnabled()) return
     const controller = new AbortController()
-    void fetch('/api/v1/crypto', { credentials: 'include', signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json() as CryptoPortfolioResponse
-        if (!response.ok) throw new Error('Could not load your crypto portfolio.')
+    void cryptoApi.get<CryptoPortfolioResponse>('/crypto', controller.signal)
+      .then((body) => {
         if ('summary' in body) {
           setTracked(body.coins)
           setSummary({ ...body.summary, baseCurrency: body.baseCurrency })
@@ -70,10 +69,8 @@ export function Crypto() {
   useEffect(() => {
     if (!backendEnabled()) return
     const controller = new AbortController()
-    void fetch('/api/v1/crypto/locations', { credentials: 'include', signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json() as CryptoLocationsResponse
-        if (!response.ok) throw new Error('Could not load crypto locations.')
+    void cryptoApi.get<CryptoLocationsResponse>('/crypto/locations', controller.signal)
+      .then((body) => {
         setLocations(body.locations)
       }).catch((error) => { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : 'Could not load crypto locations.') })
     return () => controller.abort()
@@ -85,9 +82,7 @@ export function Crypto() {
     const timer = window.setTimeout(async () => {
       setSearching(true)
       try {
-        const response = await fetch(`/api/v1/crypto/search?q=${encodeURIComponent(query)}`, { credentials: 'include', signal: controller.signal })
-        const body = await response.json() as CryptoSearchResponse
-        if (!response.ok) throw new Error('Could not search crypto right now.')
+        const body = await cryptoApi.get<CryptoSearchResponse>(`/crypto/search?q=${encodeURIComponent(query)}`, controller.signal)
         setResults(body.coins)
       } catch (error) { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : 'Could not search crypto right now.') }
       finally { if (!controller.signal.aborted) setSearching(false) }
@@ -98,9 +93,7 @@ export function Crypto() {
   useEffect(() => {
     if (!backendEnabled() || activeTab !== 'transactions') return
     const controller = new AbortController()
-    void fetch(`/api/v1/crypto/activities?type=${activityType}&q=${encodeURIComponent(activityQuery)}`, { credentials: 'include', signal: controller.signal }).then(async (response) => {
-      const body = await response.json() as CryptoActivitiesResponse
-      if (!response.ok) throw new Error('Could not load crypto transactions.')
+    void cryptoApi.get<CryptoActivitiesResponse>(`/crypto/activities?type=${activityType}&q=${encodeURIComponent(activityQuery)}`, controller.signal).then((body) => {
       setActivities(body.activities)
     }).catch((error) => { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : 'Could not load crypto transactions.') })
     return () => controller.abort()
@@ -109,9 +102,7 @@ export function Crypto() {
   useEffect(() => {
     if (!backendEnabled() || activeTab !== 'chart') return
     const controller = new AbortController()
-    void fetch(`/api/v1/crypto/history?range=${historyRange}`, { credentials: 'include', signal: controller.signal }).then(async (response) => {
-      const body = await response.json() as CryptoHistoryResponse
-      if (!response.ok) throw new Error('Could not load portfolio history.')
+    void cryptoApi.get<CryptoHistoryResponse>(`/crypto/history?range=${historyRange}`, controller.signal).then((body) => {
       setHistory(body.points)
     }).catch((error) => { if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : 'Could not load portfolio history.') })
     return () => controller.abort()
@@ -121,9 +112,8 @@ export function Crypto() {
   async function track(coin: Coin) {
     if (!coin.providerAssetId) { setMessage('This legacy coin needs a CoinGecko market-data link before it can be re-tracked.'); return }
     if (!backendEnabled()) { setTracked((current) => current.some((item) => item.providerAssetId === coin.providerAssetId) ? current : [...current, coin]); setMessage(`${coin.name} is now tracked.`); return }
-    const response = await fetch('/api/v1/crypto/coins', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ providerAssetId: coin.providerAssetId }) })
-    const body = await response.json() as { coin?: { instrumentId: string }; error?: { message?: string } }
-    if (!response.ok) { setMessage(body.error?.message ?? 'Could not track this coin.'); return }
+    let body: { coin?: { instrumentId: string } }
+    try { body = await cryptoApi.post<{ coin?: { instrumentId: string } }>('/crypto/coins', { providerAssetId: coin.providerAssetId }) } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not track this coin.'); return }
     setTracked((current) => current.some((item) => item.providerAssetId === coin.providerAssetId) ? current : [...current, { ...coin, instrumentId: body.coin?.instrumentId }])
     setQuery(''); setResults([]); setMessage(`${coin.name} is now tracked.`)
   }
@@ -131,8 +121,7 @@ export function Crypto() {
     if (!window.confirm(`Delete this ${activity.type} record for ${activity.symbol}?`)) return
     if (!backendEnabled()) { setActivities((current) => current.filter((item) => item.id !== activity.id)); setMessage(`${activity.symbol} ${activity.type} removed from mock activity.`); return }
     const resource = activity.type === 'transfer' ? 'transfers' : 'trades'
-    const response = await fetch(`/api/v1/crypto/${resource}/${activity.id}`, { method: 'DELETE', credentials: 'include' })
-    if (!response.ok) { const body = await response.json() as { error?: { message?: string } }; setMessage(body.error?.message ?? 'Could not delete this transaction.'); return }
+    try { await cryptoApi.delete(`/crypto/${resource}/${activity.id}`) } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete this transaction.'); return }
     setActivities((current) => current.filter((item) => item.id !== activity.id)); setRefreshKey((key) => key + 1); setMessage(`${activity.symbol} ${activity.type} deleted.`)
   }
 
@@ -160,8 +149,7 @@ export function Crypto() {
     {detailCoin && <CryptoCoinDetail coin={detailCoin} baseCurrency={summary?.baseCurrency ?? 'PHP'} onClose={() => setDetailCoin(null)} onAddTransaction={() => { setTransactionCoin(detailCoin); setDetailCoin(null) }} onRemove={async () => {
       if (!detailCoin.instrumentId || !window.confirm(`Remove ${detailCoin.name} from My Coins? Its transaction history will remain.`)) return
       if (!backendEnabled()) { setTracked((current) => current.filter((coin) => coin.providerAssetId !== detailCoin.providerAssetId)); setDetailCoin(null); return }
-      const response = await fetch(`/api/v1/crypto/coins/${detailCoin.instrumentId}`, { method: 'DELETE', credentials: 'include' })
-      if (!response.ok) { setMessage('Could not remove this coin.'); return }
+      try { await cryptoApi.delete(`/crypto/coins/${detailCoin.instrumentId}`) } catch { setMessage('Could not remove this coin.'); return }
       setDetailCoin(null); setRefreshKey((key) => key + 1); setMessage(`${detailCoin.name} was removed from My Coins. Its history was retained.`)
     }} />}
   </section>
@@ -183,15 +171,13 @@ function CryptoCoinDetail({ coin, baseCurrency, onClose, onAddTransaction, onRem
   useEffect(() => {
     if (!backendEnabled() || !coin.instrumentId) { setWhereHeld([{ locationId: 'demo-binance', name: 'Binance', type: 'exchange', units: coin.quantity ?? '0' }]); return }
     const controller = new AbortController()
-    void fetch(`/api/v1/crypto/coins/${coin.instrumentId}`, { credentials: 'include', signal: controller.signal }).then(async (response) => { const body = await response.json() as { coin?: { whereHeld?: typeof whereHeld }; error?: { message?: string } }; if (!response.ok) throw new Error(body.error?.message ?? 'Could not load location balances.'); setWhereHeld(body.coin?.whereHeld ?? []) }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load location balances.') })
+    void cryptoApi.get<{ coin?: { whereHeld?: typeof whereHeld } }>(`/crypto/coins/${coin.instrumentId}`, controller.signal).then((body) => { setWhereHeld(body.coin?.whereHeld ?? []) }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load location balances.') })
     return () => controller.abort()
   }, [coin.instrumentId, coin.quantity])
   useEffect(() => {
     if (!backendEnabled() || !coin.instrumentId) return
     const controller = new AbortController()
-    void fetch(`/api/v1/crypto/activities?instrumentId=${encodeURIComponent(coin.instrumentId)}`, { credentials: 'include', signal: controller.signal }).then(async (response) => {
-      const body = await response.json() as { activities?: Activity[] }
-      if (!response.ok) throw new Error('Could not load coin transaction history.')
+    void cryptoApi.get<{ activities?: Activity[] }>(`/crypto/activities?instrumentId=${encodeURIComponent(coin.instrumentId)}`, controller.signal).then((body) => {
       setCoinActivities(body.activities ?? [])
     }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load coin transaction history.') })
     return () => controller.abort()
@@ -199,9 +185,7 @@ function CryptoCoinDetail({ coin, baseCurrency, onClose, onAddTransaction, onRem
   useEffect(() => {
     if (!backendEnabled() || !coin.instrumentId) return
     const controller = new AbortController()
-    void fetch(`/api/v1/crypto/coins/${coin.instrumentId}/history?range=1m`, { credentials: 'include', signal: controller.signal }).then(async (response) => {
-      const body = await response.json() as { points?: HistoryPoint[] }
-      if (!response.ok) throw new Error('Could not load coin price history.')
+    void cryptoApi.get<{ points?: HistoryPoint[] }>(`/crypto/coins/${coin.instrumentId}/history?range=1m`, controller.signal).then((body) => {
       setCoinHistory(body.points ?? [])
     }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load coin price history.') })
     return () => controller.abort()
@@ -225,8 +209,7 @@ function CryptoTransactionDialog({ coin, prefill, locations, baseCurrency, onClo
   async function addLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget); const draft = { name: String(data.get('name') ?? ''), type: String(data.get('type') ?? 'exchange') as Location['type'] }
     if (!backendEnabled()) { onLocations([...locations, { id: `demo-${draft.name}`, ...draft }]); setShowLocation(false); return }
-    const response = await fetch('/api/v1/crypto/locations', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft) }); const body = await response.json() as { location?: Location; error?: { message?: string } }
-    if (!response.ok || !body.location) { setError(body.error?.message ?? 'Could not add this location.'); return }; onLocations([...locations, body.location]); setShowLocation(false)
+    try { const body = await cryptoApi.post<{ location?: Location }>('/crypto/locations', draft); if (!body.location) { setError('Could not add this location.'); return }; onLocations([...locations, body.location]); setShowLocation(false) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not add this location.') }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(null); const data = new FormData(event.currentTarget); const units = String(data.get('units') || prefill?.units || ''); const locationId = String(data.get('locationId') || prefill?.locationId || '')
@@ -238,7 +221,7 @@ function CryptoTransactionDialog({ coin, prefill, locations, baseCurrency, onClo
       ? { instrumentId: coin.instrumentId, fromLocationId: locationId, toLocationId: String(data.get('toLocationId') ?? ''), units, networkFeeUnits: String(data.get('networkFeeUnits') ?? '0'), occurredOn: String(data.get('occurredOn')), occurredTime: String(data.get('occurredTime') || '') || null, note: String(data.get('note') || '') || null, idempotencyKey }
       : { instrumentId: coin.instrumentId, type: kind, units, priceAmount: String(data.get('priceAmount') || prefill?.priceAmount || ''), feeAmount: String(data.get('feeAmount') || prefill?.feeAmount || '0'), currencyCode: baseCurrency, locationId, occurredOn: String(data.get('occurredOn') || prefill?.occurredOn || ''), occurredTime: String(data.get('occurredTime') || prefill?.occurredTime || '') || null, note: String(data.get('note') || prefill?.note || '') || null, idempotencyKey }
     setPending(true)
-    try { const response = await fetch(`/api/v1/crypto/${kind === 'transfer' ? 'transfers' : 'trades'}`, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); const body = await response.json() as { error?: { message?: string } }; if (!response.ok) throw new Error(body.error?.message ?? 'Could not record this transaction.'); idempotencyKeyRef.current = null; onMessage(`${coin.symbol} ${kind} recorded. No order was sent.`); onRefresh(); onClose() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not record this transaction.') } finally { setPending(false) }
+    try { await cryptoApi.post(`/crypto/${kind === 'transfer' ? 'transfers' : 'trades'}`, payload); idempotencyKeyRef.current = null; onMessage(`${coin.symbol} ${kind} recorded. No order was sent.`); onRefresh(); onClose() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not record this transaction.') } finally { setPending(false) }
   }
   const calculateQuantityFromAmount = (event: ChangeEvent<HTMLInputElement>) => {
     const form = event.currentTarget.form

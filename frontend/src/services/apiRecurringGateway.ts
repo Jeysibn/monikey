@@ -1,7 +1,7 @@
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import { FinanceApiError } from './apiFinanceGateway'
 import type { paths } from '../api.generated'
-import { minorUnitsToMajorNumber } from '../utils/money'
+import { majorNumberToMinorUnits, minorUnitsToMajorNumber } from '../utils/money'
 
 type ApiRecurringItem = paths['/recurring']['post']['responses'][201]['content']['application/json']
 export type RecurringSuggestion = paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']['suggestions'][number]
@@ -32,7 +32,7 @@ export class ApiRecurringGateway implements RecurringGateway {
 
   async load(): Promise<RecurringItem[]> { return (await this.request<paths['/recurring']['get']['responses'][200]['content']['application/json']>('/recurring')).items.map(this.map) }
   async add(input: AddRecurringItemInput): Promise<RecurringItem> {
-    return this.map(await this.request<ApiRecurringItem>('/recurring', { method: 'POST', body: JSON.stringify({ ...input, amountMinor: Math.round(input.amount * 100).toString() }) }))
+    return this.map(await this.request<ApiRecurringItem>('/recurring', { method: 'POST', body: JSON.stringify({ ...input, amountMinor: majorNumberToMinorUnits(input.amount) }) }))
   }
   async setStatus(id: string, status: 'active' | 'paused'): Promise<RecurringItem> {
     return this.map(await this.request<ApiRecurringItem>(`/recurring/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }))
@@ -43,7 +43,7 @@ export class ApiRecurringGateway implements RecurringGateway {
   async update(id: string, input: Partial<AddRecurringItemInput>): Promise<RecurringItem> {
     const body: Record<string, unknown> = {}
     if (input.merchant !== undefined) body.merchant = input.merchant
-    if (input.amount !== undefined) body.amountMinor = Math.round(input.amount * 100).toString()
+    if (input.amount !== undefined) body.amountMinor = majorNumberToMinorUnits(input.amount)
     if (input.frequency !== undefined) body.frequency = input.frequency
     if (input.nextDueDate !== undefined) body.nextDueDate = input.nextDueDate
     if (input.accountId !== undefined) body.accountId = input.accountId

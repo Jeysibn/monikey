@@ -14,7 +14,7 @@ import type {
   UpdateGoalInput,
 } from '../domain/finance'
 import type { paths } from '../api.generated'
-import { minorUnitsToMajorNumber } from '../utils/money'
+import { majorNumberToMinorUnits, minorUnitsToMajorNumber } from '../utils/money'
 
 type ApiAccount = paths['/accounts']['post']['responses'][201]['content']['application/json']
 type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']['application/json']
@@ -110,7 +110,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<TransactionMutationResponse>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: Math.round(input.amount * 100).toString(), feeMinor: Math.round((input.fee ?? 0) * 100).toString(), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
+    const result = await this.request<TransactionMutationResponse>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: majorNumberToMinorUnits(input.amount), feeMinor: majorNumberToMinorUnits(input.fee ?? 0), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
     return this.mapTransaction(result.transaction)
   }
 
@@ -120,8 +120,8 @@ export class ApiFinanceGateway implements FinanceGateway {
     if (input.categoryId !== undefined) updatePayload.categoryId = input.categoryId
     if (input.date !== undefined) updatePayload.occurredOn = input.date
     if (input.time !== undefined) updatePayload.occurredTime = input.time ?? null
-    if (input.amount !== undefined) updatePayload.amountMinor = Math.round(input.amount * 100).toString()
-    if (input.fee !== undefined) updatePayload.feeMinor = Math.round((input.fee ?? 0) * 100).toString()
+    if (input.amount !== undefined) updatePayload.amountMinor = majorNumberToMinorUnits(input.amount)
+    if (input.fee !== undefined) updatePayload.feeMinor = majorNumberToMinorUnits(input.fee ?? 0)
     if (input.note !== undefined) updatePayload.note = input.note
 
     const result = await this.request<TransactionMutationResponse>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
@@ -134,13 +134,13 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account> {
-    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: Math.round(input.balance * 100).toString(), lastFour: input.lastFour ?? null }
+    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: majorNumberToMinorUnits(input.balance), lastFour: input.lastFour ?? null }
     const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify(payload) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
-    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: Math.round(input.balance * 100).toString(), creditLimitMinor: Math.round(input.limit * 100).toString(), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: Math.round(input.minPayment * 100).toString() }
+    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: majorNumberToMinorUnits(input.balance), creditLimitMinor: majorNumberToMinorUnits(input.limit), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: majorNumberToMinorUnits(input.minPayment) }
     const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify(payload) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
@@ -148,14 +148,14 @@ export class ApiFinanceGateway implements FinanceGateway {
 
   async updateAccount(accountId: string, input: UpdateAccountInput, signal?: AbortSignal): Promise<Account> {
     const { balance, ...rest } = input
-    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100).toString() }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: majorNumberToMinorUnits(balance) }) }
     const account = await this.request<ApiAccount>(`/accounts/${accountId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async updateCreditCard(cardId: string, input: UpdateCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
     const { balance, ...rest } = input
-    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: Math.round(balance * 100).toString() }) }
+    const body: UpdateAccountRequest = { ...rest, ...(balance !== undefined && { currentBalanceMinor: majorNumberToMinorUnits(balance) }) }
     const account = await this.request<ApiAccount>(`/accounts/${cardId}`, { method: 'PATCH', signal, body: JSON.stringify(body) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balance: minor(account.currentBalanceMinor), limit: minor(detail.creditLimitMinor), dueDate: `${new Date().toISOString().slice(0, 7)}-${String(detail.dueDay).padStart(2, '0')}`, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
@@ -170,13 +170,13 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal> {
-    const payload: CreateGoalRequest = { name: input.name, targetMinor: Math.round(input.targetAmount * 100).toString(), targetDate: input.targetDate, monthlyContributionMinor: input.monthlyContribution == null ? null : Math.round(input.monthlyContribution * 100).toString() }
+    const payload: CreateGoalRequest = { name: input.name, targetMinor: majorNumberToMinorUnits(input.targetAmount), targetDate: input.targetDate, monthlyContributionMinor: input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution) }
     const goal = await this.request<ApiGoal>('/goals', { method: 'POST', signal, body: JSON.stringify(payload) })
     return this.mapGoal(goal)
   }
 
   async addGoalFunds(goalId: string, sourceAccountId: string, amount: number, date: string, signal?: AbortSignal): Promise<Goal> {
-    await this.request(`/goals/${goalId}/fund`, { method: 'POST', signal, body: JSON.stringify({ sourceAccountId, amountMinor: Math.round(amount * 100).toString(), occurredOn: date }) })
+    await this.request(`/goals/${goalId}/fund`, { method: 'POST', signal, body: JSON.stringify({ sourceAccountId, amountMinor: majorNumberToMinorUnits(amount), occurredOn: date }) })
     const state = await this.load(signal)
     const goal = state.goals.find((candidate) => candidate.id === goalId)
     if (!goal) throw new Error('Goal was not returned after funding')
@@ -186,9 +186,9 @@ export class ApiFinanceGateway implements FinanceGateway {
   async updateGoal(goalId: string, input: UpdateGoalInput, signal?: AbortSignal): Promise<Goal> {
     const updatePayload: UpdateGoalRequest = {}
     if (input.name !== undefined) updatePayload.name = input.name
-    if (input.targetAmount !== undefined) updatePayload.targetMinor = Math.round(input.targetAmount * 100).toString()
+    if (input.targetAmount !== undefined) updatePayload.targetMinor = majorNumberToMinorUnits(input.targetAmount)
     if (input.targetDate !== undefined) updatePayload.targetDate = input.targetDate
-    if (input.monthlyContribution !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContribution == null ? null : Math.round(input.monthlyContribution * 100).toString()
+    if (input.monthlyContribution !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution)
 
     const goal = await this.request<ApiGoal>(`/goals/${goalId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
     return this.mapGoal(goal)
@@ -199,11 +199,11 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async createBudgetPeriod(periodStart: string, periodEnd: string, incomePool: number, signal?: AbortSignal): Promise<ApiBudgetPeriod> {
-    return this.request<ApiBudgetPeriod>('/budgets', { method: 'POST', signal, body: JSON.stringify({ periodStart, periodEnd, incomePoolMinor: Math.round(incomePool * 100).toString() }) })
+    return this.request<ApiBudgetPeriod>('/budgets', { method: 'POST', signal, body: JSON.stringify({ periodStart, periodEnd, incomePoolMinor: majorNumberToMinorUnits(incomePool) }) })
   }
 
   async setBudgetAllocation(periodId: string, categoryId: string, allocated: number, signal?: AbortSignal): Promise<BudgetCategory> {
-    const result = await this.request<ApiBudgetAllocation>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: Math.round(allocated * 100).toString() }) })
+    const result = await this.request<ApiBudgetAllocation>(`/budgets/${periodId}/allocations`, { method: 'POST', signal, body: JSON.stringify({ categoryId, allocatedMinor: majorNumberToMinorUnits(allocated) }) })
     return { id: categoryId, allocated: minor(result.allocatedMinor), spent: minor(result.spentMinor) }
   }
 

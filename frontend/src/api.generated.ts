@@ -2411,6 +2411,10 @@ export interface paths {
                                 symbol: string;
                                 name: string;
                                 tracked: boolean;
+                                quantity: string;
+                                averageCost: string;
+                                costBasis: string;
+                                realizedPnl: string;
                                 market: null;
                                 marketDataLinkRequired: boolean;
                             }[];
@@ -2419,6 +2423,22 @@ export interface paths {
                                 stale: true;
                                 /** @enum {unknown} */
                                 code: "CRYPTO_PROVIDER_UNAVAILABLE";
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
                             };
                         };
                     };
@@ -3000,6 +3020,22 @@ export interface paths {
                                 timestamp: string;
                                 valueAmount: string;
                             }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                            };
                         };
                     };
                 };
@@ -3920,9 +3956,6 @@ export interface paths {
                             categoryId: string;
                             categoryName: string;
                             spent: string;
-                            budget?: number;
-                            remaining?: number;
-                            utilization?: number;
                         }[];
                     };
                 };
@@ -4569,11 +4602,29 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            linkToken: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
                 };
             };
         };
@@ -4599,14 +4650,40 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        publicToken: string;
+                        linkToken: string;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
-                200: {
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            itemId: string;
+                            accountIds: string[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
                 };
             };
         };
@@ -4637,7 +4714,19 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            itemId: string;
+                            institutionName: string | null;
+                            accountIds: string[];
+                            status: string;
+                            lastSyncedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                        }[];
+                    };
                 };
             };
         };
@@ -4665,14 +4754,58 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        webhook_type: string;
+                        item_id: string;
+                        error?: {
+                            [key: string]: unknown;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    };
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
                 };
             };
         };

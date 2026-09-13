@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boundedDecimalToNumber, minorUnitsToMajorNumber, parseMinorUnitInput } from './money'
+import { boundedDecimalToNumber, majorNumberToMinorUnits, minorUnitsToMajorNumber, parseMinorUnitInput } from './money'
 import { formatMinorUnits } from './currency'
 
 describe('parseMinorUnitInput', () => {
@@ -28,6 +28,18 @@ describe('minorUnitsToMajorNumber', () => {
     expect(() => minorUnitsToMajorNumber('9007199254740992')).toThrow(RangeError)
     expect(() => minorUnitsToMajorNumber('12.34')).toThrow(TypeError)
     expect(() => minorUnitsToMajorNumber('not-money')).toThrow(TypeError)
+  })
+})
+
+describe('majorNumberToMinorUnits', () => {
+  it('serializes finite numeric domain values as exact decimal strings', () => {
+    expect(majorNumberToMinorUnits(1250.5)).toBe('125050')
+    expect(majorNumberToMinorUnits(19.99)).toBe('1999')
+  })
+
+  it('rejects non-finite and unsafe transport values', () => {
+    expect(() => majorNumberToMinorUnits(Number.NaN)).toThrow(TypeError)
+    expect(() => majorNumberToMinorUnits(Number.MAX_SAFE_INTEGER)).toThrow(RangeError)
   })
 })
 

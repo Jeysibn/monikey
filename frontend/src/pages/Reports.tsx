@@ -17,6 +17,7 @@ import {
   type ReportView,
 } from '../state/reportsSelectors'
 import { formatMoney, formatMinorUnits } from '../utils/currency'
+import { minorUnitsToMajorNumber } from '../utils/money'
 import { addDaysToIso, formatGoalDate } from '../utils/date'
 import './Reports.css'
 import { useBackendAuthOptional } from '../components/BackendAuthContext'
@@ -33,6 +34,14 @@ const TREND_UNIT_FOR_VIEW: Record<ReportView, ExpensesTrendUnit> = {
   yearly: 'monthly',
 }
 type TagSpend = paths['/reports/spending-by-tag']['get']['responses'][200]['content']['application/json'][number]
+type CashFlowReport = paths['/reports/cash-flow']['get']['responses'][200]['content']['application/json']
+type NetWorthReport = paths['/reports/net-worth']['get']['responses'][200]['content']['application/json']
+type ChartPoint = { label: string; value: number; day: string; amount: number; startIso: string; endIso: string; rangeLabel: string }
+type MockExpensePoint = { day: string; amount: number; startIso: string; endIso: string; rangeLabel: string }
+function chartPoint(point: IllustrativeTrendPoint | MockExpensePoint): ChartPoint {
+  if ('value' in point) return { label: point.label, value: point.value, day: point.label, amount: point.value, startIso: point.label, endIso: point.label, rangeLabel: point.label }
+  return { label: point.day, value: point.amount, ...point }
+}
 
 /** Plain-div bar chart for an illustrative or real trend — matches the app's no-charting-library convention (see Budget.tsx's `.bva-bars`). */
 function TrendBarChart({
@@ -40,7 +49,7 @@ function TrendBarChart({
   color,
   formatValue,
 }: {
-  points: IllustrativeTrendPoint[]
+  points: ChartPoint[]
   color: string
   formatValue: (v: number) => string
 }) {
@@ -76,6 +85,8 @@ export function Reports() {
   const [customFrom, setCustomFrom] = useState(todayIso)
   const [customTo, setCustomTo] = useState(todayIso)
   const [tagSpend, setTagSpend] = useState<TagSpend[]>([])
+  const [cashFlowReport, setCashFlowReport] = useState<CashFlowReport>([])
+  const [netWorthReport, setNetWorthReport] = useState<NetWorthReport>([])
 
   const period = useMemo(() => custom ? { start: customFrom, end: customTo >= customFrom ? addDaysToIso(customTo, 1) : customFrom } : reportingPeriodForView(todayIso, view), [custom, customFrom, customTo, todayIso, view])
   const periodLabel = custom ? `${customFrom} to ${customTo}` : reportPeriodLabel(todayIso, view)
@@ -87,6 +98,27 @@ export function Reports() {
       .catch(() => setTagSpend([]))
   }, [backend, period.start, period.end])
 
+  useEffect(() => {
+    if (!backend) return
+    const controller = new AbortController()
+    const query = `from=${period.start}&to=${addDaysToIso(period.end, -1)}`
+    void Promise.all([
+      fetch(`/api/v1/reports/cash-flow?${query}`, { credentials: 'include', signal: controller.signal }),
+      fetch(`/api/v1/reports/net-worth?${query}`, { credentials: 'include', signal: controller.signal }),
+    ]).then(async ([cashFlowResponse, netWorthResponse]) => {
+      if (!cashFlowResponse.ok || !netWorthResponse.ok) throw new Error('Historical report data is unavailable.')
+      setCashFlowReport(await cashFlowResponse.json() as CashFlowReport)
+      setNetWorthReport(await netWorthResponse.json() as NetWorthReport)
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setCashFlowReport([])
+        setNetWorthReport([])
+        setTagSpend([])
+      }
+    })
+    return () => controller.abort()
+  }, [backend, period.start, period.end])
+
   const income = totalIncome(state, period)
   const expenses = totalExpenses(state, period)
   const netFlow = netCashFlow(state, period)
@@ -94,9 +126,12 @@ export function Reports() {
   const hasIncome = income > 0
 
   const trendUnit = TREND_UNIT_FOR_VIEW[view]
-  const trendPoints = finance.expensesTrend(trendUnit)
-  const trendTitle = finance.expensesTrendTitle(trendUnit)
-  const trendRange = finance.expensesTrendRangeLabel(trendPoints)
+  const mockTrendPoints = finance.expensesTrend(trendUnit)
+  const trendPoints: ChartPoint[] = backend
+    ? cashFlowReport.map((point) => ({ label: point.date, day: point.date.slice(5), startIso: point.date, endIso: point.date, value: minorUnitsToMajorNumber(point.expenses), amount: minorUnitsToMajorNumber(point.expenses), rangeLabel: point.date }))
+    : mockTrendPoints.map(chartPoint)
+  const trendTitle = backend ? 'Daily actuals' : finance.expensesTrendTitle(trendUnit)
+  const trendRange = backend ? (cashFlowReport.length ? `${cashFlowReport[0]!.date} to ${cashFlowReport.at(-1)!.date}` : 'No recorded activity') : finance.expensesTrendRangeLabel(mockTrendPoints)
   const trendMax = Math.max(1, ...trendPoints.map((p) => p.amount))
 
   const { categories, budgetCategories, creditCards } = state
@@ -105,9 +140,11 @@ export function Reports() {
     .map((c) => ({ ...c, name: categories.find((cc) => cc.id === c.id)?.name ?? c.id }))
 
   const netWorth = netWorthNow(state)
-  const netWorthTrend = netWorthTrendSample(state, todayIso)
-  const balanceTrend = accountBalanceTrendSample(state, todayIso)
-  const debtTrend = debtTrendSample(state, todayIso)
+  const netWorthTrend = backend
+    ? netWorthReport.map((point) => ({ label: point.date, day: point.date.slice(5), startIso: point.date, endIso: point.date, value: minorUnitsToMajorNumber(point.netWorth), amount: minorUnitsToMajorNumber(point.netWorth), rangeLabel: point.date }))
+    : netWorthTrendSample(state, todayIso).map(chartPoint)
+  const balanceTrend = accountBalanceTrendSample(state, todayIso).map(chartPoint)
+  const debtTrend = debtTrendSample(state, todayIso).map(chartPoint)
   function exportCsv() {
     const rows = [['Date', 'Title', 'Type', 'Amount', 'Currency', 'Category'], ...state.transactions.filter((transaction) => transaction.date >= period.start && transaction.date < period.end).map((transaction) => [transaction.date, transaction.title, transaction.type, String(Math.abs(transaction.amount)), 'PHP', categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'])]
     const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(',')).join('\n')
@@ -259,7 +296,7 @@ export function Reports() {
               Liabilities <span className="num">{formatMoney(netWorth.liabilities, { withCents: false })}</span>
             </li>
           </ul>
-          <IllustrativeNote>Illustrative 6-month trend — Monikey does not yet track historical net worth; only today&apos;s figure is real.</IllustrativeNote>
+          {backend ? <p className="rp-illustrative-note">Recorded net-worth snapshots for the selected period.</p> : <IllustrativeNote>Illustrative 6-month trend — Monikey does not yet track historical net worth; only today&apos;s figure is real.</IllustrativeNote>}
           <TrendBarChart points={netWorthTrend} color="var(--cyan)" formatValue={(v) => formatMoney(v, { withCents: false })} />
         </Card>
 

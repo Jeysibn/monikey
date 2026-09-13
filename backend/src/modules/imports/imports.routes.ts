@@ -84,6 +84,12 @@ const batchParamsJson = { type: 'object', additionalProperties: false, required:
 const batchListQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' } } } as const
 const stagedRowsQueryJson = { type: 'object', additionalProperties: false, properties: { status: { type: 'string' }, limit: { type: 'string', pattern: '^\\d+$' }, offset: { type: 'string', pattern: '^\\d+$' } } } as const
 const addRowBodyJson = { type: 'object', additionalProperties: false, required: ['dedupKey', 'provider', 'title', 'amountMinor', 'occurredOn'], properties: { dedupKey: { type: 'string', minLength: 1 }, provider: { type: 'string', minLength: 1 }, providerTransactionId: { type: 'string' }, title: { type: 'string', minLength: 1, maxLength: 255 }, description: { type: 'string' }, amountMinor: { type: 'string', pattern: '^\\d+$' }, occurredOn: { type: 'string', format: 'date' }, currencyCode: { type: 'string', minLength: 3, maxLength: 3, default: 'PHP' }, merchantName: { type: 'string' } } } as const
+const plaidLinkTokenBodyJson = { type: 'object', additionalProperties: false, required: ['linkToken'], properties: { linkToken: { type: 'string', minLength: 1 } } } as const
+const plaidExchangeBodyJson = { type: 'object', additionalProperties: false, required: ['publicToken', 'linkToken'], properties: { publicToken: { type: 'string', minLength: 1 }, linkToken: { type: 'string', minLength: 1 } } } as const
+const plaidExchangeResultJson = { type: 'object', additionalProperties: false, required: ['itemId', 'accountIds'], properties: { itemId: { type: 'string' }, accountIds: { type: 'array', items: { type: 'string' } } } } as const
+const plaidItemJson = { type: 'object', additionalProperties: false, required: ['id', 'itemId', 'institutionName', 'accountIds', 'status', 'lastSyncedAt', 'createdAt'], properties: { id: { type: 'string', format: 'uuid' }, itemId: { type: 'string' }, institutionName: { anyOf: [{ type: 'string' }, { type: 'null' }] }, accountIds: { type: 'array', items: { type: 'string' } }, status: { type: 'string' }, lastSyncedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' } } } as const
+const plaidWebhookBodyJson = { type: 'object', additionalProperties: true, required: ['webhook_type', 'item_id'], properties: { webhook_type: { type: 'string' }, item_id: { type: 'string' }, error: { type: 'object', additionalProperties: true } } } as const
+const plaidWebhookResultJson = { type: 'object', additionalProperties: false, required: ['ok'], properties: { ok: { type: 'boolean' } } } as const
 
 const plaidExchangeTokenSchema = z.object({
   publicToken: z.string().min(1),
@@ -259,7 +265,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/plaid/link-token',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { response: { 201: plaidLinkTokenBodyJson, 503: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
 
@@ -290,7 +296,7 @@ export async function createImportsRoutes(
     Body: z.infer<typeof plaidExchangeTokenSchema>
   }>(
     '/plaid/exchange-token',
-    { preHandler: requireOrigin },
+    { preValidation: [requireOrigin, requireAuth], schema: { body: plaidExchangeBodyJson, response: { 201: plaidExchangeResultJson, 400: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const input = plaidExchangeTokenSchema.parse(request.body)
@@ -337,6 +343,7 @@ export async function createImportsRoutes(
    */
   app.get(
     '/plaid/items',
+    { schema: { response: { 200: { type: 'array', items: plaidItemJson } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       const items = await importsService.listPlaidItems(userId)
@@ -362,6 +369,7 @@ export async function createImportsRoutes(
    */
   app.post(
     '/plaid/webhook',
+    { schema: { body: plaidWebhookBodyJson, response: { 200: plaidWebhookResultJson, 400: importErrorJson, 401: importErrorJson } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const signature = request.headers['plaid-verification'] as string
 

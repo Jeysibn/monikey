@@ -22,9 +22,6 @@ export interface SpendingByCategory {
   categoryId: string
   categoryName: string
   spent: string
-  budget?: number
-  remaining?: number
-  utilization?: number
 }
 
 export interface SpendingByTag { tagId: string; tagName: string; spent: string }

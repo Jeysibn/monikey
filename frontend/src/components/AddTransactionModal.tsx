@@ -508,6 +508,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
                 type="file"
                 accept="image/*,.pdf"
                 className="visually-hidden"
+                aria-label="Receipt attachment"
                 onChange={(e) => { void handleReceipt(e.target.files?.[0]) }}
               />
               <button type="button" className="tx-receipt" onClick={() => fileInputRef.current?.click()}>

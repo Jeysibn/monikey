@@ -28,6 +28,14 @@ export function minorUnitsToMajorNumber(value: string): number {
   return Number(minor) / 100
 }
 
+/** Converts an existing numeric domain value to an exact API minor-unit string. */
+export function majorNumberToMinorUnits(value: number): string {
+  if (!Number.isFinite(value)) throw new TypeError('Money value must be finite.')
+  const minor = Math.round(value * 100)
+  if (!Number.isSafeInteger(minor)) throw new RangeError('Money value exceeds the safe frontend transport range.')
+  return minor.toString()
+}
+
 /** Numeric boundary for percentages, chart coordinates, and form previews. */
 export function boundedDecimalToNumber(value: string, bounds: { min: number; max: number }): number {
   if (!/^-?\d+(?:\.\d+)?$/.test(value.trim())) throw new TypeError('Value must be a plain decimal string.')

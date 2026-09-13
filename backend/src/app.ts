@@ -44,6 +44,8 @@ import { tagsRoutes } from './modules/tags/tags.routes.js'
 export interface BuildAppOptions {
   env: Env
   prisma: PrismaClient
+  /** Test-only crypto catalog override; production always uses the configured CoinGecko adapter. */
+  cryptoCatalog?: CoinGeckoCryptoCatalog
   /** Test-only override for "now" used by session issuance/resolution. Never wired to client input in production. */
   clock?: Clock
   /** Test-only override for the outbound email provider (e.g. a capturing fake for password-reset assertions). Defaults to `createEmailProvider(env)`. */
@@ -201,7 +203,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         env,
         appOrigin: env.APP_ORIGIN,
       })
-      const cryptoCatalog = new CoinGeckoCryptoCatalog(
+      const cryptoCatalog = opts.cryptoCatalog ?? new CoinGeckoCryptoCatalog(
         env.COINGECKO_API_KEY,
         env.COINGECKO_CATALOG_URL,
         fetch,

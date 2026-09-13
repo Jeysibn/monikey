@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Reports } from './Reports'
 import { FinanceProvider } from '../state/FinanceProvider'
 import { fixedClock, DEMO_TODAY_ISO } from '../utils/clock'
+import { BackendAuthContext } from '../components/BackendAuthContext'
 
 afterEach(cleanup)
 
@@ -83,5 +84,20 @@ describe('Reports page', () => {
     expect(screen.getByText('Net Worth')).toBeDefined()
     expect(screen.getByText('Debt Trend')).toBeDefined()
     expect(screen.getByText('Account Balance Trend')).toBeDefined()
+  })
+
+  it('uses backend cash-flow and net-worth history instead of illustrative trend data', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/reports/cash-flow')) return new Response(JSON.stringify([{ date: '2026-09-01', income: '10000', expenses: '2500', netFlow: '7500' }]))
+      if (url.includes('/reports/net-worth')) return new Response(JSON.stringify([{ date: '2026-09-01', assetTotal: '100000', liabilityTotal: '20000', netWorth: '80000' }]))
+      if (url.includes('/reports/spending-by-tag')) return new Response(JSON.stringify([]))
+      throw new Error(`Unexpected report request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<BackendAuthContext.Provider value={{ logout: vi.fn(async () => undefined) }}><FinanceProvider clock={fixedClock(DEMO_TODAY_ISO)}><Reports /></FinanceProvider></BackendAuthContext.Provider>)
+    await waitFor(() => expect(screen.getByText('Recorded net-worth snapshots for the selected period.')).toBeDefined())
+    expect(screen.queryByText(/Illustrative 6-month trend — Monikey does not yet track historical net worth/)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/reports/net-worth'), expect.objectContaining({ credentials: 'include' }))
   })
 })

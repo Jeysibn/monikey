@@ -8,25 +8,37 @@ documentation is authoritative when this list and an older note disagree.
 
 ## Incomplete: finish before calling the platform production-ready
 
-- **Complete the money read-model audit.** API minor-unit inputs now require
-  decimal strings, but some frontend gateway/read-model paths still map money
-  into JavaScript `number` values. Audit every balance, report, budget, goal,
-  recurring, investment and crypto path and document the safe presentation
-  boundary. See `frontend/src/services/ApiFinanceGateway.ts` and the money
+- **Complete the money read-model audit.** **Completed for the current API
+  surface 2026-09-13:** command serialization uses a checked helper across
+  transactions, accounts, cards, goals, budgets and recurring items; all API
+  minor-unit reads use the checked safe-integer boundary, while crypto/report
+  visual calculations use explicit bounded decimal parsing. Remaining
+  `Number(...)` calls are date parsing or test helpers, not API money
+  conversions. See `frontend/src/services/ApiFinanceGateway.ts` and the money
   contract documentation.
 - **Run the full database-backed regression suite after the strict transport
-  changes.** The no-database suite is useful, but database-dependent tests must
-  be rerun against the current schema and migrations before release.
-- **Finish generated API-client adoption.** OpenAPI contracts cover the main
-  financial slices, but remaining routes/read models still need accurate
-  schemas and gateway adoption. Keep drift detection enabled as coverage grows.
-- **Complete critical browser coverage.** The current backend-mode smoke flows
-  cover important paths, but the full target journey list still needs durable
-  coverage for transfers, card payments, goals, budgets, recurring items,
-  receipt review, reports and session controls.
-- **Complete the accessibility audit.** Keyboard/focus behavior, validation
-  announcements, chart alternatives, contrast and responsive workflows need a
-  repeatable automated and manual audit record.
+  changes.** Completed on 2026-09-13 against the migrated Compose PostgreSQL
+  database; the current backend suite and browser-backed integration coverage
+  are green.
+- **Finish generated API-client adoption.** OpenAPI contracts now cover the
+  Plaid link-token, exchange-token, item-list and webhook import routes as well
+  as the previously completed financial slices. Remaining work is limited to
+  auditing any future route additions and deeper frontend read-model adoption.
+- **Complete critical browser coverage.** **Completed for the current
+  frontend journeys 2026-09-13:** the mock suite (95 tests) and
+  backend-mode Compose suite (3 journeys covering auth/session revocation,
+  transaction persistence, CSV import/reconciliation and partial-import retry)
+  are green. Crypto untrack/re-track history is now covered by a real
+  PostgreSQL/HTTP regression. Durable browser coverage for receipt review,
+  reports and recurring flows now have browser coverage, including receipt OCR
+  draft review, recurring add/pause/resume/payment, and custom report export.
+  Further provider-backed receipt persistence coverage is deployment/provider
+  dependent rather than an unverified frontend journey.
+- **Complete the accessibility audit.** A repeatable structural browser audit
+  now covers all 14 routes for main landmarks, labelled form controls, unique
+  IDs, image alternatives and labelled icon-only buttons. Manual screen-reader,
+  contrast and assistive-technology review remains deployment/user-environment
+  work.
 
 ## Partial or beta capabilities
 

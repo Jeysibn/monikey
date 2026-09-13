@@ -167,7 +167,9 @@ Frontend command gateways serialize minor units through
 inputs. New authoritative money logic must not introduce floating-point
 arithmetic or an unvalidated `Number(...)` conversion. Remaining work is to
 remove the compatibility major-unit fields from the legacy UI domain and make
-exact formatting the only presentation boundary.
+exact formatting the only presentation boundary. API-backed entity displays
+already use `formatMoneyValue`/`formatMinorUnits` directly; numeric fallback is
+limited to mock fixtures and derived chart geometry.
 
 Money Position is intentionally cash-only: available liquid cash minus card
 minimums, known recurring obligations and planned goal contributions. Crypto

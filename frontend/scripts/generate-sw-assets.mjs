@@ -1,5 +1,4 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 
 const root = new URL('../dist/', import.meta.url)
 const assetNames = (await readdir(new URL('assets/', root))).map((name) => `/assets/${name}`)

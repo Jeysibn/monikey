@@ -52,6 +52,7 @@ export type AppErrorCode =
   | 'STORAGE_NOT_FOUND'
   | 'INVALID_STORAGE_KEY'
   | 'INVALID_REQUEST'
+  | 'AMOUNT_OUT_OF_RANGE'
   // Phase 11: Imports (Plaid Sandbox + manual CSV)
   | 'DUPLICATE_IMPORT'
   | 'INVALID_STATE'

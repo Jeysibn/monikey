@@ -15,6 +15,7 @@ import { generateRequestId, REQUEST_ID_HEADER } from './common/http/requestId.js
 import type { Clock } from './common/auth/authGuard.js'
 import './common/auth/types.js'
 import { healthRoutes } from './modules/health/health.routes.js'
+import { recordRequest } from './modules/health/metrics.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { settingsRoutes } from './modules/settings/settings.routes.js'
 import { createLedgerModule } from './modules/ledger/ledger.module.js'
@@ -36,6 +37,9 @@ import type { BankAggregationProvider } from './integrations/interfaces/bankData
 import { createStubBankProvider } from './integrations/adapters/stubs/index.js'
 import { createPlaidSandboxProvider } from './integrations/adapters/plaid-sandbox/index.js'
 import { createImportsModule } from './modules/imports/imports.module.js'
+import { reconciliationRoutes } from './modules/reconciliation/reconciliation.routes.js'
+import { rulesRoutes } from './modules/rules/rules.routes.js'
+import { tagsRoutes } from './modules/tags/tags.routes.js'
 
 export interface BuildAppOptions {
   env: Env
@@ -97,6 +101,20 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     // distinct real client IPs still get independent buckets.
     trustProxy: ['loopback', 'uniquelocal'],
   })
+  const requestStarts = new WeakMap<object, bigint>()
+  app.addHook('onRequest', async (request) => {
+    requestStarts.set(request, process.hrtime.bigint())
+  })
+  app.addHook('onResponse', async (request, reply) => {
+    const start = requestStarts.get(request)
+    if (start !== undefined) recordRequest(reply.statusCode, Number(process.hrtime.bigint() - start) / 1_000_000_000)
+  })
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    if (env.NODE_ENV === 'production' && env.APP_ORIGIN.startsWith('https://')) reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  })
 
   // Echo the resolved request ID back to the caller on every response.
   app.addHook('onSend', async (request, reply, payload) => {
@@ -143,9 +161,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       servers: [{ url: '/api/v1' }],
     },
   })
-  await app.register(swaggerUi, {
-    routePrefix: '/docs',
-  })
+  if (env.PUBLIC_API_DOCS || env.NODE_ENV !== 'production') {
+    await app.register(swaggerUi, { routePrefix: '/docs' })
+  }
 
   registerErrorHandler(app)
 
@@ -208,11 +226,16 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         appOrigin: env.APP_ORIGIN,
       })
       await v1.register(imports.registerRoutes, { prefix: '/imports' })
+      await v1.register(reconciliationRoutes, { prisma, appOrigin: env.APP_ORIGIN })
+      await v1.register(rulesRoutes, { prisma, appOrigin: env.APP_ORIGIN })
+      await v1.register(tagsRoutes, { prisma })
     },
     { prefix: '/api/v1' },
   )
 
-  app.get('/openapi.json', async () => app.swagger())
+  if (env.PUBLIC_API_DOCS || env.NODE_ENV !== 'production') {
+    app.get('/openapi.json', async () => app.swagger())
+  }
 
   return app
 }

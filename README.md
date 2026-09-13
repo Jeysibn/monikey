@@ -1,7 +1,8 @@
 # Monikey
 
-Monikey is a personal finance application for transactions, accounts and credit
-cards, budgets, savings goals, investments, recurring bills, reports, and settings.
+Monikey is a privacy-first, self-hosted personal finance application for
+transactions, accounts and credit cards, budgets, savings goals, recurring bills,
+reports, and cryptocurrency tracking.
 It is a monorepo with a React frontend and a Fastify API and worker backed by PostgreSQL.
 
 ## Runtime modes
@@ -53,7 +54,9 @@ curl --fail http://localhost:8080/api/v1/health/ready
 ```
 
 Open `http://localhost:8080` and register or sign in. Compose runs PostgreSQL 18,
-a one-shot migration **and seed** service, the API, worker, and nginx frontend.
+a one-shot migration-only service, the API, worker, and nginx frontend. System
+categories are seeded explicitly with `npm --prefix backend run db:seed:system`;
+demo data requires `MONIKEY_DEMO_MODE=true` and is never part of production startup.
 The optional backend development overlay mounts source and uses `tsx watch`:
 
 ```bash
@@ -73,24 +76,35 @@ configured separately; source adapters do not prove a live integration is enable
 | `/accounts` | Manual accounts and credit cards; backend update/archive flows |
 | `/budget` | Categories and allocations |
 | `/goals` | Goal creation and funding; backend update/delete flows |
-| `/investments` | Holdings, trades, dividends, portfolio views and quote refresh |
+| `/investments` | Crypto holdings, trades, transfers, portfolio views and quote refresh (legacy URL) |
 | `/recurring` | Recurring bills and status/payment controls |
 | `/reports` | Financial report views and period controls |
+| `/imports` | CSV staging, preview and commit workflow |
+| `/rules` | Deterministic transaction rules |
+| `/reconciliation` | Account statement reconciliation |
+| `/security` | Password and active-session controls |
+| `/tags` | Transaction tags |
 | `/settings` | Profile/preferences and JSON data export |
 
 The backend also has receipt/OCR, structured AI insight, FX, and CSV/Plaid-sandbox
 import modules. Their presence does not mean every corresponding browser workflow
 is available: bank connection and the dashboard's free-form AI question control
-remain disabled. Reports CSV/PDF export and custom ranges, runtime currency/locale
-switching, password changes, and two-factor authentication remain disabled too.
+remain disabled. Reports CSV export and custom ranges are available; PDF export,
+runtime currency/locale switching, and two-factor authentication remain disabled.
+Password changes and active-session controls are available from `/security`.
 
-Investment V2 is partial: the API accepts optional linked cash accounts, but the
-current trade/dividend forms lack dedicated account selectors. Historical event
-currency capture and fully correct mixed-currency aggregate returns are unfinished.
-Money Position still excludes recurring bills.
+Crypto is active but cryptocurrency-specific; it is not a general investment
+accounting system. Broader investment accounting, historical event currency
+capture, and fully correct mixed-currency aggregate returns are unfinished.
+Money Position includes recurring bills due within its horizon.
 See [architecture limitations](docs/ARCHITECTURE.md#known-limitations).
 
-## Verification commands
+## Documentation
+
+Start with the [documentation index](docs/README.md). It separates architecture,
+product behavior, operations, security, and architectural decisions. The
+repository documentation is canonical for shipped behavior; the companion
+Obsidian vault is the project planning and knowledge hub.
 
 Run from the repository root:
 

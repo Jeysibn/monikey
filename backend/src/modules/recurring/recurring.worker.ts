@@ -30,7 +30,7 @@ export async function processDueRecurringItems(prisma: PrismaClient, ledgerServi
     const dueDate = item.nextDueDate.toISOString().slice(0, 10)
     const idempotencyKey = `recurring:${item.id}:${dueDate}`
     try {
-      await ledgerService.postTransaction(item.userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: dueDate, occurredTime: null, amountMinor: Number(item.amountMinor), feeMinor: 0, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
+      await ledgerService.postTransaction(item.userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: dueDate, occurredTime: null, amountMinor: item.amountMinor, feeMinor: 0n, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
       await prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate: advanceDueDate(item.nextDueDate, item.frequency), lastPaidDate: item.nextDueDate } })
       processed += 1
     } catch (err) {

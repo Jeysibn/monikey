@@ -16,12 +16,21 @@
 
 set -euo pipefail
 
+# Preserve explicit process-environment overrides. `.env` supplies defaults;
+# it must not redirect a scheduled backup away from its selected mount.
+receipt_path_override="${RECEIPT_STORAGE_PATH-}"
+receipt_path_was_set="${RECEIPT_STORAGE_PATH+x}"
+backup_dir_override="${BACKUP_DIR-}"
+backup_dir_was_set="${BACKUP_DIR+x}"
+
 # Source .env if it exists
 if [ -f .env ]; then
   set -a
   source .env
   set +a
 fi
+if [ -n "${receipt_path_was_set}" ]; then RECEIPT_STORAGE_PATH="${receipt_path_override}"; fi
+if [ -n "${backup_dir_was_set}" ]; then BACKUP_DIR="${backup_dir_override}"; fi
 
 # Configuration
 BACKUP_DIR="${BACKUP_DIR:-backups/receipts}"
@@ -35,9 +44,9 @@ mkdir -p "${BACKUP_DIR}"
 
 # Check if receipt storage directory exists
 if [ ! -d "${RECEIPT_STORAGE_PATH}" ]; then
-  echo "WARNING: Receipt storage directory not found: ${RECEIPT_STORAGE_PATH}"
-  echo "Creating empty backup..."
-  mkdir -p "${RECEIPT_STORAGE_PATH}"
+  echo "ERROR: Receipt storage directory not found: ${RECEIPT_STORAGE_PATH}" >&2
+  echo "Refusing to create an empty backup. Check the mounted storage path." >&2
+  exit 1
 fi
 
 echo "Starting receipt storage backup..."
@@ -45,7 +54,7 @@ echo "  Source: ${RECEIPT_STORAGE_PATH}"
 echo "  Output: ${BACKUP_FILE}"
 
 # Perform backup using tar
-if tar czf "${BACKUP_FILE}" -C "$(dirname "${RECEIPT_STORAGE_PATH}")" "$(basename "${RECEIPT_STORAGE_PATH}")" 2>/dev/null || tar czf "${BACKUP_FILE}" --exclude='lost+found' -C / "data/receipts" 2>/dev/null; then
+if tar czf "${BACKUP_FILE}" --exclude='lost+found' -C "$(dirname "${RECEIPT_STORAGE_PATH}")" "$(basename "${RECEIPT_STORAGE_PATH}")"; then
   BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
   FILE_COUNT=$(tar tzf "${BACKUP_FILE}" 2>/dev/null | wc -l)
   echo "Backup completed successfully!"
@@ -54,14 +63,7 @@ if tar czf "${BACKUP_FILE}" -C "$(dirname "${RECEIPT_STORAGE_PATH}")" "$(basenam
   echo "  Files: ${FILE_COUNT}"
   exit 0
 else
-  echo "WARNING: Backup completed but with some warnings (directory may be empty or inaccessible)"
-  if [ -f "${BACKUP_FILE}" ]; then
-    BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
-    echo "  File: ${BACKUP_FILE}"
-    echo "  Size: ${BACKUP_SIZE}"
-    exit 0
-  else
-    echo "ERROR: Backup creation failed!"
-    exit 1
-  fi
+  echo "ERROR: Backup creation failed!" >&2
+  rm -f "${BACKUP_FILE}"
+  exit 1
 fi

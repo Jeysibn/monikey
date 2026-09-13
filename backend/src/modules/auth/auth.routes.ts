@@ -6,8 +6,8 @@ import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { clearSessionCookie, setSessionCookie } from '../../common/auth/cookies.js'
 import { createEmailProvider, type EmailProvider } from '../notifications/email.js'
-import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from './auth.schemas.js'
-import { loginUser, logoutUser, registerUser, requestPasswordReset, resetPassword } from './auth.service.js'
+import { changePasswordSchema, forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from './auth.schemas.js'
+import { changePassword, loginUser, logoutUser, registerUser, requestPasswordReset, resetPassword } from './auth.service.js'
 
 export interface AuthRoutesOptions {
   prisma: PrismaClient
@@ -74,6 +74,20 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOptions):
 
   app.get('/auth/me', { preHandler: requireAuth }, async (request) => {
     return { user: request.user }
+  })
+
+  app.get('/auth/sessions', { preHandler: requireAuth }, async (request) => {
+    const sessions = await prisma.userSession.findMany({ where: { userId: request.user!.id, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' }, select: { id: true, createdAt: true, lastSeenAt: true, expiresAt: true, userAgent: true } })
+    return sessions.map((session) => ({ ...session, current: session.id === request.sessionId }))
+  })
+  app.post('/auth/change-password', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+    await changePassword(prisma, request.user!.id, request.sessionId!, changePasswordSchema.parse(request.body))
+    return reply.code(204).send()
+  })
+  app.delete<{ Params: { id: string } }>('/auth/sessions/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
+    if (request.params.id === request.sessionId) return reply.code(400).send({ error: { code: 'INVALID_REQUEST', message: 'Use sign out to revoke the current session.' } })
+    await prisma.userSession.deleteMany({ where: { id: request.params.id, userId: request.user!.id } })
+    return reply.code(204).send()
   })
 
   app.post(

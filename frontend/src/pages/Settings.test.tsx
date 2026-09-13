@@ -83,10 +83,10 @@ describe('Notifications section', () => {
 })
 
 describe('Display Preferences section', () => {
-  it('renders the currency selector as disabled ("coming soon")', () => {
+  it('documents the supported currency without a misleading disabled control', () => {
     renderSettings()
-    const select = screen.getByRole('combobox') as HTMLSelectElement
-    expect(select.disabled).toBe(true)
+    expect(screen.getByText(/currently uses Philippine Peso/)).toBeDefined()
+    expect(screen.queryByRole('combobox')).toBeNull()
   })
 
   it('the hide-cents toggle actually changes amounts shown on this page', () => {
@@ -184,11 +184,10 @@ describe('Data & Privacy section', () => {
 })
 
 describe('Security section', () => {
-  it('renders honest, disabled placeholders — no fake working controls', () => {
+  it('links implemented security controls and keeps unsupported MFA disabled', () => {
     renderSettings()
-    const changePassword = screen.getByRole('button', { name: /Change password/ })
+    expect(screen.getByRole('link', { name: /Manage security/ }).getAttribute('href')).toBe('/security')
     const twoFactor = screen.getByRole('button', { name: /two-factor authentication/ })
-    expect(changePassword).toHaveProperty('disabled', true)
     expect(twoFactor).toHaveProperty('disabled', true)
   })
 })

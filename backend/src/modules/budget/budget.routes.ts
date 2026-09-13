@@ -5,17 +5,27 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
+import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
 
-const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: z.number().int().nonnegative().default(0) })
-const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: z.number().int().nonnegative() })
+const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: minorUnitTransportInput.default(0n) })
+const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: minorUnitTransportInput })
 const categorySchema = z.object({ name: z.string().trim().min(1).max(100), color: z.string().trim().min(1).max(64), budgetable: z.boolean().default(true), allowsIncome: z.boolean().default(false), allowsExpense: z.boolean().default(true) })
 const updateCategorySchema = z.object({ name: z.string().trim().min(1).max(100).optional(), color: z.string().trim().min(1).max(64).optional() })
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const budgetIdParamSchema = z.object({ id: z.string().uuid('Invalid budget ID format') })
 const categoryIdParamSchema = z.object({ id: z.string().uuid('Invalid category ID format') })
+const categoryJson = { type: 'object', required: ['id', 'userId', 'name', 'color', 'budgetable', 'allowsIncome', 'allowsExpense', 'archivedAt', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, userId: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] }, name: { type: 'string' }, color: { type: 'string' }, budgetable: { type: 'boolean' }, allowsIncome: { type: 'boolean' }, allowsExpense: { type: 'boolean' }, archivedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const categoryBody = { type: 'object', required: ['name', 'color'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, color: { type: 'string', minLength: 1, maxLength: 64 }, budgetable: { type: 'boolean' }, allowsIncome: { type: 'boolean' }, allowsExpense: { type: 'boolean' } } } as const
+const categoryUpdateBody = { type: 'object', additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, color: { type: 'string', minLength: 1, maxLength: 64 } } } as const
 
 type PeriodWithAllocations = { id: string; userId: string; periodStart: Date; periodEnd: Date; incomePoolMinor: bigint; createdAt: Date; updatedAt: Date; allocations: Array<{ id: string; budgetPeriodId: string; categoryId: string; allocatedMinor: bigint; createdAt: Date; updatedAt: Date }> }
+
+const minorJson = { type: 'string', pattern: '^-?\\d+$' } as const
+const allocationJson = { type: 'object', required: ['id', 'budgetPeriodId', 'categoryId', 'allocatedMinor', 'spentMinor', 'createdAt', 'updatedAt'], properties: { id: { type: 'string', format: 'uuid' }, budgetPeriodId: { type: 'string', format: 'uuid' }, categoryId: { type: 'string', format: 'uuid' }, allocatedMinor: minorJson, spentMinor: minorJson, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' } } } as const
+const periodJson = { type: 'object', required: ['id', 'userId', 'periodStart', 'periodEnd', 'incomePoolMinor', 'createdAt', 'updatedAt', 'allocations'], properties: { id: { type: 'string', format: 'uuid' }, userId: { type: 'string', format: 'uuid' }, periodStart: { type: 'string', format: 'date-time' }, periodEnd: { type: 'string', format: 'date-time' }, incomePoolMinor: minorJson, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' }, allocations: { type: 'array', items: allocationJson } } } as const
+const periodBodyJson = { type: 'object', required: ['periodStart', 'periodEnd'], additionalProperties: false, properties: { periodStart: { type: 'string', format: 'date' }, periodEnd: { type: 'string', format: 'date' }, incomePoolMinor: minorJson } } as const
+const allocationBodyJson = { type: 'object', required: ['categoryId', 'allocatedMinor'], additionalProperties: false, properties: { categoryId: { type: 'string', format: 'uuid' }, allocatedMinor: minorJson } } as const
 
 // Computes a server-authoritative `spentMinor` per allocation by summing
 // qualifying cleared expense transactions in that category for the period's
@@ -42,11 +52,11 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
   }
   return {
     ...period,
-    incomePoolMinor: Number(period.incomePoolMinor),
+    incomePoolMinor: String(period.incomePoolMinor),
     allocations: period.allocations.map((a) => ({
       ...a,
-      allocatedMinor: Number(a.allocatedMinor),
-      spentMinor: Number(spentByCategory.get(a.categoryId) ?? 0n),
+      allocatedMinor: String(a.allocatedMinor),
+      spentMinor: String(spentByCategory.get(a.categoryId) ?? 0n),
     })),
   }
 }
@@ -54,12 +64,12 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
 export async function budgetRoutes(app: FastifyInstance, options: { prisma: PrismaClient; appOrigin: string }) {
   const { prisma, appOrigin } = options
   app.addHook('preHandler', authGuard({ prisma }))
-  app.post('/categories', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post('/categories', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { body: categoryBody, response: { 201: categoryJson } } }, async (request, reply) => {
     const input = categorySchema.parse(request.body)
     const category = await prisma.category.create({ data: { userId: request.user!.id, ...input } })
     return reply.code(201).send(category)
   })
-  app.patch<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/categories/:id', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, body: categoryUpdateBody, response: { 200: categoryJson, 404: { type: 'object' } } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = categoryIdParamSchema.parse(request.params)
     const input = updateCategorySchema.parse(request.body)
@@ -107,11 +117,11 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     }
     return reply.code(204).send()
   })
-  app.get('/budgets', async (request) => {
+  app.get('/budgets', { schema: { response: { 200: { type: 'array', items: periodJson } } } }, async (request) => {
     const periods = await prisma.budgetPeriod.findMany({ where: { userId: request.user!.id }, include: { allocations: true }, orderBy: { periodStart: 'desc' } })
     return Promise.all(periods.map((period) => attachSpentMinor(prisma, request.user!.id, period)))
   })
-  app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { body: periodBodyJson, response: { 201: periodJson } } }, async (request, reply) => {
     const input = periodSchema.parse(request.body)
     const userTimezone = request.user!.timezone
 
@@ -127,7 +137,7 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
     const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC } }, create: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC, incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
     return reply.code(201).send(await attachSpentMinor(prisma, request.user!.id, period))
   })
-  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }) }, async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/budgets/:id/allocations', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } }, body: allocationBodyJson, response: { 201: allocationJson } } }, async (request, reply) => {
     // D8: Validate UUID path parameter
     const { id } = budgetIdParamSchema.parse(request.params)
     const input = allocationSchema.parse(request.body)

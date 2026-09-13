@@ -9,7 +9,7 @@ describe('Sparkline', () => {
     expect(container.querySelectorAll('path').length).toBeGreaterThan(0)
   })
 
-  it('does not throw and renders a flat line for an empty series (regression: fresh-portfolio Investments page crash)', () => {
+  it('does not throw and renders a flat line for an empty Crypto portfolio series', () => {
     expect(() => render(<Sparkline values={[]} />)).not.toThrow()
     const { container } = render(<Sparkline values={[]} />)
     expect(container.querySelector('svg')).toBeTruthy()

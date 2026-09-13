@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { pingDatabase } from '../../db/client.js'
+import { renderDatabaseMetrics } from './metrics.js'
 
 export interface HealthRoutesOptions {
   prisma: PrismaClient
@@ -13,6 +14,11 @@ export interface HealthRoutesOptions {
  * traffic on real readiness.
  */
 export async function healthRoutes(app: FastifyInstance, opts: HealthRoutesOptions): Promise<void> {
+  app.get('/metrics', async (_request, reply) => {
+    reply.type('text/plain; version=0.0.4; charset=utf-8')
+    return renderDatabaseMetrics(opts.prisma)
+  })
+
   app.get('/health/live', async () => {
     return { status: 'ok' as const }
   })

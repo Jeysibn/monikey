@@ -232,7 +232,10 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
       const result = await uploadAndProcessReceipt(file)
       const draft = result.receipt?.draft ?? {}
       if (draft.merchant) update('title', draft.merchant)
-      if (typeof draft.totalMinor === 'number') update('amount', (draft.totalMinor / 100).toFixed(2))
+      if (typeof draft.totalMinor === 'string') {
+        const minor = BigInt(draft.totalMinor)
+        update('amount', `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`)
+      }
       if (draft.date) update('date', draft.date)
       showToast('Receipt scanned — review the fields before saving')
     } catch (error) {

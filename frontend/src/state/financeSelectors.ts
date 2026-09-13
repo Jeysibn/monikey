@@ -8,6 +8,7 @@
 // inline or calling `new Date()`.
 
 import type { Account, BudgetStatus, Category, CreditCard, FinanceState, Goal, ReportingPeriod, Transaction } from '../domain/finance'
+import type { RecurringItem } from '../domain/recurring'
 import {
   addDaysToIso,
   formatDateLabel,
@@ -407,7 +408,7 @@ export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): Cr
 /**
  * Line-by-line breakdown behind the dashboard's "Estimated safe to spend"
  * figure. Every field here reconciles exactly:
- * `safeToSpend === max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions)`.
+ * `safeToSpend === max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions - upcomingRecurringBills)`.
  *
  * Goal-money accounting (verified against the SR-003 funded-savings model):
  * `addGoalFunds` debits a source account and credits `Goal.currentAmount`
@@ -425,9 +426,9 @@ export function cardsDueWithinHorizon(state: FinanceState, todayIso: string): Cr
  * credit card minimum (also unpaid) is treated: a known near-term claim on
  * today's cash.
  *
- * Deliberately excluded: recurring bills. Monikey has no recurring-bills
- * feature yet, so there is no data source for rent, subscriptions, or
- * utilities — the UI must say so rather than imply completeness.
+ * Active recurring items due within the same horizon are also included as
+ * known claims on cash. Future income and obligations not recorded in the
+ * application remain outside this estimate.
  */
 export interface SafeToSpendBreakdown {
   availableCash: number
@@ -436,15 +437,24 @@ export interface SafeToSpendBreakdown {
   safeToSpend: number
   /** How many cards contributed a minimum payment inside the horizon. */
   cardsDueCount: number
+  upcomingRecurringBills: number
+  recurringBillsCount: number
 }
 
-export function safeToSpendBreakdown(state: FinanceState, todayIso: string): SafeToSpendBreakdown {
+export function recurringBillsDueWithinHorizon(items: RecurringItem[], todayIso: string): RecurringItem[] {
+  const horizonEnd = addDaysToIso(todayIso, COMMITMENT_HORIZON_DAYS)
+  return items.filter((item) => item.status === 'active' && isIsoDateWithinInclusive(item.nextDueDate, todayIso, horizonEnd))
+}
+
+export function safeToSpendBreakdown(state: FinanceState, todayIso: string, recurringItems: RecurringItem[] = []): SafeToSpendBreakdown {
   const availableCash = totalAvailableCash(state)
   const dueCards = cardsDueWithinHorizon(state, todayIso)
   const upcomingCreditMinimums = dueCards.reduce((sum, c) => sum + c.minPayment, 0)
   const plannedGoalContributions = plannedMonthlyContributionTotal(state)
-  const safeToSpend = Math.max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions)
-  return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length }
+  const dueRecurring = recurringBillsDueWithinHorizon(recurringItems, todayIso)
+  const upcomingRecurringBills = dueRecurring.reduce((sum, item) => sum + item.amount, 0)
+  const safeToSpend = Math.max(0, availableCash - upcomingCreditMinimums - plannedGoalContributions - upcomingRecurringBills)
+  return { availableCash, upcomingCreditMinimums, plannedGoalContributions, safeToSpend, cardsDueCount: dueCards.length, upcomingRecurringBills, recurringBillsCount: dueRecurring.length }
 }
 
 // ---- Transaction list helpers ---------------------------------------------

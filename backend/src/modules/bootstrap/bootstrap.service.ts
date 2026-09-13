@@ -24,33 +24,33 @@ export interface FinanceState {
     userId: string;
     periodStart: string;
     periodEnd: string;
-    incomePoolMinor: number;
+    incomePoolMinor: string;
     createdAt: string;
     updatedAt: string;
     allocations: Array<{
       id: string;
       budgetPeriodId: string;
       categoryId: string;
-      allocatedMinor: number;
+      allocatedMinor: string;
     }>;
   }>;
   goals: Array<{
     id: string;
     userId: string;
     name: string;
-    targetMinor: number;
-    currentMinor: number;
+    targetMinor: string;
+    currentMinor: string;
     currencyCode: string;
     targetDate: string;
     completedDate: string | null;
-    monthlyContributionMinor: number | null;
+    monthlyContributionMinor: string | null;
     status: string;
     active: boolean;
     createdAt: string;
     updatedAt: string;
   }>;
   recurring: Array<{
-    id: string; userId: string; merchant: string; amountMinor: number; frequency: string; nextDueDate: string;
+    id: string; userId: string; merchant: string; amountMinor: string; frequency: string; nextDueDate: string;
     accountId: string; categoryId: string; autopay: boolean; status: string; lastPaidDate: string | null;
     createdAt: string; updatedAt: string;
   }>;
@@ -132,25 +132,25 @@ export class BootstrapService {
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt.toISOString(),
         })),
-        budgets: budgetPeriods.map((period) => ({ id: period.id, userId: period.userId, periodStart: period.periodStart.toISOString().slice(0, 10), periodEnd: period.periodEnd.toISOString().slice(0, 10), incomePoolMinor: Number(period.incomePoolMinor), createdAt: period.createdAt.toISOString(), updatedAt: period.updatedAt.toISOString(), allocations: period.allocations.map((allocation) => ({ id: allocation.id, budgetPeriodId: allocation.budgetPeriodId, categoryId: allocation.categoryId, allocatedMinor: Number(allocation.allocatedMinor) })) })),
+        budgets: budgetPeriods.map((period) => ({ id: period.id, userId: period.userId, periodStart: period.periodStart.toISOString().slice(0, 10), periodEnd: period.periodEnd.toISOString().slice(0, 10), incomePoolMinor: String(period.incomePoolMinor), createdAt: period.createdAt.toISOString(), updatedAt: period.updatedAt.toISOString(), allocations: period.allocations.map((allocation) => ({ id: allocation.id, budgetPeriodId: allocation.budgetPeriodId, categoryId: allocation.categoryId, allocatedMinor: String(allocation.allocatedMinor) })) })),
         goals: goals.map((g) => ({
           id: g.id,
           userId: g.userId,
           name: g.name,
-          targetMinor: Number(g.targetMinor),
-          currentMinor: Number(g.currentMinor),
+          targetMinor: String(g.targetMinor),
+          currentMinor: String(g.currentMinor),
           currencyCode: g.currencyCode,
           targetDate: g.targetDate.toISOString().split('T')[0]!,
           completedDate: g.completedDate?.toISOString().split('T')[0] ?? null,
-          monthlyContributionMinor: g.monthlyContributionMinor ? Number(g.monthlyContributionMinor) : null,
+          monthlyContributionMinor: g.monthlyContributionMinor ? String(g.monthlyContributionMinor) : null,
           status: g.status,
           active: g.active,
           createdAt: g.createdAt.toISOString(),
           updatedAt: g.updatedAt.toISOString(),
         })),
-        recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
+        recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: String(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       },
-      recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: Number(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
+      recurring: recurring.map((item) => ({ id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: String(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })),
       investmentActivity: {
         trades: investmentTrades.map((trade) => {
           // D10: Use Prisma.Decimal for money multiplication, not Number
@@ -163,13 +163,13 @@ export class BootstrapService {
             ticker: trade.instrument.ticker,
             type: trade.type,
             units: Number(trade.units),
-            priceMinor: Number(trade.priceMinor),
-            amountMinor: amountMinor.toNumber(),
+            priceMinor: trade.priceMinor.toString(),
+            amountMinor: amountMinor.toFixed(0),
             occurredOn: trade.occurredOn.toISOString().slice(0, 10),
             note: trade.note ?? null,
           };
         }),
-        dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.instrument.ticker, amountMinor: Number(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10), note: dividend.note ?? null })),
+        dividends: dividends.map((dividend) => ({ id: dividend.id, ticker: dividend.instrument.ticker, amountMinor: String(dividend.amountMinor), occurredOn: dividend.occurredOn.toISOString().slice(0, 10), note: dividend.note ?? null })),
       },
       settings: {
         displayName: user.displayName,

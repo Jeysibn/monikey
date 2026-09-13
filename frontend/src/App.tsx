@@ -13,6 +13,11 @@ import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
 import { Crypto } from './pages/Crypto'
 import type { Transaction } from './domain/finance'
+import { Rules } from './pages/Rules'
+import { Reconciliation } from './pages/Reconciliation'
+import { Imports } from './pages/Imports'
+import { Security } from './pages/Security'
+import { Tags } from './pages/Tags'
 
 export default function App() {
   const [addTxOpen, setAddTxOpen] = useState(false)
@@ -42,6 +47,11 @@ export default function App() {
         <Route path="/budget" element={<Budget />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="/recurring" element={<Recurring />} />
+        <Route path="/rules" element={<Rules />} />
+        <Route path="/reconciliation" element={<Reconciliation />} />
+        <Route path="/imports" element={<Imports />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/tags" element={<Tags />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/investments" element={<Crypto />} />
         <Route path="/settings" element={<Settings />} />

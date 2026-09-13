@@ -11,6 +11,15 @@ import { FinanceValidationError } from '../domain/financeRules'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import './Budget.css'
 
+export function projectPeriodEndSpend(spent: number, periodStart: string, periodEnd: string, todayIso: string): number {
+  const start = Date.parse(`${periodStart}T00:00:00Z`)
+  const end = Date.parse(`${periodEnd}T00:00:00Z`)
+  const today = Date.parse(`${todayIso}T00:00:00Z`)
+  const totalDays = Math.max(1, Math.round((end - start) / 86_400_000))
+  const elapsedDays = Math.min(totalDays, Math.max(1, Math.round((Math.min(today, end - 86_400_000) - start) / 86_400_000) + 1))
+  return Math.round((spent * totalDays) / elapsedDays)
+}
+
 const CATEGORY_FIELDS = ['category', 'allocated'] as const
 type CategoryField = (typeof CATEGORY_FIELDS)[number]
 
@@ -18,6 +27,7 @@ export function Budget() {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const { budgetCategories, categories, budgetVsActual, totalBudgetAllocated } = finance.state
+  const { activePeriod, todayIso } = finance
   // Only categories with an amount set (allocated > 0) show up as budget
   // lines here — Budget never creates, renames, or deletes a category, it
   // only sets/changes/clears the amount for one that Settings already made.
@@ -238,6 +248,7 @@ export function Budget() {
             const status = finance.budgetStatus(c.allocated, c.spent)
             const rawPct = Math.round((c.spent / c.allocated) * 100)
             const diff = c.allocated - c.spent
+            const forecast = projectPeriodEndSpend(c.spent, activePeriod.start, activePeriod.end, todayIso)
             const category = categories.find((cc) => cc.id === c.id)
             const valueText =
               diff < 0
@@ -293,11 +304,11 @@ export function Budget() {
                         label={`${category?.name ?? c.id} budget used`}
                         valueText={valueText}
                       />
-                      {c.forecast && (
+                      {forecast > 0 && (
                         <div className="budget-forecast">
-                          Forecast {formatMoney(c.forecast, { withCents: false })} · projected{' '}
-                          {formatMoney(Math.abs(c.forecast - c.allocated), { withCents: false })}{' '}
-                          {c.forecast > c.allocated ? 'over' : 'under'}
+                          Projected period-end spend {formatMoney(forecast, { withCents: false })} ·{' '}
+                          {formatMoney(Math.abs(forecast - c.allocated), { withCents: false })}{' '}
+                          {forecast > c.allocated ? 'over' : 'under'} allocation
                         </div>
                       )}
                     </div>

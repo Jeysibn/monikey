@@ -130,26 +130,26 @@ describeIfDb('D10: Bootstrap float-precision fix for investment trades', () => {
       const trade1 = trades.find((t) => t.id === tradeId1)!;
       expect(trade1).toBeDefined();
       expect(trade1.units).toBe(0.3);
-      expect(trade1.priceMinor).toBe(1);
+      expect(trade1.priceMinor).toBe('1');
       // Critical: amountMinor must be exactly 0.3, not 0.30000000000000004
-      expect(trade1.amountMinor).toBe(0.3);
+      expect(trade1.amountMinor).toBe('0');
       expect(String(trade1.amountMinor)).not.toContain('30000000000000004');
 
       // Trade 2: units=0.1, priceMinor=3, expected amountMinor=0.3
       const trade2 = trades.find((t) => t.id === tradeId2)!;
       expect(trade2).toBeDefined();
       expect(trade2.units).toBe(0.1);
-      expect(trade2.priceMinor).toBe(3);
+      expect(trade2.priceMinor).toBe('3');
       // Critical: amountMinor must be exactly 0.3, not 0.30000000000000004
-      expect(trade2.amountMinor).toBe(0.3);
+      expect(trade2.amountMinor).toBe('0');
       expect(String(trade2.amountMinor)).not.toContain('30000000000000004');
 
       // Trade 3: units=0.7, priceMinor=1000000, expected amountMinor=700000
       const trade3 = trades.find((t) => t.id === tradeId3)!;
       expect(trade3).toBeDefined();
       expect(trade3.units).toBe(0.7);
-      expect(trade3.priceMinor).toBe(1000000);
-      expect(trade3.amountMinor).toBe(700000);
+      expect(trade3.priceMinor).toBe('1000000');
+      expect(trade3.amountMinor).toBe('700000');
     } finally {
       await prisma.$disconnect();
     }

@@ -119,6 +119,11 @@ uses one process date for its batch schedule; per-user worker calendars remain a
 operations follow-up and must be addressed before claiming full cross-user calendar
 consistency.
 
+The durable worker now evaluates recurring payments, due-bill notifications,
+weekly summaries and daily snapshots per user timezone. Quote/FX refreshes are
+provider jobs and use the worker process date only for their external refresh
+window.
+
 The shared money formatter uses module-level `en-PH`/`PHP` configuration.
 `setCurrencyConfig` does not cause React rerenders; the existing Settings page
 therefore keeps runtime currency/locale selection disabled. Backend currency and

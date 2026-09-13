@@ -12,11 +12,12 @@ import { rebuildSnapshot } from './reports.repository.js'
  * This is rebuildable — if run multiple times on the same date,
  * it will overwrite the previous snapshot with the current ledger state.
  */
-export async function generateDailySnapshots(prisma: PrismaClient, forDate: Date): Promise<number> {
+export async function generateDailySnapshots(prisma: PrismaClient, forDate: Date, userId?: string): Promise<number> {
   const dateOnly = new Date(Date.UTC(forDate.getUTCFullYear(), forDate.getUTCMonth(), forDate.getUTCDate()))
 
   // Get all active users
   const users = await prisma.user.findMany({
+    where: userId ? { id: userId } : undefined,
     select: { id: true, baseCurrency: true },
   })
 

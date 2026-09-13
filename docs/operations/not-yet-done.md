@@ -25,9 +25,10 @@ documentation is authoritative when this list and an older note disagree.
 
 - **API calendar defaults.** **Completed 2026-09-13:** bootstrap and API finance
   defaults now use the authenticated user's local calendar date.
-- **Per-user worker calendars.** **Not yet done:** durable worker maintenance still
-  uses one process-wide date; split recurring/notification scheduling by user
-  timezone before claiming full cross-user calendar consistency.
+- **Per-user worker calendars.** **Completed 2026-09-13:** recurring payments,
+  notifications and daily snapshots now evaluate each user's configured IANA
+  timezone independently. External quote/FX refreshes remain process-level
+  provider jobs.
 
 - **Complete the money read-model audit.** **Completed for the current API
   surface 2026-09-13:** command serialization uses a checked helper across

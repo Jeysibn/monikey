@@ -22,8 +22,8 @@ export interface RecurringRunResult {
  * stops retrying against a permanently-broken link, while every other due
  * item in the same run still gets processed.
  */
-export async function processDueRecurringItems(prisma: PrismaClient, ledgerService: LedgerService, todayIso: string, logger?: RecurringWorkerLogger): Promise<RecurringRunResult> {
-  const dueItems = await prisma.recurringItem.findMany({ where: { status: 'active', nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) }, account: { archivedAt: null } }, orderBy: { nextDueDate: 'asc' } })
+export async function processDueRecurringItems(prisma: PrismaClient, ledgerService: LedgerService, todayIso: string, logger?: RecurringWorkerLogger, userId?: string): Promise<RecurringRunResult> {
+  const dueItems = await prisma.recurringItem.findMany({ where: { status: 'active', ...(userId ? { userId } : {}), nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) }, account: { archivedAt: null } }, orderBy: { nextDueDate: 'asc' } })
   let processed = 0
   let failed = 0
   for (const item of dueItems) {

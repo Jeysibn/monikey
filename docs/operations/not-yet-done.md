@@ -65,10 +65,10 @@ documentation is authoritative when this list and an older note disagree.
 
 ## Partial or beta capabilities
 
-- **Crypto is active but crypto-specific.** Broader investment accounting,
-  securities, cost basis, realized gains and portfolio reconciliation are not
-  complete. Retained investment models are future-facing and must not be read
-  as shipped investment support.
+- **Crypto is active but crypto-specific.** Crypto cost basis, realized and
+  unrealized P&L, holdings and portfolio reconciliation are shipped. Broader
+  investment accounting for securities is not complete; retained investment
+  models are future-facing and must not be read as shipped stock/ETF support.
 - **OCR and AI are optional integrations.** They require provider
   configuration, user consent and human review. Deterministic application code
   remains the source of truth for amounts and financial decisions.
@@ -116,8 +116,9 @@ documentation is authoritative when this list and an older note disagree.
 - Production startup does not seed demo users or demo financial data.
 - AI cannot calculate balances, budgets, reconciliation, safe-to-spend totals,
   posting decisions or forecast arithmetic.
-- Offline writes are not enabled until a safe synchronization/conflict model
-  exists.
+- Offline create writes are enabled only for the bounded transaction, crypto
+  activity and receipt-capture outbox model. Offline edit/delete writes remain
+  disabled until a domain-specific merge model exists.
 - Live Philippine banking integrations are not claimed without provider
   credentials, contracts and security review.
 

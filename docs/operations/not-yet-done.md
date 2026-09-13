@@ -6,6 +6,15 @@ This is the current-state gap list for Monikey. It is based on the source tree
 and current operational evidence, not on historical phase plans. Repository
 documentation is authoritative when this list and an older note disagree.
 
+## Local-first status
+
+- **Completed:** IndexedDB snapshot fallback, receipt Blob persistence, server
+  reachability probing, an idempotent pending transaction outbox record, and a
+  browser Tesseract worker seam.
+- **Not yet done:** authenticated outbox replay through authoritative gateway
+  mutations, conflict resolution/Sync Center, and preinstalled offline
+  language-data verification for English and Simplified Chinese OCR.
+
 ## Incomplete: finish before calling the platform production-ready
 
 - **Same-time crypto activity ordering.** **Completed 2026-09-13:** trades and

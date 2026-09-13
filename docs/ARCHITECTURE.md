@@ -272,3 +272,24 @@ checks from the jobs actually enabled in [CI](CI-CD-Operations.md).
   implemented in the reports page.
 - The `frontend` package's `test:backend:compose` script changes to the repository
   root before running `scripts/test-compose-backend-regression.sh`.
+
+## Local-first and browser OCR
+
+PostgreSQL remains authoritative. `frontend/src/services/localFirstStore.ts`
+uses IndexedDB only for a bounded latest finance snapshot, receipt Blobs and
+durable pending intentions. A cached snapshot is explicitly a fallback and is
+not treated as live ledger state. The server reachability probe targets
+Monikey's health endpoint because `navigator.onLine` cannot distinguish an
+available internet connection from an unreachable homelab.
+
+Offline V1 capture is intentionally limited to new transactions. It keeps the
+same idempotency key in an outbox record for later replay; edits, destructive
+history changes and reconciliation commits remain server-only until a complete
+sync replay/conflict UI exists.
+
+Receipt OCR has a provider-neutral contract in `frontend/src/domain/receiptOcr.ts`.
+The browser adapter runs Tesseract in `receiptOcr.worker.ts`, persists the source
+Blob locally, and returns suggestions only. OCR never posts a transaction and
+the existing server OCR adapter remains available when the homelab is reachable.
+The worker bundle is cached by the service-worker runtime cache; language-data
+preinstallation and full outbox replay remain follow-up work.

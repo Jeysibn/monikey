@@ -9,6 +9,18 @@ type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transa
 export class LedgerRepository {
   constructor(private prisma: PrismaClient) {}
 
+  private encodeCursor(row: { occurredOn: Date; createdAt: Date; id: string }): string {
+    return Buffer.from(JSON.stringify({ occurredOn: row.occurredOn.toISOString(), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url')
+  }
+
+  private decodeCursor(cursor: string): { occurredOn: Date; createdAt: Date; id: string } | null {
+    try {
+      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { occurredOn?: string; createdAt?: string; id?: string }
+      if (!parsed.occurredOn || !parsed.createdAt || !parsed.id) return null
+      return { occurredOn: new Date(parsed.occurredOn), createdAt: new Date(parsed.createdAt), id: parsed.id }
+    } catch { return null }
+  }
+
   async getTransaction(id: string, userId: string): Promise<TransactionView | null> {
     const tx = await this.prisma.transaction.findFirst({
       where: { id, userId }, include: { tags: { include: { tag: true } } },
@@ -24,20 +36,36 @@ export class LedgerRepository {
     if (type) where.type = type;
     if (categoryId) where.categoryId = categoryId;
     if (accountId) {
-      where.OR = [{ fromAccountId: accountId }, { toAccountId: accountId }];
+      where.AND = [{ OR: [{ fromAccountId: accountId }, { toAccountId: accountId }] }];
     }
     if (tagId) where.tags = { some: { tagId, tag: { userId } } };
-    if (cursor) where.id = { lt: cursor };
+    const decodedCursor = cursor ? this.decodeCursor(cursor) : null
+    if (decodedCursor) {
+      // Cursor predicate mirrors the display order exactly: newest business
+      // date first, then creation time, then the stable UUID tie-breaker.
+      const cursorPredicate = {
+        OR: [
+        { occurredOn: { lt: decodedCursor.occurredOn } },
+        { occurredOn: decodedCursor.occurredOn, createdAt: { lt: decodedCursor.createdAt } },
+        { occurredOn: decodedCursor.occurredOn, createdAt: decodedCursor.createdAt, id: { lt: decodedCursor.id } },
+        ],
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), cursorPredicate]
+    } else if (cursor) {
+      // Preserve compatibility with pre-composite cursors while callers roll
+      // forward to the deterministic cursor format.
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { id: { lt: cursor } }]
+    }
 
     const transactions = await this.prisma.transaction.findMany({
       where,
-      orderBy: { occurredOn: 'desc' }, include: { tags: { include: { tag: true } } },
+      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], include: { tags: { include: { tag: true } } },
       take: limit + 1,
     });
 
     const hasMore = transactions.length > limit;
     const items = hasMore ? transactions.slice(0, limit) : transactions;
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
+    const nextCursor = hasMore && items.length > 0 ? this.encodeCursor(items[items.length - 1]!) : null;
 
     return {
       items: items.map(this.mapTransaction),
@@ -321,6 +349,12 @@ export class LedgerRepository {
     if (original.reversedTransactionId) {
       throw new AppError('ALREADY_REVERSED', 'Cannot update a reversed transaction.', { field: 'id' });
     }
+    // Goal funding has a second authoritative aggregate (Goal.currentMinor and
+    // GoalContribution). Until a fully atomic contribution migration exists,
+    // permit metadata edits only; never leave the goal total out of sync.
+    if (original.goalId && (input.amountMinor !== undefined || input.feeMinor !== undefined)) {
+      throw new AppError('VALIDATION_ERROR', 'Goal-funding amount and fee cannot be edited; reverse and recreate the funding instead.', { field: 'amountMinor' });
+    }
 
     // Lock affected accounts
     const accountIds = new Set(original.balanceEffects.map(e => e.accountId));
@@ -361,6 +395,11 @@ export class LedgerRepository {
     const updatedOccurredTime = input.occurredTime ? new Date(`1970-01-01T${input.occurredTime}Z`) : original.occurredTime;
     const updatedStatus = input.status ?? original.status;
     const updatedNote = input.note !== undefined ? input.note : original.note;
+
+    // Re-run the same authoritative invariant checks used by creation against
+    // the balances after removing the original effects. This prevents an edit
+    // from bypassing overdraft, card-limit, or transfer validation.
+    this.validateInvariants(original.type, accountMap, original.fromAccountId ?? null, original.toAccountId ?? null, updatedAmount, updatedFee, Boolean(original.goalId));
 
     // Calculate new balance effects
     const newBalanceEffects = this.calculateBalanceEffects(

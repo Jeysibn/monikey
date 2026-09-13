@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { useBackendAuthOptional } from './BackendAuthContext'
 import './AppShell.css'
+import { probeMonikeyServer, type ServerConnectionState } from '../services/serverReachability'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true },
@@ -225,6 +226,15 @@ function MobileNav() {
 
 export function AppShell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction?: () => void }) {
   const backendAuth = useBackendAuthOptional()
+  const [connection, setConnection] = useState<ServerConnectionState>('checking')
+  useEffect(() => {
+    if (import.meta.env.VITE_FINANCE_BACKEND !== 'true') { setConnection('connected'); return }
+    let active = true
+    const check = async () => { const result = await probeMonikeyServer(); if (active) setConnection(result) }
+    void check()
+    const timer = window.setInterval(() => void check(), 30_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -259,6 +269,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
           )}
         </div>
       </header>
+      {connection === 'unreachable' && <div className="offline-banner" role="status">Server unreachable · showing available local data. New changes remain pending until Monikey reconnects.</div>}
       <main className="page-main">{children}</main>
     </div>
   )

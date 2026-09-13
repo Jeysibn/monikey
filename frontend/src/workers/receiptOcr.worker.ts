@@ -5,6 +5,11 @@ type ResponseMessage = { id: number; type: 'progress' | 'complete' | 'error'; pr
 
 let activeWorker: Awaited<ReturnType<typeof createWorker>> | null = null
 self.onmessage = async (event: MessageEvent<RequestMessage>) => {
+  // Dedicated workers normally receive an empty origin, but keep an explicit
+  // origin guard so this handler never processes a cross-origin message if the
+  // runtime provides one.
+  if (event.origin !== '' && event.origin !== self.location.origin) return
+
   const { id, file, language } = event.data
   try {
     activeWorker ??= await createWorker(language, 1, {

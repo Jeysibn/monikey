@@ -140,11 +140,14 @@ export function validateAddTransaction(state: FinanceState, input: AddTransactio
   }
   if (input.type === 'expense') {
     if (account) {
-      requireSufficientAssetBalance(account.balance, input.amount, account.name, 'accountId')
+      requireSufficientAssetBalance(account.balance, input.amount, account.name, 'accountId', account.balanceMinor)
     } else if (card) {
       // Rule 2: a charge may not exceed the card's remaining credit.
-      if (card.balance + input.amount > card.limit) {
-        const available = Math.max(0, card.limit - card.balance)
+      const balanceMinor = exactMinor(card.balanceMinor, card.balance)
+      const limitMinor = exactMinor(card.limitMinor, card.limit)
+      const requestedMinor = BigInt(majorNumberToMinorUnits(input.amount))
+      if (balanceMinor + requestedMinor > limitMinor) {
+        const available = exactMinorToMajorNumber(limitMinor - balanceMinor)
         reject(
           'TX_CARD_LIMIT_EXCEEDED',
           `${card.name} only has ${formatMoney(available)} of credit left.`,
@@ -189,11 +192,11 @@ function validateTransfer(state: FinanceState, input: AddTransactionInput): void
   }
 
   // Rule 1: the source pays both the amount and the fee.
-  requireSufficientAssetBalance(from.balance, input.amount + (input.fee ?? 0), from.name, 'amount')
+  requireSufficientAssetBalance(from.balance, input.amount + (input.fee ?? 0), from.name, 'amount', from.balanceMinor)
 
   if (toCard) {
     // Rule 3: a card payment may not exceed the amount owed.
-    if (input.amount > toCard.balance) {
+    if (BigInt(majorNumberToMinorUnits(input.amount)) > exactMinor(toCard.balanceMinor, toCard.balance)) {
       reject(
         'TX_CARD_PAYMENT_EXCEEDS_OWED',
         `${toCard.name} only owes ${formatMoney(toCard.balance)} — enter that or less.`,
@@ -203,8 +206,8 @@ function validateTransfer(state: FinanceState, input: AddTransactionInput): void
   }
 }
 
-function requireSufficientAssetBalance(balance: number, needed: number, accountName: string, field: string): void {
-  if (needed > balance) {
+function requireSufficientAssetBalance(balance: number, needed: number, accountName: string, field: string, balanceMinor?: string): void {
+  if (BigInt(majorNumberToMinorUnits(needed)) > exactMinor(balanceMinor, balance)) {
     reject(
       'ASSET_INSUFFICIENT_BALANCE',
       `${accountName} only has ${formatMoney(balance)} available.`,
@@ -347,7 +350,9 @@ export function maxFundableAmount(state: FinanceState, goalId: string, sourceAcc
   const goal = state.goals.find((g) => g.id === goalId)
   const account = state.accounts.find((a) => a.id === sourceAccountId && a.classification === 'asset')
   if (!goal || !account) return 0
-  return Math.max(0, Math.min(account.balance, goal.targetAmount - goal.currentAmount))
+  const accountMinor = exactMinor(account.balanceMinor, account.balance)
+  const remainingMinor = exactMinor(goal.targetMinor, goal.targetAmount) - exactMinor(goal.currentMinor, goal.currentAmount)
+  return exactMinorToMajorNumber(accountMinor < remainingMinor ? accountMinor : remainingMinor > 0n ? remainingMinor : 0n)
 }
 
 export function validateAddGoalFunds(state: FinanceState, goalId: string, sourceAccountId: string, amount: number): void {
@@ -366,14 +371,15 @@ export function validateAddGoalFunds(state: FinanceState, goalId: string, source
   }
   // Rule 4 first: "that's all this goal needs" is the more useful message
   // when both ceilings would be crossed.
-  const remaining = goal.targetAmount - goal.currentAmount
-  if (amount > remaining) {
+  const remainingMinor = exactMinor(goal.targetMinor, goal.targetAmount) - exactMinor(goal.currentMinor, goal.currentAmount)
+  const amountMinor = BigInt(majorNumberToMinorUnits(amount))
+  if (amountMinor > remainingMinor) {
     reject(
       'GOAL_OVERFUNDING',
-      `Enter at most ${formatMoney(remaining)} — that’s all this goal needs to reach its target.`,
+      `Enter at most ${formatMoney(exactMinorToMajorNumber(remainingMinor))} — that’s all this goal needs to reach its target.`,
       'amount',
     )
   }
   // Rule 1: funding may not overdraw the source account.
-  requireSufficientAssetBalance(account.balance, amount, account.name, 'amount')
+  requireSufficientAssetBalance(account.balance, amount, account.name, 'amount', account.balanceMinor)
 }

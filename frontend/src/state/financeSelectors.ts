@@ -381,17 +381,27 @@ export function plannedMonthlyContributionTotal(state: FinanceState): number {
 export function avgGoalProgressPct(state: FinanceState): number {
   const active = activeGoals(state)
   if (active.length === 0) return 0
-  return Math.round((active.reduce((s, g) => s + g.currentAmount / g.targetAmount, 0) / active.length) * 100)
+  const basisPoints = active.reduce((s, g) => {
+    const current = exactMinor(g.currentMinor, g.currentAmount)
+    const target = exactMinor(g.targetMinor, g.targetAmount)
+    return s + (target > 0n ? (current * 10000n + target / 2n) / target : 0n)
+  }, 0n)
+  return Number((basisPoints + BigInt(active.length * 50)) / BigInt(active.length)) / 100
 }
 
 /** Progress percentage clamped to [0, 100] for rendering a fill bar. */
 export function goalProgressPct(goal: Goal): number {
-  return Math.max(0, Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100)))
+  const current = exactMinor(goal.currentMinor, goal.currentAmount)
+  const target = exactMinor(goal.targetMinor, goal.targetAmount)
+  if (target <= 0n) return 0
+  return Math.max(0, Math.min(100, Number((current * 100n + target / 2n) / target)))
 }
 
 /** True (uncapped) progress percentage. With overfunding unsupported (TR-004) this never exceeds 100 for valid state. */
 export function goalRawProgressPct(goal: Goal): number {
-  return Math.round((goal.currentAmount / goal.targetAmount) * 100)
+  const current = exactMinor(goal.currentMinor, goal.currentAmount)
+  const target = exactMinor(goal.targetMinor, goal.targetAmount)
+  return target > 0n ? Number((current * 100n + target / 2n) / target) : 0
 }
 
 // ---- Money position / "Estimated safe to spend" (SR-008 / TR-003) -------
@@ -498,9 +508,10 @@ export function transactionAccountDotColor(t: Transaction): string {
  * that isn't a fee-bearing transfer.
  */
 export function transferFeeReconciliationLabel(state: FinanceState, t: Transaction): string | undefined {
-  if (t.type !== 'transfer' || !t.fee || t.fee <= 0) return undefined
-  const total = t.amount + t.fee
-  return `${formatMoney(t.amount)} transfer + ${formatMoney(t.fee)} fee = ${formatMoney(total)} from ${accountLabel(state, t.fromAccountId)}`
+  const feeMinor = exactMinor(t.feeMinor, t.fee ?? 0)
+  if (t.type !== 'transfer' || feeMinor <= 0n) return undefined
+  const amountMinor = exactMinor(t.amountMinor, t.amount)
+  return `${formatMoney(major(amountMinor))} transfer + ${formatMoney(major(feeMinor))} fee = ${formatMoney(major(amountMinor + feeMinor))} from ${accountLabel(state, t.fromAccountId)}`
 }
 
 /**
@@ -511,7 +522,7 @@ export function transferFeeReconciliationLabel(state: FinanceState, t: Transacti
  */
 export function cardPaymentReconciliationLabel(state: FinanceState, t: Transaction): string | undefined {
   if (t.type !== 'transfer' || t.goalId || !isCreditCardId(state, t.toAccountId)) return undefined
-  return `Credit card payment · ${formatMoney(t.amount)} from ${accountLabel(state, t.fromAccountId)} reduced ${accountLabel(state, t.toAccountId)} owed by the same amount (not an expense)`
+  return `Credit card payment · ${formatMoney(major(exactMinor(t.amountMinor, t.amount)))} from ${accountLabel(state, t.fromAccountId)} reduced ${accountLabel(state, t.toAccountId)} owed by the same amount (not an expense)`
 }
 
 /** Source label for a transaction, distinguishing manual, OCR, and recurring entries (SR-010). Never collapse `recurring` into `manual`. */

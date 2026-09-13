@@ -46,6 +46,7 @@ import type {
 } from './finance'
 import { isIsoDateBefore, isValidIsoDate, isValidTime24 } from '../utils/date'
 import { formatMoney } from '../utils/currency'
+import { exactMinor, exactMinorToMajorNumber, majorNumberToMinorUnits } from '../utils/money'
 
 /**
  * A rejected mutation. `code` is a stable identifier a caller can branch on
@@ -273,11 +274,14 @@ export function validateAddBudgetCategory(state: FinanceState, input: AddBudgetC
   // `totalBudgetAllocated` is the fixed monthly envelope, not a running sum
   // that grows every time a category is created (SR-002): a new category can
   // only consume what is still unallocated.
-  const unallocated = state.totalBudgetAllocated - state.budgetCategories.reduce((s, c) => s + c.allocated, 0)
-  if (input.allocated > unallocated) {
+  const envelope = state.totalBudgetAllocatedMinor === undefined ? BigInt(majorNumberToMinorUnits(state.totalBudgetAllocated)) : BigInt(state.totalBudgetAllocatedMinor)
+  const used = state.budgetCategories.reduce((s, c) => s + exactMinor(c.allocatedMinor, c.allocated), 0n)
+  const requested = BigInt(majorNumberToMinorUnits(input.allocated))
+  const unallocated = envelope - used
+  if (requested > unallocated) {
     reject(
       'BUDGET_ALLOCATION_EXCEEDS_UNALLOCATED',
-      `Allocation can’t exceed the ${formatMoney(unallocated)} unallocated.`,
+      `Allocation can’t exceed the ${formatMoney(exactMinorToMajorNumber(unallocated))} unallocated.`,
       'allocated',
     )
   }
@@ -302,12 +306,14 @@ export function validateSetCategoryBudget(state: FinanceState, categoryId: strin
   // 0 is allowed — it's how Budget removes a category from the active
   // budget without deleting the category itself (see `setCategoryBudget`).
   requireNonNegativeAmount(allocated, 'allocated', 'BUDGET_ALLOCATION_INVALID', 'budget amount')
-  const usedByOthers = state.budgetCategories.reduce((s, c) => (c.id === categoryId ? s : s + c.allocated), 0)
-  const unallocated = state.totalBudgetAllocated - usedByOthers
-  if (allocated > unallocated) {
+  const envelope = state.totalBudgetAllocatedMinor === undefined ? BigInt(majorNumberToMinorUnits(state.totalBudgetAllocated)) : BigInt(state.totalBudgetAllocatedMinor)
+  const usedByOthers = state.budgetCategories.reduce((s, c) => (c.id === categoryId ? s : s + exactMinor(c.allocatedMinor, c.allocated)), 0n)
+  const requested = BigInt(majorNumberToMinorUnits(allocated))
+  const unallocated = envelope - usedByOthers
+  if (requested > unallocated) {
     reject(
       'BUDGET_ALLOCATION_EXCEEDS_UNALLOCATED',
-      `Allocation can’t exceed the ${formatMoney(unallocated)} unallocated.`,
+      `Allocation can’t exceed the ${formatMoney(exactMinorToMajorNumber(unallocated))} unallocated.`,
       'allocated',
     )
   }

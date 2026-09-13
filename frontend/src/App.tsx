@@ -18,6 +18,7 @@ import { Reconciliation } from './pages/Reconciliation'
 import { Imports } from './pages/Imports'
 import { Security } from './pages/Security'
 import { Tags } from './pages/Tags'
+import { SyncCenter } from './pages/SyncCenter'
 
 export default function App() {
   const [addTxOpen, setAddTxOpen] = useState(false)
@@ -59,6 +60,7 @@ export default function App() {
             working (§27) instead of silently 404ing. */}
         <Route path="/investments" element={<Navigate to="/crypto" replace />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/sync" element={<SyncCenter />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={handleCloseModal} editingTransaction={editingTransaction ?? undefined} />
       <Toast />

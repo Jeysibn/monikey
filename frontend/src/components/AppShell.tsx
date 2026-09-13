@@ -22,6 +22,7 @@ const MORE_ITEMS = [
   { to: '/security', label: 'Sessions & Security', sub: 'Password and active sessions' },
   { to: '/tags', label: 'Tags', sub: 'Transaction context' },
   { to: '/reports', label: 'Reports', sub: 'Trends over time' },
+  { to: '/sync', label: 'Sync Center', sub: 'Offline changes and local cache' },
 ]
 
 function BrandMark() {

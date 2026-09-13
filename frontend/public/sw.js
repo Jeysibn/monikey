@@ -1,6 +1,13 @@
 const CACHE = 'monikey-shell-v2'
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['/', '/favicon.svg', '/manifest.webmanifest', '/icons.svg'])))
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([
+    '/', '/favicon.svg', '/manifest.webmanifest', '/icons.svg',
+    '/tesseract/worker.min.js',
+    '/tesseract/core/tesseract-core.wasm.js',
+    '/tesseract/core/tesseract-core.wasm',
+    '/tesseract/lang/eng.traineddata.gz',
+    '/tesseract/lang/chi_sim.traineddata.gz',
+  ])))
   self.skipWaiting()
 })
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
@@ -11,7 +18,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request).catch(() => caches.match('/')))
     return
   }
-  event.respondWith(fetch(event.request).then((response) => {
+  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)).then((response) => {
     if (response.ok) void caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
     return response
   }).catch(() => caches.match(event.request)))

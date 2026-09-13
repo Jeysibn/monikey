@@ -296,5 +296,8 @@ Receipt OCR has a provider-neutral contract in `frontend/src/domain/receiptOcr.t
 The browser adapter runs Tesseract in `receiptOcr.worker.ts`, persists the source
 Blob locally, and returns suggestions only. OCR never posts a transaction and
 the existing server OCR adapter remains available when the homelab is reachable.
-The worker bundle is cached by the service-worker runtime cache; language-data
-preinstallation and full outbox replay remain follow-up work.
+The worker runtime, WASM core and English/Simplified Chinese language data are
+packaged under `frontend/public/tesseract` and are available to the service
+worker cache, so an installed production build can run the selected languages
+without a network request. Full outbox conflict resolution remains follow-up
+work.

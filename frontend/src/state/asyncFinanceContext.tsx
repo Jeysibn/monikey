@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AddCategoryInput, AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, BudgetCategory, Category, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal, UpdateAccountInput, UpdateCreditCardInput, UpdateGoalInput } from '../domain/finance'
-import type { FinanceGateway } from '../services/apiFinanceGateway'
+import { FinanceApiError, type FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import type { RecurringGateway, RecurringSuggestion } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
@@ -79,6 +79,9 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
       }
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) {
+        if (cause instanceof FinanceApiError && (cause.status === 401 || cause.status === 403)) {
+          setError(cause); setStatus('error'); return
+        }
         void localFirstStore.latestSnapshot().then((snapshot) => {
           if (snapshot) { setState(snapshot.value as FinanceState); setOffline(true); setStatus('ready') }
           else { setError(cause instanceof Error ? cause : new Error('Unable to load finance data')); setStatus('error') }

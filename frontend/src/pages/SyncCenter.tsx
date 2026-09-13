@@ -14,7 +14,11 @@ export function SyncCenter() {
       setSnapshotDate(snapshot?.syncedAt ?? null)
     })
   }, [])
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    refresh()
+    const timer = window.setInterval(refresh, 500)
+    return () => window.clearInterval(timer)
+  }, [refresh])
   const pending = operations.filter((operation) => operation.status === 'pending' || operation.status === 'syncing').length
   const failed = operations.filter((operation) => operation.status === 'failed' || operation.status === 'conflict').length
   const retryOperation = (operation: SyncOutboxOperation) => {

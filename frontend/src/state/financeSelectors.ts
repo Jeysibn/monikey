@@ -377,7 +377,7 @@ export function plannedMonthlyContributionTotal(state: FinanceState): number {
   return major(activeGoals(state).reduce((s, g) => s + exactMinor(g.monthlyContributionMinor, g.monthlyContribution ?? 0), 0n))
 }
 
-/** Average progress across ACTIVE goals only — a completed goal at 100% would otherwise inflate this. */
+/** Average progress across ACTIVE goals only, rounded to two decimal places. */
 export function avgGoalProgressPct(state: FinanceState): number {
   const active = activeGoals(state)
   if (active.length === 0) return 0
@@ -386,7 +386,11 @@ export function avgGoalProgressPct(state: FinanceState): number {
     const target = exactMinor(g.targetMinor, g.targetAmount)
     return s + (target > 0n ? (current * 10000n + target / 2n) / target : 0n)
   }, 0n)
-  return Number((basisPoints + BigInt(active.length * 50)) / BigInt(active.length)) / 100
+  // Each goal above is already rounded to one basis point. Average those
+  // basis-point values, adding only half the divisor for nearest-integer
+  // division. Adding 50 per goal here would incorrectly add ~0.5 percentage
+  // points to every result.
+  return Number((basisPoints + BigInt(Math.floor(active.length / 2))) / BigInt(active.length)) / 100
 }
 
 /** Progress percentage clamped to [0, 100] for rendering a fill bar. */

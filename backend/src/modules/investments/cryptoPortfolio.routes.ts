@@ -196,7 +196,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
     return { transfer: { ...serializeTransfer(transfer), id: undefined, idempotencyKey: undefined } }
   })
 
-  app.get('/crypto/history', { preValidation: requireAuth, schema: { querystring: historyQueryJson, response: { 200: historyResponseJson, 503: errorJson } } }, async (request, reply) => {
+  app.get('/crypto/history', { preValidation: requireAuth, schema: { querystring: historyQueryJson, response: { 200: historyResponseJson, 422: errorJson, 503: errorJson } } }, async (request, reply) => {
     const { range } = historyQuery.parse(request.query); const userId = request.user!.id; const baseCurrency = request.user!.baseCurrency
     const instruments = await options.prisma.instrument.findMany({ where: { userId, assetType: 'crypto', tracked: true, providerAssetId: { not: null } } })
     if (instruments.length === 0) return { baseCurrency, points: [] }
@@ -218,7 +218,13 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
         return { timestamp, valueAmount: value.toString() }
       })
       return { baseCurrency, points }
-    } catch (error) { if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } }); throw error }
+    } catch (error) {
+      if (error instanceof CryptoProviderUnavailableError) return reply.code(503).send({ error: { code: error.code, message: error.message, requestId: request.id } })
+      // Same fail-closed contract as GET /crypto: a missing historical FX
+      // rate is a data problem the user must fix, not a generic 500.
+      if (error instanceof CryptoHistoricalFxUnavailableError) return reply.code(422).send({ error: { code: error.code, message: 'An earlier trade for this coin has no recorded historical FX rate; it must be corrected before portfolio history can be valued.', requestId: request.id } })
+      throw error
+    }
   })
 
   app.get<{ Params: { id: string } }>('/crypto/coins/:id', { preValidation: requireAuth, schema: { params: uuidParamsJson, response: { 200: coinDetailJson, 404: errorJson, 422: errorJson } } }, async (request, reply) => {

@@ -284,6 +284,7 @@ export function Dashboard() {
           <CardTitle action={<Link to="/crypto" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
           {cryptoSummary ? (
             <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
+              {!backendEnabled() && <span className="dash-demo-badge">Demo data</span>}
               {formatDecimalMoney(cryptoSummary.portfolioValue)} total
               {cryptoSummary.totalPnlPct != null && (
                 <>

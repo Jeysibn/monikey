@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
+import { useConfirm } from '../hooks/useConfirm'
 import { ProgressBar } from '../components/ProgressBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
@@ -40,6 +42,8 @@ export function Budget() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAllocated, setEditAllocated] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
   const { errors: editErrors, field: editField, errorId: editErrorId, fail: editFail, clear: editClear } = useFieldErrors<CategoryField>(CATEGORY_FIELDS)
 
@@ -134,22 +138,21 @@ export function Budget() {
   async function handleDelete(categoryId: string) {
     // Removes the category from the active budget without deleting the
     // category itself — deleting the category outright is a Settings action.
-    if (!window.confirm('Remove this category from the budget? It will still exist in Settings and can be re-budgeted any time.')) {
+    if (!await confirm({ title: 'Remove budget category?', message: 'The category will stay in Settings and can be budgeted again later.', confirmLabel: 'Remove budget' })) {
       return
     }
     try {
       if (asyncFinance) await asyncFinance.setCategoryBudget(categoryId, 0)
       else finance.setCategoryBudget(categoryId, 0)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not remove category from budget.')
+      setActionError(err instanceof Error ? err.message : 'Could not remove category from budget.')
     }
   }
 
   return (
     <div>
-      <div className="page-head">
-        <h1 className="page-title">Budget</h1>
-      </div>
+      <PageHeader title="Budget" description="Set monthly envelopes, monitor progress, and see what remains for the period." />
+      {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
       <div className="kpi-row">
         <Card>
@@ -415,6 +418,7 @@ export function Budget() {
           </Card>
         </div>
       </div>
+      {confirmDialog}
     </div>
   )
 }

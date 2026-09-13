@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
+import { TagPicker } from '../components/TagPicker'
+import { useConfirm } from '../hooks/useConfirm'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
@@ -20,15 +24,19 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
   const { transactions } = finance.state
-  const params = new URLSearchParams(window.location.search)
-  const [search, setSearch] = useState(params.get('q') ?? '')
-  const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>('all')
-  const [categoryFilter] = useState(params.get('category') ?? '')
-  const [fromFilter] = useState(params.get('from') ?? '')
-  const [toFilter] = useState(params.get('to') ?? '')
-  const [tagFilter] = useState(params.get('tag') ?? '')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('q') ?? '')
+  const [typeFilter, setTypeFilter] = useState<'all' | TransactionType>((searchParams.get('type') as 'all' | TransactionType | null) ?? 'all')
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? '')
+  const [accountFilter, setAccountFilter] = useState(searchParams.get('account') ?? '')
+  const [fromFilter, setFromFilter] = useState(searchParams.get('from') ?? '')
+  const [toFilter, setToFilter] = useState(searchParams.get('to') ?? '')
+  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [availableTags, setAvailableTags] = useState<ApiTag[]>([])
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [tagEditor, setTagEditor] = useState<Transaction | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
   useEffect(() => {
     if (!asyncFinance) return
     fetch('/api/v1/tags', { credentials: 'include' }).then((response) => response.ok ? response.json() as Promise<ApiTag[]> : Promise.reject(new Error('tags unavailable'))).then(setAvailableTags).catch(() => undefined)
@@ -54,13 +62,25 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
       if (reversalPairIds.has(t.id)) return false
       if (typeFilter !== 'all' && t.type !== typeFilter) return false
       if (categoryFilter && t.categoryId !== categoryFilter) return false
+      if (accountFilter && t.accountId !== accountFilter) return false
       if (fromFilter && t.date < fromFilter) return false
       if (toFilter && t.date > toFilter) return false
       if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false
       if (search && !finance.transactionMatchesSearch(t, search)) return false
       return true
     })
-  }, [transactions, search, typeFilter, categoryFilter, fromFilter, toFilter, tagFilter, finance, reversalPairIds])
+  }, [transactions, search, typeFilter, categoryFilter, accountFilter, fromFilter, toFilter, tagFilter, finance, reversalPairIds])
+
+  function updateUrl(name: string, value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(name, value); else next.delete(name)
+    setSearchParams(next, { replace: true })
+  }
+
+  function clearFilters() {
+    setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setAccountFilter(''); setFromFilter(''); setToFilter(''); setTagFilter('')
+    setSearchParams(new URLSearchParams(), { replace: true })
+  }
 
   const handleEdit = (transaction: typeof transactions[0]) => {
     if (onEditTransaction) {
@@ -69,7 +89,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
   }
 
   const handleDelete = async (transactionId: string) => {
-    if (!window.confirm('Are you sure you want to delete this transaction? This action creates a reversal entry for audit purposes.')) {
+    if (!await confirm({ title: 'Delete transaction?', message: 'The transaction will be reversed for audit purposes and removed from this active list.', confirmLabel: 'Delete transaction' })) {
       return
     }
     setBusyId(transactionId)
@@ -81,38 +101,33 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
       }
     } catch (err) {
       console.error('Failed to delete transaction:', err)
-      window.alert('Failed to delete transaction. Please try again.')
+      setActionError('Failed to delete transaction. Please try again.')
     } finally {
       setBusyId(null)
     }
   }
 
-  async function handleTags(transaction: Transaction) {
+  async function handleTags(transaction: Transaction, value: string) {
     if (!asyncFinance) return
-    const value = window.prompt(`Tags for ${transaction.title} (comma-separated):`, (transaction.tags ?? []).join(', '))
-    if (value === null) return
     const names = [...new Set(value.split(',').map((name) => name.trim()).filter(Boolean))]
     const tagIds = names.map((name) => availableTags.find((tag) => tag.name === name)?.id).filter((id): id is string => Boolean(id))
-    if (tagIds.length !== names.length) { window.alert('Create each tag first from the Tags page.'); return }
+    if (tagIds.length !== names.length) throw new Error('Create each tag first from the Tags page.')
     setBusyId(transaction.id)
     try {
       const response = await fetch(`/api/v1/transactions/${transaction.id}/tags`, { method: 'PUT', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tagIds }) })
       if (!response.ok) throw new Error('Could not update tags')
       window.location.reload()
-    } catch { window.alert('Could not update transaction tags.') } finally { setBusyId(null) }
+    } finally { setBusyId(null) }
   }
 
   return (
     <div className="transactions-page">
-      <div className="page-head">
-        <h1 className="page-title">Transactions</h1>
-        <button type="button" className="btn btn--primary" onClick={onAddTransaction}>
+      <PageHeader title="Transactions" description="Review, filter, and reconcile every movement in your ledger." action={<button type="button" className="btn btn--primary" onClick={onAddTransaction}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
           Add Transaction
-        </button>
-      </div>
+        </button>} />
 
       <div className="toolbar">
         <label className="search-box">
@@ -125,21 +140,19 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
             type="search"
             placeholder="Search transactions..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); updateUrl('q', e.target.value) }}
           />
         </label>
-        <select
-          className="filter-select"
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-          aria-label="Filter by type"
-        >
-          <option value="all">All Types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-          <option value="transfer">Transfer</option>
-        </select>
+        <label className="filter-control"><span>Type</span><select aria-label="Filter by type" className="filter-select" value={typeFilter} onChange={(e) => { const value = e.target.value as typeof typeFilter; setTypeFilter(value); updateUrl('type', value === 'all' ? '' : value) }}><option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option></select></label>
+        <label className="filter-control"><span>Category</span><select aria-label="Transaction category filter" className="filter-select" value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); updateUrl('category', e.target.value) }}><option value="">All categories</option>{finance.state.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label className="filter-control"><span>Account</span><select aria-label="Transaction account filter" className="filter-select" value={accountFilter} onChange={(e) => { setAccountFilter(e.target.value); updateUrl('account', e.target.value) }}><option value="">All accounts</option>{finance.state.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label className="filter-control filter-date"><span>From</span><input aria-label="Transaction from date" type="date" value={fromFilter} onChange={(e) => { setFromFilter(e.target.value); updateUrl('from', e.target.value) }} /></label>
+        <label className="filter-control filter-date"><span>To</span><input aria-label="Transaction to date" type="date" value={toFilter} onChange={(e) => { setToFilter(e.target.value); updateUrl('to', e.target.value) }} /></label>
+        <label className="filter-control"><span>Tag</span><input aria-label="Transaction tag filter" value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); updateUrl('tag', e.target.value) }} placeholder="Any tag" /></label>
       </div>
+
+      {(search || typeFilter !== 'all' || categoryFilter || accountFilter || fromFilter || toFilter || tagFilter) && <div className="active-filters" aria-label="Active transaction filters"><span className="active-filters-label">Filtered by</span>{search && <button type="button" className="filter-chip" onClick={() => { setSearch(''); updateUrl('q', '') }}>Search: {search} ×</button>}{typeFilter !== 'all' && <button type="button" className="filter-chip" onClick={() => { setTypeFilter('all'); updateUrl('type', '') }}>Type: {TYPE_LABEL[typeFilter]} ×</button>}{categoryFilter && <button type="button" className="filter-chip" onClick={() => { setCategoryFilter(''); updateUrl('category', '') }}>Category: {finance.state.categories.find((category) => category.id === categoryFilter)?.name ?? categoryFilter} ×</button>}{accountFilter && <button type="button" className="filter-chip" onClick={() => { setAccountFilter(''); updateUrl('account', '') }}>Account: {finance.state.accounts.find((account) => account.id === accountFilter)?.name ?? accountFilter} ×</button>}{fromFilter && <button type="button" className="filter-chip" onClick={() => { setFromFilter(''); updateUrl('from', '') }}>From: {fromFilter} ×</button>}{toFilter && <button type="button" className="filter-chip" onClick={() => { setToFilter(''); updateUrl('to', '') }}>To: {toFilter} ×</button>}{tagFilter && <button type="button" className="filter-chip" onClick={() => { setTagFilter(''); updateUrl('tag', '') }}>Tag: {tagFilter} ×</button>}<button type="button" className="clear-filters" onClick={clearFilters}>Clear all</button></div>}
+      {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
       <div className="kpi-row">
         <Card>
@@ -172,7 +185,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
               className="btn btn--ghost"
               onClick={() => {
                 setSearch('')
-                setTypeFilter('all')
+                clearFilters()
               }}
             >
               Clear Filters
@@ -242,7 +255,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                 </span>
                 <span role="cell" className="tx-col-center">
                   <div className="tx-row-actions">
-                    {asyncFinance && <button type="button" className="btn btn--ghost btn--compact tx-icon-btn" disabled={busyId === t.id} onClick={() => void handleTags(t)} title="Edit tags" aria-label="Edit tags">#</button>}
+                    {asyncFinance && <button type="button" className="btn btn--ghost btn--compact tx-icon-btn" disabled={busyId === t.id} onClick={() => setTagEditor(t)} title="Edit tags" aria-label="Edit tags">#</button>}
                     <button
                       type="button"
                       className="btn btn--ghost btn--compact tx-icon-btn"
@@ -320,7 +333,7 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
                 <span className="faint">{finance.transactionAccountLabel(t)}</span>
               </div>
               <div className="tx-mobile-actions">
-                {asyncFinance && <button type="button" className="btn btn--ghost btn--compact" disabled={busyId === t.id} onClick={() => void handleTags(t)}>Edit tags</button>}
+                {asyncFinance && <button type="button" className="btn btn--ghost btn--compact" disabled={busyId === t.id} onClick={() => setTagEditor(t)}>Edit tags</button>}
                 <button
                   type="button"
                   className="btn btn--ghost btn--compact"
@@ -350,6 +363,8 @@ export function Transactions({ onAddTransaction, onEditTransaction }: { onAddTra
           ))}
         </ul>
       )}
+      {tagEditor && <TagPicker key={tagEditor.id} transaction={tagEditor} initialValue={(tagEditor.tags ?? []).map((tag) => availableTags.find((item) => item.id === tag)?.name ?? tag).join(', ')} open onSave={(value) => handleTags(tagEditor, value)} onClose={() => setTagEditor(null)} />}
+      {confirmDialog}
     </div>
   )
 }

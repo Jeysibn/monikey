@@ -313,7 +313,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
       <form method="dialog" onSubmit={handleSubmit} noValidate>
         <div className="tx-modal-head">
           <h2 id="add-tx-title" className="tx-modal-title">
-            Add Transaction
+            {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
           </h2>
           <button type="button" className="tx-modal-close" aria-label="Close" onClick={handleClose} disabled={submitting}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">

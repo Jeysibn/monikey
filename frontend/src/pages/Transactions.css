@@ -25,6 +25,11 @@
   flex: 1;
   outline: none;
 }
+.search-box:focus-within {
+  border-color: var(--cyan);
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
 .filter-select {
   border: 1px solid var(--card-border);
   background: oklch(24% 0.03 255 / 0.5);

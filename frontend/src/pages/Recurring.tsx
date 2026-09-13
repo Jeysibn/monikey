@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Card } from '../components/Card'
 import { Tag } from '../components/StatusBadge'
 import { useFinance } from '../hooks/useFinance'
+import { PageHeader } from '../components/PageHeader'
+import { useConfirm } from '../hooks/useConfirm'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { dueStateOf, monthlyEquivalent, useRecurring } from '../hooks/useRecurring'
 import { formatMoney, formatMoneyValue, formatMinorUnits } from '../utils/currency'
@@ -330,6 +332,7 @@ export function Recurring() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([])
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const todayIso = finance.todayIso
 
   const editingItem = editingItemId ? items.find((item) => item.id === editingItemId) : undefined
@@ -347,7 +350,7 @@ export function Recurring() {
     localRecurring.editItem(editingItemId, input)
   }
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this recurring item?')) return
+    if (!await confirm({ title: 'Delete recurring item?', message: 'This removes the recurring item and its future reminders.', confirmLabel: 'Delete item' })) return
     setBusyId(id)
     setActionError(null)
     try {
@@ -397,10 +400,8 @@ export function Recurring() {
   const suggestions = (finance.recurringSuggestions ?? []).filter((suggestion) => !ignoredSuggestions.includes(`${suggestion.merchant}|${suggestion.amountMinor}`))
 
   return (
-    <div>
-      <div className="page-head">
-        <h1 className="page-title">Recurring &amp; Bills</h1>
-      </div>
+    <div className="page-stack recurring-page">
+      <PageHeader title="Recurring & Bills" description="Keep recurring bills and subscriptions visible before they are due." />
 
       <div className="kpi-row">
         <Card>
@@ -531,6 +532,7 @@ export function Recurring() {
           </ul>
         </Card>
       )}
+      {confirmDialog}
     </div>
   )
 }

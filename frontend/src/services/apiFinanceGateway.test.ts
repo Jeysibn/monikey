@@ -39,6 +39,16 @@ describe('ApiFinanceGateway', () => {
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: '9007199254740993' })
   })
 
+  it('loads unsafe historical minor units without making the lossy display value authoritative', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ financeState: {
+      accounts: [account({ currentBalanceMinor: '9007199254740993' })],
+      transactions: [], categories: [], budgets: [], goals: [],
+    }, serverDate: '2026-08-29' }))
+    const state = await new ApiFinanceGateway('/api/v1', fetcher).load()
+    expect(state.accounts[0]?.balanceMinor).toBe('9007199254740993')
+    expect(state.accounts[0]?.balance).toBe(Number(BigInt('9007199254740993')) / 100)
+  })
+
   it('surfaces non-success API responses', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({}, 422))
     await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toMatchObject({ status: 422, code: 'INTERNAL_ERROR' })

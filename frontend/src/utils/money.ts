@@ -50,6 +50,16 @@ export function minorUnitsToMajorNumber(value: string): number {
   return Number(minor) / 100
 }
 
+/** Non-authoritative read-model fallback. Exact `*Minor` fields remain the
+ * source of truth; this value exists only for legacy components that still
+ * require a number to render or position a chart. */
+export function minorUnitsToMajorDisplayNumber(value: string): number {
+  if (!/^-?\d+$/.test(value)) throw new TypeError('Minor units must be a decimal integer string.')
+  const display = Number(BigInt(value)) / 100
+  if (!Number.isFinite(display)) throw new RangeError('Minor-unit value cannot be represented for display.')
+  return display
+}
+
 /** Converts an existing numeric domain value to an exact API minor-unit string. */
 export function majorNumberToMinorUnits(value: number): string {
   if (!Number.isFinite(value)) throw new TypeError('Money value must be finite.')

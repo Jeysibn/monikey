@@ -14,7 +14,7 @@ import type {
   UpdateGoalInput,
 } from '../domain/finance'
 import type { paths } from '../api.generated'
-import { majorNumberToMinorUnits, minorUnitsToMajorNumber } from '../utils/money'
+import { majorNumberToMinorUnits, minorUnitsToMajorDisplayNumber } from '../utils/money'
 
 type ApiAccount = paths['/accounts']['post']['responses'][201]['content']['application/json']
 type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']['application/json']
@@ -73,7 +73,7 @@ export class FinanceApiError extends Error {
   }
 }
 
-const minor = minorUnitsToMajorNumber
+const minor = minorUnitsToMajorDisplayNumber
 
 export class ApiFinanceGateway implements FinanceGateway {
   private readonly baseUrl: string

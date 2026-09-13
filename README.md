@@ -76,7 +76,7 @@ configured separately; source adapters do not prove a live integration is enable
 | `/accounts` | Manual accounts and credit cards; backend update/archive flows |
 | `/budget` | Categories and allocations |
 | `/goals` | Goal creation and funding; backend update/delete flows |
-| `/investments` | Crypto holdings, trades, transfers, portfolio views and quote refresh (legacy URL) |
+| `/crypto` | Crypto holdings, trades, transfers, portfolio views and quote refresh (`/investments` redirects here) |
 | `/recurring` | Recurring bills and status/payment controls |
 | `/reports` | Financial report views and period controls |
 | `/imports` | CSV staging, preview and commit workflow |

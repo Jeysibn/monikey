@@ -189,7 +189,7 @@ function DisplayPreferencesSection({
     <Card>
       <CardTitle>Display Preferences</CardTitle>
       <p className="form-help">
-        MoniKey currently uses Philippine Peso (₱) and <code>en-PH</code>
+        Monikey currently uses Philippine Peso (₱) and <code>en-PH</code>
         formatting consistently across the application. Multi-currency display
         preferences are planned once the setting can be applied atomically to
         every financial view.

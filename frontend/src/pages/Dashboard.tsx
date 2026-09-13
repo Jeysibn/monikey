@@ -281,7 +281,7 @@ export function Dashboard() {
         </Card>
 
         <Card className="area-portfolio">
-          <CardTitle action={<Link to="/investments" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
+          <CardTitle action={<Link to="/crypto" className="see-all">See all</Link>}>Crypto Portfolio</CardTitle>
           {cryptoSummary ? (
             <div className="dash-meta" style={{ marginTop: -6, marginBottom: 6 }}>
               {formatDecimalMoney(cryptoSummary.portfolioValue)} total
@@ -321,7 +321,7 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <Link to="/investments" className="see-all" style={{ display: 'block', textAlign: 'left' }}>
+            <Link to="/crypto" className="see-all" style={{ display: 'block', textAlign: 'left' }}>
               Add your first coin →
             </Link>
           )}

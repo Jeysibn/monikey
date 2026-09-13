@@ -1,4 +1,4 @@
-# MoniKey documentation
+# Monikey documentation
 
 Repository documentation is the canonical reference for the shipped system.
 

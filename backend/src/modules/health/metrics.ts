@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client'
 
 type Counter = { value: number; help: string }
 const counters = new Map<string, Counter>([
-  ['monikey_http_requests_total', { value: 0, help: 'Total HTTP requests handled by MoniKey.' }],
+  ['monikey_http_requests_total', { value: 0, help: 'Total HTTP requests handled by Monikey.' }],
   ['monikey_http_errors_total', { value: 0, help: 'Total HTTP responses with status 400 or higher.' }],
   ['monikey_worker_jobs_succeeded_total', { value: 0, help: 'Durable worker jobs completed successfully.' }],
   ['monikey_worker_jobs_failed_total', { value: 0, help: 'Durable worker job attempts that failed.' }],

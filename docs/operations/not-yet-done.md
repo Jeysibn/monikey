@@ -2,7 +2,7 @@
 
 Updated: 2026-09-13
 
-This is the current-state gap list for MoniKey. It is based on the source tree
+This is the current-state gap list for Monikey. It is based on the source tree
 and current operational evidence, not on historical phase plans. Repository
 documentation is authoritative when this list and an older note disagree.
 

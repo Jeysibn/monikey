@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { AddTransactionModal } from './components/AddTransactionModal'
 import { Toast } from './components/Toast'
@@ -53,7 +53,11 @@ export default function App() {
         <Route path="/security" element={<Security />} />
         <Route path="/tags" element={<Tags />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/investments" element={<Crypto />} />
+        <Route path="/crypto" element={<Crypto />} />
+        {/* Compatibility redirect: /investments was the canonical route before
+            the Crypto Portfolio feature was renamed; keep old bookmarks/links
+            working (§27) instead of silently 404ing. */}
+        <Route path="/investments" element={<Navigate to="/crypto" replace />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <AddTransactionModal open={addTxOpen} onClose={handleCloseModal} editingTransaction={editingTransaction ?? undefined} />

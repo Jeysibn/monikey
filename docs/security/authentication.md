@@ -1,6 +1,6 @@
 # Authentication
 
-MoniKey uses Argon2id password hashes and random session tokens whose hashes are
+Monikey uses Argon2id password hashes and random session tokens whose hashes are
 stored in PostgreSQL. Browser sessions use HttpOnly cookies with SameSite=Lax;
 production cookies are Secure. State-changing browser requests require the
 configured application origin.

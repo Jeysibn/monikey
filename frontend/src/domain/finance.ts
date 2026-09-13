@@ -223,7 +223,9 @@ export interface AddTransactionInput {
   time?: string
   /** Always a positive amount; sign is derived from `type`. */
   amount: number
+  amountMinor?: MinorUnits
   fee?: number
+  feeMinor?: MinorUnits
   note?: string
   /** Stable per-submit key used by the backend to make retries safe. */
   idempotencyKey?: string
@@ -234,6 +236,7 @@ export interface AddManualAccountInput {
   type: Exclude<AccountType, 'credit_card'>
   institution?: string
   balance: number
+  balanceMinor?: MinorUnits
   lastFour?: string
 }
 
@@ -242,9 +245,12 @@ export interface AddManualCreditCardInput {
   lastFour: string
   network: 'visa' | 'mastercard'
   balance: number
+  balanceMinor?: MinorUnits
   limit: number
+  limitMinor?: MinorUnits
   dueDate: string
   minPayment: number
+  minPaymentMinor?: MinorUnits
 }
 
 export interface AddBudgetCategoryInput {
@@ -265,15 +271,19 @@ export interface AddCategoryInput {
 export interface CreateGoalInput {
   name: string
   targetAmount: number
+  targetMinor?: MinorUnits
   targetDate: string
   monthlyContribution?: number
+  monthlyContributionMinor?: MinorUnits
 }
 
 export interface UpdateGoalInput {
   name?: string
   targetAmount?: number
+  targetMinor?: MinorUnits
   targetDate?: string
   monthlyContribution?: number | null
+  monthlyContributionMinor?: MinorUnits | null
 }
 
 export interface UpdateAccountInput {

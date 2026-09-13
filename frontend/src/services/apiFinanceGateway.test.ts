@@ -32,6 +32,13 @@ describe('ApiFinanceGateway', () => {
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: '1234', feeMinor: '50', fromAccountId: 'account-1', toAccountId: null, idempotencyKey: 'submit-1' })
   })
 
+  it('preserves caller-provided exact minor units without narrowing through Number', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ transaction: { id: 'tx-large', type: 'income', title: 'Historical', categoryId: null, goalId: null, fromAccountId: null, toAccountId: 'account-1', occurredOn: '1900-01-01', occurredTime: null, amountMinor: '100', feeMinor: '0', source: 'import', status: 'cleared', note: null } }))
+    const api = new ApiFinanceGateway('/api/v1', fetcher)
+    await api.addTransaction({ type: 'income', title: 'Historical', accountId: 'account-1', date: '1900-01-01', amount: 1, amountMinor: '9007199254740993' })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ amountMinor: '9007199254740993' })
+  })
+
   it('surfaces non-success API responses', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({}, 422))
     await expect(new ApiFinanceGateway('/api/v1', fetcher).addManualAccount({ name: 'Cash', type: 'cash', balance: 0 })).rejects.toMatchObject({ status: 422, code: 'INTERNAL_ERROR' })

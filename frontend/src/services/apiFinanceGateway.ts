@@ -115,7 +115,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addTransaction(input: AddTransactionInput, signal?: AbortSignal): Promise<Transaction> {
-    const result = await this.request<TransactionMutationResponse>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: majorNumberToMinorUnits(input.amount), feeMinor: majorNumberToMinorUnits(input.fee ?? 0), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
+    const result = await this.request<TransactionMutationResponse>('/transactions', { method: 'POST', signal, body: JSON.stringify({ type: input.type, title: input.title, categoryId: input.categoryId ?? null, fromAccountId: input.type === 'expense' ? input.accountId : input.fromAccountId ?? null, toAccountId: input.type === 'income' ? input.accountId : input.toAccountId ?? null, occurredOn: input.date, occurredTime: input.time ?? null, amountMinor: input.amountMinor ?? majorNumberToMinorUnits(input.amount), feeMinor: input.feeMinor ?? majorNumberToMinorUnits(input.fee ?? 0), note: input.note ?? null, source: 'manual', status: 'cleared', idempotencyKey: input.idempotencyKey ?? null }) })
     return this.mapTransaction(result.transaction)
   }
 
@@ -125,8 +125,10 @@ export class ApiFinanceGateway implements FinanceGateway {
     if (input.categoryId !== undefined) updatePayload.categoryId = input.categoryId
     if (input.date !== undefined) updatePayload.occurredOn = input.date
     if (input.time !== undefined) updatePayload.occurredTime = input.time ?? null
-    if (input.amount !== undefined) updatePayload.amountMinor = majorNumberToMinorUnits(input.amount)
-    if (input.fee !== undefined) updatePayload.feeMinor = majorNumberToMinorUnits(input.fee ?? 0)
+    if (input.amountMinor !== undefined) updatePayload.amountMinor = input.amountMinor
+    else if (input.amount !== undefined) updatePayload.amountMinor = majorNumberToMinorUnits(input.amount)
+    if (input.feeMinor !== undefined) updatePayload.feeMinor = input.feeMinor
+    else if (input.fee !== undefined) updatePayload.feeMinor = majorNumberToMinorUnits(input.fee ?? 0)
     if (input.note !== undefined) updatePayload.note = input.note
 
     const result = await this.request<TransactionMutationResponse>(`/transactions/${transactionId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
@@ -139,13 +141,13 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async addManualAccount(input: AddManualAccountInput, signal?: AbortSignal): Promise<Account> {
-    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: majorNumberToMinorUnits(input.balance), lastFour: input.lastFour ?? null }
+    const payload: CreateAccountRequest = { name: input.name, institution: input.institution ?? null, accountType: input.type, openingBalanceMinor: input.balanceMinor ?? majorNumberToMinorUnits(input.balance), lastFour: input.lastFour ?? null }
     const account = await this.request<ApiAccount>('/accounts', { method: 'POST', signal, body: JSON.stringify(payload) })
     return { id: account.id, name: account.name, institution: account.institution ?? undefined, type: account.accountType, classification: account.classification, balanceMinor: account.currentBalanceMinor, balance: minor(account.currentBalanceMinor), lastFour: account.lastFour ?? undefined, syncStatus: account.syncStatus, manual: account.manual }
   }
 
   async addManualCreditCard(input: AddManualCreditCardInput, signal?: AbortSignal): Promise<CreditCard> {
-    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: majorNumberToMinorUnits(input.balance), creditLimitMinor: majorNumberToMinorUnits(input.limit), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: majorNumberToMinorUnits(input.minPayment) }
+    const payload: CreateCreditCardRequest = { name: input.name, lastFour: input.lastFour, network: input.network, openingBalanceMinor: input.balanceMinor ?? majorNumberToMinorUnits(input.balance), creditLimitMinor: input.limitMinor ?? majorNumberToMinorUnits(input.limit), dueDay: Number(input.dueDate.slice(-2)), minimumPaymentMinor: input.minPaymentMinor ?? majorNumberToMinorUnits(input.minPayment) }
     const account = await this.request<ApiAccount>('/credit-cards', { method: 'POST', signal, body: JSON.stringify(payload) })
     const detail = account.creditCardDetail!
     return { id: account.id, name: account.name, lastFour: account.lastFour ?? '', network: detail.network, balanceMinor: account.currentBalanceMinor, balance: minor(account.currentBalanceMinor), limitMinor: detail.creditLimitMinor, limit: minor(detail.creditLimitMinor), dueDate: input.dueDate, minPaymentMinor: detail.minimumPaymentMinor, minPayment: minor(detail.minimumPaymentMinor), manual: account.manual }
@@ -175,7 +177,7 @@ export class ApiFinanceGateway implements FinanceGateway {
   }
 
   async createGoal(input: CreateGoalInput, signal?: AbortSignal): Promise<Goal> {
-    const payload: CreateGoalRequest = { name: input.name, targetMinor: majorNumberToMinorUnits(input.targetAmount), targetDate: input.targetDate, monthlyContributionMinor: input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution) }
+    const payload: CreateGoalRequest = { name: input.name, targetMinor: input.targetMinor ?? majorNumberToMinorUnits(input.targetAmount), targetDate: input.targetDate, monthlyContributionMinor: input.monthlyContributionMinor ?? (input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution)) }
     const goal = await this.request<ApiGoal>('/goals', { method: 'POST', signal, body: JSON.stringify(payload) })
     return this.mapGoal(goal)
   }
@@ -191,9 +193,11 @@ export class ApiFinanceGateway implements FinanceGateway {
   async updateGoal(goalId: string, input: UpdateGoalInput, signal?: AbortSignal): Promise<Goal> {
     const updatePayload: UpdateGoalRequest = {}
     if (input.name !== undefined) updatePayload.name = input.name
-    if (input.targetAmount !== undefined) updatePayload.targetMinor = majorNumberToMinorUnits(input.targetAmount)
+    if (input.targetMinor !== undefined) updatePayload.targetMinor = input.targetMinor
+    else if (input.targetAmount !== undefined) updatePayload.targetMinor = majorNumberToMinorUnits(input.targetAmount)
     if (input.targetDate !== undefined) updatePayload.targetDate = input.targetDate
-    if (input.monthlyContribution !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution)
+    if (input.monthlyContributionMinor !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContributionMinor
+    else if (input.monthlyContribution !== undefined) updatePayload.monthlyContributionMinor = input.monthlyContribution == null ? null : majorNumberToMinorUnits(input.monthlyContribution)
 
     const goal = await this.request<ApiGoal>(`/goals/${goalId}`, { method: 'PATCH', signal, body: JSON.stringify(updatePayload) })
     return this.mapGoal(goal)

@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const dist = new URL('../dist/', import.meta.url)
-const forbidden = [/fonts\.googleapis\.com/i, /fonts\.gstatic\.com/i]
+const forbiddenOrigins = ['fonts.googleapis.com', 'fonts.gstatic.com']
 const files = []
 
 async function collect(directory) {
@@ -16,9 +16,9 @@ async function collect(directory) {
 await collect(dist.pathname)
 const violations = []
 for (const path of files) {
-  const contents = await readFile(path, 'utf8')
-  for (const pattern of forbidden) {
-    if (pattern.test(contents)) violations.push(`${path}: ${pattern}`)
+  const contents = (await readFile(path, 'utf8')).toLowerCase()
+  for (const origin of forbiddenOrigins) {
+    if (contents.includes(origin)) violations.push(`${path}: ${origin}`)
   }
 }
 

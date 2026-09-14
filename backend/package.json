@@ -40,7 +40,7 @@
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.3",
     "argon2": "^0.45.1",
-    "fastify": "^5.12.1",
+    "fastify": "^5.12.3",
     "fastify-type-provider-zod": "^7.0.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.0.0",

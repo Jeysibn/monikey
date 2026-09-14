@@ -6,10 +6,11 @@ import { originCheckPreHandler } from '../../common/auth/originCheck.js';
 import type { PrismaClient } from '@prisma/client';
 import { LedgerService } from './ledger.service.js';
 import { postTransactionSchema, reverseTransactionSchema, updateTransactionSchema } from './ledger.schemas.js';
-import type { PostTransactionInput, ReverseTransactionInput, UpdateTransactionInput } from './ledger.schemas.js';
+import type { PostTransactionInput, ReverseTransactionInput, TransactionQuery, UpdateTransactionInput } from './ledger.schemas.js';
 
 // UUID validation for path parameters (D8: malformed UUID handling)
 const transactionIdParamSchema = z.object({ id: z.string().uuid('Invalid transaction ID format') });
+type TransactionListQuery = Omit<TransactionQuery, 'userId'>;
 
 const transactionViewJsonSchema = {
   type: 'object',
@@ -53,7 +54,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
   );
 
   // GET /transactions
-  f.get(
+  f.get<{ Querystring: TransactionListQuery }>(
     '/transactions',
     {
       schema: {
@@ -73,7 +74,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
       },
     },
     async (req) => {
-      const { cursor, limit, fromDate, toDate, type, categoryId, accountId, tagId } = req.query as any;
+      const { cursor, limit, fromDate, toDate, type, categoryId, accountId, tagId } = req.query;
       const result = await service.listTransactions({
         userId: req.user!.id,
         cursor,

@@ -11,8 +11,8 @@ It is a monorepo with a React frontend and a Fastify API and worker backed by Po
   tests. The injected date is `2026-08-29`; `?today=YYYY-MM-DD` overrides it.
 - **Backend mode**: build with `VITE_FINANCE_BACKEND=true` to use the session-cookie
   registration/sign-in gate and asynchronous API gateways. Data persists in PostgreSQL.
-  The mock clock override does not control this mode; the async provider currently
-  uses the UTC calendar date, and the backend has its own date handling.
+  The mock clock override does not control this mode; the backend supplies the
+  authenticated user's calendar date using their configured IANA timezone.
 
 This flag is a Vite **build-time** setting; changing it requires a frontend rebuild.
 Mock and backend modes have different capabilities; they are not interchangeable test targets.

@@ -56,3 +56,15 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=10 \
   CMD ["node", "./scripts/healthcheck.mjs"]
 
 CMD ["node", "dist/server.js"]
+
+# ---- migration: migration-capable release artifact -------------------
+# This target is published separately from the hardened runtime. GitOps
+# migration Jobs must use this artifact (or an equivalent pinned image), not
+# the API/worker runtime, because schema deployment needs npm/npx and Prisma.
+FROM build AS migration
+ENV NODE_ENV=production
+RUN apk upgrade --no-cache \
+  && addgroup -S monikey \
+  && adduser -S monikey -G monikey
+USER monikey
+CMD ["npx", "prisma", "migrate", "deploy"]

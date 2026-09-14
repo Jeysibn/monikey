@@ -96,15 +96,23 @@ const plaidExchangeTokenSchema = z.object({
   linkToken: z.string().min(1),
 })
 
+const plaidWebhookSchema = z.object({
+  webhook_type: z.string().optional(),
+  item_id: z.string().optional(),
+  error: z.record(z.string(), z.unknown()).optional(),
+}).passthrough()
+
+export interface ImportsRoutesOptions {
+  prisma: PrismaClient
+  ledgerService: LedgerService
+  bankProvider: BankAggregationProvider
+  env: Env
+  appOrigin: string
+}
+
 export async function createImportsRoutes(
   app: FastifyInstance,
-  options: {
-    prisma: PrismaClient
-    ledgerService: LedgerService
-    bankProvider: BankAggregationProvider
-    env: Env
-    appOrigin: string
-  }
+  options: ImportsRoutesOptions,
 ) {
   const { prisma, ledgerService, bankProvider, env, appOrigin } = options
   const importsService = new ImportsService(prisma, ledgerService, env)
@@ -142,9 +150,9 @@ export async function createImportsRoutes(
   app.get<{ Querystring: { status?: string } }>(
     '/batches',
     { preValidation: requireAuth, schema: { querystring: batchListQueryJson, response: { 200: { type: 'array', items: importBatchJson } } } },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Querystring: { status?: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
-      const status = (request.query as any).status as string | undefined
+      const status = request.query.status
 
       const batches = await importsService.listImportBatches(userId, status)
       return reply.send(batches)
@@ -158,10 +166,10 @@ export async function createImportsRoutes(
   app.get<{ Params: { batchId: string } }>(
     '/batches/:batchId',
     { preValidation: requireAuth, schema: { params: batchParamsJson, response: { 200: importBatchJson } } },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: { batchId: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
-      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
+      const { batchId } = batchIdParamSchema.parse(request.params)
 
       const batch = await importsService.getImportBatch(batchId, userId)
       return reply.send(batch)
@@ -181,7 +189,7 @@ export async function createImportsRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
-      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
+      const { batchId } = batchIdParamSchema.parse(request.params)
       const input = addImportedTransactionSchema.parse(request.body)
 
       const txn = await importsService.addImportedTransaction(batchId, userId, {
@@ -210,13 +218,13 @@ export async function createImportsRoutes(
   app.get<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
     '/batches/:batchId/transactions',
     { preValidation: requireAuth, schema: { params: batchParamsJson, querystring: stagedRowsQueryJson, response: { 200: { type: 'array', items: importRowJson }, 404: importErrorJson } } },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: { batchId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
-      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
-      const status = ((request.query as any).status as string | undefined) || undefined
-      const limit = Math.min(parseInt((request.query as any).limit as string) || 100, 1000)
-      const offset = Math.max(0, parseInt((request.query as any).offset as string) || 0)
+      const { batchId } = batchIdParamSchema.parse(request.params)
+      const status = request.query.status || undefined
+      const limit = Math.min(parseInt(request.query.limit ?? '', 10) || 100, 1000)
+      const offset = Math.max(0, parseInt(request.query.offset ?? '', 10) || 0)
 
       const txns = await importsService.repo.listImportedTransactions(batchId, userId, { status, limit, offset })
 
@@ -251,7 +259,7 @@ export async function createImportsRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user!.id
       // D8: Validate UUID path parameter
-      const { batchId } = batchIdParamSchema.parse((request.params as any) as { batchId: string })
+      const { batchId } = batchIdParamSchema.parse(request.params)
       const input = commitBatchSchema.parse(request.body)
 
       const result = await importsService.commitImportBatch(batchId, userId, input)
@@ -385,9 +393,9 @@ export async function createImportsRoutes(
       }
 
       try {
-        const payload = request.body as any
-        const webhookType = payload.webhook_type as string | undefined
-        const itemId = payload.item_id as string | undefined
+        const payload = plaidWebhookSchema.parse(request.body)
+        const webhookType = payload.webhook_type
+        const itemId = payload.item_id
 
         if (!itemId) {
           return reply.code(400).send({
@@ -786,6 +794,6 @@ export function parseAmount(amountStr: string): bigint {
   return value > 0n ? value : 0n
 }
 
-export async function registerImportsRoutes(app: FastifyInstance, options: any) {
+export async function registerImportsRoutes(app: FastifyInstance, options: ImportsRoutesOptions) {
   await createImportsRoutes(app, options)
 }

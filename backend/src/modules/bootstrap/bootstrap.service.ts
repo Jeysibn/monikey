@@ -66,10 +66,19 @@ export interface BootstrapResponse {
     baseCurrency: string;
   };
   financeState: FinanceState;
-  recurring: Array<any>;
+  recurring: FinanceState['recurring'];
   investmentActivity: {
-    trades: Array<any>;
-    dividends: Array<any>;
+    trades: Array<{
+      id: string;
+      ticker: string;
+      type: string;
+      units: number;
+      priceMinor: string;
+      amountMinor: string;
+      occurredOn: string;
+      note: string | null;
+    }>;
+    dividends: Array<{ id: string; ticker: string; amountMinor: string; occurredOn: string; note: string | null }>;
   };
   settings: {
     displayName: string;

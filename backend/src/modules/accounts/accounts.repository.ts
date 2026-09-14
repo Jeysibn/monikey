@@ -1,8 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import type { AccountView, CreateAccountInput, CreateCreditCardInput, UpdateAccountInput } from './accounts.schemas.js';
 import { AppError } from '../../common/errors/appError.js';
 
 type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+type AccountWithCreditCard = Prisma.FinancialAccountGetPayload<{ include: { creditCardDetail: true } }>;
 
 export class AccountsRepository {
   constructor(private prisma: PrismaClient) {}
@@ -133,7 +134,7 @@ export class AccountsRepository {
     });
   }
 
-  private mapAccount(account: any): AccountView {
+  private mapAccount(account: AccountWithCreditCard): AccountView {
     return {
       id: account.id,
       userId: account.userId,

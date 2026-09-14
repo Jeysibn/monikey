@@ -15,25 +15,25 @@ export class AccountsService {
 
   async createAccount(userId: string, input: CreateAccountInput): Promise<AccountView> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.createAccount(tx as any, userId, input);
+      return this.repo.createAccount(tx, userId, input);
     });
   }
 
   async createCreditCard(userId: string, input: CreateCreditCardInput): Promise<AccountView> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.createCreditCard(tx as any, userId, input);
+      return this.repo.createCreditCard(tx, userId, input);
     });
   }
 
   async updateAccount(userId: string, id: string, input: UpdateAccountInput): Promise<AccountView> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.updateAccount(tx as any, userId, id, input);
+      return this.repo.updateAccount(tx, userId, id, input);
     });
   }
 
   async archiveAccount(userId: string, id: string): Promise<void> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.archiveAccount(tx as any, userId, id);
+      return this.repo.archiveAccount(tx, userId, id);
     });
   }
 }

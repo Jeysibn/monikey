@@ -51,3 +51,27 @@ compact menu before it can wrap at tablet widths.
   generated Tesseract asset and pre-existing React hook/export warnings.
 - `npm run build --prefix frontend` — passed; the production bundle and
   service-worker asset list were generated successfully.
+
+## Follow-up pass — 2026-09-15
+
+The rendered audit found and corrected the remaining high-signal layout and
+interaction inconsistencies:
+
+- Recent Transactions now uses the full desktop dashboard row, removing the
+  unused left-column gap and giving its data table a wider, more useful measure.
+- Transactions filters now use a responsive labelled grid; mobile keeps all
+  URL-backed filters visible, and the nested search-input border was removed.
+- Account row actions now use a shared layout primitive instead of borrowing
+  recurring-page CSS. Shared metadata/status styles moved to the global UI
+  layer.
+- The transaction modal preserves shared values when switching type and uses
+  `Update Transaction` when editing.
+- A skip link, reduced-motion handling for authored transitions, dark native
+  form chrome, and touch-action normalization were added without changing the
+  existing color, type, card, or density direction.
+
+Follow-up verification: 264 frontend unit/component tests, 101 mock Playwright
+tests, the production build, and the Impeccable layout detector passed. Desktop
+and tablet geometry checks covered all 15 routes at 1440×900, 1280×800,
+1024×768, and 768×1024 with no horizontal overflow; the existing mobile suite
+continues to cover 390px overflow, 200% zoom, and the compact navigation.

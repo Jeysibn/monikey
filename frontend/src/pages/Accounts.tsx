@@ -514,7 +514,7 @@ export function Accounts() {
                     )}
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
                         Edit
                       </button>
@@ -564,7 +564,7 @@ export function Accounts() {
                     )}
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
                         Edit
                       </button>
@@ -605,7 +605,7 @@ export function Accounts() {
                     <div className="acct-meta">of {formatMoneyValue(c.limit, c.limitMinor, { withCents: false })}</div>
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditCard(c.id)}>
                         Edit
                       </button>

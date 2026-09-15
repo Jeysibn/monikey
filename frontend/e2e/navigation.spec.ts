@@ -108,4 +108,21 @@ test.describe('Mobile navigation', () => {
       expect(overflow, `${route} should not overflow horizontally`).toBe(0)
     }
   })
+
+  test('transaction filters remain visible and the search field uses one control surface', async ({ page }) => {
+    await page.goto('/transactions')
+    for (const label of ['Category', 'Account', 'From', 'To']) {
+      await expect(page.locator('.filter-control').filter({ hasText: new RegExp(`^${label}`) })).toBeVisible()
+    }
+    await expect(page.getByText('Tag', { exact: true })).toBeVisible()
+
+    const searchGeometry = await page.locator('.search-box').evaluate((element) => {
+      const outer = element.getBoundingClientRect()
+      const input = element.querySelector('input')!.getBoundingClientRect()
+      return { outerWidth: outer.width, inputWidth: input.width, inputBorder: getComputedStyle(element.querySelector('input')!).borderWidth }
+    })
+    expect(searchGeometry.outerWidth).toBeGreaterThan(340)
+    expect(searchGeometry.inputWidth).toBeGreaterThan(300)
+    expect(searchGeometry.inputBorder).toBe('0px')
+  })
 })

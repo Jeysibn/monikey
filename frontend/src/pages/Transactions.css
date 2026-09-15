@@ -16,8 +16,11 @@
   padding: 9px 13px;
   color: var(--text-faint);
 }
-.search-box input {
+label.search-box input[type='search'] {
+  min-height: 0;
+  padding: 0;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font-size: 12.5px;
@@ -44,6 +47,25 @@
 .filter-select option {
   color: var(--text);
   background: var(--card);
+}
+.filter-control {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.filter-control > span {
+  line-height: 1;
+}
+.filter-control input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
+.filter-control .filter-select {
+  min-width: 0;
+  width: 100%;
+}
+.filter-date {
+  min-width: 142px;
 }
 
 .tx-card {
@@ -202,6 +224,39 @@
   }
   .tx-mobile-list {
     display: flex;
+  }
+}
+
+@media (max-width: 600px) {
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+    align-items: end;
+  }
+  .search-box {
+    min-width: 0;
+    width: auto;
+    grid-column: 1 / -1;
+  }
+  .toolbar .filter-control {
+    min-width: 0;
+  }
+  .toolbar .filter-control:nth-of-type(3),
+  .toolbar .filter-control:nth-of-type(4),
+  .toolbar .filter-control:nth-of-type(5),
+  .toolbar .filter-control:nth-of-type(6),
+  .toolbar .filter-control:nth-of-type(7) {
+    grid-column: span 1;
+  }
+  .toolbar .filter-control:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+  .toolbar .filter-control:nth-of-type(4),
+  .toolbar .filter-control:nth-of-type(5) {
+    grid-column: span 1;
+  }
+  .filter-date {
+    min-width: 0;
   }
 }
 

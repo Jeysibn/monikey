@@ -91,13 +91,6 @@
   gap: 2px;
   line-height: 1.3;
 }
-.coming-soon-tag {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
-}
 .completed-actions .btn--outline {
   color: var(--cyan);
   background: oklch(80% 0.13 210 / 0.1);

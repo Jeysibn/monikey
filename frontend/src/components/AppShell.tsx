@@ -264,6 +264,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
   }, [])
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="topbar">
         <MobileNav />
         <div className="brand">
@@ -297,7 +298,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
         </div>
       </header>
       {connection === 'unreachable' && <div className="offline-banner" role="status">Server unreachable · showing available local data. New changes remain pending until Monikey reconnects.</div>}
-      <main className="page-main">{children}</main>
+      <main id="main-content" className="page-main">{children}</main>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, CardTitle } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
 import { ProgressBar } from '../components/ProgressBar'
 import { Sparkline } from '../components/Sparkline'
 import { useFinance } from '../hooks/useFinance'
@@ -153,13 +154,8 @@ export function Reports() {
   }
 
   return (
-    <div className="reports-page">
-      <div className="page-head">
-        <h1 className="page-title">Reports</h1>
-        <div className="reports-actions">
-          <button type="button" className="btn btn--ghost" onClick={exportCsv}>Export CSV</button>
-        </div>
-      </div>
+    <div className="reports-page page-stack">
+      <PageHeader title="Reports" description="Compare income, expenses, budget performance, and financial trends." action={<div className="reports-actions"><button type="button" className="btn btn--ghost" onClick={exportCsv}>Export CSV</button></div>} />
 
       <div className="view-toggle" role="group" aria-label="Report period">
         {VIEWS.map((v) => (

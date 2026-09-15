@@ -57,7 +57,9 @@
 }
 .rec-row-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 .rec-row-actions .btn {
@@ -79,6 +81,7 @@
   }
   .rec-row-actions {
     flex-direction: row;
+    justify-content: flex-start;
   }
   .rec-row-actions .btn {
     flex: 1;

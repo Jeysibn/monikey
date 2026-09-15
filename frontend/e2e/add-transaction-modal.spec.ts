@@ -81,7 +81,7 @@ test.describe('Add Transaction modal', () => {
     await expect(page.getByText('Scanned: receipt.png')).toBeVisible()
     await expect(page.getByPlaceholder('e.g. Grab Grocery')).toHaveValue('OCR Cafe')
     await expect(page.locator('.tx-amount-input')).toHaveValue('42.50')
-    await expect(page.locator('input[type="date"]').first()).toHaveValue('2026-08-28')
+    await expect(page.locator('.tx-modal input[type="date"]')).toHaveValue('2026-08-28')
     await expect(page.getByText(/review the fields before saving/i)).toBeVisible()
   })
 
@@ -92,8 +92,8 @@ test.describe('Add Transaction modal', () => {
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('100')
     await page.getByPlaceholder('e.g. Grab Grocery').fill('Playwright Snack')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: 'Checking ••4471' })
     await page.getByRole('button', { name: 'Save Expense' }).click()
 
     await expect(page.getByRole('dialog')).toBeHidden()
@@ -108,7 +108,7 @@ test.describe('Add Transaction modal', () => {
     await page.getByRole('button', { name: 'Income', exact: true }).click()
     await page.locator('.tx-amount-input').fill('500')
     await page.getByPlaceholder('e.g. Freelance Payment').fill('Playwright Bonus')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Salary' })
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Salary' })
     await page.getByLabel('Deposit to', { exact: false }).selectOption({ label: 'Checking ••4471' })
     await page.getByRole('button', { name: 'Save Income' }).click()
 

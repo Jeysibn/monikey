@@ -6,48 +6,59 @@
   flex: none;
 }
 
+.dash-demo-badge {
+  display: inline-flex;
+  margin-right: 6px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--amber) 42%, var(--card-border));
+  border-radius: 999px;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  align-items: stretch;
+  gap: var(--space-4);
+  align-items: start;
 }
 @media (min-width: 1000px) {
   .dash-grid {
-    grid-template-columns: 300px repeat(3, 1fr);
-    grid-template-rows: repeat(4, minmax(190px, auto));
-    grid-template-areas:
-      'balance  expenses expenses expenses'
-      'balance  budget   goals    spend'
-      'ai       credit   credit   portfolio'
-      'ai       recent   recent   portfolio';
+    grid-template-columns: 300px repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto auto auto auto;
   }
   .area-balance {
-    grid-area: balance;
+    grid-column: 1;
+    grid-row: 1 / span 2;
   }
   .area-expenses {
-    grid-area: expenses;
+    grid-column: 2 / -1;
+    grid-row: 1;
   }
   .area-budget {
-    grid-area: budget;
+    grid-column: 2;
+    grid-row: 2;
   }
   .area-goals {
-    grid-area: goals;
+    grid-column: 3;
+    grid-row: 2;
   }
   .area-spend {
-    grid-area: spend;
-  }
-  .area-ai {
-    grid-area: ai;
+    grid-column: 4;
+    grid-row: 2;
   }
   .area-credit {
-    grid-area: credit;
+    grid-column: 1 / span 2;
+    grid-row: 3;
   }
   .area-portfolio {
-    grid-area: portfolio;
+    grid-column: 3 / span 2;
+    grid-row: 3;
   }
   .area-recent {
-    grid-area: recent;
+    grid-column: 1 / -1;
+    grid-row: 4;
   }
 }
 
@@ -77,16 +88,13 @@
   .area-spend {
     order: 7;
   }
-  .area-ai {
-    order: 8;
-  }
   .area-portfolio {
-    order: 9;
+    order: 8;
   }
 }
 
 .balance-card {
-  gap: 12px;
+  gap: var(--space-3);
 }
 .bal-amount {
   font-size: 26px;

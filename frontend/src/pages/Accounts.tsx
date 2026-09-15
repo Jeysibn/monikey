@@ -1,5 +1,7 @@
 import { useId, useState } from 'react'
 import { Card } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
+import { useConfirm } from '../hooks/useConfirm'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
 import { formatMoney, formatMoneyValue } from '../utils/currency'
@@ -396,6 +398,8 @@ export function Accounts() {
   const [addingCard, setAddingCard] = useState(false)
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [editingCardId, setEditingCardId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const bankFormId = useId()
   const walletFormId = useId()
 
@@ -416,28 +420,27 @@ export function Accounts() {
   }
   async function handleArchiveAccount(id: string, name: string) {
     if (!asyncFinance) return
-    if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
+    if (!await confirm({ title: 'Archive account?', message: `Archive “${name}”? It will no longer appear in your accounts.`, confirmLabel: 'Archive account' })) return
     try {
       await asyncFinance.archiveAccount(id)
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Could not archive account.')
+      setActionError(err instanceof Error ? err.message : 'Could not archive account.')
     }
   }
   async function handleArchiveCard(id: string, name: string) {
     if (!asyncFinance) return
-    if (!window.confirm(`Archive "${name}"? It will no longer appear in your accounts.`)) return
+    if (!await confirm({ title: 'Archive credit card?', message: `Archive “${name}”? It will no longer appear in your accounts.`, confirmLabel: 'Archive card' })) return
     try {
       await asyncFinance.archiveCreditCard(id)
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Could not archive card.')
+      setActionError(err instanceof Error ? err.message : 'Could not archive card.')
     }
   }
 
   return (
     <div>
-      <div className="page-head">
-        <h1 className="page-title">Accounts</h1>
-      </div>
+      <PageHeader title="Accounts" description="Keep cash sources, cards, balances, and liabilities in one view." />
+      {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
       <div className="kpi-row">
         <Card>
@@ -511,7 +514,7 @@ export function Accounts() {
                     )}
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
                         Edit
                       </button>
@@ -561,7 +564,7 @@ export function Accounts() {
                     )}
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditAccount(a.id)}>
                         Edit
                       </button>
@@ -602,7 +605,7 @@ export function Accounts() {
                     <div className="acct-meta">of {formatMoneyValue(c.limit, c.limitMinor, { withCents: false })}</div>
                   </div>
                   {asyncFinance && (
-                    <div className="rec-row-actions">
+                    <div className="row-actions">
                       <button type="button" className="btn btn--ghost btn--compact" onClick={() => handleEditCard(c.id)}>
                         Edit
                       </button>
@@ -664,6 +667,7 @@ export function Accounts() {
           </Card>
         </div>
       </div>
+      {confirmDialog}
     </div>
   )
 }

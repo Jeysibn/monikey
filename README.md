@@ -84,6 +84,7 @@ configured separately; source adapters do not prove a live integration is enable
 | `/reconciliation` | Account statement reconciliation |
 | `/security` | Password and active-session controls |
 | `/tags` | Transaction tags |
+| `/sync` | Connection status and pending offline operations |
 | `/settings` | Profile/preferences and JSON data export |
 
 The backend also has receipt/OCR, structured AI insight, FX, and CSV/Plaid-sandbox

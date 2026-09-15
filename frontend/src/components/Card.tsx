@@ -21,9 +21,9 @@ export function Card({
 
 export function CardTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="card-title">
+    <h2 className="card-title">
       <span>{children}</span>
       {action}
-    </div>
+    </h2>
   )
 }

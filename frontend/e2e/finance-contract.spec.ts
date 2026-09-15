@@ -55,9 +55,9 @@ test.describe('Finance implementation contract', () => {
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('12.34')
     await page.getByPlaceholder('e.g. Grab Grocery').fill(title)
-    if (expenseCategoryId) await page.getByLabel('Category', { exact: false }).selectOption(expenseCategoryId)
-    else await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: accountLabels.at(-2)! })
+    if (expenseCategoryId) await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption(expenseCategoryId)
+    else await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: accountLabels.at(-2)! })
     await page.getByRole('button', { name: 'Save Expense' }).click()
 
     await expect(page.getByText('Expense saved')).toBeVisible()

@@ -29,8 +29,8 @@ test('offline snapshot and transaction outbox replay through Compose @backend-co
   await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
   await page.getByLabel('Amount').fill('6.80')
   await page.getByPlaceholder('e.g. Grab Grocery').fill('Offline lunch')
-  await page.getByLabel('Category', { exact: false }).selectOption(category.id)
-  await page.getByLabel('Account', { exact: false }).selectOption(account.id)
+  await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption(category.id)
+  await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption(account.id)
   await page.getByRole('button', { name: 'Save Expense' }).click()
   await expect(page.getByText('queued for sync')).toBeVisible()
 

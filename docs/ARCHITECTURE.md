@@ -106,6 +106,24 @@ superseded entirely by the crypto portfolio routes. The current route table
 is `frontend/src/App.tsx`; none of those routes uses the removed
 placeholder page.
 
+### Frontend shell and interaction primitives
+
+`AppShell` owns the responsive navigation hierarchy: Dashboard, Transactions,
+Accounts, Budget, Goals, and Crypto remain primary; secondary routes are
+grouped under Manage, Insights, and System in both desktop and mobile
+disclosures. `PageHeader` provides the shared page title/description/action
+baseline used by secondary pages, while `CardTitle` is a semantic heading for
+card sections. The dashboard uses explicit placement only for its stable
+desktop composition and falls back to a single responsive stack below the
+desktop breakpoint; no fixed-height grid rows are required.
+
+Destructive actions use the native `<dialog>`-based `ConfirmDialog` through
+`useConfirm`, preserving Escape, focus, and modal semantics without browser
+prompt/alert chrome. Transaction filters are reflected in URL search
+parameters, with visible controls, removable chips, and a clear-all action so
+shared links retain the view a user is auditing. Mock-only crypto values carry
+an explicit demo-data label; they are not presented as connected market data.
+
 ## Clock, dates and currency
 
 Mock mode injects `AppClock`, defaults to `2026-08-29`, and accepts a validated

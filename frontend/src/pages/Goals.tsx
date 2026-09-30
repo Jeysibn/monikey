@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Card } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
+import { useConfirm } from '../hooks/useConfirm'
 import { ProgressBar } from '../components/ProgressBar'
 import { useFinance } from '../hooks/useFinance'
 import { useFieldErrors } from '../hooks/useFieldErrors'
@@ -296,15 +298,17 @@ export function Goals() {
   const [creatingGoal, setCreatingGoal] = useState(false)
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const handleDeleteGoal = async (goalId: string) => {
-    if (!window.confirm('Are you sure you want to delete this goal? This action cannot be undone.')) return
+    if (!await confirm({ title: 'Delete goal?', message: 'This removes the goal and its saved progress.', confirmLabel: 'Delete goal' })) return
     if (!asyncFinance) return
     try {
       setDeletingGoalId(goalId)
       await asyncFinance.deleteGoal(goalId)
     } catch (err) {
-      console.error('Failed to delete goal:', err)
+      setActionError(err instanceof Error ? err.message : 'Could not delete goal.')
     } finally {
       setDeletingGoalId(null)
     }
@@ -312,9 +316,8 @@ export function Goals() {
 
   return (
     <div>
-      <div className="page-head">
-        <h1 className="page-title">Goals</h1>
-      </div>
+      <PageHeader title="Goals" description="Track targets, planned contributions, and progress toward the things you’re saving for." />
+      {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
       <div className="kpi-row">
         <Card>
@@ -465,6 +468,7 @@ export function Goals() {
           </Card>
         ))}
       </div>
+      {confirmDialog}
     </div>
   )
 }

@@ -119,7 +119,21 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
   }
 
   function setTab(tab: TxTab) {
-    setForm((f) => ({ ...emptyFormState(finance.todayIso), tab, date: f.date }))
+    if (tab === form.tab) return
+    // Preserve the fields that still mean the same thing across transaction
+    // types. Only clear type-specific selectors: switching to Transfer should
+    // not erase an amount, description, date, time, or note the user already
+    // entered (WCAG 3.3.7 — redundant entry).
+    setForm((f) => ({
+      ...f,
+      tab,
+      categoryId: '',
+      accountId: '',
+      fromAccountId: '',
+      toAccountId: '',
+      fee: '',
+      receiptName: tab === 'expense' ? f.receiptName : '',
+    }))
     clear()
   }
 
@@ -313,7 +327,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
       <form method="dialog" onSubmit={handleSubmit} noValidate>
         <div className="tx-modal-head">
           <h2 id="add-tx-title" className="tx-modal-title">
-            Add Transaction
+            {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
           </h2>
           <button type="button" className="tx-modal-close" aria-label="Close" onClick={handleClose} disabled={submitting}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -565,7 +579,7 @@ export function AddTransactionModal({ open, onClose, editingTransaction }: { ope
             Cancel
           </button>
           <button type="submit" className="btn btn--primary" disabled={sameAccount || submitting}>
-            {submitting ? 'Saving…' : `Save ${form.tab[0].toUpperCase() + form.tab.slice(1)}`}
+            {submitting ? 'Saving…' : editingTransaction ? 'Update Transaction' : `Save ${form.tab[0].toUpperCase() + form.tab.slice(1)}`}
           </button>
         </div>
       </form>

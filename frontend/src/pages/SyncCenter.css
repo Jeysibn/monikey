@@ -1,0 +1,12 @@
+.sync-page { width: 100%; }
+.sync-grid { display: grid; gap: var(--space-4); }
+.sync-grid .card { min-height: 100%; }
+.sync-operation-list { display: grid; gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.sync-operation-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sync-operation-actions { display: inline-flex; flex: none; gap: var(--space-2); }
+@media (min-width: 900px) {
+  .sync-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+}
+@media (max-width: 520px) {
+  .sync-operation-list li { flex-direction: column; }
+}

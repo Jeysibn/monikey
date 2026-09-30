@@ -94,7 +94,7 @@
     grid-template-columns: minmax(0, 1fr) max-content;
   }
 
-  .account-row .rec-row-actions {
+  .account-row .row-actions {
     grid-column: 1 / -1;
     flex-direction: row;
     justify-content: flex-end;

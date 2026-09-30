@@ -5,6 +5,9 @@ import { AppError } from '../../common/errors/appError.js';
 type BalanceEffectRole = 'source' | 'destination' | 'expense' | 'income' | 'card_charge' | 'card_payment' | 'fee';
 
 type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+type TransactionWithTags = Prisma.TransactionGetPayload<{ include: { tags: { include: { tag: true } } } }>;
+type TransactionRecord = Prisma.TransactionGetPayload<{}> & { tags?: TransactionWithTags['tags'] };
+type LedgerAccount = Prisma.FinancialAccountGetPayload<{ include: { creditCardDetail: true } }>;
 
 export class LedgerRepository {
   constructor(private prisma: PrismaClient) {}
@@ -457,7 +460,7 @@ export class LedgerRepository {
 
   private validateInvariants(
     type: string,
-    accountMap: Map<string, any>,
+    accountMap: Map<string, LedgerAccount>,
     fromAccountId: string | null,
     toAccountId: string | null,
     amountMinor: bigint,
@@ -548,7 +551,7 @@ export class LedgerRepository {
 
   private calculateBalanceEffects(
     type: string,
-    accountMap: Map<string, any>,
+    accountMap: Map<string, LedgerAccount>,
     fromAccountId: string | null,
     toAccountId: string | null,
     amountMinor: bigint,
@@ -633,7 +636,7 @@ export class LedgerRepository {
     return effects.map((effect) => ({ ...effect, deltaMinor: String(effect.deltaMinor), balanceAfterMinor: String(effect.balanceAfterMinor) }))
   }
 
-  private mapTransaction(tx: any): TransactionView {
+  private mapTransaction(tx: TransactionRecord): TransactionView {
     return {
       id: tx.id,
       userId: tx.userId,
@@ -643,8 +646,8 @@ export class LedgerRepository {
       goalId: tx.goalId,
       fromAccountId: tx.fromAccountId,
       toAccountId: tx.toAccountId,
-      occurredOn: tx.occurredOn.toISOString().split('T')[0],
-      occurredTime: tx.occurredTime ? tx.occurredTime.toISOString().split('T')[1].slice(0, 5) : null,
+      occurredOn: tx.occurredOn.toISOString().slice(0, 10),
+      occurredTime: tx.occurredTime ? tx.occurredTime.toISOString().slice(11, 16) : null,
       amountMinor: String(tx.amountMinor),
       feeMinor: String(tx.feeMinor),
       currencyCode: tx.currencyCode,

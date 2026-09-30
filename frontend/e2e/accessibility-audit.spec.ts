@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
-const ROUTES = ['/', '/transactions', '/accounts', '/budget', '/goals', '/crypto', '/recurring', '/reports', '/imports', '/rules', '/reconciliation', '/tags', '/security', '/settings']
+const ROUTES = ['/', '/transactions', '/accounts', '/budget', '/goals', '/crypto', '/recurring', '/reports', '/imports', '/rules', '/reconciliation', '/tags', '/sync', '/security', '/settings']
 
 test.describe('route accessibility audit', () => {
   for (const route of ROUTES) {
@@ -23,6 +24,9 @@ test.describe('route accessibility audit', () => {
       expect(issues.duplicateIds, `${route}: duplicate IDs`).toEqual([])
       expect(issues.missingImageAlt, `${route}: images without alt`).toEqual([])
       expect(issues.unlabeledIconButtons, `${route}: unlabeled icon buttons`).toEqual([])
+
+      const axeResults = await new AxeBuilder({ page }).analyze()
+      expect(axeResults.violations, `${route}: axe accessibility violations`).toEqual([])
     })
   }
 })

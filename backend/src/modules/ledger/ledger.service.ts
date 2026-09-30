@@ -8,20 +8,20 @@ export class LedgerService {
 
   async postTransaction(userId: string, input: PostTransactionInput): Promise<PostTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.postTransaction(tx as any, userId, input);
+      return this.repo.postTransaction(tx, userId, input);
     });
   }
 
   async postTransactionWithCallback<T>(userId: string, input: PostTransactionInput, callback: (tx: Prisma.TransactionClient, result: PostTransactionResult) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
-      const result = await this.repo.postTransaction(tx as any, userId, input);
+      const result = await this.repo.postTransaction(tx, userId, input);
       return callback(tx, result);
     });
   }
 
   async reverseTransaction(userId: string, transactionId: string, input: ReverseTransactionInput): Promise<ReverseTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.reverseTransaction(tx as any, userId, transactionId, input.idempotencyKey ?? undefined);
+      return this.repo.reverseTransaction(tx, userId, transactionId, input.idempotencyKey ?? undefined);
     });
   }
 
@@ -35,14 +35,14 @@ export class LedgerService {
    */
   async reverseTransactionWithCallback<T>(userId: string, transactionId: string, input: ReverseTransactionInput, callback: (tx: Prisma.TransactionClient, result: ReverseTransactionResult) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
-      const result = await this.repo.reverseTransaction(tx as any, userId, transactionId, input.idempotencyKey ?? undefined);
+      const result = await this.repo.reverseTransaction(tx, userId, transactionId, input.idempotencyKey ?? undefined);
       return callback(tx, result);
     });
   }
 
   async updateTransaction(userId: string, transactionId: string, input: UpdateTransactionInput): Promise<UpdateTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.updateTransaction(tx as any, userId, transactionId, input);
+      return this.repo.updateTransaction(tx, userId, transactionId, input);
     });
   }
 

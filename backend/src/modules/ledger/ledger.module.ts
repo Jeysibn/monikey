@@ -2,11 +2,12 @@ import { LedgerService } from './ledger.service.js';
 import { LedgerRepository } from './ledger.repository.js';
 import { ledgerRoutes } from './ledger.routes.js';
 import { PrismaClient } from '@prisma/client';
+import type { FastifyInstance } from 'fastify';
 
 export interface LedgerModule {
   service: LedgerService;
   repo: LedgerRepository;
-  registerRoutes(app: any): Promise<void>;
+  registerRoutes(app: FastifyInstance): Promise<void>;
 }
 
 export function createLedgerModule(prisma: PrismaClient): LedgerModule {
@@ -16,7 +17,7 @@ export function createLedgerModule(prisma: PrismaClient): LedgerModule {
   return {
     service,
     repo,
-    async registerRoutes(app: any) {
+    async registerRoutes(app: FastifyInstance) {
       await app.register(ledgerRoutes, { service, prisma });
     },
   };

@@ -1,0 +1,14 @@
+# Prisma 6.19.3 pins deepmerge-ts 7.x through @prisma/config. The available
+# remediation requires a Prisma major upgrade, which is not a safe hardening
+# change. This dependency exists only in the dedicated migration toolchain;
+# the API/worker runtime image removes Prisma, @prisma/config, and deepmerge-ts.
+# Re-evaluate and remove this exception when the Prisma toolchain is upgraded.
+CVE-2026-40345
+
+# Node 24.21.0 bundles these versions inside npm 11.19.0. They are used only
+# by the migration command's npm/npx tooling; re-evaluate after the base Node
+# image ships versions containing the upstream fixes.
+CVE-2026-14257
+CVE-2026-69152
+CVE-2026-69192
+CVE-2026-73566

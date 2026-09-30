@@ -2,7 +2,7 @@
 
 Date: 2026-09-13
 Branch: `dev`
-Latest commit: `146d220`
+Verification continuation: 2026-09-13 working tree (not yet committed)
 
 ## Summary
 
@@ -34,9 +34,12 @@ cash, ordinary income or an exchange workflow.
 - Frontend unit tests: 26 files / 263 tests passed.
 - Frontend typecheck and production build passed.
 - Backend Compose regression: 54 files / 382 tests passed.
-- Backend-mode Compose E2E: 3/3 passed.
+- Backend-mode Compose E2E: 4/4 passed.
+- Dedicated migration image build: npm/npx/Prisma present; hardened API runtime
+  image omits migration tooling.
 - Offline Compose E2E: 1/1 passed.
-- Mock Playwright suite: 95/95 passed.
+- Mock Playwright suite: 98/98 passed in CI mode.
+- Shared finance contract: 3/3 mock and 3/3 Compose API scenarios passed.
 - Unsafe historical minor-unit load and exact mutation transport regressions
   passed.
 

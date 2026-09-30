@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { useBackendAuthOptional } from './BackendAuthContext'
 import './AppShell.css'
@@ -14,16 +14,28 @@ const NAV_ITEMS = [
   { to: '/crypto', label: 'Crypto' },
 ]
 
-const MORE_ITEMS = [
-  { to: '/recurring', label: 'Recurring & Bills', sub: 'Subscriptions & due dates' },
-  { to: '/rules', label: 'Transaction Rules', sub: 'Automate imported transactions' },
-  { to: '/reconciliation', label: 'Reconciliation', sub: 'Match statements to ledger' },
-  { to: '/imports', label: 'Imports', sub: 'Review CSV transactions' },
-  { to: '/security', label: 'Sessions & Security', sub: 'Password and active sessions' },
-  { to: '/tags', label: 'Tags', sub: 'Transaction context' },
-  { to: '/reports', label: 'Reports', sub: 'Trends over time' },
-  { to: '/sync', label: 'Sync Center', sub: 'Offline changes and local cache' },
+const MORE_GROUPS = [
+  {
+    label: 'Manage',
+    items: [
+      { to: '/recurring', label: 'Recurring & Bills', sub: 'Subscriptions & due dates' },
+      { to: '/rules', label: 'Transaction Rules', sub: 'Automate imported transactions' },
+      { to: '/tags', label: 'Tags', sub: 'Transaction context' },
+      { to: '/reconciliation', label: 'Reconciliation', sub: 'Match statements to ledger' },
+      { to: '/imports', label: 'Imports', sub: 'Review CSV transactions' },
+    ],
+  },
+  { label: 'Insights', items: [{ to: '/reports', label: 'Reports', sub: 'Trends over time' }] },
+  {
+    label: 'System',
+    items: [
+      { to: '/sync', label: 'Sync Center', sub: 'Offline changes and local cache' },
+      { to: '/security', label: 'Sessions & Security', sub: 'Password and active sessions' },
+      { to: '/settings', label: 'Settings', sub: 'Preferences and categories' },
+    ],
+  },
 ]
+const MORE_ITEMS = MORE_GROUPS.flatMap((group) => group.items)
 
 function BrandMark() {
   return (
@@ -81,13 +93,15 @@ function useDisclosure() {
 function MoreMenu() {
   const { open, setOpen, rootRef, buttonRef, panelRef } = useDisclosure()
   const panelId = useId()
+  const location = useLocation()
+  const moreActive = MORE_ITEMS.some((item) => location.pathname === item.to)
 
   return (
     <div className="more-menu" ref={rootRef}>
       <button
         ref={buttonRef}
         type="button"
-        className="pill pill--more"
+        className={`pill pill--more${moreActive ? ' pill--active' : ''}`}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
@@ -106,16 +120,22 @@ function MoreMenu() {
       </button>
       {open && (
         <div id={panelId} ref={panelRef} className="more-dropdown">
-          {MORE_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} className="more-item" onClick={() => setOpen(false)}>
-              <span className="more-item-label">{item.label}</span>
-              <span className="more-item-sub">{item.sub}</span>
-            </NavLink>
+          {MORE_GROUPS.map((group) => (
+            <section className="more-group" key={group.label} aria-labelledby={`${panelId}-${group.label.toLowerCase()}`}>
+              <h2 id={`${panelId}-${group.label.toLowerCase()}`} className="more-group-title">{group.label}</h2>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => `more-item${isActive ? ' more-item--active' : ''}`}
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="more-item-label">{item.label}</span>
+                  <span className="more-item-sub">{item.sub}</span>
+                </NavLink>
+              ))}
+            </section>
           ))}
-          <div className="more-sep" role="separator" />
-          <NavLink to="/settings" className="more-item" onClick={() => setOpen(false)}>
-            <span className="more-item-label">Settings</span>
-          </NavLink>
         </div>
       )}
     </div>
@@ -210,15 +230,21 @@ function MobileNav() {
               {item.label}
             </NavLink>
           ))}
-          <div className="more-sep" role="separator" />
-          {MORE_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} className="mobile-nav-item" onClick={() => setOpen(false)}>
-              {item.label}
-            </NavLink>
+          {MORE_GROUPS.map((group) => (
+            <section className="mobile-nav-group" key={group.label} aria-labelledby={`mobile-${group.label.toLowerCase()}`}>
+              <h2 id={`mobile-${group.label.toLowerCase()}`} className="mobile-nav-group-title">{group.label}</h2>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => `mobile-nav-item${isActive ? ' mobile-nav-item--active' : ''}`}
+                  onClick={() => setOpen(false)}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </section>
           ))}
-          <NavLink to="/settings" className="mobile-nav-item" onClick={() => setOpen(false)}>
-            Settings
-          </NavLink>
         </nav>
       )}
     </div>
@@ -238,6 +264,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
   }, [])
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="topbar">
         <MobileNav />
         <div className="brand">
@@ -271,7 +298,7 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
         </div>
       </header>
       {connection === 'unreachable' && <div className="offline-banner" role="status">Server unreachable · showing available local data. New changes remain pending until Monikey reconnects.</div>}
-      <main className="page-main">{children}</main>
+      <main id="main-content" className="page-main">{children}</main>
     </div>
   )
 }

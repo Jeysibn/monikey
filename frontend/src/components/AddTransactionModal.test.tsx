@@ -78,6 +78,35 @@ describe('AddTransactionModal transfer destinations (TR-003)', () => {
   })
 })
 
+describe('AddTransactionModal type switching and edit affordance', () => {
+  it('keeps shared values when switching transaction type and uses an update action in edit mode', () => {
+    renderModal('2026-08-29')
+
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '125.50' } })
+    fireEvent.change(screen.getByLabelText(/Merchant \/ Description/), { target: { value: 'Market run' } })
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Keep this note' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Income' }))
+
+    expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('125.50')
+    expect((screen.getByLabelText(/Source \/ Description/) as HTMLInputElement).value).toBe('Market run')
+    expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('Keep this note')
+
+    cleanup()
+    const transaction = {
+      id: 'tx-edit', type: 'expense', title: 'Existing', amount: -20, date: '2026-08-29', time: null,
+      note: null, categoryId: 'food', accountId: 'checking', status: 'cleared', source: 'manual',
+    } as never
+    render(
+      <FinanceProvider clock={fixedClock('2026-08-29')}>
+        <AddTransactionModal open onClose={() => {}} editingTransaction={transaction} />
+      </FinanceProvider>,
+    )
+    expect(screen.getByRole('dialog').getAttribute('aria-labelledby')).toBe('add-tx-title')
+    expect(screen.getByRole('heading', { name: 'Edit Transaction' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Update Transaction' })).toBeDefined()
+  })
+})
+
 describe('AddTransactionModal idempotency key compatibility', () => {
   it('saves a transaction when the browser crypto object lacks randomUUID', () => {
     vi.stubGlobal('crypto', {})

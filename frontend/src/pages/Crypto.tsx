@@ -5,6 +5,7 @@ import { createIdempotencyKey } from '../utils/idempotencyKey'
 import type { paths } from '../api.generated'
 import { cryptoApi } from '../services/cryptoApiGateway'
 import { localFirstStore, newOperationId } from '../services/localFirstStore'
+import { useConfirm } from '../hooks/useConfirm'
 import './Crypto.css'
 
 type Coin = { instrumentId?: string; providerAssetId: string | null; symbol: string; name: string; imageUrl: string | null; marketCapRank: number | null; quantity?: string; currentPrice?: string | null; marketValue?: string | null; averageCost?: string; costBasis?: string; realizedPnl?: string; unrealizedPnl?: string | null; totalPnl?: string | null; allocationPct?: string }
@@ -32,6 +33,7 @@ const allocationNumber = (value: string) => boundedDecimalToNumber(value, { min:
 const chartNumber = (value: string) => boundedDecimalToNumber(value, { min: -1_000_000_000_000_000, max: 1_000_000_000_000_000 })
 
 export function Crypto() {
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Coin[]>([])
   const [tracked, setTracked] = useState<Coin[]>(backendEnabled() ? [] : DEMO_COINS)
@@ -119,7 +121,7 @@ export function Crypto() {
     setQuery(''); setResults([]); setMessage(`${coin.name} is now tracked.`)
   }
   async function deleteActivity(activity: Activity) {
-    if (!window.confirm(`Delete this ${activity.type} record for ${activity.symbol}?`)) return
+    if (!await confirm({ title: 'Delete crypto activity?', message: `Delete this ${activity.type} record for ${activity.symbol}?`, confirmLabel: 'Delete' })) return
     if (!backendEnabled()) { setActivities((current) => current.filter((item) => item.id !== activity.id)); setMessage(`${activity.symbol} ${activity.type} removed from mock activity.`); return }
     const resource = activity.type === 'transfer' ? 'transfers' : 'trades'
     try { await cryptoApi.delete(`/crypto/${resource}/${activity.id}`) } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete this transaction.'); return }
@@ -128,7 +130,7 @@ export function Crypto() {
 
   return <section className="crypto-page" aria-labelledby="crypto-title">
     <header className="crypto-header">
-      <div><p className="eyebrow">Investments</p><h1 id="crypto-title">Crypto Portfolio</h1><p className="crypto-subtitle">Track what you hold. Monikey never sends an order to an exchange.</p>{summary && <div className="crypto-balance"><strong>{formatMoney(summary.portfolioValue, summary.baseCurrency)}</strong>{summary.change24h !== undefined && <span className={performanceNumber(summary.change24h) >= 0 ? 'positive' : 'negative'}>{performanceNumber(summary.change24h) >= 0 ? '+' : ''}{formatMoney(summary.change24h, summary.baseCurrency)} {summary.change24hPct ? `(${performanceNumber(summary.change24hPct).toFixed(2)}%) ` : ''}24h</span>}<span className={performanceNumber(summary.totalPnl) >= 0 ? 'positive' : 'negative'}>{performanceNumber(summary.totalPnl) >= 0 ? '+' : ''}{formatMoney(summary.totalPnl, summary.baseCurrency)} all time</span></div>}</div>
+      <div><p className="eyebrow">Investments</p><h1 id="crypto-title">Crypto Portfolio</h1><p className="crypto-subtitle">Track what you hold. Monikey never sends an order to an exchange.</p>{!backendEnabled() && <span className="demo-badge">Demo data · not connected</span>}{summary && <div className="crypto-balance"><strong>{formatMoney(summary.portfolioValue, summary.baseCurrency)}</strong>{summary.change24h !== undefined && <span className={performanceNumber(summary.change24h) >= 0 ? 'positive' : 'negative'}>{performanceNumber(summary.change24h) >= 0 ? '+' : ''}{formatMoney(summary.change24h, summary.baseCurrency)} {summary.change24hPct ? `(${performanceNumber(summary.change24hPct).toFixed(2)}%) ` : ''}24h</span>}<span className={performanceNumber(summary.totalPnl) >= 0 ? 'positive' : 'negative'}>{performanceNumber(summary.totalPnl) >= 0 ? '+' : ''}{formatMoney(summary.totalPnl, summary.baseCurrency)} all time</span></div>}</div>
       <label className="crypto-search"><span className="sr-only">Search crypto</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search and add a coin" /></label>
     </header>
     {message && <p className="crypto-status" role="status">{message}</p>}
@@ -148,11 +150,12 @@ export function Crypto() {
     </section> : activeTab === 'chart' ? <section className="crypto-empty crypto-chart"><div className="crypto-chart-head"><h2>Portfolio History</h2><div role="group" aria-label="Portfolio history range">{(['1d', '7d', '1m', '3m', '1y', 'all'] as const).map((range) => <button key={range} type="button" className={historyRange === range ? 'active' : ''} onClick={() => setHistoryRange(range)}>{range.toUpperCase()}</button>)}</div></div>{backendEnabled() ? <PortfolioChart points={history} currency={summary?.baseCurrency ?? 'PHP'} /> : <PortfolioChart points={[{ timestamp: '2026-09-01T00:00:00.000Z', valueAmount: '150000' }, { timestamp: '2026-09-05T00:00:00.000Z', valueAmount: '171000' }, { timestamp: '2026-09-09T00:00:00.000Z', valueAmount: '184392.54' }]} currency="PHP" />}</section> : <section className="crypto-empty crypto-activity" aria-live="polite"><h2>Transactions</h2><div className="crypto-activity-controls"><div role="group" aria-label="Transaction type filter">{(['all', 'buy', 'sell', 'transfer'] as const).map((type) => <button type="button" key={type} className={activityType === type ? 'active' : ''} onClick={() => setActivityType(type)}>{type[0]!.toUpperCase() + type.slice(1)}</button>)}</div><label><span className="sr-only">Search transactions</span><input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Search transactions" /></label></div>{activities.length === 0 ? <p>No crypto transactions have been recorded yet.</p> : <div className="crypto-activity-list">{activities.map((activity) => <article key={activity.id}><div><strong>{activity.type.toUpperCase()} · {activity.name}</strong><span>{activity.units} {activity.symbol} · {activity.occurredOn}{activity.occurredTime ? ` ${activity.occurredTime}` : ''}</span></div><div>{activity.type === 'transfer' ? <span>{activity.fromLocation} → {activity.toLocation}{activity.networkFeeUnits !== '0' ? ` · Fee ${activity.networkFeeUnits} ${activity.symbol}` : ''}</span> : <span>{activity.location ?? 'No location'} · {activity.priceAmount} {activity.currencyCode}</span>}<button type="button" className="crypto-text-action" onClick={() => void deleteActivity(activity)}>Delete</button></div></article>)}</div>}</section>}
     {transactionCoin && <CryptoTransactionDialog coin={transactionCoin} prefill={transactionPrefill} locations={locations} baseCurrency={summary?.baseCurrency ?? 'PHP'} onClose={() => { setTransactionCoin(null); setTransactionPrefill(undefined) }} onMessage={setMessage} onLocations={setLocations} onRefresh={() => setRefreshKey((key) => key + 1)} />}
     {detailCoin && <CryptoCoinDetail coin={detailCoin} baseCurrency={summary?.baseCurrency ?? 'PHP'} onClose={() => setDetailCoin(null)} onAddTransaction={() => { setTransactionCoin(detailCoin); setDetailCoin(null) }} onRemove={async () => {
-      if (!detailCoin.instrumentId || !window.confirm(`Remove ${detailCoin.name} from My Coins? Its transaction history will remain.`)) return
+      if (!await confirm({ title: 'Remove coin from portfolio?', message: `Remove ${detailCoin.name} from My Coins? Its transaction history will remain.`, confirmLabel: 'Remove coin' })) return
       if (!backendEnabled()) { setTracked((current) => current.filter((coin) => coin.providerAssetId !== detailCoin.providerAssetId)); setDetailCoin(null); return }
       try { await cryptoApi.delete(`/crypto/coins/${detailCoin.instrumentId}`) } catch { setMessage('Could not remove this coin.'); return }
       setDetailCoin(null); setRefreshKey((key) => key + 1); setMessage(`${detailCoin.name} was removed from My Coins. Its history was retained.`)
     }} />}
+    {confirmDialog}
   </section>
 }
 

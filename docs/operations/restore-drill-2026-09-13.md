@@ -14,7 +14,10 @@ after the exercise.
 
 1. Started a dedicated Compose project named `monikey-drill` with its own
    `monikey-drill_postgres_data` volume.
-2. Applied all 24 repository migrations using the cached migration image.
+2. Applied all 24 migrations present at the drill revision using the cached
+   migration image. The current repository has since added two forward-only
+   migrations; the current 26-migration chain is verified separately in the
+   dated hardening report.
 3. Ran the idempotent system seed.
 4. Created a compressed plain-SQL dump and checked gzip/SQL plausibility.
 5. Restored the dump into a separate `monikey_restore_drill` database.

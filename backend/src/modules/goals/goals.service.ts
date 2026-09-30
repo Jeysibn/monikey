@@ -11,19 +11,19 @@ export class GoalsService {
 
   async createGoal(userId: string, input: CreateGoalInput): Promise<GoalView> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.createGoal(tx as any, userId, input)
+      return this.repo.createGoal(tx, userId, input)
     })
   }
 
   async updateGoal(userId: string, id: string, input: UpdateGoalInput): Promise<GoalView> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.updateGoal(tx as any, userId, id, input)
+      return this.repo.updateGoal(tx, userId, id, input)
     })
   }
 
   async deleteGoal(userId: string, id: string): Promise<void> {
     return this.prisma.$transaction(async (tx) => {
-      return this.repo.deleteGoal(tx as any, userId, id)
+      return this.repo.deleteGoal(tx, userId, id)
     })
   }
 }

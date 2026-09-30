@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test'
 test.describe('Primary navigation', () => {
   test('all five main pages are reachable from the nav', async ({ page }) => {
     await page.goto('/')
-    // Dashboard has no page <h1>; assert via a known widget instead.
+    // The dashboard heading is visually hidden so the Money Position widget
+    // can remain the visual lead while the page still has a document title.
     await expect(page.getByText('Available Cash', { exact: true })).toBeVisible()
 
     await page.getByRole('link', { name: 'Transactions', exact: true }).click()
@@ -60,6 +61,20 @@ test.describe('Primary navigation', () => {
     await expect(settingsLink).toBeHidden()
   })
 
+  test('secondary route keeps More active and transaction filters stay in the URL', async ({ page }) => {
+    await page.goto('/settings')
+    await expect(page.getByRole('button', { name: /More/ })).toHaveClass(/pill--active/)
+
+    await page.goto('/transactions?type=expense&from=2026-08-01&tag=work')
+    await expect(page.getByLabel('Filter by type')).toHaveValue('expense')
+    await expect(page.getByLabel('Transaction from date')).toHaveValue('2026-08-01')
+    await expect(page.getByLabel('Transaction tag filter')).toHaveValue('work')
+    await expect(page.getByRole('button', { name: /Type: Expense/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Clear all' }).click()
+    await expect(page).toHaveURL(/\/transactions$/)
+    await expect(page.getByLabel('Filter by type')).toHaveValue('all')
+  })
+
   test('notification bell shows a badge count and lists attention items', async ({ page }) => {
     await page.goto('/')
     const bellButton = page.getByRole('button', { name: /Notifications, \d+ need attention/ })
@@ -92,5 +107,22 @@ test.describe('Mobile navigation', () => {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow, `${route} should not overflow horizontally`).toBe(0)
     }
+  })
+
+  test('transaction filters remain visible and the search field uses one control surface', async ({ page }) => {
+    await page.goto('/transactions')
+    for (const label of ['Category', 'Account', 'From', 'To']) {
+      await expect(page.locator('.filter-control').filter({ hasText: new RegExp(`^${label}`) })).toBeVisible()
+    }
+    await expect(page.getByText('Tag', { exact: true })).toBeVisible()
+
+    const searchGeometry = await page.locator('.search-box').evaluate((element) => {
+      const outer = element.getBoundingClientRect()
+      const input = element.querySelector('input')!.getBoundingClientRect()
+      return { outerWidth: outer.width, inputWidth: input.width, inputBorder: getComputedStyle(element.querySelector('input')!).borderWidth }
+    })
+    expect(searchGeometry.outerWidth).toBeGreaterThan(340)
+    expect(searchGeometry.inputWidth).toBeGreaterThan(300)
+    expect(searchGeometry.inputBorder).toBe('0px')
   })
 })

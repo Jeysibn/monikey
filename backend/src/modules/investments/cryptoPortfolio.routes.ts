@@ -264,7 +264,7 @@ export async function cryptoPortfolioRoutes(app: FastifyInstance, options: { pri
   app.post('/crypto/locations', { preValidation: [requireOrigin, requireAuth], schema: { body: locationBodyJson, response: { 201: { type: 'object', additionalProperties: false, required: ['location'], properties: { location: locationJson } }, 409: errorJson } } }, async (request, reply) => {
     const input = locationInput.parse(request.body)
     try { return reply.code(201).send({ location: await options.prisma.cryptoLocation.create({ data: { userId: request.user!.id, ...input } }) }) }
-    catch (error: any) { if (error?.code === 'P2002') return reply.code(409).send({ error: { code: 'CRYPTO_LOCATION_ALREADY_EXISTS', message: 'A location with this name already exists.', field: 'name', requestId: request.id } }); throw error }
+    catch (error: unknown) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return reply.code(409).send({ error: { code: 'CRYPTO_LOCATION_ALREADY_EXISTS', message: 'A location with this name already exists.', field: 'name', requestId: request.id } }); throw error }
   })
 
   app.post('/crypto/trades', { preValidation: [requireOrigin, requireAuth], schema: { body: tradeBodyJson, response: { 200: { type: 'object', additionalProperties: false, required: ['trade'], properties: { trade: tradeJson } }, 201: { type: 'object', additionalProperties: false, required: ['trade'], properties: { trade: tradeJson } }, 404: errorJson, 409: errorJson, 422: errorJson } } }, async (request, reply) => {

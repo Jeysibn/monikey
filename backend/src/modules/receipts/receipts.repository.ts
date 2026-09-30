@@ -3,7 +3,7 @@
  * All queries are user-scoped and require explicit user_id.
  */
 
-import type { PrismaClient, Receipt } from '@prisma/client'
+import { Prisma, type PrismaClient, type Receipt } from '@prisma/client'
 
 export interface CreateReceiptInput {
   userId: string
@@ -66,17 +66,14 @@ export class ReceiptsRepository {
       return null
     }
 
-    const data: Record<string, unknown> = {}
+    const data: Prisma.ReceiptUpdateInput = {}
     if (input.status !== undefined) data.status = input.status
     if (input.ocrProvider !== undefined) data.ocrProvider = input.ocrProvider
     if (input.ocrText !== undefined) data.ocrText = input.ocrText
-    if (input.parsedPayload !== undefined) data.parsedPayload = input.parsedPayload
-    if (input.transactionId !== undefined) data.transactionId = input.transactionId
+    if (input.parsedPayload !== undefined) data.parsedPayload = input.parsedPayload === null ? Prisma.JsonNull : input.parsedPayload as Prisma.InputJsonValue
+    if (input.transactionId !== undefined) data.transaction = input.transactionId === null ? { disconnect: true } : { connect: { id: input.transactionId } }
 
-    return this.prisma.receipt.update({
-      where: { id },
-      data: data as any,
-    })
+    return this.prisma.receipt.update({ where: { id }, data })
   }
 
   async delete(id: string, userId: string): Promise<boolean> {

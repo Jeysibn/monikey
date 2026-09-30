@@ -1,9 +1,11 @@
 import { useId, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardTitle } from '../components/Card'
+import { PageHeader } from '../components/PageHeader'
 import { useFinance } from '../hooks/useFinance'
 import { useSettings, type UseSettingsResult } from '../hooks/useSettings'
 import { useFieldErrors } from '../hooks/useFieldErrors'
+import { useConfirm } from '../hooks/useConfirm'
 import { showToast } from '../hooks/toastBus'
 import { formatMoney, formatMoneyValue } from '../utils/currency'
 import type { NotificationPreferences } from '../domain/settings'
@@ -215,6 +217,7 @@ type CategoryFormField = (typeof CATEGORY_FORM_FIELDS)[number]
 function CategoriesSection() {
   const finance = useFinance()
   const asyncFinance = useAsyncFinanceOptional()
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [formOpen, setFormOpen] = useState(false)
   const [name, setName] = useState('')
   const [color, setColor] = useState(CATEGORY_PALETTE[0])
@@ -225,6 +228,7 @@ function CategoriesSection() {
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const { errors, field, errorId, fail, clear } = useFieldErrors<CategoryFormField>(CATEGORY_FORM_FIELDS)
   const { errors: editErrors, field: editField, errorId: editErrorId, fail: editFail, clear: editClear } = useFieldErrors<CategoryFormField>(CATEGORY_FORM_FIELDS)
 
@@ -288,14 +292,14 @@ function CategoriesSection() {
   }
 
   async function handleDelete(categoryId: string) {
-    if (!window.confirm('Delete this category? Any budget line for it goes too, and its transactions become uncategorized.')) {
+    if (!await confirm({ title: 'Delete category?', message: 'Any budget line for it goes too, and its transactions become uncategorized.', confirmLabel: 'Delete category' })) {
       return
     }
     try {
       if (asyncFinance) await asyncFinance.deleteCategory(categoryId)
       else finance.deleteCategory(categoryId)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not delete category.')
+      setActionError(err instanceof Error ? err.message : 'Could not delete category.')
     }
   }
 
@@ -310,6 +314,7 @@ function CategoriesSection() {
       <p className="form-help">
         Create and manage categories here. Head to <Link to="/budget">Budget</Link> to set how much to spend on one each month.
       </p>
+      {actionError && <p className="tx-error" role="alert">{actionError}</p>}
 
       {formOpen && (
         <form className="settings-form" onSubmit={handleSubmit} noValidate>
@@ -433,6 +438,7 @@ function CategoriesSection() {
           )
         })}
       </ul>
+      {confirmDialog}
     </Card>
   )
 }
@@ -549,9 +555,7 @@ export function Settings() {
 
   return (
     <div>
-      <div className="page-head">
-        <h1 className="page-title">Settings</h1>
-      </div>
+      <PageHeader title="Settings" description="Manage profile details, display preferences, categories, and local data." />
 
       <div className="settings-grid">
         <div className="settings-col">

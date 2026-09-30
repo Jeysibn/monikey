@@ -40,6 +40,9 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+      - name: Verify local font privacy boundary
+        working-directory: frontend
+        run: npm run verify:privacy
       - name: Unit tests
         working-directory: frontend
         run: npm run test
@@ -61,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: monikey
           POSTGRES_USER: monikey

@@ -130,7 +130,7 @@ export class PlaidClient {
     })
   }
 
-  private async post<T>(path: string, body: Record<string, any>): Promise<T> {
+  private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: {

@@ -1,7 +1,9 @@
-.imports-page { display: grid; gap: 1.25rem; max-width: 960px; }
-.imports-form, .imports-commit { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; }
-.imports-form label, .imports-commit label { display: grid; gap: .35rem; color: var(--text-muted); font-size: .85rem; }
+.imports-page { width: 100%; }
+.imports-form, .imports-commit { display: flex; align-items: end; gap: var(--space-4); flex-wrap: wrap; }
+.imports-form label, .imports-commit label { display: grid; gap: var(--space-1); color: var(--text-dim); font-size: 12px; }
 .import-table-wrap { overflow-x: auto; }
 .import-table { width: 100%; border-collapse: collapse; }
-.import-table th, .import-table td { text-align: left; padding: .65rem; border-bottom: 1px solid var(--line); }
+.import-table th, .import-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+.import-table th { color: var(--text-faint); font-size: 12px; font-weight: 700; }
+.import-table td:nth-child(3), .import-table th:nth-child(3) { text-align: right; }
 @media (max-width: 600px) { .imports-form, .imports-commit { align-items: stretch; flex-direction: column; } }

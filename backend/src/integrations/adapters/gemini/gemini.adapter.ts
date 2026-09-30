@@ -5,18 +5,18 @@
 
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import type { AiProvider, AiInsightResponse, StructuredAiRequest } from '../../interfaces/aiProvider.js'
-import type { Logger } from 'pino'
+import type { FastifyBaseLogger } from 'fastify'
 
 export interface GeminiAdapterConfig {
   apiKey: string
   model: string
-  logger: Logger
+  logger: FastifyBaseLogger
 }
 
 export class GeminiAdapter implements AiProvider {
   private client: GoogleGenerativeAI
   private model: string
-  private logger: Logger
+  private logger: FastifyBaseLogger
 
   constructor(config: GeminiAdapterConfig) {
     this.client = new GoogleGenerativeAI(config.apiKey)

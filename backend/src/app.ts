@@ -175,7 +175,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       ? createGeminiAdapter({
           apiKey: env.GEMINI_API_KEY,
           model: env.GEMINI_MODEL,
-          logger: app.log as any, // Fastify logger is compatible with pino Logger interface
+          logger: app.log,
         })
       : createStubAiAdapter()
 

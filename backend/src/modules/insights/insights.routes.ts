@@ -44,7 +44,7 @@ export async function insightsRoutes(app: FastifyInstance, options: InsightsRout
   const service = createInsightsService({
     aiProvider,
     prisma,
-    logger: app.log as any, // Fastify logger compatible with pino Logger
+    logger: app.log,
     maxCallsPerDay,
     maxCallsPerMonth,
   })

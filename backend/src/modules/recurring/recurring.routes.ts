@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
+import type { RecurringItem } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
@@ -15,7 +16,7 @@ const updateSchema = z.object({ merchant: z.string().trim().min(1).max(160).opti
 // UUID validation for path parameters (D8: malformed UUID handling)
 const recurringIdParamSchema = z.object({ id: z.string().uuid('Invalid recurring item ID format') })
 
-function view(item: any) {
+function view(item: RecurringItem) {
   return { id: item.id, userId: item.userId, merchant: item.merchant, amountMinor: String(item.amountMinor), frequency: item.frequency, nextDueDate: item.nextDueDate.toISOString().slice(0, 10), accountId: item.accountId, categoryId: item.categoryId, autopay: item.autopay, status: item.status, lastPaidDate: item.lastPaidDate?.toISOString().slice(0, 10) ?? null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }
 }
 

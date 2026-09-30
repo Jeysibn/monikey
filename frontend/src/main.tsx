@@ -7,6 +7,13 @@ import { AsyncFinanceProvider } from './state/asyncFinanceContext.tsx'
 import { BackendFinanceGate } from './components/BackendFinanceGate.tsx'
 import { resolveAppClock } from './utils/clock.ts'
 import { useRecurring } from './hooks/useRecurring'
+import '@fontsource/manrope/400.css'
+import '@fontsource/manrope/500.css'
+import '@fontsource/manrope/600.css'
+import '@fontsource/manrope/700.css'
+import '@fontsource/space-grotesk/500.css'
+import '@fontsource/space-grotesk/600.css'
+import '@fontsource/space-grotesk/700.css'
 import './styles/global.css'
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js').catch(() => undefined)

@@ -16,52 +16,35 @@ documentation is authoritative when this list and an older note disagree.
   Transaction, crypto-activity and receipt-capture intentions replay through
   their normal gateway paths.
 
-## Incomplete: finish before calling the platform production-ready
+## Resolved engineering history
 
-- **Same-time crypto activity ordering.** **Completed 2026-09-13:** trades and
-  transfers now use a shared persisted PostgreSQL activity sequence rather than
-  UUID lexical order or a cross-table timestamp tie-breaker. Existing rows are
-  backfilled by migration and the accounting unit/integration suites cover the
-  invariant.
+The following items were verified as complete before this gap list was refreshed:
 
-- **API calendar defaults.** **Completed 2026-09-13:** bootstrap and API finance
-  defaults now use the authenticated user's local calendar date.
-- **Per-user worker calendars.** **Completed 2026-09-13:** recurring payments,
-  notifications and daily snapshots now evaluate each user's configured IANA
-  timezone independently. External quote/FX refreshes remain process-level
-  provider jobs.
+- Same-time crypto activity ordering uses a persisted PostgreSQL activity
+  sequence, with migration backfill and accounting tests.
+- API defaults and per-user worker calendars use authenticated/user-configured
+  IANA timezones.
+- The current API money read-model audit uses checked minor-unit boundaries.
+- Database-backed regression, generated-client adoption, critical browser
+  journeys, and the repeatable structural accessibility audit are covered by
+  the dated release notes and test suites.
 
-- **Complete the money read-model audit.** **Completed for the current API
-  surface 2026-09-13:** command serialization uses a checked helper across
-  transactions, accounts, cards, goals, budgets and recurring items; all API
-  minor-unit reads use the checked safe-integer boundary, while crypto/report
-  visual calculations use explicit bounded decimal parsing. Remaining
-  `Number(...)` calls are date parsing or test helpers, not API money
-  conversions. See `frontend/src/services/ApiFinanceGateway.ts` and the money
-  contract documentation.
-- **Run the full database-backed regression suite after the strict transport
-  changes.** Completed on 2026-09-13 against the migrated Compose PostgreSQL
-  database; the current backend suite and browser-backed integration coverage
-  are green.
-- **Finish generated API-client adoption.** OpenAPI contracts now cover the
-  Plaid link-token, exchange-token, item-list and webhook import routes as well
-  as the previously completed financial slices. Remaining work is limited to
-  auditing any future route additions and deeper frontend read-model adoption.
-- **Complete critical browser coverage.** **Completed for the current
-  frontend journeys 2026-09-13:** the mock suite (95 tests) and
-  backend-mode Compose suite (3 journeys covering auth/session revocation,
-  transaction persistence, CSV import/reconciliation and partial-import retry)
-  are green. Crypto untrack/re-track history is now covered by a real
-  PostgreSQL/HTTP regression. Durable browser coverage for receipt review,
-  reports and recurring flows now have browser coverage, including receipt OCR
-  draft review, recurring add/pause/resume/payment, and custom report export.
-  Further provider-backed receipt persistence coverage is deployment/provider
-  dependent rather than an unverified frontend journey.
-- **Complete the accessibility audit.** A repeatable structural browser audit
-  now covers all 14 routes for main landmarks, labelled form controls, unique
-  IDs, image alternatives and labelled icon-only buttons. Manual screen-reader,
-  contrast and assistive-technology review remains deployment/user-environment
-  work.
+Details and evidence are retained in the [hardening report](hardening-report-2026-09-13.md).
+
+## Incomplete: deployment or further hardening required before a production claim
+
+- **Full verification evidence.** Local PostgreSQL 18 migrations, backend
+  integration tests, backend-mode Compose journeys, and backup-script checks
+  are now green. The fast and full-stack CI workflows still need to run in
+  GitHub Actions for hosted-runner evidence.
+- **Explicit adapter casts.** The audited transaction, Fastify, import,
+  persistence, logger, and API transport boundaries no longer use type-syntax
+  `any`. A few deliberate `unknown as` casts remain for JSON/provider adapter
+  seams and should be narrowed further if those contracts become stable.
+- **Mock/API contract scope.** A shared contract now covers account creation,
+  transaction validation, expense posting, and transfer classification in both
+  mock and Compose API modes. Mock/backend differences remain intentional;
+  backend-only behavior is covered by the API and Compose suites below.
 
 ## Partial or beta capabilities
 
@@ -93,7 +76,16 @@ documentation is authoritative when this list and an older note disagree.
 - Run and record a restore drill in the actual deployment environment. The
   repository currently records an isolated local/disposable drill only.
 - Consume the immutable OCI digests produced by release workflows in the
-  external GitOps deployment, and add image signing/verification (for example,
+  external GitOps deployment. Audit at `homelab-gitops` revision `0c6399b`
+  found MoniKey `api`, `worker`, `web`, and migration manifests still use
+  mutable `:latest`; its migration Job also invokes `npx`, which is absent from
+  the current MoniKey runtime image. The application now publishes a dedicated
+  migration image containing that tooling; GitOps must consume it by digest.
+  The same audit found an HTTP-only ingress,
+  `NODE_ENV=development`, an HTTP `APP_ORIGIN`, `SESSION_SECURE=false`, and no
+  inspected backup schedule. Resolve the migration-image, digest-pinning,
+  secure-edge, production-config, and backup-wiring contracts before
+  deployment certification. Add image signing/verification (for example,
   Cosign) if that is part of the release trust model.
 - Verify ingress-owned security headers, TLS/HSTS behavior and production
   exposure of `/docs` and `/openapi.json` in the real deployment.

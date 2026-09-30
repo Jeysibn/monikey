@@ -54,7 +54,7 @@ test.describe('TR-001 — one clock: rolling it forward moves everything togethe
     // The Add Transaction form's default date moved with it: a default save
     // always lands inside the period the KPIs are labeled with.
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
-    await expect(page.locator('input[type="date"]')).toHaveValue('2026-09-05')
+    await expect(page.locator('.tx-modal input[type="date"]')).toHaveValue('2026-09-05')
   })
 
   test('the same clock drives the dashboard’s budget days remaining and chart window', async ({ page }) => {
@@ -228,8 +228,8 @@ test.describe('TR-004 — goal funding integrity', () => {
     await page.getByRole('main').getByRole('button', { name: 'Add Transaction' }).click()
     await page.locator('.tx-amount-input').fill('0.40')
     await page.getByPlaceholder('e.g. Grab Grocery').fill('Sachet')
-    await page.getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
-    await page.getByLabel('Account', { exact: false }).selectOption({ label: 'Cash Wallet' })
+    await page.locator('.tx-modal').getByLabel('Category', { exact: false }).selectOption({ label: 'Food & Groceries' })
+    await page.locator('.tx-modal').getByLabel('Account', { exact: false }).selectOption({ label: 'Cash Wallet' })
     await page.getByRole('button', { name: 'Save Expense' }).click()
     await expect(page.getByText('Expense saved')).toBeVisible()
 

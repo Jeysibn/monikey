@@ -83,6 +83,11 @@
   align-items: center;
   gap: 6px;
 }
+.tx-amount-row:focus-within {
+  border-color: var(--cyan);
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
 .tx-amount-ph {
   color: var(--text-faint);
   font-weight: 600;

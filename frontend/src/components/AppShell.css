@@ -17,13 +17,12 @@
 }
 
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(150px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   padding: 16px clamp(16px, 3vw, 32px);
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
 }
 
 .brand {
@@ -41,7 +40,6 @@
   gap: 7px;
   flex-wrap: wrap;
   justify-content: center;
-  flex: 1;
   position: relative;
 }
 
@@ -92,12 +90,23 @@
 /* Below this width: replace the wrapping desktop nav row with a single
    compact menu button (FR-007 — "Replace the wrapping desktop navigation
    with a compact mobile menu"). */
-@media (max-width: 760px) {
+@media (max-width: 840px) {
+  .topbar {
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    padding: 10px 14px;
+  }
   .nav {
     display: none;
   }
   .mobile-nav {
     display: block;
+  }
+  .brand {
+    justify-self: center;
+  }
+  .topbar-right {
+    gap: 8px;
   }
   .add-tx-label {
     display: none;
@@ -130,7 +139,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  flex: none;
+  justify-self: end;
 }
 
 .btn {
@@ -207,10 +216,33 @@
   color: var(--text-faint);
   margin-top: 1px;
 }
+.more-group + .more-group {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.more-group-title,
+.mobile-nav-group-title {
+  margin: 4px 11px 3px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.more-item--active {
+  color: var(--cyan);
+  background: oklch(80% 0.13 210 / 0.08);
+}
 .more-sep {
   height: 1px;
   background: var(--line);
   margin: 6px 4px;
+}
+.mobile-nav-group + .mobile-nav-group {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
 }
 
 .icon-btn {

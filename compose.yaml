@@ -16,7 +16,7 @@ services:
   migrate:
     build:
       context: ./backend
-      target: build
+      target: migration
     # Schema deployment is intentionally separate from all data seeding.
     # Production startup must never create demo users or financial records.
     command: ["npx", "prisma", "migrate", "deploy"]
@@ -30,6 +30,7 @@ services:
   api:
     build:
       context: ./backend
+      target: runtime
     command: ["node", "dist/server.js"]
     env_file: .env
     # `env_file` is applied at container run time and wins over the image's
@@ -37,11 +38,11 @@ services:
     # in .env.example, the "production" compose stack was actually booting
     # in development mode (QA Attempt 1, Finding 4). Setting it explicitly
     # here, in `environment:`, wins over both the image default AND
-    # `env_file`, so this stack is always production regardless of what a
-    # developer's local `.env` happens to say. `compose.dev.yaml` is the
-    # only place development mode is turned back on.
+    # `env_file`. Production remains the default; the explicit
+    # COMPOSE_NODE_ENV override exists for disposable CI, where the HTTP
+    # localhost edge is intentionally used with test cookies and test origin.
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${COMPOSE_NODE_ENV:-production}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -56,10 +57,11 @@ services:
   worker:
     build:
       context: ./backend
+      target: runtime
     command: ["node", "dist/worker.js"]
     env_file: .env
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${COMPOSE_NODE_ENV:-production}
     depends_on:
       migrate:
         condition: service_completed_successfully

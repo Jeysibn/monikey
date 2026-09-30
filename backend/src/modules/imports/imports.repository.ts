@@ -3,7 +3,7 @@
  * Handles all database operations for Phase 11 import staging.
  */
 
-import type { PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
 
 export interface CreateImportBatchInput {
   userId: string
@@ -74,7 +74,7 @@ export class ImportsRepository {
    * List import batches for a user.
    */
   async listImportBatches(userId: string, options?: { status?: string; limit?: number; offset?: number }) {
-    const where: any = { userId }
+    const where: Prisma.ImportBatchWhereInput = { userId }
     if (options?.status) {
       where.status = options.status
     }
@@ -159,7 +159,7 @@ export class ImportsRepository {
       return null // Unauthorized or not found
     }
 
-    const where: any = { importBatchId: batchId }
+    const where: Prisma.ImportedTransactionWhereInput = { importBatchId: batchId }
     if (options?.status) {
       where.status = options.status
     }
@@ -306,7 +306,7 @@ export class ImportsRepository {
   /**
    * Update a Plaid item with arbitrary data.
    */
-  async updatePlaidItem(itemId: string, data: any) {
+  async updatePlaidItem(itemId: string, data: Prisma.PlaidItemUpdateInput) {
     return this.prisma.plaidItem.update({
       where: { id: itemId },
       data,

@@ -79,6 +79,9 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
       await page.goto('/security')
       await expect(page.getByText('Other session')).toBeVisible()
       await page.getByRole('button', { name: 'Revoke' }).click()
+      const revokeDialog = page.getByRole('dialog', { name: 'Revoke this session?' })
+      await expect(revokeDialog).toBeVisible()
+      await revokeDialog.getByRole('button', { name: 'Revoke session' }).click()
       await expect(page.getByText('Other session')).toHaveCount(0)
       expect((await secondPage.request.get('/api/v1/auth/me')).status()).toBe(401)
     } finally {

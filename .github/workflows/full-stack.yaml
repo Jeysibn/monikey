@@ -80,7 +80,9 @@ jobs:
         # Registration-heavy journeys share the disposable runner's source IP
         # and must be serial so the real rate limiter is not mistaken for a
         # browser regression.
-        run: npm run test:e2e:backend -- --workers=1
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: http://localhost:8080
+        run: npm run test:e2e:backend --prefix frontend -- --workers=1
 
       - name: Shared finance contract against Compose API
         run: npm run test:e2e:contract

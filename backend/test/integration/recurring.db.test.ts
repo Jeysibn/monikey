@@ -1,6 +1,6 @@
 // Real-Postgres, real-HTTP integration coverage for Phase 5 (Recurring
 // Transactions + Worker). Written in response to QA Attempt 1 (see
-// `main-brain/03 Projects/Monikey/Backend/QA Logs/2026-09-01 - Phase 5
+// `main-brain/Projects/Monikey/Logs/2026-09-01 - Phase 5
 // Recurring and Notifications - QA Attempt 1.md`):
 //   - Defect 2: zero test coverage existed for this scope.
 //   - Defect 1/3: the worker must not crash on one bad item, and must not

@@ -157,6 +157,6 @@ main-only Kubernetes nginx resolver fix. See [CI/CD operations](docs/CI-CD-Opera
 - [Architecture](docs/ARCHITECTURE.md)
 - [CI/CD operations](docs/CI-CD-Operations.md)
 - [Disaster recovery](docs/Disaster-Recovery.md)
-- Canonical Obsidian project: `~/main-brain/main-brain/03 Projects/Monikey/`.
+- Canonical Obsidian project: `~/main-brain/Projects/Monikey/`.
   Start with its `README.md`; dated development/QA/release logs are historical
   evidence for their recorded revision, not automatic certification of current code.

@@ -111,7 +111,7 @@ test.describe('Authenticated Compose backend flow @backend-compose', () => {
     const csv = 'date,description,amount,merchant\n2026-09-10,Import E2E Grocery,12.34,Market'
     await page.getByLabel('CSV file').setInputFiles({ name: 'import.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
     await page.getByRole('button', { name: 'Upload and preview' }).click()
-    await expect(page.getByText('2. Review staged rows', { exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Review staged rows' })).toBeVisible()
     await page.getByLabel('Post to account').selectOption(account.id)
     await page.getByRole('button', { name: 'Commit eligible rows' }).click()
     await expect(page.getByText(/Committed 1 transaction/)).toBeVisible()

@@ -54,7 +54,7 @@ jobs:
       # once here and reused by both publish jobs below.
       image_owner: ${{ steps.owner.outputs.lowercase }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Filter changed paths
         id: filter
@@ -96,7 +96,7 @@ jobs:
       API_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-api
       MIGRATION_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-migration
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
@@ -179,7 +179,7 @@ jobs:
     env:
       WEB_IMAGE: ghcr.io/${{ needs.detect-changes.outputs.image_owner }}/monikey-web
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 

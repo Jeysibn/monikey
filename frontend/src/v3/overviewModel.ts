@@ -53,12 +53,12 @@ export function positionMinor(state: FinanceState): PositionMinor {
   return { liquid, cardDebt, net: liquid - cardDebt }
 }
 
-/** Income/expense for a period from active (non-reversed) cleared-or-pending income/expense rows only. Transfers and card repayments never count. */
+/** Income/expense for a period from active (non-reversed) cleared income/expense rows only, matching the reports API. Pending, transfers and card repayments never count. */
 export function periodFlowMinor(state: FinanceState, period: ReportingPeriod): { income: bigint; spending: bigint } {
   let income = 0n
   let spending = 0n
   for (const t of activeTransactions(state)) {
-    if (!isDateInPeriod(t.date, period)) continue
+    if (t.status === 'pending' || !isDateInPeriod(t.date, period)) continue
     const m = exactMinor(t.amountMinor, t.amount)
     if (t.type === 'income') income += m
     else if (t.type === 'expense') spending += -m
@@ -71,7 +71,7 @@ export interface CategorySpend { categoryId: string; name: string; color: string
 export function spendingByCategory(state: FinanceState, period: ReportingPeriod): CategorySpend[] {
   const totals = new Map<string, bigint>()
   for (const t of activeTransactions(state)) {
-    if (t.type !== 'expense' || !isDateInPeriod(t.date, period)) continue
+    if (t.type !== 'expense' || t.status === 'pending' || !isDateInPeriod(t.date, period)) continue
     const key = t.categoryId ?? ''
     totals.set(key, (totals.get(key) ?? 0n) + -exactMinor(t.amountMinor, t.amount))
   }
@@ -136,7 +136,7 @@ export function favoriteAccounts(state: FinanceState, count = 4): FavoriteItem[]
 
 export interface HistoryPoint { date: string; netMinor: bigint }
 
-/** Daily snapshots from `/reports/net-worth`. Returns only what the server stored — never interpolated or backfilled. */
-export function historyFromSnapshots(rows: { date: string; netWorth: string }[]): HistoryPoint[] {
-  return rows.map((r) => ({ date: r.date, netMinor: BigInt(r.netWorth) }))
+/** Ledger-derived daily points from `/reports/net-tracked-position`. Only what the server returns — never interpolated or backfilled. */
+export function historyFromTracked(rows: { date: string; netTrackedPosition: string }[]): HistoryPoint[] {
+  return rows.map((r) => ({ date: r.date, netMinor: BigInt(r.netTrackedPosition) }))
 }

@@ -24,7 +24,7 @@ function renderOverview() {
 describe('V3 Overview summary', () => {
   it('shows four favorite accounts first with real balances', () => {
     renderOverview()
-    const list = screen.getByRole('list', { name: 'Favorite accounts' })
+    const list = screen.getByRole('list', { name: 'Featured accounts' })
     const cards = within(list).getAllByRole('listitem')
     expect(cards).toHaveLength(4)
     expect(cards[0]!.textContent).toContain('4,120.00')
@@ -50,8 +50,8 @@ describe('V3 Overview summary', () => {
   })
   it('shows the monthly budget line from budget totals', () => {
     renderOverview()
-    expect(screen.getByTestId('v3-budget-line').textContent).toMatch(/of .*11,600\.00 budgeted/)
-    expect(screen.getByRole('progressbar', { name: 'Budget used' })).toBeTruthy()
+    expect(screen.getByTestId('v3-budget-line').textContent).toMatch(/Budgeted categories: .*of .*11,600\.00/)
+    expect(screen.getByRole('progressbar', { name: 'Budgeted categories used' })).toBeTruthy()
   })
   it('lists recent activity newest first and links to existing pages', () => {
     renderOverview()
@@ -103,22 +103,41 @@ describe('V3 Insights', () => {
     expect(screen.getByTestId('v3-period-label').textContent).toMatch(/Q3|2026/)
     expect(screen.getByTestId('v3-bva').textContent).toContain('Budgets are monthly')
   })
-  it('renders stored backend snapshots and a not-enough-history state', async () => {
+  const routed = (tracked: unknown[], extra: Record<string, () => Response> = {}) => vi.fn(async (url: string) => {
+    for (const [k, v] of Object.entries(extra)) if (url.includes(k)) return v()
+    if (url.includes('net-tracked-position')) return new Response(JSON.stringify(tracked), { status: 200 })
+    if (url.includes('reports/summary')) return new Response(JSON.stringify({ income: '500000', expenses: '350000' }), { status: 200 })
+    if (url.includes('spending-by-category')) return new Response(JSON.stringify([{ categoryId: 'c1', categoryName: 'Food', spent: '300000' }]), { status: 200 })
+    if (url.includes('budget-performance')) return new Response(JSON.stringify({ totalAllocated: '400000', totalSpent: '300000', categories: [{ categoryId: 'c1', categoryName: 'Food', allocated: '400000', spent: '300000' }] }), { status: 200 })
+    return new Response('{}', { status: 404 })
+  })
+  it('backend mode: uses the ledger-derived history and report endpoints, with an Uncategorized remainder', async () => {
     vi.stubEnv('VITE_FINANCE_BACKEND', 'true')
-    const two = [{ date: '2026-08-01', assetTotal: '0', liabilityTotal: '0', netWorth: '100000' }, { date: '2026-08-02', assetTotal: '0', liabilityTotal: '0', netWorth: '150000' }]
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(two), { status: 200 })))
+    const two = [{ date: '2026-08-01', netTrackedPosition: '100000' }, { date: '2026-08-02', netTrackedPosition: '150000' }]
+    vi.stubGlobal('fetch', routed(two))
     open()
     expect((await screen.findByTestId('v3-history-summary')).textContent).toContain('1,500.00')
+    const cats = await screen.findByTestId('v3-cat-total')
+    expect(cats.textContent).toContain('3,500.00')
+    expect(screen.getByTestId('v3-categories').textContent).toContain('Uncategorized')
+    expect(screen.getByTestId('v3-categories').textContent).toContain('500.00')
     cleanup()
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(two.slice(0, 1)), { status: 200 })))
+    vi.stubGlobal('fetch', routed(two.slice(0, 1)))
     open()
     expect((await screen.findByTestId('v3-history')).textContent).toContain('Not enough tracked history')
   })
-  it('reports a history error without breaking the page', async () => {
+  it('backend mode: a missing budget (404) shows the empty state, not an error', async () => {
+    vi.stubEnv('VITE_FINANCE_BACKEND', 'true')
+    vi.stubGlobal('fetch', routed([], { 'budget-performance': () => new Response('{}', { status: 404 }) }))
+    open()
+    expect((await screen.findByTestId('v3-bva')).textContent).toContain('No budget set for this month')
+  })
+  it('reports errors per section without breaking the page', async () => {
     vi.stubEnv('VITE_FINANCE_BACKEND', 'true')
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })))
     open()
-    expect((await screen.findByRole('alert')).textContent).toContain('could not be loaded')
+    expect((await screen.findAllByRole('alert')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByTestId('v3-history').textContent).toContain('could not be loaded')
     expect(screen.getByTestId('v3-categories')).toBeTruthy()
   })
 })

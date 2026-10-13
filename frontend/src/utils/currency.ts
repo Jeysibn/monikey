@@ -81,5 +81,6 @@ export function formatMinorUnits(value: string | bigint, opts: { withCents?: boo
   const rendered = parts.map((part) => part.type === 'integer' ? part.value : part.value).join('')
   const decimal = new Intl.NumberFormat(currencyConfig.locale).formatToParts(1.1).find((part) => part.type === 'decimal')?.value ?? '.'
   const withFraction = withCents ? `${rendered}${decimal}${cents}` : rendered
-  return negative ? withFraction.replace(/^(\D)/, '$1-') : withFraction
+  // Sign leads the whole amount (-₱8.20), matching `formatMoney`.
+  return negative ? `-${withFraction}` : withFraction
 }

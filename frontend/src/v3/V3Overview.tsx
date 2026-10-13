@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { accountLabel } from '../state/financeSelectors'
 import { reportingPeriodForView, reportPeriodLabel, type ReportView } from '../state/reportsSelectors'
-import { addDaysToIso, formatDateLabel } from '../utils/date'
+import { formatDateLabel } from '../utils/date'
 import { formatMinorUnits } from '../utils/currency'
 import { exactMinor } from '../utils/money'
 import { V3AccountCard } from './V3AccountCard'
 import { V3Workspace } from './V3Shell'
-import {
-  budgetRows, budgetSnapshot, favoriteAccounts, historyFromSnapshots, periodFlowMinor, positionMinor, recentActivity, spendingByCategory,
-  type HistoryPoint,
-} from './overviewModel'
+import { budgetRows, budgetSnapshot, favoriteAccounts, positionMinor, recentActivity, type HistoryPoint } from './overviewModel'
+import { useBudgetPerformance,  useNetTrackedHistory, usePeriodReport } from './useOverviewReports'
 import './V3Overview.css'
 
 type Tab = 'summary' | 'insights'
@@ -20,7 +18,6 @@ const TABS: { id: Tab; label: string }[] = [{ id: 'summary', label: 'Summary' },
 const VIEWS: { id: ReportView; label: string }[] = [{ id: 'monthly', label: 'Monthly' }, { id: 'quarterly', label: 'Quarterly' }, { id: 'yearly', label: 'Yearly' }]
 
 const money = (minor: bigint) => formatMinorUnits(minor, { withCents: true })
-const backendMode = () => import.meta.env.VITE_FINANCE_BACKEND === 'true'
 
 function Tabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
   const refs = useRef<Record<Tab, HTMLButtonElement | null>>({ summary: null, insights: null })
@@ -67,7 +64,7 @@ function SummaryAccounts() {
   if (favorites.length === 0) return <Empty>No accounts yet. Add one from Accounts to see it here.</Empty>
   return (
     <>
-      <ul className="v3-ov-cards" aria-label="Favorite accounts">
+      <ul className="v3-ov-cards" aria-label="Featured accounts">
         {favorites.map((f) => {
           if (f.kind === 'credit') {
             const owed = exactMinor(f.card.balanceMinor, f.card.balance)
@@ -115,26 +112,30 @@ function MonthlySnapshot() {
   const finance = useFinance()
   const { state, todayIso } = finance
   const period = reportingPeriodForView(todayIso, 'monthly')
-  const flow = periodFlowMinor(state, period)
+  const report = usePeriodReport(state, period)
   const budget = budgetSnapshot(state)
   return (
     <div className="v3-card" data-testid="v3-monthly">
       <h3 className="v3-h3">{reportPeriodLabel(todayIso, 'monthly')}</h3>
-      <dl className="v3-ov-position">
-        <div><dt className="v3-secondary">Spent</dt><dd className="v3-figure v3-figure--md" data-testid="v3-spent">{money(flow.spending)}</dd></div>
-        <div><dt className="v3-secondary">Income</dt><dd className="v3-figure v3-figure--md">{money(flow.income)}</dd></div>
-      </dl>
+      {report.status === 'loading' && <div className="v3-skeleton" role="status" aria-label="Loading monthly totals" />}
+      {(report.status === 'error' || report.status === 'unavailable') && <p role="alert" className="v3-secondary">Monthly totals could not be loaded. Account balances above are unaffected.</p>}
+      {report.status === 'ready' && (
+        <dl className="v3-ov-position">
+          <div><dt className="v3-secondary">All spending</dt><dd className="v3-figure v3-figure--md" data-testid="v3-spent">{money(report.data.spendingMinor)}</dd></div>
+          <div><dt className="v3-secondary">Income</dt><dd className="v3-figure v3-figure--md">{money(report.data.incomeMinor)}</dd></div>
+        </dl>
+      )}
       {budget ? (
         <div>
-          <div className="v3-ov-meter" role="progressbar" aria-label="Budget used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, budget.usedPct)} aria-valuetext={`${budget.usedPct}% of budget used`}>
+          <div className="v3-ov-meter" role="progressbar" aria-label="Budgeted categories used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, budget.usedPct)} aria-valuetext={`${budget.usedPct}% of budget used`}>
             <span className={budget.over ? 'is-over' : ''} style={{ width: `${Math.min(100, budget.usedPct)}%` }} />
           </div>
           <p className="v3-secondary" data-testid="v3-budget-line">
-            {money(budget.spent)} of {money(budget.allocated)} budgeted · {budget.over ? `${money(-budget.remaining)} over` : `${money(budget.remaining)} left`}
+            Budgeted categories: {money(budget.spent)} of {money(budget.allocated)} · {budget.over ? `${money(-budget.remaining)} over` : `${money(budget.remaining)} left`}
           </p>
         </div>
       ) : <p className="v3-secondary">No budget set for this month. Set one in Planning.</p>}
-      <p className="v3-caption v3-secondary">Transfers and card repayments are not spending. Budget totals cover budgeted categories only.</p>
+      <p className="v3-caption v3-secondary">All spending is every cleared expense this month. Budgeted categories count only categories with a budget, so the two can differ. Transfers, card repayments, reversed and pending items are excluded.</p>
     </div>
   )
 }
@@ -177,25 +178,6 @@ function Summary() {
   )
 }
 
-type HistoryState = { status: 'unavailable' | 'loading' | 'error' } | { status: 'ready'; points: HistoryPoint[] }
-
-function useNetHistory(from: string, to: string): HistoryState {
-  const [result, setResult] = useState<{ key: string; state: HistoryState } | null>(null)
-  const key = `${from}|${to}`
-  const enabled = backendMode()
-  useEffect(() => {
-    if (!enabled) return
-    const controller = new AbortController()
-    fetch(`/api/v1/reports/net-worth?from=${from}&to=${to}`, { credentials: 'include', signal: controller.signal })
-      .then((r) => (r.ok ? r.json() as Promise<{ date: string; netWorth: string }[]> : Promise.reject(new Error('history unavailable'))))
-      .then((rows) => setResult({ key, state: { status: 'ready', points: historyFromSnapshots(rows) } }))
-      .catch(() => { if (!controller.signal.aborted) setResult({ key, state: { status: 'error' } }) })
-    return () => controller.abort()
-  }, [enabled, from, to, key])
-  if (!enabled) return { status: 'unavailable' }
-  return result && result.key === key ? result.state : { status: 'loading' }
-}
-
 function HistoryChart({ points }: { points: HistoryPoint[] }) {
   const nums = points.map((p) => Number(p.netMinor))
   const min = Math.min(...nums)
@@ -222,10 +204,15 @@ function Insights() {
   const { state, todayIso } = finance
   const [view, setView] = useState<ReportView>('monthly')
   const period = useMemo(() => reportingPeriodForView(todayIso, view), [todayIso, view])
-  const history = useNetHistory(period.start, addDaysToIso(period.end, -1))
-  const categories = spendingByCategory(state, period)
-  const rows = budgetRows(state)
+  const monthStart = useMemo(() => reportingPeriodForView(todayIso, 'monthly').start, [todayIso])
+  const history = useNetTrackedHistory(period)
+  const report = usePeriodReport(state, period)
+  const remoteBudget = useBudgetPerformance(monthStart)
+  const localRows = useMemo(() => budgetRows(state), [state])
   const budgetIsMonthly = view === 'monthly'
+  const budget: Remote2 = remoteBudget
+    ? remoteBudget.status === 'ready' ? { status: 'ready', rows: remoteBudget.data?.rows.map((r) => ({ ...r, color: state.categories.find((c) => c.id === r.categoryId)?.color ?? 'var(--v3-muted)' })) ?? [] } : remoteBudget
+    : { status: 'ready', rows: localRows.map((r) => ({ categoryId: r.categoryId, name: r.name, allocated: r.allocated, spent: r.spent })) }
   return (
     <div className="v3-ov-insights">
       <div className="v3-ov-views" role="group" aria-label="Timeframe">
@@ -237,47 +224,61 @@ function Insights() {
 
       <section className="v3-card" aria-labelledby="v3-ins-history" data-testid="v3-history">
         <h2 id="v3-ins-history" className="v3-h2">Net tracked position</h2>
-        {history.status === 'unavailable' && <p className="v3-secondary">History is not recorded in demo mode, so no trend is shown. Connect a backend to see tracked daily snapshots.</p>}
+        {history.status === 'unavailable' && <p className="v3-secondary">{history.message}</p>}
         {history.status === 'loading' && <div className="v3-skeleton" role="status" aria-label="Loading history" />}
         {history.status === 'error' && <p role="alert" className="v3-secondary">History could not be loaded. Current figures are unaffected.</p>}
-        {history.status === 'ready' && history.points.length < 2 && <p className="v3-secondary">Not enough tracked history for {reportPeriodLabel(todayIso, view)} yet ({history.points.length} recorded {history.points.length === 1 ? 'day' : 'days'}).</p>}
-        {history.status === 'ready' && history.points.length >= 2 && <HistoryChart points={history.points} />}
+        {history.status === 'ready' && history.data.length < 2 && <p className="v3-secondary">Not enough tracked history for {reportPeriodLabel(todayIso, view)} yet ({history.data.length} recorded {history.data.length === 1 ? 'day' : 'days'}).</p>}
+        {history.status === 'ready' && history.data.length >= 2 && <HistoryChart points={history.data} />}
       </section>
 
       <section className="v3-card" aria-labelledby="v3-ins-cats" data-testid="v3-categories">
         <h2 id="v3-ins-cats" className="v3-h2">Spending by category</h2>
-        {categories.length === 0 ? <p className="v3-secondary">No spending recorded for {reportPeriodLabel(todayIso, view)}.</p> : (
-          <ul className="v3-ov-bars">
-            {categories.map((c) => (
-              <li key={c.categoryId}>
-                <div className="v3-ov-bars__head"><span><span className="v3-ov-dot" style={{ background: c.color }} aria-hidden="true" />{c.name}</span><span className="v3-figure">{money(c.amountMinor)} · {c.sharePct}%</span></div>
-                <div className="v3-ov-meter" aria-hidden="true"><span style={{ width: `${c.sharePct}%`, background: c.color }} /></div>
-              </li>
-            ))}
-          </ul>
-        )}
+        {report.status === 'loading' && <div className="v3-skeleton" role="status" aria-label="Loading spending" />}
+        {(report.status === 'error' || report.status === 'unavailable') && <p role="alert" className="v3-secondary">Spending could not be loaded.</p>}
+        {report.status === 'ready' && (report.data.categories.length === 0 ? <p className="v3-secondary">No spending recorded for {reportPeriodLabel(todayIso, view)}.</p> : (
+          <>
+            <p className="v3-secondary" data-testid="v3-cat-total">All spending: {money(report.data.spendingMinor)} (cleared expenses, including uncategorized)</p>
+            <ul className="v3-ov-bars">
+              {report.data.categories.map((c) => (
+                <li key={c.categoryId || 'uncategorized'}>
+                  <div className="v3-ov-bars__head"><span><span className="v3-ov-dot" style={{ background: c.color }} aria-hidden="true" />{c.name}</span><span className="v3-figure">{money(c.amountMinor)} · {c.sharePct}%</span></div>
+                  <div className="v3-ov-meter" aria-hidden="true"><span style={{ width: `${c.sharePct}%`, background: c.color }} /></div>
+                </li>
+              ))}
+            </ul>
+          </>
+        ))}
       </section>
 
       <section className="v3-card" aria-labelledby="v3-ins-budget" data-testid="v3-bva">
-        <h2 id="v3-ins-budget" className="v3-h2">Budget vs actual</h2>
+        <h2 id="v3-ins-budget" className="v3-h2">Budgeted categories vs actual</h2>
         {!budgetIsMonthly ? <p className="v3-secondary">Budgets are monthly. Switch to Monthly to compare budget and actual spending.</p>
-          : rows.length === 0 ? <p className="v3-secondary">No budget set for this month.</p> : (
-            <ul className="v3-ov-bars">
-              {rows.map((r) => {
-                const pct = r.allocated > 0n ? Number((r.spent * 100n) / r.allocated) : 0
-                return (
-                  <li key={r.categoryId}>
-                    <div className="v3-ov-bars__head"><span>{r.name}</span><span className="v3-figure">{money(r.spent)} / {money(r.allocated)}{r.over ? ' · over' : ''}</span></div>
-                    <div className="v3-ov-meter" role="progressbar" aria-label={`${r.name} budget used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, pct)} aria-valuetext={`${pct}% used`}><span className={r.over ? 'is-over' : ''} style={{ width: `${Math.min(100, pct)}%` }} /></div>
-                  </li>
-                )
-              })}
-            </ul>
+          : budget.status === 'loading' ? <div className="v3-skeleton" role="status" aria-label="Loading budget" />
+          : budget.status !== 'ready' ? <p role="alert" className="v3-secondary">Budget comparison could not be loaded.</p>
+          : budget.rows.length === 0 ? <p className="v3-secondary">No budget set for this month.</p> : (
+            <>
+              <p className="v3-secondary">Only categories with a budget are listed; their total can be lower than All spending.</p>
+              <ul className="v3-ov-bars">
+                {budget.rows.map((r) => {
+                  const pct = r.allocated > 0n ? Number((r.spent * 100n) / r.allocated) : 0
+                  const over = r.allocated > 0n && r.spent > r.allocated
+                  return (
+                    <li key={r.categoryId}>
+                      <div className="v3-ov-bars__head"><span>{r.name}</span><span className="v3-figure">{money(r.spent)} / {money(r.allocated)}{over ? ' · over' : ''}</span></div>
+                      <div className="v3-ov-meter" role="progressbar" aria-label={`${r.name} budget used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, pct)} aria-valuetext={`${pct}% used`}><span className={over ? 'is-over' : ''} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
       </section>
     </div>
   )
 }
+
+type BudgetRowView = { categoryId: string; name: string; allocated: bigint; spent: bigint }
+type Remote2 = { status: 'loading' } | { status: 'error' | 'unavailable'; message: string } | { status: 'ready'; rows: BudgetRowView[] }
 
 export function V3Overview() {
   const [tab, setTab] = useState<Tab>('summary')

@@ -8,10 +8,10 @@ const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
 } as const
 
-// Set V3_SCREENSHOTS=1 to (re)write docs/remake/screenshots/stage4/*.png.
-const shotDir = path.resolve(process.cwd(), '../docs/remake/screenshots/stage4')
+// Set V3_SCREENSHOTS=1 to (re)write docs/remake/screenshots/stage4_1/*.png.
+const shotDir = path.resolve(process.cwd(), '../docs/remake/screenshots/stage4_1')
 async function shot(page: Page, name: string) {
-  if (process.env.V3_SCREENSHOTS === '1') await page.screenshot({ path: path.join(shotDir, `${name}.png`), fullPage: true })
+  if (process.env.V3_SCREENSHOTS === '1') await page.screenshot({ path: path.join(shotDir, `${name}.png`), fullPage: false })
 }
 
 async function openOverview(page: Page, tab: 'Summary' | 'Insights' = 'Summary') {
@@ -29,7 +29,7 @@ for (const [name, vp] of Object.entries(VIEWPORTS)) {
 
     test('Summary: four accounts, position, budget, activity; no overflow; axe clean', async ({ page }) => {
       await openOverview(page)
-      await expect(page.getByRole('list', { name: 'Favorite accounts' }).getByRole('listitem')).toHaveCount(4)
+      await expect(page.getByRole('list', { name: 'Featured accounts' }).getByRole('listitem')).toHaveCount(4)
       await expect(page.getByTestId('v3-net')).toContainText('₱')
       await expect(page.getByTestId('v3-budget-line')).toBeVisible()
       await expect(page.getByRole('list', { name: 'Recent transactions' })).toBeVisible()

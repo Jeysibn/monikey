@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FinanceState, Transaction } from '../domain/finance'
 import { mockFinanceRepository } from '../services/mockFinanceRepository'
-import { activeTransactions, budgetSnapshot, favoriteAccounts, historyFromSnapshots, periodFlowMinor, positionMinor, recentActivity, spendingByCategory } from './overviewModel'
+import { activeTransactions, budgetSnapshot, favoriteAccounts, historyFromTracked, periodFlowMinor, positionMinor, recentActivity, spendingByCategory } from './overviewModel'
 
 const base = (): FinanceState => mockFinanceRepository.getInitialState()
 const period = { start: '2026-08-01', end: '2026-09-01' }
@@ -91,7 +91,15 @@ describe('favoriteAccounts', () => {
 
 describe('history', () => {
   it('maps only stored snapshots and keeps exact minor units', () => {
-    expect(historyFromSnapshots([{ date: '2026-08-01', netWorth: '123456789012345678' }])).toEqual([{ date: '2026-08-01', netMinor: 123456789012345678n }])
-    expect(historyFromSnapshots([])).toEqual([])
+    expect(historyFromTracked([{ date: '2026-08-01', netTrackedPosition: '123456789012345678' }])).toEqual([{ date: '2026-08-01', netMinor: 123456789012345678n }])
+    expect(historyFromTracked([])).toEqual([])
+  })
+})
+
+describe('cleared-only semantics (matches reports API)', () => {
+  it('excludes pending rows from spending, income and categories', () => {
+    const s = { ...base(), transactions: [tx({ id: 'a', amountMinor: '-1000', amount: -10 }), tx({ id: 'b', amountMinor: '-5000', amount: -50, status: 'pending' }), tx({ id: 'c', type: 'income', amountMinor: '9000', amount: 90, status: 'pending' })] }
+    expect(periodFlowMinor(s, period)).toEqual({ income: 0n, spending: 1000n })
+    expect(spendingByCategory(s, period).reduce((n, c) => n + c.amountMinor, 0n)).toBe(1000n)
   })
 })

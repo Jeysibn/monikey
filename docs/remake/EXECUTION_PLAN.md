@@ -293,3 +293,26 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
 ### Risks
 - History chart is a minimal SVG with a text summary; there are no per-point tooltips.
 - Activity and account rows link to classic pages until their milestones.
+
+## 10. Stage 4.1 — Overview data integrity (2026-10-14)
+
+### Data-contract findings and corrections
+1. **Net tracked position history.** `/reports/net-worth` (stored daily snapshots) is unreliable: `rebuildSnapshot` takes the last-*posted* effect's `balanceAfterMinor`, which is wrong for backdated entries (characterized: returns 98500 where 99500 is correct); it includes archived accounts and opening balances from before account creation; snapshots are written only by the daily worker, so there is no backfill and existing rows go stale. Endpoint left untouched.
+   - **New** `GET /reports/net-tracked-position?from&to` (commit `80a504d`): exact, ledger-derived, BigInt/minor-unit strings. Per day = opening balance + cumulative `delta_minor` by `occurred_on`; liquid (checking/savings/ewallet/cash) minus credit-card liability; archived accounts excluded; accounts appear from their creation date (no fabricated earlier days); no days after the user's local today; span capped at 731 days (400 `INVALID_RANGE`). Card repayments and transfers leave net unchanged; reversals handled.
+   - V3 Insights now uses it. Demo mode has no history and says so.
+2. **Spending analytics.** Stage 4 computed quarterly/yearly totals from the bootstrap list, which is capped at 1,000 transactions with no truncation flag. In backend mode V3 now uses `/reports/summary` (total) and `/reports/spending-by-category`; the difference is shown as **Uncategorized** (the category endpoint omits uncategorized expenses). Verified with a 1,200+ transaction backend test including transfer, pending, reversal pair and uncategorized noise.
+3. **Budget consistency.** The mock seed's budget `spent` values are static demo numbers unrelated to the seeded transactions; the gap is a seed artefact. In the UI the metrics are now never under one label: **All spending** (every cleared expense) vs **Budgeted categories: X of Y** (only categories with a budget). Backend mode takes budgets from `/reports/budget-performance?period=YYYY-MM` (404 → "No budget set"). Mock model and API both count cleared rows only.
+4. **Account cards.** Heading/aria renamed **Featured accounts**; four cards remain on mobile. The heuristic (first bank, e-wallet, cash, card) is not user configuration.
+   - **Requirement for the Accounts milestone:** persistent, user-selectable favorite accounts (API field + UI).
+5. **Money formatting.** `formatMinorUnits` now renders negatives as `-₱8.20` (shared helper, BigInt, tested in `currency.test.ts`).
+
+### Results
+- Frontend: typecheck, lint (warnings pre-existing), build, `verify:privacy` pass; vitest 32 files / 319 tests; Playwright mock suite 137 passed.
+- Backend (disposable PostgreSQL): 56 files / 436 tests, `api:openapi:check` pass.
+- Viewport screenshots: `docs/remake/screenshots/stage4_1/` (mobile, tablet, desktop × Summary, Insights).
+
+### Risks / blockers
+- Backend-mode Overview is verified by mocked-fetch component tests plus backend integration tests of each endpoint; a live browser run against a local backend was not performed (no `@backend-compose` run).
+- Existing `/net-worth` snapshots remain wrong for backdated data; consider rebuilding or deprecating.
+- Backend-mode "Budgeted categories" on Summary still reads bootstrap budget state; Insights uses the authoritative endpoint.
+- Quarterly/yearly Summary-vs-Insights use report endpoints only in backend mode.

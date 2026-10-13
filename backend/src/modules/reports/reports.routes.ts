@@ -2,12 +2,14 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
+import { localDateIso } from '../../common/timezone.js'
 import {
   computeReportSummary,
   computeCashFlow,
   computeSpendingByCategory,
   computeSpendingByTag,
   computeNetWorthTrend,
+  computeNetTrackedPosition,
   computeBudgetPerformance,
   computeGoalsReport,
 } from './reports.repository.js'
@@ -55,6 +57,7 @@ const errorJson = {
   properties: { error: { type: 'object', additionalProperties: false, required: ['code', 'message', 'requestId'], properties: { code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' } } } },
 } as const
 const summaryJson = { type: 'object', additionalProperties: false, required: ['income', 'expenses', 'netCashFlow', 'cardDebtChange', 'netWorthChange', 'cardDebtAtEnd', 'netWorthAtEnd'], properties: { income: minorUnitsJson, expenses: minorUnitsJson, netCashFlow: minorUnitsJson, cardDebtChange: minorUnitsJson, netWorthChange: minorUnitsJson, cardDebtAtEnd: minorUnitsJson, netWorthAtEnd: minorUnitsJson } } as const
+const netTrackedJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'liquidTotal', 'cardDebt', 'netTrackedPosition'], properties: { date: dateJson, liquidTotal: minorUnitsJson, cardDebt: minorUnitsJson, netTrackedPosition: minorUnitsJson } } } as const
 const cashFlowJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'income', 'expenses', 'netFlow'], properties: { date: dateJson, income: minorUnitsJson, expenses: minorUnitsJson, netFlow: minorUnitsJson } } } as const
 const categorySpendJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['categoryId', 'categoryName', 'spent'], properties: { categoryId: { type: 'string', format: 'uuid' }, categoryName: { type: 'string' }, spent: minorUnitsJson } } } as const
 const tagSpendJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['tagId', 'tagName', 'spent'], properties: { tagId: { type: 'string', format: 'uuid' }, tagName: { type: 'string' }, spent: minorUnitsJson } } } as const
@@ -178,6 +181,24 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
 
     const trend = await computeNetWorthTrend(prisma, userId, dateFrom, dateTo)
     return reply.send(trend)
+  })
+
+  /**
+   * GET /reports/net-tracked-position?from=2026-09-01&to=2026-09-30
+   *
+   * Daily net tracked position (liquid assets minus credit-card debt), computed
+   * exactly from ledger balance effects by transaction date. Unlike /net-worth it
+   * does not depend on stored daily snapshots, so backdated entries are correct
+   * and nothing is interpolated. Days before an account existed are omitted.
+   */
+  app.get<{ Querystring: Record<string, string> }>('/net-tracked-position', { schema: { querystring: dateRangeQueryJson, response: { 200: netTrackedJson, 400: errorJson } } }, async (request, reply) => {
+    const query = dateRangeSchema.parse(request.query)
+    const spanDays = (new Date(`${query.to}T00:00:00Z`).getTime() - new Date(`${query.from}T00:00:00Z`).getTime()) / DAY_MS
+    if (spanDays < 0 || spanDays > 731) {
+      return reply.code(400).send({ error: { code: 'INVALID_RANGE', message: 'Range must be between 0 and 731 days.', requestId: request.id } })
+    }
+    const timezone = request.user!.timezone
+    return reply.send(await computeNetTrackedPosition(prisma, request.user!.id, query.from, query.to, localDateIso(timezone), timezone))
   })
 
   /**

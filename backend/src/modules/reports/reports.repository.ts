@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
+import { localDateIso } from '../../common/timezone.js'
 
 export interface ReportSummary {
   income: string
@@ -491,4 +492,87 @@ export async function rebuildSnapshot(
     netWorthMinor: assetTotalMinor - liabilityTotalMinor,
     cardDebtMinor,
   }
+}
+
+export interface NetTrackedPositionPoint {
+  date: string
+  liquidTotal: string
+  cardDebt: string
+  netTrackedPosition: string
+}
+
+/**
+ * Net tracked position history (MVP definition): non-archived liquid asset
+ * accounts minus outstanding credit-card balances, as of the END of each
+ * calendar day. Computed exactly in minor units from the ledger:
+ *
+ *   balance(account, D) = openingBalance + SUM(effect.delta) over effects whose
+ *                         transaction.occurredOn <= D
+ *
+ * This does NOT use stored `balanceAfterMinor`, which is a running balance in
+ * posting order and is therefore wrong for backdated entries. Reversals count
+ * because their compensating effects are real balance movements on their own
+ * dates. Days before an account was created in MoniKey are omitted rather than assumed, and days after the
+ * user's local today are never produced. Nothing is interpolated.
+ */
+export async function computeNetTrackedPosition(
+  prisma: PrismaClient,
+  userId: string,
+  from: string,
+  to: string,
+  todayIso: string,
+  timezone: string,
+): Promise<NetTrackedPositionPoint[]> {
+  const last = to < todayIso ? to : todayIso
+  if (from > last) return []
+  const accounts = await prisma.financialAccount.findMany({ where: { userId, archivedAt: null }, select: { id: true, accountType: true, classification: true, openingBalanceMinor: true, createdAt: true } })
+  const tracked = accounts.filter((a) => a.accountType === 'credit_card' ? a.classification === 'liability' : a.classification === 'asset')
+  if (tracked.length === 0) return []
+
+  const rows = await prisma.$queryRaw<{ account_id: string; day: string; delta: string }[]>(Prisma.sql`
+    SELECT e.account_id::text AS account_id, t.occurred_on::text AS day, SUM(e.delta_minor)::text AS delta
+    FROM transaction_balance_effects e
+    JOIN transactions t ON t.id = e.transaction_id
+    JOIN financial_accounts a ON a.id = e.account_id
+    WHERE a.user_id = ${userId}::uuid AND a.archived_at IS NULL AND t.occurred_on <= ${last}::date
+    GROUP BY e.account_id, t.occurred_on`)
+
+  const deltasByAccount = new Map<string, Map<string, bigint>>()
+  for (const row of rows) {
+    const byDay = deltasByAccount.get(row.account_id) ?? new Map<string, bigint>()
+    byDay.set(row.day, BigInt(row.delta))
+    deltasByAccount.set(row.account_id, byDay)
+  }
+
+  const state = tracked.map((a) => {
+    const byDay = deltasByAccount.get(a.id) ?? new Map<string, bigint>()
+    const created = localDateIso(timezone, a.createdAt)
+    const startsOn = created
+    let balance = a.openingBalanceMinor
+    for (const [day, delta] of byDay) if (day < from) balance += delta
+    return { isCard: a.accountType === 'credit_card', byDay, startsOn, balance }
+  })
+
+  const points: NetTrackedPositionPoint[] = []
+  for (let day = from; day <= last; day = addIsoDays(day, 1)) {
+    let liquid = 0n
+    let debt = 0n
+    let any = false
+    for (const s of state) {
+      s.balance += s.byDay.get(day) ?? 0n
+      if (day < s.startsOn) continue
+      any = true
+      if (s.isCard) debt += s.balance
+      else liquid += s.balance
+    }
+    // An account that began before `from` already carries its prior balance; one that begins later must not leak into earlier days.
+    if (any) points.push({ date: day, liquidTotal: liquid.toString(), cardDebt: debt.toString(), netTrackedPosition: (liquid - debt).toString() })
+  }
+  return points
+}
+
+function addIsoDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }

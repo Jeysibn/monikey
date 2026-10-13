@@ -108,9 +108,9 @@ cross-user account/category access rejected (404).
 | C3 | `mark-paid` has no due check, so future bills can be pre-paid and repeated clicks pay successive cycles | Confirm exactly the due occurrence | Medium |
 | C4 | After the worker posts a cycle, `mark-paid` pays the *next* cycle early | No double-posting | High |
 | C5 | A manually entered payment is not matched, so confirming the bill posts it again | Do not duplicate a manual payment | High |
-| C6 | Reversal creates a compensating transaction of the same type (`expense`, cleared, positive amount, dated *today*); budgets/reports sum it as another expense, so a reversed expense counts twice | Reversal must net out of spending/budgets | **High (financial)** |
-| C7 | `POST /budgets` shifts a date-only period one day early (stored `2026-08-31`..`2026-09-29` for Sep 1–30): Aug 31 spend is counted, Sep 30 spend is missed | Month boundaries follow the user's local calendar | **High (financial)** |
-| C8 | `/reports/budget-performance` returns 404 for a budget created through the API for that month (consequence of C7) | Truthful budget vs actual | Medium |
+| C6 | Reversal creates a compensating transaction of the same type (`expense`, cleared, positive amount, dated *today*); budgets/reports sum it as another expense, so a reversed expense counts twice | Reversal must net out of spending/budgets | **High (financial)** — fixed in Stage 2b (§7) |
+| C7 | `POST /budgets` shifts a date-only period one day early (stored `2026-08-31`..`2026-09-29` for Sep 1–30): Aug 31 spend is counted, Sep 30 spend is missed | Month boundaries follow the user's local calendar | **High (financial)** — fixed in Stage 2b (§7) |
+| C8 | `/reports/budget-performance` returns 404 for a budget created through the API for that month (consequence of C7) | Truthful budget vs actual | Medium — fixed in Stage 2b (§7) |
 | C9 | Concurrent duplicate `mark-paid` calls: one 201, the rest 500 `INTERNAL_ERROR` (no double post) | Idempotent replay | Low |
 | C10 | `mark-paid` posts, then updates the schedule in separate steps (not one DB transaction); a crash between them leaves the cycle posted but still due, and the next click replays safely via the idempotency key | Atomic confirmation | Medium |
 | C11 | No balance-adjustment event type exists (unchanged from M1) | Auditable adjustments | Gap |
@@ -148,3 +148,73 @@ C6 with failing-test-first changes** (date-boundary storage for budget periods; 
 pairs from spend aggregation), each as its own small PR with owner sign-off, **before** the V3 visual
 work. If you prefer to keep Stage 2 strictly characterization-only, go to Stage 1 (tokens + dock behind a
 flag) next and track C6/C7 as parallel bug fixes.
+
+
+## 7. Stage 2b results — financial reporting corrections (2026-10-14)
+
+Two local commits on `feature/monikey-v3-foundation-20261013` (not pushed): Task A `8624caf`, Task B `921c143`.
+No schema change, no ledger/balance-effect change, recurring worker untouched, no production data touched.
+
+### C7/C8 — root cause and change (Task A)
+`budget_periods.period_start/end`, `transactions.occurred_on` and `daily_finance_snapshots.snapshot_date` are
+`@db.Date` (calendar dates). `POST /budgets` and `/reports/summary` / `/reports/budget-performance` converted
+local dates into timezone **instants** (`getUTCDateForLocalDateTime`) and Prisma truncated them to their UTC
+date, which is one day early for UTC+ users (Asia/Manila stored `2026-08-31`..`2026-09-29` for Sep 1–30;
+`/reports/summary` for September included Aug 31). The budget-performance lookup then required
+`periodStart <= Sep 1 && periodEnd >= Sep 30`, so API-created budgets 404'd.
+Contract now: a period is a pair of calendar dates, **inclusive end**, stored literally (UTC midnight of the
+submitted date); report boundaries are calendar dates (end = day before the next period). Changes:
+`budget.routes.ts` (literal storage), `reports.routes.ts` (calendar boundaries), frontend
+`resolveCurrentBudgetPeriod` (sends last day of month instead of first of next month) and
+`projectPeriodEndSpend` (inclusive end). Existing rows are not rewritten.
+
+### C6 — root cause and change (Task B)
+Reversal posts a same-type compensating transaction and links the pair via `reversedTransactionId`; every
+income/expense aggregation counted both rows. New shared predicate `excludeReversalPairs`
+(`ledger/reportingSemantics.ts`, `reversedTransactionId: null`) is applied to budget actuals, report summary,
+cash-flow, spending by category/tag, budget performance, AI insights context and the weekly-summary email.
+Both rows stay in the ledger; balance effects, reconciliation and card-debt/net-worth calcs are unchanged
+(they read balance effects/snapshots, which already net to zero). Income reversals use the same predicate.
+A genuine refund is an independent `income` row without `reversedTransactionId`, so it is still reported
+(tested). Cross-month reversals net out in the original month and add nothing in the reversal month (tested).
+Note: a reversed transaction is excluded from the report even if the user considers a reversal a
+"correction" dated today — by design.
+
+### Test results
+- Before fix (new failing-first tests): 15 failed in the Stage 2 file for Task A (C7/C8 across Asia/Manila,
+  UTC, America/Los_Angeles, Pacific/Auckland), 3 failed for Task B (C6); the 3 old `V3 CONFLICT` tests for
+  C6–C8 were rewritten to assert corrected behaviour.
+- After: Stage 2 file 47/47; full backend 55 files / 429 tests passed; backend `tsc` clean; backend lint
+  warnings pre-existing only; frontend 27 files / 279 tests, typecheck clean, lint pre-existing warnings only.
+- Not run: Playwright/mock e2e, real-API e2e, frontend `build`, any non-disposable database.
+
+### Historical-data impact (assessed from code; no real data inspected)
+Existing `budget_periods` rows come in two shapes: (a) API/legacy-created rows are one day early on both
+ends (`start-1`, `end-1`); (b) frontend-created rows have `start` = last day of previous month and
+`end` = last day of the month (the frontend sent next-month-first, which shifted to the month's last day).
+Consequences after this change: (b) rows still satisfy the lookup `start <= first && end >= last`, so
+budget-performance finds them and actuals over-count only the previous month's last day; (a) rows end a
+day early and are not matched by budget-performance; actuals use the row's own dates. The frontend picks
+`budgetPeriods[0]` (latest `periodStart`) as the current period, so a new correctly-dated row for the
+current month can sort above/beside a legacy row and appear empty until allocations are re-entered.
+Nothing was rewritten automatically.
+
+Proposed repair (documented only, **not run**; needs owner approval and a backup):
+1. Audit (read-only): list rows where `period_start` is not the 1st or `period_end` is not a month end,
+   with allocation counts, and detect collisions with the unique `(user_id, period_start, period_end)`.
+2. Normalise, per row, inside a transaction: `start' = date_trunc('month', start + 1 day)`,
+   `end' = (date_trunc('month', start + 1 day) + 1 month - 1 day)` only for rows whose derived month is
+   unambiguous (spans one month ± 1 day). Skip any row whose target tuple already exists; for those, move
+   allocations into the existing row (`ON CONFLICT (budget_period_id, category_id) DO NOTHING`) and report
+   leftovers for manual review. Idempotent: normalised rows are no longer selected.
+3. Re-run the audit; expect zero rows; keep the pre-image in a backup table.
+
+### Remaining risks / blockers
+- Historical budget rows need the owner-approved repair above; until then some existing months may show a
+  one-day offset or be hidden behind a newer empty period.
+- Custom (non-month) budget ranges are still inclusive end-dates; clients sending an exclusive end will be
+  off by one day.
+- `reversedTransactionId` is `@unique` on each side; any future partial-reversal feature must revisit the
+  predicate (partial reversals are not supported today).
+- Daily snapshot generation and net-worth were not changed (balance-based, unaffected by reversals).
+- Recurring (C1–C5, C9, C10) remain unfixed by design.

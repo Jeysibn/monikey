@@ -12,6 +12,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
+import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
 
 export interface PrivacySafeFinancialContext {
   /** Aggregated summary: total income/expenses/net cash flow for the requested period. */
@@ -103,6 +104,7 @@ export async function buildPrivacySafeFinancialContext(
       userId,
       type: 'income',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: periodStart, lte: periodEnd },
     },
   })
@@ -113,6 +115,7 @@ export async function buildPrivacySafeFinancialContext(
       userId,
       type: 'expense',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: periodStart, lte: periodEnd },
     },
   })
@@ -137,6 +140,7 @@ export async function buildPrivacySafeFinancialContext(
       userId,
       type: 'expense',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: periodStart, lte: periodEnd },
     },
     _sum: { amountMinor: true },
@@ -264,6 +268,7 @@ export async function buildPrivacySafeFinancialContext(
       where: {
         userId,
         status: 'cleared',
+        ...excludeReversalPairs,
         occurredOn: { gte: periodStart },
       },
       orderBy: { occurredOn: 'desc' },

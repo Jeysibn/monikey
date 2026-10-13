@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
+import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
 
 const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: minorUnitTransportInput.default(0n) })
 const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: minorUnitTransportInput })
@@ -42,6 +43,7 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
         userId,
         type: 'expense',
         status: 'cleared',
+        ...excludeReversalPairs,
         categoryId: { in: categoryIds },
         occurredOn: { gte: period.periodStart, lte: period.periodEnd },
       },

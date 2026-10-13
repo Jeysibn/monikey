@@ -216,6 +216,61 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     await expectConsistent(a)
   })
 
+  it('C6: a fully reversed expense nets to zero in budget actuals, summary, cash-flow and category/tag spending; both rows stay for audit', async () => {
+    const { userId, cookie } = await newUser()
+    const a = await cash(userId, 10000); const cat = await category(userId)
+    const today = new Date().toISOString().slice(0, 10)
+    const ym = today.slice(0, 7)
+    const bp = await prisma.budgetPeriod.create({ data: { userId, periodStart: new Date(`${ym}-01`), periodEnd: new Date(`${ym}-28`), incomePoolMinor: 0 } })
+    await prisma.budgetAllocation.create({ data: { budgetPeriodId: bp.id, categoryId: cat, allocatedMinor: 9000 } })
+    const posted = await ledger.postTransaction(userId, input({ categoryId: cat, fromAccountId: a, amountMinor: 4000, occurredOn: `${ym}-01` }))
+    await ledger.reverseTransaction(userId, posted.transaction.id, { idempotencyKey: null } as never)
+    expect(await bal(a)).toBe(10000n)
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(2)
+    await expectConsistent(a)
+    expect(await spent(cookie, cat)).toBe('0')
+    expect((await summary(cookie, ym)).expenses).toBe('0')
+    const cfRes = await get(cookie, `/reports/cash-flow?from=${ym}-01&to=${today}`)
+    expect(cfRes.statusCode).toBe(200)
+    const cf = cfRes.json() as { expenses: string }[]
+    expect(cf.length).toBeGreaterThan(0)
+    expect(cf.every((d) => d.expenses === '0')).toBe(true)
+    const catRes = await get(cookie, `/reports/spending-by-category?from=${ym}-01&to=${today}`)
+    expect(catRes.statusCode).toBe(200)
+    expect(catRes.json()).toEqual([])
+  })
+
+  it('C6: a reversal made in a later month removes the original month spend and adds nothing to the reversal month', async () => {
+    const { userId, cookie } = await newUser()
+    const a = await cash(userId, 10000)
+    const posted = await ledger.postTransaction(userId, input({ fromAccountId: a, amountMinor: 4000, occurredOn: '2026-01-15' }))
+    await ledger.reverseTransaction(userId, posted.transaction.id, { idempotencyKey: null } as never)
+    const ym = new Date().toISOString().slice(0, 7)
+    expect((await summary(cookie, '2026-01')).expenses).toBe('0')
+    expect((await summary(cookie, ym)).expenses).toBe('0')
+  })
+
+  it('C6: a reversed income nets to zero income; a genuine refund (independent income) is still counted', async () => {
+    const { userId, cookie } = await newUser()
+    const a = await cash(userId, 0)
+    const ym = new Date().toISOString().slice(0, 7)
+    const inc = await ledger.postTransaction(userId, input({ type: 'income', toAccountId: a, amountMinor: 5000, occurredOn: `${ym}-01` }))
+    await ledger.reverseTransaction(userId, inc.transaction.id, { idempotencyKey: null } as never)
+    expect((await summary(cookie, ym)).income).toBe('0')
+    await ledger.postTransaction(userId, input({ type: 'income', toAccountId: a, amountMinor: 700, occurredOn: `${ym}-02`, title: 'Refund' }))
+    expect((await summary(cookie, ym)).income).toBe('700')
+  })
+
+  it('C6: an unreversed expense plus a genuine refund keep their separate effects', async () => {
+    const { userId, cookie } = await newUser()
+    const a = await cash(userId, 10000)
+    const ym = new Date().toISOString().slice(0, 7)
+    await ledger.postTransaction(userId, input({ fromAccountId: a, amountMinor: 3000, occurredOn: `${ym}-01` }))
+    await ledger.postTransaction(userId, input({ type: 'income', toAccountId: a, amountMinor: 1000, occurredOn: `${ym}-02`, title: 'Refund' }))
+    const s = await summary(cookie, ym)
+    expect(s.expenses).toBe('3000'); expect(s.income).toBe('1000')
+  })
+
   it('reversal of a card repayment restores cash and owed', async () => {
     const { userId } = await newUser()
     const c = await card(userId, 9000); const w = await cash(userId, 9000)

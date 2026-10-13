@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
+import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
 
 export interface ReportSummary {
   income: string
@@ -91,6 +92,7 @@ export async function computeReportSummary(
       userId,
       type: 'income',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: periodStart, lte: periodEnd },
     },
   })
@@ -102,6 +104,7 @@ export async function computeReportSummary(
       userId,
       type: 'expense',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: periodStart, lte: periodEnd },
     },
   })
@@ -169,6 +172,7 @@ export async function computeCashFlow(
       userId,
       type: 'income',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: dateFrom, lte: dateTo },
     },
     _sum: { amountMinor: true },
@@ -180,6 +184,7 @@ export async function computeCashFlow(
       userId,
       type: 'expense',
       status: 'cleared',
+      ...excludeReversalPairs,
       occurredOn: { gte: dateFrom, lte: dateTo },
     },
     _sum: { amountMinor: true },
@@ -214,7 +219,7 @@ export async function computeSpendingByCategory(
   dateTo: Date
 ): Promise<SpendingByCategory[]> {
   const transactions = await prisma.transaction.findMany({
-    where: { userId, type: 'expense', status: 'cleared', occurredOn: { gte: dateFrom, lte: dateTo } },
+    where: { userId, type: 'expense', status: 'cleared', ...excludeReversalPairs, occurredOn: { gte: dateFrom, lte: dateTo } },
     select: { categoryId: true, amountMinor: true, splits: { select: { categoryId: true, amountMinor: true } } },
   })
 
@@ -233,7 +238,7 @@ export async function computeSpendingByCategory(
 }
 
 export async function computeSpendingByTag(prisma: PrismaClient, userId: string, dateFrom: Date, dateTo: Date): Promise<SpendingByTag[]> {
-  const rows = await prisma.transactionTagOnTransaction.findMany({ where: { tag: { userId }, transaction: { userId, type: 'expense', status: 'cleared', occurredOn: { gte: dateFrom, lte: dateTo } } }, select: { tagId: true, tag: { select: { name: true } }, transaction: { select: { amountMinor: true, splits: { select: { amountMinor: true } } } } } })
+  const rows = await prisma.transactionTagOnTransaction.findMany({ where: { tag: { userId }, transaction: { userId, type: 'expense', status: 'cleared', ...excludeReversalPairs, occurredOn: { gte: dateFrom, lte: dateTo } } }, select: { tagId: true, tag: { select: { name: true } }, transaction: { select: { amountMinor: true, splits: { select: { amountMinor: true } } } } } })
   const totals = new Map<string, { name: string; amount: bigint }>()
   for (const row of rows) {
     const amount = row.transaction.splits.length > 0 ? row.transaction.splits.reduce((sum, split) => sum + split.amountMinor, 0n) : row.transaction.amountMinor
@@ -296,6 +301,7 @@ export async function computeBudgetPerformance(
       userId,
       type: 'expense',
       status: 'cleared',
+      ...excludeReversalPairs,
       categoryId: { in: period.allocations.map((a) => a.categoryId) },
       occurredOn: { gte: period.periodStart, lte: period.periodEnd },
     },

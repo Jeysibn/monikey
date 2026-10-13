@@ -20,7 +20,8 @@ import { Security } from './pages/Security'
 import { Tags } from './pages/Tags'
 import { SyncCenter } from './pages/SyncCenter'
 import { V3Shell } from './v3/V3Shell'
-import { V3Accounts, V3Activity, V3DesignSpecimen, V3Overview, V3Planning } from './v3/V3Pages'
+import { V3Accounts, V3Activity, V3DesignSpecimen, V3Planning } from './v3/V3Pages'
+import { V3Overview } from './v3/V3Overview'
 import { isV3PreviewEnabled, setV3PreviewEnabled, v3QueryOverride } from './v3/v3Preview'
 
 export default function App() {

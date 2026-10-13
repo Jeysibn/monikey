@@ -262,3 +262,34 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
   elements (select, textarea, checkbox) will need the same treatment or a cascade-layer migration later.
 - The opt-in flag is runtime and user-controlled; it only exposes placeholder pages plus links to existing pages.
 - Placeholder pages deliberately show no financial data; real Overview/Activity/Accounts/Planning are next milestones.
+
+## 9. Stage 4 — Functional Overview & Insights (opt-in V3 preview)
+
+### Built
+- `/v3` is now the real Overview (`frontend/src/v3/V3Overview.tsx`, `overviewModel.ts`, `V3Overview.css`), still behind the opt-in flag.
+- **Summary**: four favorite account cards (link to `/accounts`), position card (liquid, card debt, net tracked position), monthly spent/income plus budget meter, recent activity (links to `/transactions`). Mobile is one column, accounts first; 768px+ two columns; 1200px+ three columns.
+- **Insights**: net tracked position history, spending by category, budget vs actual, and a Monthly/Quarterly/Yearly selector. Budget vs actual is monthly only, and the UI says so.
+- Accessible tablist (arrow keys, Home/End, roving tabindex); offline banner; 48px targets; credit cards show `Owed` + "Outstanding debt", never available credit.
+- Data: existing `useFinance()` state in both modes. All money is exact BigInt minor units. Reversal pairs are hidden and never counted; transfers and card repayments are excluded from spending/income; investments and crypto are outside the position.
+- Mock repository fix: the compensating reversal row now sets `reversedTransactionId`, matching backend semantics so pairs are recognised in mock mode.
+
+### Verification (exact)
+- Unit: 31 files / 314 tests passed before the final test additions; `src/v3` alone: 4 files / 33 tests passed after. New: `overviewModel.test.ts`, `V3Overview.test.tsx`.
+- Typecheck clean; lint has pre-existing warnings only, none in `src/v3`; build and `verify:privacy` passed.
+- Playwright mock suite (`--grep-invert @backend-compose`): 137 passed, 0 failed, 0 skipped, incl. 10 new `e2e/v3-overview.spec.ts` tests plus axe on Summary and Insights at mobile/tablet/desktop (0 violations), no overflow, dock non-occlusion, keyboard navigation to existing pages.
+- Not run: backend-compose / live-API checks (disposable DB left stopped; history fetch is covered only by mocked-fetch unit tests), non-Chromium browsers, real devices.
+
+### Screenshots
+`docs/remake/screenshots/stage4/{mobile,tablet,desktop}-{summary,insights}.png` (`V3_SCREENSHOTS=1 npx playwright test e2e/v3-overview.spec.ts`; full-page, so the fixed dock appears mid-image on mobile).
+
+### Data APIs/selectors that cannot safely support the approved UX
+1. **Favorite accounts**: no persisted flag in the domain or API. Selection is deterministic (first bank, e-wallet, cash, card, then fill). Needs a favorites field or setting.
+2. **Net position history**: the frontend gateway does not expose `/reports/net-worth`; Insights fetches it directly (as Reports does). Snapshot scope (whether it matches liquid minus card debt, and excludes investments) is unverified, and history may be sparse. Mock mode has none, so an unavailable state is shown. The `*TrendSample` selectors were deliberately not used.
+3. **Existing selectors** `totalAvailableCash` / `totalExpenses` / `totalIncome` use floats and do not exclude reversal pairs, so V3 uses its own BigInt model. These should be consolidated later.
+4. **Mock seed**: budget `spent` values are hand-set and do not reconcile with seed transactions, so budget and category spending differ in demo mode. In backend mode the budget figure covers budgeted categories only.
+5. **Bootstrap transactions**: it is unverified whether the backend bootstrap returns full history; quarterly/yearly category spending relies on it. A report-endpoint-backed path (`/reports/spending-by-category`) is the safer follow-up.
+6. Negative money renders as `₱-8.20` (existing `formatMinorUnits`); left unchanged.
+
+### Risks
+- History chart is a minimal SVG with a text summary; there are no per-point tooltips.
+- Activity and account rows link to classic pages until their milestones.

@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { V3AccountCard } from './V3AccountCard'
-import { V3Workspace } from './V3Shell'
 
 /*
  * Structural destinations for the V3 preview. These are intentionally NOT the
@@ -26,19 +25,6 @@ function Placeholder({ label, rows = 2 }: { label: string; rows?: number }) {
         {Array.from({ length: rows }, (_, i) => <div key={i} className="v3-skeleton" />)}
       </div>
     </div>
-  )
-}
-
-export function V3Overview() {
-  return (
-    <>
-      <PageHead title="Overview" summary="Layout preview. Live account cards, position and activity arrive in the Overview milestone." />
-      <V3Workspace
-        accounts={<Placeholder label="Favorite account cards (bank, e-wallet, cash, credit card) will appear here first." rows={3} />}
-        position={<Placeholder label="Cash, credit liability, net position and monthly budget preview." rows={2} />}
-        activity={<Placeholder label="Recent transactions." rows={3} />}
-      />
-    </>
   )
 }
 

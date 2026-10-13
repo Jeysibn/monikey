@@ -5,7 +5,7 @@ import App from '../App'
 import { FinanceProvider } from '../state/FinanceProvider'
 import { fixedClock } from '../utils/clock'
 import { V3Shell, V3Workspace } from './V3Shell'
-import { V3Overview } from './V3Pages'
+import { V3Overview } from './V3Overview'
 import { setV3PreviewEnabled } from './v3Preview'
 
 afterEach(() => { cleanup(); localStorage.clear() })
@@ -20,7 +20,7 @@ function renderApp(path: string) {
 
 describe('V3 shell structure', () => {
   function shell() {
-    return render(<MemoryRouter initialEntries={['/v3']}><V3Shell onAddTransaction={() => {}}><V3Overview /></V3Shell></MemoryRouter>)
+    return render(<FinanceProvider clock={fixedClock('2026-09-13')}><MemoryRouter initialEntries={['/v3']}><V3Shell onAddTransaction={() => {}}><V3Overview /></V3Shell></MemoryRouter></FinanceProvider>)
   }
   it('has skip link, main landmark, a single Primary nav and a Utilities nav', () => {
     shell()

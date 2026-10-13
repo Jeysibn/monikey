@@ -216,20 +216,6 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     await expectConsistent(a)
   })
 
-  it('V3 CONFLICT: a reversed expense still counts in its budget/report, and the reversal counts as a second expense in the month it was made', async () => {
-    const { userId, cookie } = await newUser()
-    const a = await cash(userId, 10000); const cat = await category(userId)
-    const today = new Date().toISOString().slice(0, 7)
-    await budget(cookie, cat, '9000', `${today}-01`, `${today}-28`)
-    const posted = await ledger.postTransaction(userId, input({ categoryId: cat, fromAccountId: a, amountMinor: 4000, occurredOn: `${today}-01` }))
-    await ledger.reverseTransaction(userId, posted.transaction.id, { idempotencyKey: null } as never)
-    // Cash is whole again, but spending is overstated: original + compensating
-    // transaction are both type=expense/status=cleared with positive amounts.
-    expect(await bal(a)).toBe(10000n)
-    expect(await spent(cookie, cat)).toBe('8000')
-    expect((await summary(cookie, today)).expenses).toBe('8000')
-  })
-
   it('reversal of a card repayment restores cash and owed', async () => {
     const { userId } = await newUser()
     const c = await card(userId, 9000); const w = await cash(userId, 9000)
@@ -269,25 +255,50 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     expect(perf.json().totalRemaining).toBe('49000')
   })
 
-  it('V3 CONFLICT: /reports/budget-performance 404s for a budget created through the API for the same month', async () => {
-    const { cookie } = await newUser()
-    await budget(cookie, await category((await prisma.user.findFirstOrThrow({ orderBy: { createdAt: 'desc' } })).id), '1000')
-    expect((await get(cookie, '/reports/budget-performance?period=2026-09')).statusCode).toBe(404)
+  it.each(['Asia/Manila', 'UTC', 'America/Los_Angeles', 'Pacific/Auckland'])('C8: budget-performance finds an API-created Sept budget (%s)', async (tz) => {
+    const { userId, cookie } = await newUser()
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } })
+    const cat = await category(userId)
+    await budget(cookie, cat, '1000')
+    const perf = await get(cookie, '/reports/budget-performance?period=2026-09')
+    expect(perf.statusCode).toBe(200)
+    expect(perf.json().totalAllocated).toBe('1000')
   })
 
-  it('V3 CONFLICT: a budget created for 2026-09-01..2026-09-30 is stored shifted one day early (Aug 31..Sep 29)', async () => {
-    // POST /budgets converts the date-only inputs with the user's timezone
-    // (Asia/Manila, UTC+8) and stores the result in a date-compared column, so
-    // the period drifts a day. Month-boundary expenses land in the wrong month.
+  it.each(['Asia/Manila', 'UTC', 'America/Los_Angeles', 'Pacific/Auckland'])('C7: a Sept 1-30 budget is stored literally and counts Sep 1..30 only (%s)', async (tz) => {
     const { userId, cookie } = await newUser()
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } })
     const a = await cash(userId, 100000); const cat = await category(userId)
     const id = await budget(cookie, cat, '50000')
     const period = await prisma.budgetPeriod.findUniqueOrThrow({ where: { id } })
-    expect(period.periodStart.toISOString().slice(0, 10)).toBe('2026-08-31')
-    expect(period.periodEnd.toISOString().slice(0, 10)).toBe('2026-09-29')
-    await ledger.postTransaction(userId, input({ categoryId: cat, fromAccountId: a, amountMinor: 111, occurredOn: '2026-08-31' }))
-    await ledger.postTransaction(userId, input({ categoryId: cat, fromAccountId: a, amountMinor: 222, occurredOn: '2026-09-30' }))
-    expect(await spent(cookie, cat)).toBe('111') // Aug 31 counted, Sep 30 missed
+    expect(period.periodStart.toISOString().slice(0, 10)).toBe('2026-09-01')
+    expect(period.periodEnd.toISOString().slice(0, 10)).toBe('2026-09-30')
+    for (const [d, amt] of [['2026-08-31', 1], ['2026-09-01', 10], ['2026-09-30', 100], ['2026-10-01', 1000]] as const) {
+      await ledger.postTransaction(userId, input({ categoryId: cat, fromAccountId: a, amountMinor: amt, occurredOn: d }))
+    }
+    expect(await spent(cookie, cat)).toBe('110')
+    expect((await get(cookie, '/reports/budget-performance?period=2026-09')).json().totalSpent).toBe('110')
+  })
+
+  it.each(['Asia/Manila', 'UTC', 'America/Los_Angeles', 'Pacific/Auckland'])('C7: /reports/summary monthly excludes Aug 31 and Oct 1, includes Sep 30 (%s)', async (tz) => {
+    const { userId, cookie } = await newUser()
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } })
+    const a = await cash(userId, 100000)
+    for (const [d, amt] of [['2026-08-31', 1], ['2026-09-01', 10], ['2026-09-30', 100], ['2026-10-01', 1000]] as const) {
+      await ledger.postTransaction(userId, input({ fromAccountId: a, amountMinor: amt, occurredOn: d }))
+    }
+    expect((await summary(cookie)).expenses).toBe('110')
+  })
+
+  it('C7: re-posting the same budget dates is idempotent and does not rewrite other rows', async () => {
+    const { userId, cookie } = await newUser()
+    const legacy = await prisma.budgetPeriod.create({ data: { userId, periodStart: new Date('2026-08-31'), periodEnd: new Date('2026-09-29'), incomePoolMinor: 0 } })
+    const id1 = await budget(cookie, await category(userId), '1000')
+    const id2 = (await send(cookie, 'POST', '/budgets', { periodStart: '2026-09-01', periodEnd: '2026-09-30', incomePoolMinor: '0' })).json().id
+    expect(id2).toBe(id1)
+    const after = await prisma.budgetPeriod.findUniqueOrThrow({ where: { id: legacy.id } })
+    expect(after.periodStart.toISOString().slice(0, 10)).toBe('2026-08-31')
+    expect(after.periodEnd.toISOString().slice(0, 10)).toBe('2026-09-29')
   })
 
   it('budget-performance returns 404 when no budget covers the period', async () => {

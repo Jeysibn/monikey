@@ -68,12 +68,22 @@ describe('ApiFinanceGateway', () => {
     expect(error).toMatchObject({ status: 422, code: 'ASSET_OVERDRAFT', message: 'Insufficient balance.', field: 'amountMinor' })
   })
 
+  it('creates the current budget period with an inclusive last-day-of-month end', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-09-01', periodEnd: '2026-09-30', incomePoolMinor: '0', allocations: [] }, 201))
+      .mockResolvedValueOnce(response({ id: 'a', categoryId: 'food', allocatedMinor: '100', spentMinor: '0' }, 201))
+    const api = new ApiFinanceGateway('/api/v1', fetcher) as unknown as { _todayIso: string; setCategoryBudget: (c: string, a: number) => Promise<unknown> }
+    api._todayIso = '2026-09-15'
+    await api.setCategoryBudget('food', 1)
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ periodStart: '2026-09-01', periodEnd: '2026-09-30' })
+  })
+
   it('uses minor units for budget period and allocation commands', async () => {
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-08-01', periodEnd: '2026-09-01', incomePoolMinor: '250000', allocations: [] }))
+      .mockResolvedValueOnce(response({ id: 'period-1', periodStart: '2026-08-01', periodEnd: '2026-08-31', incomePoolMinor: '250000', allocations: [] }))
       .mockResolvedValueOnce(response({ id: 'allocation-1', categoryId: 'food', allocatedMinor: '160000', spentMinor: '0' }))
     const api = new ApiFinanceGateway('/api/v1', fetcher)
-    await api.createBudgetPeriod('2026-08-01', '2026-09-01', 2500)
+    await api.createBudgetPeriod('2026-08-01', '2026-08-31', 2500)
     const allocation = await api.setBudgetAllocation('period-1', 'food', 1600)
     expect(allocation).toMatchObject({ id: 'food', allocated: 1600 })
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ incomePoolMinor: '250000' })

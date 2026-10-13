@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
-import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
 import {
   computeReportSummary,
   computeCashFlow,
@@ -63,6 +62,9 @@ const netWorthJson = { type: 'array', items: { type: 'object', additionalPropert
 const budgetPerformanceJson = { type: 'object', additionalProperties: false, required: ['periodStart', 'periodEnd', 'categories', 'totalAllocated', 'totalSpent', 'totalRemaining'], properties: { periodStart: dateJson, periodEnd: dateJson, categories: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['categoryId', 'categoryName', 'allocated', 'spent', 'remaining', 'utilization'], properties: { categoryId: { type: 'string', format: 'uuid' }, categoryName: { type: 'string' }, allocated: minorUnitsJson, spent: minorUnitsJson, remaining: minorUnitsJson, utilization: { type: 'number' } } } }, totalAllocated: minorUnitsJson, totalSpent: minorUnitsJson, totalRemaining: minorUnitsJson } } as const
 const goalsJson = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['goalId', 'name', 'target', 'current', 'targetDate', 'progress', 'completed'], properties: { goalId: { type: 'string', format: 'uuid' }, name: { type: 'string' }, target: minorUnitsJson, current: minorUnitsJson, targetDate: dateJson, monthlyContribution: minorUnitsJson, progress: { type: 'number' }, completed: { type: 'boolean' }, completedDate: dateJson } } } as const
 
+const DAY_MS = 86_400_000
+const calendarDate = (d: { year: number; month: number; day: number }) => new Date(Date.UTC(d.year, d.month - 1, d.day))
+
 function addDaysToLocalDate(year: number, month: number, day: number, days: number) {
   const date = new Date(Date.UTC(year, month - 1, day + days))
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate(), hour: 0, minute: 0, second: 0 }
@@ -117,11 +119,11 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
       localPeriodEnd = { year: year + 1, month: 1, day: 1, hour: 0, minute: 0, second: 0 }
     }
 
-    // Convert local period boundaries to UTC using user's timezone
-    const periodStart = getUTCDateForLocalDateTime(localPeriodStart.year, localPeriodStart.month, localPeriodStart.day, localPeriodStart.hour, localPeriodStart.minute, localPeriodStart.second, userTimezone)
-    const periodEndUTC = getUTCDateForLocalDateTime(localPeriodEnd.year, localPeriodEnd.month, localPeriodEnd.day, localPeriodEnd.hour, localPeriodEnd.minute, localPeriodEnd.second, userTimezone)
-    // For period end, we want the last moment before the next period starts
-    const periodEnd = new Date(periodEndUTC.getTime() - 1)
+    // Period boundaries are calendar dates compared with @db.Date columns, so they
+    // are UTC-midnight dates (never timezone-shifted instants). The end is
+    // inclusive: the day before the next period starts.
+    const periodStart = calendarDate(localPeriodStart)
+    const periodEnd = new Date(calendarDate(localPeriodEnd).getTime() - DAY_MS)
 
     const summary = await computeReportSummary(prisma, userId, periodStart, periodEnd, userTimezone)
     return reply.send(summary)
@@ -186,21 +188,14 @@ export async function reportsRoutes(app: FastifyInstance, options: { prisma: Pri
   app.get<{ Querystring: Record<string, string> }>('/budget-performance', { schema: { querystring: periodQueryJson, response: { 200: budgetPerformanceJson, 404: errorJson } } }, async (request, reply) => {
     const query = periodSchema.parse(request.query)
     const userId = request.user!.id
-    const userTimezone = request.user!.timezone
     const parts = query.period.split('-').map(Number)
     const year = parts[0]!
     const month = parts[1]!
 
-    // Convert local period boundaries to UTC using user's timezone
-    const localPeriodStart = { year, month, day: 1, hour: 0, minute: 0, second: 0 }
     const nextMonth = month === 12 ? 1 : month + 1
     const nextYear = month === 12 ? year + 1 : year
-    const localPeriodEnd = { year: nextYear, month: nextMonth, day: 1, hour: 0, minute: 0, second: 0 }
-
-    const periodStart = getUTCDateForLocalDateTime(localPeriodStart.year, localPeriodStart.month, localPeriodStart.day, localPeriodStart.hour, localPeriodStart.minute, localPeriodStart.second, userTimezone)
-    const periodEndUTC = getUTCDateForLocalDateTime(localPeriodEnd.year, localPeriodEnd.month, localPeriodEnd.day, localPeriodEnd.hour, localPeriodEnd.minute, localPeriodEnd.second, userTimezone)
-    // For period end, we want the last moment before the next period starts
-    const periodEnd = new Date(periodEndUTC.getTime() - 1)
+    const periodStart = calendarDate({ year, month, day: 1 })
+    const periodEnd = new Date(calendarDate({ year: nextYear, month: nextMonth, day: 1 }).getTime() - DAY_MS)
 
     const performance = await computeBudgetPerformance(prisma, userId, periodStart, periodEnd)
     if (!performance) {

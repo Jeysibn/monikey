@@ -233,8 +233,9 @@ export class ApiFinanceGateway implements FinanceGateway {
     const today = this._todayIso ?? new Date().toISOString().slice(0, 10)
     const [year, month] = today.split('-').map(Number)
     const start = `${year}-${String(month).padStart(2, '0')}-01`
-    const endDate = new Date(Date.UTC(year, month, 1))
-    const end = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-01`
+    // Inclusive last day of the month (day 0 of next month).
+    const endDate = new Date(Date.UTC(year, month, 0))
+    const end = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-${String(endDate.getUTCDate()).padStart(2, '0')}`
     return this.createBudgetPeriod(start, end, 0, signal)
   }
 

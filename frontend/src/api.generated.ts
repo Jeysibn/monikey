@@ -570,6 +570,7 @@ export interface paths {
                     categoryId?: string;
                     accountId?: string;
                     tagId?: string;
+                    q?: string;
                 };
                 header?: never;
                 path?: never;

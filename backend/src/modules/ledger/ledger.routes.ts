@@ -69,12 +69,13 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
             categoryId: { type: 'string', format: 'uuid' },
             accountId: { type: 'string', format: 'uuid' },
             tagId: { type: 'string', format: 'uuid' },
+            q: { type: 'string', minLength: 1, maxLength: 100 },
           },
         },
       },
     },
     async (req) => {
-      const { cursor, limit, fromDate, toDate, type, categoryId, accountId, tagId } = req.query;
+      const { cursor, limit, fromDate, toDate, type, categoryId, accountId, tagId, q } = req.query;
       const result = await service.listTransactions({
         userId: req.user!.id,
         cursor,
@@ -85,6 +86,7 @@ export async function ledgerRoutes(fastify: FastifyInstance, options: { service:
         categoryId,
         accountId,
         tagId,
+        q,
       });
       return result;
     }

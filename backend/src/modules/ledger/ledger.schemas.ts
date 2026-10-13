@@ -111,6 +111,8 @@ export interface TransactionQuery {
   categoryId?: string;
   accountId?: string;
   tagId?: string;
+  /** Case-insensitive substring match on title or note. */
+  q?: string;
 }
 
 export interface Page<T> {

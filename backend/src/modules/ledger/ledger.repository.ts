@@ -32,7 +32,7 @@ export class LedgerRepository {
   }
 
   async listTransactions(query: TransactionQuery): Promise<Page<TransactionView>> {
-    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId, tagId } = query;
+    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId, tagId, q } = query;
 
     const where: Prisma.TransactionWhereInput = { userId };
     if (fromDate || toDate) where.occurredOn = { ...(fromDate ? { gte: new Date(fromDate) } : {}), ...(toDate ? { lte: new Date(toDate) } : {}) };
@@ -42,6 +42,11 @@ export class LedgerRepository {
       where.AND = [{ OR: [{ fromAccountId: accountId }, { toAccountId: accountId }] }];
     }
     if (tagId) where.tags = { some: { tagId, tag: { userId } } };
+    // Prisma passes `contains` through to ILIKE unescaped; escape wildcards so '%' and '_' match literally.
+    const search = q?.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+    if (search) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: [{ title: { contains: search, mode: 'insensitive' } }, { note: { contains: search, mode: 'insensitive' } }] }];
+    }
     const decodedCursor = cursor ? this.decodeCursor(cursor) : null
     if (decodedCursor) {
       // Cursor predicate mirrors the display order exactly: newest business

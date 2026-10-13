@@ -54,7 +54,7 @@ Each stage = one reviewable (draft) PR into a branch based on current `origin/ma
 |---|---|---|---|
 | 0/M1 | Preflight, this plan, V3Dock unit tests | Dock tests pass; dock unreferenced; app behaviour unchanged | `npm run lint:frontend`, `typecheck`, `test:frontend`, `build:frontend` |
 | 1 | Tokens, responsive dock, shell scaffold behind flag | Old routes untouched; screenshots at 390/768/1280/1440; keyboard, focus, reduced-motion, ≥48px mobile targets, contrast checked in browser | frontend suite + `test:e2e:mock` |
-| 2 | Ledger characterization tests | Backend tests for expense, income, transfer, card charge, card repayment, idempotency, budget exclusion; no production code changes | `test:backend` on isolated PostgreSQL |
+| 2 (done, see §6) | Ledger characterization tests | Backend tests for expense, income, transfer, card charge, card repayment, idempotency, budget exclusion; no production code changes | `test:backend` on isolated PostgreSQL |
 | 3 | Account-first Overview + Insights | Four favorites; 3-column desktop; liquid / card owed / net position distinct from `safeToSpend`; no fabricated history | frontend + mock e2e + backend-mode e2e |
 | 4 | Activity + Accounts | Inline expansion, account-filtered Activity, edit/reversal preserved | same |
 | 5 | Quick Add + Quick Picks | Required-field validation, no double submit, queued state never shown as saved | same + `offline-compose` |
@@ -78,3 +78,73 @@ Each stage = one reviewable (draft) PR into a branch based on current `origin/ma
 ## 5. Out of scope until separately approved
 
 Production/staging access, GitOps repo, schema changes, deletion or hiding of dormant data, merges, deployment.
+
+## 6. Stage 2 results — ledger characterization (2026-10-14)
+
+**Test environment.** Disposable `postgres:18-alpine` container (`monikey-stage2-testdb`, bound to
+127.0.0.1 only, `--rm`), database `monikey_stage2_test`; `prisma migrate deploy` + system seed applied; the
+new suite refuses to run unless `current_database()` matches `/test/i`. No production or homelab
+connection was made. Run with `DATABASE_URL`/`TEST_DATABASE_URL` pointing at it:
+`npm run test:backend` (or `npx vitest run test/integration/stage2-ledger-characterization.db.test.ts`).
+
+**Results.** New file `backend/test/integration/stage2-ledger-characterization.db.test.ts`: 33 tests pass
+(stable over repeated runs). Full backend suite: 55 files / 415 tests pass; baseline before the new file
+was 54 / 382. Frontend build passes after `npm ci --prefix frontend` (lockfile unchanged); frontend
+Vitest 278 pass. Not run: Playwright, real-API browser e2e.
+
+**Verified-correct behaviour (matches V3 spec).** Expense/income balance effects and ledger-sum
+consistency; transfers (incl. fee) are zero income/expense/budget; card purchase = liability + one expense;
+card repayment lowers cash and owed with no expense; overpay/overdraft/credit-limit/zero-balance guards;
+idempotency (retry, cross-user keys, concurrent same key → one row); reversal restores balances and is
+single-use; budget actuals exclude pending, other categories, transfers; BigInt exactness above 2^53;
+cross-user account/category access rejected (404).
+
+### Existing behaviours that CONFLICT with the V3 spec (each pinned by a `V3 CONFLICT` test)
+
+| ID | Behaviour today | Spec requirement | Severity |
+|---|---|---|---|
+| C1 | Recurring worker posts every due `active` item, ignoring `autopay`, and catches up one missed cycle per run | Due date alone never posts; manual confirmation only | High |
+| C2 | `mark-paid` takes no body: amount/account/date cannot be confirmed or corrected | Confirm actual amount, account, date | High |
+| C3 | `mark-paid` has no due check, so future bills can be pre-paid and repeated clicks pay successive cycles | Confirm exactly the due occurrence | Medium |
+| C4 | After the worker posts a cycle, `mark-paid` pays the *next* cycle early | No double-posting | High |
+| C5 | A manually entered payment is not matched, so confirming the bill posts it again | Do not duplicate a manual payment | High |
+| C6 | Reversal creates a compensating transaction of the same type (`expense`, cleared, positive amount, dated *today*); budgets/reports sum it as another expense, so a reversed expense counts twice | Reversal must net out of spending/budgets | **High (financial)** |
+| C7 | `POST /budgets` shifts a date-only period one day early (stored `2026-08-31`..`2026-09-29` for Sep 1–30): Aug 31 spend is counted, Sep 30 spend is missed | Month boundaries follow the user's local calendar | **High (financial)** |
+| C8 | `/reports/budget-performance` returns 404 for a budget created through the API for that month (consequence of C7) | Truthful budget vs actual | Medium |
+| C9 | Concurrent duplicate `mark-paid` calls: one 201, the rest 500 `INTERNAL_ERROR` (no double post) | Idempotent replay | Low |
+| C10 | `mark-paid` posts, then updates the schedule in separate steps (not one DB transaction); a crash between them leaves the cycle posted but still due, and the next click replays safely via the idempotency key | Atomic confirmation | Medium |
+| C11 | No balance-adjustment event type exists (unchanged from M1) | Auditable adjustments | Gap |
+
+C6 and C7 are not recurring-specific and affect existing users' budget/report numbers today; they should be
+triaged independently of the V3 UI work.
+
+### Worker ↔ `mark-paid` interaction (verified)
+
+Both use the idempotency key `recurring:<itemId>:<dueDate>`, so racing for the same cycle posts once.
+They do not coordinate on the schedule: the schedule is advanced by whichever finishes, computed from the
+row each read earlier, so the same-cycle race converges (asserted). The unsafe interleaving is
+sequential, not concurrent (C4).
+
+### Proposed smallest safe correction (Stage 6, not implemented)
+
+1. Worker: stop posting. Replace with a read-only "due" state (items with `nextDueDate <= today`), and
+   leave posting to confirmation. Keep `autopay` column untouched (no schema change) and decide its fate
+   separately; until then ignore it in the V3 UI. Behind an env flag defaulting to the old behaviour so
+   rollout is reversible.
+2. `mark-paid` → confirm endpoint accepting `{ amountMinor?, accountId?, paidOn? }` defaulting to the
+   schedule; reject when `nextDueDate` is in the future beyond a configurable horizon; keep idempotency
+   key `recurring:<id>:<dueDate>` for the due occurrence regardless of overrides.
+3. Run post + schedule advance inside one `prisma.$transaction` via the existing ledger service seam.
+4. Map the idempotency-race unique violation to an idempotent replay (fixes C9).
+5. Optional duplicate guard: warn (not block) when a same-account, same-amount expense exists within ±3 days.
+6. Existing data: do not rewrite already auto-posted history. Items that were auto-posted keep their ledger rows.
+
+Tests to rewrite with that change: every `V3 CONFLICT` recurring test (C1–C5, C9, C10).
+
+### Recommended next milestone
+
+Because C6 and C7 misstate budget and report totals for existing data, propose **Stage 2b: fix C7 then
+C6 with failing-test-first changes** (date-boundary storage for budget periods; exclude reversed/reversal
+pairs from spend aggregation), each as its own small PR with owner sign-off, **before** the V3 visual
+work. If you prefer to keep Stage 2 strictly characterization-only, go to Stage 1 (tokens + dock behind a
+flag) next and track C6/C7 as parallel bug fixes.

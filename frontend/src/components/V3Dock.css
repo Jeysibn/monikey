@@ -1,7 +1,7 @@
 /*
- * MoniKey V3 dock prototype — deliberately scoped and not mounted yet.
+ * MoniKey V3 dock — mounted only by the opt-in V3 preview shell.
  * Accessible labels are persistent: the dock does not depend on hover hints.
- * The owning layout must reserve bottom padding to avoid covering content.
+ * The owning layout must reserve bottom padding (--v3-dock-clearance) to avoid covering content.
  */
 .v3-dock {
   --v3-blue: #0866d9;
@@ -97,6 +97,11 @@
   .v3-dock__add:hover {
     transform: translateY(-3px) scale(1.05);
   }
+  /* Subtle neighbour magnification, macOS-dock style. */
+  .v3-dock__item:not(.v3-dock__add):hover + .v3-dock__item,
+  .v3-dock__item:has(+ .v3-dock__item:hover) {
+    transform: translateY(-1px) scale(1.025);
+  }
 }
 
 @media (max-width: 580px) {
@@ -125,5 +130,9 @@
 @media (prefers-reduced-motion: reduce) {
   .v3-dock__item {
     transition: none;
+  }
+  .v3-dock__item,
+  .v3-dock__item:hover {
+    transform: none !important;
   }
 }

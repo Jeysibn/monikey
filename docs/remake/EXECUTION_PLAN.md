@@ -218,3 +218,47 @@ Proposed repair (documented only, **not run**; needs owner approval and a backup
   predicate (partial reversals are not supported today).
 - Daily snapshot generation and net-worth were not changed (balance-based, unaffected by reversals).
 - Recurring (C1–C5, C9, C10) remain unfixed by design.
+
+## 8. Stage 3 results — V3 design system and application shell (2026-10-14)
+
+Frontend only. No backend, database, ledger, recurring, GitOps or deployment change; no legacy route removed.
+
+### What was built
+- **Tokens** `frontend/src/styles/v3-tokens.css`: scoped to `.v3-root` (never `:root`/`body`). Blue accent `#0866D9`,
+  canvas/surface/raised/overlay hierarchy, ink/muted text (muted 7.4:1), status colours, four account-card
+  gradients, type scale (body 14–16px, secondary 12–14px), 4px spacing scale, radii, shadows, 44/48px
+  control/touch sizes, focus ring, `--v3-dock-clearance`.
+- **Primitives** `v3-primitives.css`: type, tabular `.v3-figure`, card, buttons (primary/secondary/ghost), field/input,
+  link, account card, skeleton. All selectors are prefixed `.v3-root` to out-rank legacy global element rules.
+  One legacy change: `global.css` input rules gained `:not(.v3-input)` (only narrows matching; legacy inputs unchanged).
+- **Dock** `V3Dock`: completed with Left/Right/Home/End focus movement (all controls stay in the Tab order),
+  subtle neighbour magnification (hover-capable pointers only), reduced-motion removes all transforms.
+  Safe-area and 48px touch targets were already in place and are now tested.
+- **Shell** `src/v3/`: `V3Shell` (skip link, utilities nav with Sync Center / Settings / Security / Exit preview,
+  main, dock, bottom clearance), `V3Workspace` (accounts → position → activity in DOM order: 1 column on
+  mobile with accounts first, 2 columns from 768px, 3 columns from 1200px), structural pages for Overview,
+  Activity, Accounts, Planning (skeleton regions and links to the classic pages, no ledger data read), and
+  `/v3/design` specimen (labelled sample values only).
+- **Opt-in**: `?v3=1` (persisted in localStorage) or `VITE_V3_PREVIEW=true`; `?v3=0` / "Exit preview" turns it off.
+  Default is the legacy UI; `/v3/*` redirects to `/` unless opted in. Legacy AppShell shows a "V3 preview" link only
+  when opted in. Quick Add from the dock reuses the existing modal.
+
+### Verification (exact)
+- Frontend unit: 29 files / 292 tests passed (new: dock keyboard + mounting guard, `v3Preview`, shell/opt-in routing).
+- Typecheck clean; lint: pre-existing warnings only, none in V3 files; build and `verify:privacy` passed.
+- Playwright mock suite (`--grep-invert @backend-compose`): 127 passed, 0 failed, 0 skipped, including 26 new
+  `e2e/v3-shell.spec.ts` tests: opt-in/out, Sync Center and Settings reachability, dock current-page/keyboard/Add,
+  hover magnification and reduced motion, mobile/tablet/desktop/1000px layout, dock non-occlusion, 48px targets,
+  no horizontal overflow, and axe (0 violations) on 5 V3 routes × 3 viewports.
+- Not run: `@backend-compose` / real-API e2e, other browsers (Chromium only), real-device safe-area testing.
+- A first axe run caught a real defect (legacy dark `input` rule overriding `.v3-input`); fixed as above.
+
+### Screenshots
+`docs/remake/screenshots/stage3/`: `{mobile,tablet,desktop}-overview.png` and `{mobile,tablet,desktop}-design-system.png`
+(390×844, 820×1180, 1440×900). Regenerate with `V3_SCREENSHOTS=1 npx playwright test e2e/v3-shell.spec.ts`.
+
+### Risks / follow-ups
+- Legacy global CSS (`a`, `input`, `body`) is still loaded under V3; primitives defend by specificity. New V3
+  elements (select, textarea, checkbox) will need the same treatment or a cascade-layer migration later.
+- The opt-in flag is runtime and user-controlled; it only exposes placeholder pages plus links to existing pages.
+- Placeholder pages deliberately show no financial data; real Overview/Activity/Accounts/Planning are next milestones.

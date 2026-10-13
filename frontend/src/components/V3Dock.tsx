@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { NavLink } from 'react-router-dom'
 import './V3Dock.css'
 
@@ -27,13 +28,29 @@ function DockIcon({ name }: { name: DockIconName }) {
 }
 
 /**
- * V3 design-system foundation. Intentionally NOT mounted by the current AppShell.
+ * V3 floating dock. Mounted only by the opt-in V3 preview shell (never by the
+ * legacy AppShell) until the remake release gates are met.
  *
  * This component never mutates accounts or the ledger; the owning shell supplies
- * existing route destinations and the already-validated Quick Add callback.
- * Keep unmounted until the new pages, migration paths, and recovery affordances
- * meet the remake release gates.
+ * route destinations and the already-validated Quick Add callback. Every control
+ * stays in the natural Tab order; Left/Right/Home/End additionally move focus
+ * between dock controls (a toolbar-style shortcut, not a roving tabindex).
  */
+function moveFocus(event: KeyboardEvent<HTMLElement>) {
+  const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+  if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return
+  const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a, button'))
+  const index = items.indexOf(document.activeElement as HTMLElement)
+  if (index === -1) return
+  let next = index
+  if (event.key === 'ArrowRight') next = (index + 1) % items.length
+  else if (event.key === 'ArrowLeft') next = (index - 1 + items.length) % items.length
+  else if (event.key === 'Home') next = 0
+  else next = items.length - 1
+  event.preventDefault()
+  items[next]?.focus()
+}
+
 export function V3Dock({
   routes,
   onAddTransaction,
@@ -62,7 +79,7 @@ export function V3Dock({
   )
 
   return (
-    <nav className="v3-dock" aria-label="Primary">
+    <nav className="v3-dock" aria-label="Primary" onKeyDown={moveFocus}>
       {destinations.slice(0, 2).map(renderLink)}
       <button
         type="button"

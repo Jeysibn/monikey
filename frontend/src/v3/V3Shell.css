@@ -1,0 +1,44 @@
+.v3-shell { padding-bottom: var(--v3-dock-clearance); }
+
+.v3-shell__skip { position: absolute; left: var(--v3-space-3); top: var(--v3-space-3); z-index: 60; transform: translateY(-200%); }
+.v3-shell__skip:focus { transform: none; }
+
+.v3-shell__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--v3-space-2) var(--v3-space-4); max-width: var(--v3-page-max); margin: 0 auto; padding: var(--v3-space-3) var(--v3-gutter); }
+.v3-shell__brand { font-weight: 800; font-size: var(--v3-text-lg); color: var(--v3-ink); text-decoration: none; display: inline-flex; align-items: center; gap: var(--v3-space-2); min-height: var(--v3-control); }
+.v3-shell__preview-tag { font-size: var(--v3-text-xs); font-weight: 700; color: var(--v3-blue); background: var(--v3-blue-tint); border-radius: 999px; padding: 2px 10px; }
+.v3-shell__utilities { display: flex; flex-wrap: wrap; gap: var(--v3-space-1); }
+
+.v3-shell__main { max-width: var(--v3-page-max); margin: 0 auto; padding: var(--v3-space-3) var(--v3-gutter) var(--v3-space-5); outline: none; }
+.v3-page-head { display: grid; gap: var(--v3-space-1); margin-bottom: var(--v3-space-4); }
+.v3-page-actions { display: flex; flex-wrap: wrap; gap: var(--v3-space-2); margin-top: var(--v3-space-3); }
+.v3-stack { display: grid; gap: var(--v3-space-3); }
+
+/* Workspace: single column (mobile, accounts first) -> two columns -> three columns */
+.v3-workspace { display: grid; gap: var(--v3-space-4); grid-template-columns: minmax(0, 1fr); align-items: start; }
+.v3-workspace > section { display: grid; gap: var(--v3-space-3); align-content: start; min-width: 0; }
+
+@media (min-width: 768px) {
+  .v3-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'accounts position' 'accounts activity';
+  }
+  .v3-workspace__accounts { grid-area: accounts; }
+  .v3-workspace__position { grid-area: position; }
+  .v3-workspace__activity { grid-area: activity; }
+}
+
+@media (min-width: 1200px) {
+  .v3-workspace {
+    grid-template-columns: minmax(300px, 1fr) minmax(0, 1.25fr) minmax(300px, 1fr);
+    grid-template-areas: 'accounts position activity';
+    gap: var(--v3-space-5);
+  }
+}
+
+.v3-specimen-grid { display: grid; gap: var(--v3-space-4); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+.v3-shell__brand:hover { color: var(--v3-blue); }
+
+/* While the preview is active the page behind it is light too (overscroll, scrollbars, native controls). */
+html.v3-active, html.v3-active body { background: #f4f7fb; color-scheme: light; }
+.v3-root { color-scheme: light; }

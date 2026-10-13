@@ -23,6 +23,32 @@ function renderDock(path = '/', onAddTransaction: () => void = () => {}) {
 }
 
 describe('V3Dock', () => {
+  it('moves focus with ArrowRight/ArrowLeft (wrapping), Home and End', () => {
+    const dock = renderDock()
+    const items = Array.from(screen.getByRole('navigation', { name: 'Primary' }).querySelectorAll<HTMLElement>('a, button'))
+    items[0].focus()
+    fireEvent.keyDown(items[0], { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(items[1])
+    fireEvent.keyDown(items[1], { key: 'End' })
+    expect(document.activeElement).toBe(items[4])
+    fireEvent.keyDown(items[4], { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(items[0])
+    fireEvent.keyDown(items[0], { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(items[4])
+    fireEvent.keyDown(items[4], { key: 'Home' })
+    expect(document.activeElement).toBe(items[0])
+    expect(dock.getAllByRole('link').length).toBe(4)
+  })
+
+  it('ignores unrelated keys and modified arrows', () => {
+    renderDock()
+    const items = Array.from(screen.getByRole('navigation', { name: 'Primary' }).querySelectorAll<HTMLElement>('a, button'))
+    items[1].focus()
+    fireEvent.keyDown(items[1], { key: 'a' })
+    fireEvent.keyDown(items[1], { key: 'ArrowRight', altKey: true })
+    expect(document.activeElement).toBe(items[1])
+  })
+
   it('exposes a single labelled primary navigation landmark', () => {
     renderDock()
     expect(screen.getAllByRole('navigation')).toHaveLength(1)
@@ -132,16 +158,17 @@ describe('V3Dock', () => {
   })
 })
 
-// Milestone 1 guard: the dock is dormant. Remove this block in the PR that
-// intentionally mounts it in AppShell.
-describe('V3Dock is not mounted', () => {
-  it('is not imported or referenced by any other source file', () => {
+// Stage 3 guard: the dock is mounted only by the opt-in V3 shell, never by the legacy AppShell.
+describe('V3Dock mounting', () => {
+  it('is referenced only by the opt-in V3 shell', () => {
     const sources = import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     const referencing = Object.entries(sources)
       .filter(([file]) => !/\/V3Dock(\.test)?\.tsx$/.test(file))
       .filter(([, text]) => text.includes('V3Dock'))
       .map(([file]) => file)
     expect(Object.keys(sources).length).toBeGreaterThan(50)
-    expect(referencing).toEqual([])
+    expect(referencing.every((f) => f.startsWith('../v3/'))).toBe(true)
+    expect(referencing).toContain('../v3/V3Shell.tsx')
+    expect(referencing.some((f) => f.includes('AppShell'))).toBe(false)
   })
 })

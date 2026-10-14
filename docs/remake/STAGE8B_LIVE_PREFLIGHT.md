@@ -187,3 +187,21 @@ Steps 3 to 7 each need separate authorization; 4 and 5 and 6 require changes to 
 ## Limitations
 
 No cluster access; no registry scope (403); CI metadata only shows publish times and results, not the contents or digests of images; the pre-V3 conclusion for `latest` is an inference from CI history and the `main` migration list. No run summaries or logs were read.
+
+## Addendum: locally built V3 images (user direction: no environment access needed; build a working image)
+
+Built locally from the V3 branch at `700b3bd` using the repo Dockerfiles and the same build arguments as `publish.yaml` (`VITE_FINANCE_BACKEND=true` for web). **Not pushed, not published, not deployed.** Local image IDs (not registry digests; those exist only after a publish):
+
+| Image | Local ID |
+|---|---|
+| `monikey-api:v3-700b3bd` (runtime; api and worker) | `sha256:b6b3b0be9987…` |
+| `monikey-migration:v3-700b3bd` (migration target) | `sha256:53da66b646d2…` |
+| `monikey-web:v3-700b3bd` | `sha256:f300265522c3…` |
+
+Verified on a disposable PostgreSQL 18 with synthetic credentials (containers and network removed afterwards; images kept):
+- Migration image under Kubernetes-like hardening (uid 1000, read-only root filesystem, tmpfs `/tmp`, all caps dropped, no-new-privileges): "All migrations have been successfully applied", 30 migrations, last `20261017000000_recurring_schedule_guard`. This answers the Prisma-in-image and securityContext questions for D11-A **for the migration image**; the GitOps Job still points at the wrong image.
+- Runtime image has no `npx`, confirming the current Job spec cannot work with it.
+- API (production mode, secure cookies, `RECURRING_CONFIRMATIONS_DISABLED=true`): healthy, `/api/v1/health/ready` returns `{"status":"ok","db":"ok"}`. Worker (`node dist/worker.js`): running, connected to the database.
+- Web: nginx serves the SPA and proxies `/api` to the API (resolver override; note busybox `localhost` resolves to IPv6 and nginx listens on IPv4 only, so probes should use 127.0.0.1).
+
+Remaining for D14: these images need a reviewed publish and digest pin; this build is evidence that the artifacts are buildable and work, not provenance.

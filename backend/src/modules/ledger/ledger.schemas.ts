@@ -113,6 +113,9 @@ export interface TransactionQuery {
   tagId?: string;
   /** Case-insensitive substring match on title or note. */
   q?: string;
+  /** `date` (default) or stored amount magnitude; `dir` defaults to desc. */
+  sort?: 'date' | 'amount';
+  dir?: 'asc' | 'desc';
 }
 
 export interface Page<T> {

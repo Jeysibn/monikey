@@ -571,6 +571,8 @@ export interface paths {
                     accountId?: string;
                     tagId?: string;
                     q?: string;
+                    sort?: "date" | "amount";
+                    dir?: "asc" | "desc";
                 };
                 header?: never;
                 path?: never;
@@ -1036,6 +1038,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1105,6 +1108,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1129,6 +1133,84 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        accountIds: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            favorites: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                name: string;
+                                institution: string | null;
+                                /** @enum {string} */
+                                accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                                /** @enum {string} */
+                                classification: "asset" | "liability";
+                                currencyCode: string;
+                                openingBalanceMinor: string;
+                                currentBalanceMinor: string;
+                                lastFour: string | null;
+                                favoriteRank: number | null;
+                                syncStatus: string;
+                                manual: boolean;
+                                version: number;
+                                archivedAt: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                creditCardDetail: {
+                                    /** @enum {string} */
+                                    network: "visa" | "mastercard";
+                                    creditLimitMinor: string;
+                                    dueDay: number;
+                                    minimumPaymentMinor: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    /** Format: date-time */
+                                    updatedAt: string;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1192,6 +1274,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1276,6 +1359,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;

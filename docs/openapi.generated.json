@@ -951,6 +951,30 @@
             "in": "query",
             "name": "q",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "date",
+                "amount"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "dir",
+            "required": false
           }
         ],
         "responses": {
@@ -1969,6 +1993,7 @@
                       "openingBalanceMinor",
                       "currentBalanceMinor",
                       "lastFour",
+                      "favoriteRank",
                       "syncStatus",
                       "manual",
                       "version",
@@ -2033,6 +2058,18 @@
                         "anyOf": [
                           {
                             "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favoriteRank": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4
                           },
                           {
                             "type": "null"
@@ -2207,6 +2244,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2271,6 +2309,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"
@@ -2352,6 +2402,228 @@
                           "type": "null"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/favorites": {
+      "put": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accountIds"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "accountIds": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "favorites"
+                  ],
+                  "properties": {
+                    "favorites": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "userId",
+                          "name",
+                          "institution",
+                          "accountType",
+                          "classification",
+                          "currencyCode",
+                          "openingBalanceMinor",
+                          "currentBalanceMinor",
+                          "lastFour",
+                          "favoriteRank",
+                          "syncStatus",
+                          "manual",
+                          "version",
+                          "archivedAt",
+                          "createdAt",
+                          "updatedAt",
+                          "creditCardDetail"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "institution": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "accountType": {
+                            "type": "string",
+                            "enum": [
+                              "cash",
+                              "checking",
+                              "savings",
+                              "ewallet",
+                              "credit_card"
+                            ]
+                          },
+                          "classification": {
+                            "type": "string",
+                            "enum": [
+                              "asset",
+                              "liability"
+                            ]
+                          },
+                          "currencyCode": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 3
+                          },
+                          "openingBalanceMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "currentBalanceMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "lastFour": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "favoriteRank": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 4
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "syncStatus": {
+                            "type": "string"
+                          },
+                          "manual": {
+                            "type": "boolean"
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "archivedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "creditCardDetail": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "network",
+                                  "creditLimitMinor",
+                                  "dueDay",
+                                  "minimumPaymentMinor",
+                                  "createdAt",
+                                  "updatedAt"
+                                ],
+                                "properties": {
+                                  "network": {
+                                    "type": "string",
+                                    "enum": [
+                                      "visa",
+                                      "mastercard"
+                                    ]
+                                  },
+                                  "creditLimitMinor": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "dueDay": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 31
+                                  },
+                                  "minimumPaymentMinor": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updatedAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -2460,6 +2732,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2524,6 +2797,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"
@@ -2690,6 +2975,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2754,6 +3040,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"

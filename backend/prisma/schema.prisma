@@ -165,6 +165,8 @@ model UserPreferences {
   externalAiEnabled        Boolean  @default(false) @map("external_ai_enabled")
   externalOcrEnabled       Boolean  @default(false) @map("external_ocr_enabled")
   detailedAiContextEnabled Boolean  @default(false) @map("detailed_ai_context_enabled")
+  /// false = never chose favorites (Overview suggests accounts); true = the selection, even if empty, is intentional.
+  favoritesConfigured      Boolean  @default(false) @map("favorites_configured")
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -209,6 +211,8 @@ model FinancialAccount {
   syncStatus          String                @default("manual") @map("sync_status")
   manual              Boolean               @default(true)
   version             Int                   @default(0)
+  /// 1-4 when the user pinned this account to Overview; range CHECK and per-user partial unique index live in the migration SQL.
+  favoriteRank        Int?                  @map("favorite_rank") @db.SmallInt
   archivedAt          DateTime?             @map("archived_at") @db.Timestamptz(6)
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)

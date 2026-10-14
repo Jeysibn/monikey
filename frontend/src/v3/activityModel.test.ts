@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Transaction } from '../domain/finance'
 import { mockFinanceRepository } from '../services/mockFinanceRepository'
-import { activityKind, applyFilters, activeFilterCount, DEFAULT_FILTERS, filterLocal, groupByDate, parseFilters, serverQuery, sortRows } from './activityModel'
+import { activityKind, applyFilters, activeFilterCount, DEFAULT_FILTERS, filterLocal, groupByDate, parseFilters, serverQuery } from './activityModel'
 
 const state = mockFinanceRepository.getInitialState()
 const card = state.creditCards[0]!
 const bank = state.accounts[0]!
 const tx = (over: Partial<Transaction>): Transaction => ({ id: 'x', type: 'expense', title: 't', date: '2026-08-10', amount: -10, amountMinor: '-1000', source: 'manual', status: 'cleared', ...over })
-const labels = { category: () => '', account: () => '' }
 
 describe('filters <-> URL', () => {
   it('round-trips and omits defaults', () => {
@@ -55,11 +54,16 @@ describe('local filtering, sorting, grouping', () => {
     expect(filterLocal(state, rows, { ...DEFAULT_FILTERS, q: 'MONTHLY' }).map((t) => t.id)).toEqual(['2'])
     expect(filterLocal(state, rows, { ...DEFAULT_FILTERS, from: '2026-08-02', to: '2026-08-02' })).toHaveLength(2)
   })
-  it('sorts by exact amount (BigInt) and is stable', () => {
-    const sorted = sortRows(state, rows.slice(0, 2), { ...DEFAULT_FILTERS, sort: 'amount', dir: 'asc' }, labels)
-    expect(sorted.map((t) => t.id)).toEqual(['2', '1'])
+  it('mock sort mirrors the backend: exact BigInt magnitude, date tie-break, id last', () => {
+    expect(filterLocal(state, rows.slice(0, 2), { ...DEFAULT_FILTERS, sort: 'amount', dir: 'asc' }).map((t) => t.id)).toEqual(['1', '2'])
     const big = [tx({ id: 'a', amountMinor: '-9007199254740993' }), tx({ id: 'b', amountMinor: '-9007199254740992' })]
-    expect(sortRows(state, big, { ...DEFAULT_FILTERS, sort: 'amount', dir: 'desc' }, labels).map((t) => t.id)).toEqual(['b', 'a'])
+    expect(filterLocal(state, big, { ...DEFAULT_FILTERS, sort: 'amount', dir: 'desc' }).map((t) => t.id)).toEqual(['a', 'b'])
+    expect(filterLocal(state, rows, { ...DEFAULT_FILTERS, dir: 'asc' }).map((t) => t.id)[0]).toBe('2')
+  })
+  it('sends sort and dir to the server only when non-default and drops unsupported sorts from the URL', () => {
+    expect(serverQuery({ ...DEFAULT_FILTERS, sort: 'amount', dir: 'asc' })).toContain('sort=amount&dir=asc')
+    expect(serverQuery(DEFAULT_FILTERS)).not.toContain('sort')
+    expect(parseFilters(new URLSearchParams('sort=description')).sort).toBe('date')
   })
   it('groups consecutive rows by date', () => {
     expect(groupByDate(filterLocal(state, rows, DEFAULT_FILTERS)).map((g) => [g.date, g.rows.length])).toEqual([['2026-08-02', 2], ['2026-08-01', 1]])

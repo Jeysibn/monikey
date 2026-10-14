@@ -9,7 +9,7 @@ import { formatDateLabel, formatTimeLabel } from '../utils/date'
 import { formatMinorUnits } from '../utils/currency'
 import { exactMinor } from '../utils/money'
 import {
-  activeFilterCount, activityKind, applyFilters, groupByDate, isReversalPart, KIND_LABEL, parseFilters, sortRows,
+  activeFilterCount, activityKind, applyFilters, groupByDate, isReversalPart, KIND_LABEL, parseFilters,
   type ActivityFilters, type ActivityKind, type ActivitySort,
 } from './activityModel'
 import { useActivityFeed, useTransactionById } from './useActivityFeed'
@@ -19,17 +19,10 @@ import './V3Activity.css'
 
 const money = (minor: bigint) => formatMinorUnits(minor, { withCents: true })
 
-const COLUMNS: { id: ActivitySort; label: string }[] = [
-  { id: 'date', label: 'Date' }, { id: 'description', label: 'Description' }, { id: 'category', label: 'Category' },
-  { id: 'account', label: 'Account' }, { id: 'type', label: 'Type' }, { id: 'amount', label: 'Amount' },
+const COLUMNS: { id: string; label: string; sort?: ActivitySort }[] = [
+  { id: 'date', label: 'Date', sort: 'date' }, { id: 'description', label: 'Description' }, { id: 'category', label: 'Category' },
+  { id: 'account', label: 'Account' }, { id: 'type', label: 'Type' }, { id: 'amount', label: 'Amount', sort: 'amount' },
 ]
-
-function useLabels(state: FinanceState) {
-  return useMemo(() => ({
-    category: (t: Transaction) => (t.type === 'transfer' ? '' : state.categories.find((c) => c.id === t.categoryId)?.name ?? 'Uncategorized'),
-    account: (t: Transaction) => transactionAccountLabel(state, t),
-  }), [state])
-}
 
 /** Signed display. Transfers and card repayments move money between your own accounts, so they carry no +/- sign. */
 function amountView(state: FinanceState, t: Transaction): { text: string; tone: string } {
@@ -80,8 +73,7 @@ function Filters({ filters, state, onChange, onClear, open, id }: { filters: Act
       <div className="v3-field"><label className="v3-label" htmlFor="v3-f-sort">Sort by</label>
         <select id="v3-f-sort" className="v3-input" value={`${filters.sort}:${filters.dir}`} onChange={(e) => { const [sort, dir] = e.target.value.split(':') as [ActivitySort, 'asc' | 'desc']; set({ sort, dir }) }}>
           <option value="date:desc">Newest first</option><option value="date:asc">Oldest first</option>
-          <option value="amount:desc">Amount: high to low</option><option value="amount:asc">Amount: low to high</option>
-          <option value="description:asc">Description A–Z</option><option value="category:asc">Category A–Z</option><option value="account:asc">Account A–Z</option>
+          <option value="amount:desc">Amount: largest first</option><option value="amount:asc">Amount: smallest first</option>
         </select></div>
       <label className="v3-act-check"><input type="checkbox" checked={filters.showReversed} onChange={(e) => set({ showReversed: e.target.checked })} /> Show reversed transactions (audit trail)</label>
       <button type="button" className="v3-btn v3-btn--secondary" onClick={onClear}>Clear filters</button>
@@ -148,7 +140,6 @@ export function V3Activity({ onEditTransaction }: { onEditTransaction?: (tx: Tra
   const [actionError, setActionError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const { confirm, dialog } = useConfirm()
-  const labels = useLabels(state)
   const feed = useActivityFeed(state, filters, state.transactions)
   const selected = useTransactionById(state, selectedId, feed.rows)
 
@@ -170,9 +161,8 @@ export function V3Activity({ onEditTransaction }: { onEditTransaction?: (tx: Tra
     setParams(next)
   }
 
-  const rows = useMemo(() => sortRows(state, feed.rows, filters, labels), [state, feed.rows, filters, labels])
-  const groups = useMemo(() => groupByDate(rows), [rows])
-  const nonDefaultSort = filters.sort !== 'date' || filters.dir !== 'desc'
+  const rows = feed.rows
+  const groups = useMemo(() => (filters.sort === 'date' ? groupByDate(rows) : [{ date: '', rows }]), [rows, filters.sort])
   const count = activeFilterCount(filters)
   const detailTx = selected.tx
 
@@ -231,7 +221,6 @@ export function V3Activity({ onEditTransaction }: { onEditTransaction?: (tx: Tra
           {feed.status === 'ready' && rows.length > 0 && (
             <div className="v3-act-foot">
               <p className="v3-secondary" data-testid="v3-act-count">{rows.length} {rows.length === 1 ? 'transaction' : 'transactions'} loaded{feed.hasMore ? ' · more available' : ' · end of history'}</p>
-              {nonDefaultSort && feed.hasMore && <p className="v3-secondary">Sorted within the loaded transactions only. Load more to include older ones.</p>}
               {feed.moreError && <p role="alert" className="v3-secondary v3-act-error">Could not load more. Try again.</p>}
               {feed.hasMore && <button type="button" className="v3-btn v3-btn--secondary" onClick={feed.loadMore} disabled={feed.loadingMore}>{feed.loadingMore ? 'Loading…' : 'Load more'}</button>}
             </div>
@@ -248,8 +237,8 @@ function ActivityList({ state, groups, selectedId, onSelect }: { state: FinanceS
   return (
     <div className="v3-act-groups">
       {groups.map((g) => (
-        <section key={g.date} aria-label={formatDateLabel(g.date)}>
-          <h2 className="v3-h3 v3-act-date">{formatDateLabel(g.date)} {g.date.slice(0, 4)}</h2>
+        <section key={g.date || 'all'} aria-label={g.date ? formatDateLabel(g.date) : 'Transactions by amount'}>
+          {g.date && <h2 className="v3-h3 v3-act-date">{formatDateLabel(g.date)} {g.date.slice(0, 4)}</h2>}
           <ul className="v3-card v3-act-list">
             {g.rows.map((t) => {
               const kind = activityKind(state, t)
@@ -261,7 +250,7 @@ function ActivityList({ state, groups, selectedId, onSelect }: { state: FinanceS
                   <button type="button" className={`v3-act-row ${reversed ? 'is-reversed' : ''}`} aria-current={selectedId === t.id ? 'true' : undefined} onClick={() => onSelect(t.id)} aria-label={`${t.title}, ${KIND_LABEL[kind]}${reversed ? ', reversed pair' : ''}, ${amount.text}. Open details`}>
                     <span className="v3-act-row__main">
                       <span className="v3-act-row__title">{t.title}</span>
-                      <span className="v3-caption">{[category, transactionAccountLabel(state, t), t.status === 'pending' ? 'Pending' : ''].filter(Boolean).join(' · ')}</span>
+                      <span className="v3-caption">{[g.date ? '' : formatDateLabel(t.date), category, transactionAccountLabel(state, t), t.status === 'pending' ? 'Pending' : ''].filter(Boolean).join(' · ')}</span>
                       <KindBadge kind={kind} reversed={reversed} />
                     </span>
                     <span className={`v3-figure v3-act-row__amt ${amount.tone}`}>{amount.text}</span>
@@ -283,14 +272,16 @@ function ActivityTable({ state, rows, filters, selectedId, onSelect, onSort, onE
   return (
     <div className="v3-card v3-act-tablewrap">
       <table className="v3-act-table">
-        <caption className="v3-visually-hidden">Transactions, sortable by column</caption>
+        <caption className="v3-visually-hidden">Transactions, sortable by date and amount</caption>
         <thead>
           <tr>
-            {COLUMNS.map((c) => (
-              <th key={c.id} scope="col" className={c.id === 'amount' ? 'is-num' : undefined} aria-sort={filters.sort === c.id ? (filters.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                <button type="button" className="v3-act-sort" onClick={() => onSort(c.id)}>{c.label}{filters.sort === c.id ? (filters.dir === 'asc' ? ' ▲' : ' ▼') : ''}</button>
-              </th>
-            ))}
+            {COLUMNS.map((c) => c.sort
+              ? (
+                <th key={c.id} scope="col" className={c.id === 'amount' ? 'is-num' : undefined} aria-sort={filters.sort === c.sort ? (filters.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="v3-act-sort" onClick={() => onSort(c.sort!)}>{c.label}{filters.sort === c.sort ? (filters.dir === 'asc' ? ' ▲' : ' ▼') : ''}</button>
+                </th>
+              )
+              : <th key={c.id} scope="col">{c.label}</th>)}
             <th scope="col"><span className="v3-visually-hidden">Actions</span></th>
           </tr>
         </thead>

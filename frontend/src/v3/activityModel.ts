@@ -6,7 +6,8 @@ import { exactMinor } from '../utils/money'
 
 export type ActivityKind = 'expense' | 'income' | 'transfer' | 'card_charge' | 'repayment'
 export type ActivityTypeFilter = '' | 'expense' | 'income' | 'transfer'
-export type ActivitySort = 'date' | 'description' | 'category' | 'account' | 'type' | 'amount'
+/** Only sorts the backend can apply across the whole dataset (keyset paging). Amount orders by magnitude. */
+export type ActivitySort = 'date' | 'amount'
 
 export interface ActivityFilters {
   q: string
@@ -22,7 +23,7 @@ export interface ActivityFilters {
 
 export const DEFAULT_FILTERS: ActivityFilters = { q: '', type: '', category: '', account: '', from: '', to: '', showReversed: false, sort: 'date', dir: 'desc' }
 
-const SORTS: ActivitySort[] = ['date', 'description', 'category', 'account', 'type', 'amount']
+const SORTS: ActivitySort[] = ['date', 'amount']
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Reads filters from the URL. Unknown or malformed values fall back to defaults instead of throwing. */
@@ -64,7 +65,7 @@ export function activeFilterCount(f: ActivityFilters): number {
   return [f.q.trim(), f.type, f.category, f.account, f.from, f.to, f.showReversed ? '1' : ''].filter(Boolean).length
 }
 
-/** Server query for `/api/v1/transactions` (date-descending, cursor paged). */
+/** Server query for `/api/v1/transactions` (sorted and cursor paged by the backend across all matching rows). */
 export function serverQuery(f: ActivityFilters, cursor?: string, limit = 50): string {
   const p = new URLSearchParams({ limit: String(limit) })
   if (f.q.trim()) p.set('q', f.q.trim())
@@ -73,6 +74,8 @@ export function serverQuery(f: ActivityFilters, cursor?: string, limit = 50): st
   if (f.account) p.set('accountId', f.account)
   if (f.from) p.set('fromDate', f.from)
   if (f.to) p.set('toDate', f.to)
+  if (f.sort !== 'date') p.set('sort', f.sort)
+  if (f.dir !== 'desc') p.set('dir', f.dir)
   if (cursor) p.set('cursor', cursor)
   return p.toString()
 }
@@ -102,24 +105,17 @@ export function filterLocal(_state: FinanceState, rows: Transaction[], f: Activi
     if (f.to && t.date > f.to) return false
     if (q && !`${t.title} ${t.note ?? ''}`.toLowerCase().includes(q)) return false
     return true
-  }).sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? ''))
+  }).sort(compareRows(f))
 }
 
 const cmpBig = (a: bigint, b: bigint) => (a === b ? 0 : a > b ? 1 : -1)
+const magnitude = (t: Transaction): bigint => { const v = exactMinor(t.amountMinor, t.amount); return v < 0n ? -v : v }
 
-export function sortRows(state: FinanceState, rows: Transaction[], f: ActivityFilters, labels: { category: (t: Transaction) => string; account: (t: Transaction) => string }): Transaction[] {
+/** Mock-mode comparator mirroring the backend: primary key, then date/time, then id as a stable tie-break. */
+function compareRows(f: ActivityFilters) {
   const dir = f.dir === 'asc' ? 1 : -1
-  const key = (a: Transaction, b: Transaction): number => {
-    switch (f.sort) {
-      case 'description': return a.title.localeCompare(b.title)
-      case 'category': return labels.category(a).localeCompare(labels.category(b))
-      case 'account': return labels.account(a).localeCompare(labels.account(b))
-      case 'type': return KIND_LABEL[activityKind(state, a)].localeCompare(KIND_LABEL[activityKind(state, b)])
-      case 'amount': return cmpBig(exactMinor(a.amountMinor, a.amount), exactMinor(b.amountMinor, b.amount))
-      default: return a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')
-    }
-  }
-  return rows.map((t, i) => ({ t, i })).sort((x, y) => dir * key(x.t, y.t) || x.i - y.i).map((x) => x.t)
+  const byDate = (a: Transaction, b: Transaction) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')
+  return (a: Transaction, b: Transaction): number => dir * ((f.sort === 'amount' ? cmpBig(magnitude(a), magnitude(b)) : 0) || byDate(a, b)) || a.id.localeCompare(b.id)
 }
 
 export function groupByDate(rows: Transaction[]): { date: string; rows: Transaction[] }[] {

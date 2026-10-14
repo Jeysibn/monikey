@@ -94,7 +94,7 @@ test('Activity: search (literal %), type filter, paging, reversal audit, Back/Fo
   await page.getByRole('button', { name: /Filters/ }).click()
   await page.getByLabel('Type', { exact: true }).selectOption('income')
   await expect(page).toHaveURL(/type=income/)
-  await expect(page.getByText('Salary').first()).toBeVisible()
+  await expect(page.locator('li, tr, [role=listitem]').getByText('Salary').first()).toBeVisible()
   await page.goBack()
   await expect(page).not.toHaveURL(/type=income/)
   await page.goForward()

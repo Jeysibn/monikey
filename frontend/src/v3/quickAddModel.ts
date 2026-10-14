@@ -54,10 +54,12 @@ export interface AccountOption {
 export type AccountRole = 'expense' | 'income' | 'from' | 'transferTo' | 'cardTo'
 
 function optionFor(state: FinanceState, id: string, favorites: string[]): AccountOption | undefined {
+  // The institution is only added when another account would otherwise look the same, keeping option text short on phones.
+  const sameName = state.accounts.filter((a) => a.name === state.accounts.find((x) => x.id === id)?.name).length > 1
   const account = state.accounts.find((a) => a.id === id)
   if (account) {
     const bal = formatMinorUnits(exactMinor(account.balanceMinor, account.balance), { withCents: true })
-    return { id, label: accountLabel(state, id), detail: `${account.institution ? `${account.institution} · ` : ''}${bal}`, favorite: favorites.includes(id), isCard: false }
+    return { id, label: accountLabel(state, id), detail: `${sameName && account.institution ? `${account.institution} · ` : ''}${bal}`, favorite: favorites.includes(id), isCard: false }
   }
   const card = state.creditCards.find((c) => c.id === id)
   if (card) {

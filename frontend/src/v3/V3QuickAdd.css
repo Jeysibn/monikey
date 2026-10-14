@@ -5,6 +5,7 @@
 .v3-root .v3-qa__head { display: flex; align-items: center; justify-content: space-between; padding: var(--v3-space-3) var(--v3-space-4); border-bottom: 1px solid var(--v3-border); }
 .v3-root .v3-qa__close { padding: 0; }
 .v3-root .v3-qa__body { display: grid; gap: var(--v3-space-4); padding: var(--v3-space-4); overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.v3-root .v3-qa__typebar { padding: var(--v3-space-3) var(--v3-space-4) 0; }
 .v3-root .v3-qa__types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0; padding: 4px; border: 0; border-radius: var(--v3-radius-md); background: var(--v3-sunken); }
 .v3-root .v3-qa__type { position: relative; display: flex; }
 .v3-root .v3-qa__type input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
@@ -19,7 +20,7 @@
 .v3-root .v3-qa__chip[aria-pressed='true'] { background: var(--v3-blue-tint); border-color: var(--v3-blue); color: var(--v3-blue); }
 .v3-root .v3-qa__chip:focus-visible, .v3-root .v3-qa__details-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--v3-blue-ring); }
 .v3-root .v3-qa__details { display: grid; gap: var(--v3-space-3); }
-.v3-root .v3-qa__details-toggle { justify-content: flex-start; flex-wrap: wrap; text-align: left; border-color: var(--v3-border); }
+.v3-root dialog.v3-qa .v3-qa__details-toggle { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding-block: var(--v3-space-2); text-align: left; border-color: var(--v3-border); }
 .v3-root .v3-qa__details-body { display: grid; gap: var(--v3-space-3); }
 .v3-root .v3-qa__details-body[hidden] { display: none; }
 .v3-root .v3-qa__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--v3-space-3); }
@@ -45,3 +46,6 @@
 @keyframes v3-qa-sheet { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes v3-qa-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .v3-root dialog.v3-qa { animation: none; } }
+
+/* Primary touch targets are 48x48 CSS px inside the composer (the shared 44px control size is for dense desktop UI). */
+.v3-root dialog.v3-qa .v3-btn, .v3-root dialog.v3-qa .v3-input, .v3-root dialog.v3-qa .v3-qa__chip { min-height: var(--v3-touch); min-width: var(--v3-touch); }

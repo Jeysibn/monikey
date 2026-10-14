@@ -63,6 +63,8 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog && !dialog.open) dialog.showModal()
+    // showModal focuses the first control (Close); the amount is what the user types first.
+    dialog?.querySelector<HTMLInputElement>('.v3-qa__amount')?.focus()
     const trigger = triggerRef.current
     return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus() }
   }, [])
@@ -196,7 +198,7 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
           </section>
         ) : (
           <>
-            <div className="v3-qa__body">
+            <div className="v3-qa__typebar">
               <fieldset className="v3-qa__types" disabled={busy}>
                 <legend className="v3-visually-hidden">Transaction type</legend>
                 {QUICK_ADD_TYPES.map((t) => (
@@ -206,12 +208,13 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
                   </label>
                 ))}
               </fieldset>
-
+            </div>
+            <div className="v3-qa__body">
               {formError && <p className="v3-qa__banner" role="alert" data-testid="v3-qa-form-error">{formError}</p>}
 
               <div className="v3-field">
                 <label className="v3-label" htmlFor={field('amount').id}>Amount</label>
-                <input {...field('amount', (ev) => update({ amount: ev.target.value }))} className="v3-input v3-qa__amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={draft.amount} autoFocus />
+                <input {...field('amount', (ev) => update({ amount: ev.target.value }))} className="v3-input v3-qa__amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={draft.amount} />
                 {err('amount')}
                 {cardOwed !== undefined && !errors.amount && <p className="v3-caption">Outstanding on this card: {formatMinorUnits(cardOwed, { withCents: true })}</p>}
               </div>
@@ -273,8 +276,8 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
 
               <div className="v3-qa__details">
                 <button type="button" className="v3-btn v3-btn--ghost v3-qa__details-toggle" aria-expanded={autoOpenDetails} aria-controls="v3-qa-details" onClick={() => setDetailsOpen(!autoOpenDetails)}>
-                  {autoOpenDetails ? 'Hide optional details' : 'Add optional details'}
-                  <span className="v3-caption"> · description, date, time, note{type === 'transfer' ? ', fee' : ''}</span>
+                  <span>{autoOpenDetails ? 'Hide optional details' : 'Add optional details'}</span>
+                  <span className="v3-caption">Description, date, time, note{type === 'transfer' ? ', fee' : ''}</span>
                 </button>
                 <div id="v3-qa-details" hidden={!autoOpenDetails} className="v3-qa__details-body">
                   <div className="v3-field">

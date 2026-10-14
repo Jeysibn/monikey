@@ -118,6 +118,19 @@ describe('V3 Planning: confirm a recurring payment', () => {
     expect(confirm).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    ['RECURRING_PAYMENT_REVERSED', 'The payment for the 2026-10-10 cycle was reversed, so that cycle stays closed with no payment on record. Record the correct payment as a normal expense in Quick Add.'],
+    ['RECURRING_SETTLED_CYCLE', 'The 2026-10-10 cycle of this bill is already paid, and settled cycles cannot be reopened.'],
+  ])('shows the server explanation for a refused lifecycle operation (%s) and never claims success', async (code, message) => {
+    const confirm = vi.fn().mockRejectedValue(new FinanceApiError(409, code, message))
+    setup([bill({})], confirm)
+    const dialog = await openDialog()
+    fireEvent.click(within(dialog).getByTestId('v3-confirm-submit'))
+    await waitFor(() => expect(within(screen.getByTestId('v3-confirm-dialog')).getByText(message)).toBeTruthy())
+    expect(screen.queryByTestId('v3-confirm-success')).toBeNull()
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
   it('an uncertain result is never described as paid; Check again resends the identical request', async () => {
     const confirm = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')).mockImplementation(async () => ({ ...ok(bill({})), outcome: 'replayed' as const }))
     setup([bill({})], confirm)

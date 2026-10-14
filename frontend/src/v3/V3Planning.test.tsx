@@ -55,12 +55,13 @@ describe('V3 Planning (demo data)', () => {
     expect(screen.queryByLabelText('Monthly budget for Food & Groceries')).toBeNull()
   })
 
-  it('offers no way to pay, post or advance a recurring bill', () => {
+  it('demo data offers no way to pay, post or advance a recurring bill, and says nothing is recorded automatically', () => {
     open()
     const bills = screen.getByTestId('v3-plan-bills')
     expect(within(bills).queryAllByRole('button')).toHaveLength(0)
-    expect(bills.textContent).not.toMatch(/mark.*paid|pay now|confirm/i)
-    expect(bills.textContent).toMatch(/reference only/i)
+    expect(bills.textContent).not.toMatch(/mark.*paid|pay now/i)
+    expect(bills.textContent).toMatch(/never records a bill by itself/i)
+    expect(bills.textContent).not.toMatch(/may record a bill by itself/i)
   })
 })
 

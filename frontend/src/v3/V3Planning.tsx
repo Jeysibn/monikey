@@ -12,6 +12,8 @@ import {
 import { backendMode, usePeriodReport } from './useOverviewReports'
 import { usePlanningBudgets } from './usePlanningBudgets'
 import { useAsyncRecurringItems } from './useRecurringReadOnly'
+import { ConfirmBillDialog } from './V3ConfirmBill'
+import type { RecurringItem } from '../domain/recurring'
 import './V3Planning.css'
 
 const money = (minor: bigint) => formatMinorUnits(minor, { withCents: true })
@@ -120,12 +122,15 @@ function UnbudgetedList({ rows, editingId, canEdit, onEdit, form }: { rows: Unbu
 
 function Bills({ todayIso }: { todayIso: string }) {
   const finance = useFinance()
+  const asyncFinance = useAsyncFinanceOptional()
   const items = useAsyncRecurringItems()
+  const [confirming, setConfirming] = useState<{ item: RecurringItem; opener: HTMLElement | null } | null>(null)
+  const canConfirm = Boolean(asyncFinance) && !asyncFinance?.offline
   const sorted = useMemo(() => sortBills(items, todayIso), [items, todayIso])
   return (
     <section className="v3-card v3-pl-bills" aria-labelledby="v3-pl-bills" data-testid="v3-plan-bills">
       <h2 id="v3-pl-bills" className="v3-h2">Recurring bills</h2>
-      <p className="v3-caption v3-secondary" data-testid="v3-plan-bills-note">For reference only: nothing is paid or recorded from this list. MoniKey may record a bill by itself once it is due, so check Activity before paying one yourself. These are scheduled bills, not expenses you have already recorded.</p>
+      <p className="v3-caption v3-secondary" data-testid="v3-plan-bills-note">MoniKey never records a bill by itself. A bill that is due stays here until you record the payment (or it is skipped), and only then does it become an expense. If you already entered it in Quick Add, we'll warn you before recording it twice.</p>
       {sorted.length === 0 ? (
         <p className="v3-secondary" data-testid="v3-plan-bills-empty">No recurring bills yet. Add bills in <Link to="/recurring">Recurring &amp; Bills</Link>.</p>
       ) : (
@@ -144,11 +149,15 @@ function Bills({ todayIso }: { todayIso: string }) {
                   {state === 'paused' ? `Paused · was due ${formatDateLabel(item.nextDueDate)}` : state === 'overdue' ? `Was due ${formatDateLabel(item.nextDueDate)} · not recorded yet` : `Next due ${formatDateLabel(item.nextDueDate)}`}
                 </p>
                 <p className="v3-caption v3-secondary">Pays from {finance.accountLabel(item.accountId)}</p>
+                {canConfirm && (state === 'overdue' || state === 'due_today') && (
+                  <button type="button" className="v3-btn v3-btn--primary v3-pl-btn" data-testid={`v3-plan-confirm-${item.id}`} aria-label={`Record payment for ${item.merchant}`} onClick={(e) => setConfirming({ item, opener: e.currentTarget })}>Record payment</button>
+                )}
               </li>
             )
           })}
         </ul>
       )}
+      {confirming && <ConfirmBillDialog key={`${confirming.item.id}:${confirming.item.nextDueDate}`} item={confirming.item} state={finance.state} todayIso={todayIso} onClose={() => { const o = confirming.opener; setConfirming(null); setTimeout(() => (o?.isConnected ? o : document.querySelector<HTMLElement>('[data-testid="v3-planning"] h1'))?.focus?.(), 0) }} />}
     </section>
   )
 }
@@ -165,7 +174,7 @@ export function V3Planning() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const bounds = monthBounds(month)
-  const refreshKey = `${state.transactions.length}:${state.transactions[0]?.id ?? ''}`
+  const refreshKey = `v${asyncFinance?.financeVersion ?? 0}`
   const period = useMemo(() => monthPeriodContaining(bounds.start), [bounds.start])
   const report = usePeriodReport(state, period, refreshKey)
   const { budgets, reload, save } = usePlanningBudgets(backend, refreshKey)
@@ -226,7 +235,7 @@ export function V3Planning() {
   return (
     <div className="v3-pl" data-testid="v3-planning">
       <div className="v3-page-head">
-        <h1 className="v3-h1">Planning</h1>
+        <h1 className="v3-h1" tabIndex={-1}>Planning</h1>
         <p className="v3-secondary">Monthly category budgets, then your recurring bills.</p>
       </div>
 

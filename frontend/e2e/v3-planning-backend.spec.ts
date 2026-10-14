@@ -129,7 +129,7 @@ test.describe('desktop', () => {
     expect(prevStart < prevEnd || prevStart === prevEnd).toBe(true)
   })
 
-  test('recurring: active, paused and overdue shown read-only; opening Planning posts nothing', async ({ page }) => {
+  test('recurring: active, paused and overdue shown; opening Planning posts nothing', async ({ page }) => {
     const mk = async (merchant: string, due: string) => { const r = await post(page, '/api/v1/recurring', { merchant, amountMinor: '129900', frequency: 'monthly', nextDueDate: due, accountId: ids.bdo, categoryId: cats[3].id, autopay: false }); expect(r.status(), await r.text()).toBe(201); return (await r.json()) as { id: string } }
     const up = await mk('Internet Upcoming', addDays(today, 10))
     const od = await mk('Rent Overdue', addDays(today, -5))
@@ -141,7 +141,9 @@ test.describe('desktop', () => {
     await expect(page.getByTestId(`v3-plan-bill-${up.id}`)).toContainText('Internet Upcoming')
     await expect(page.getByTestId(`v3-plan-bill-${od.id}`)).toContainText(/Overdue/i)
     await expect(page.getByTestId(`v3-plan-bill-${pa.id}`)).toContainText(/Paused/i)
-    await expect(page.getByTestId('v3-plan-bills').getByRole('button')).toHaveCount(0)
+    // Only the overdue bill is confirmable; upcoming and paused bills have no action.
+    await expect(page.getByTestId('v3-plan-bills').getByRole('button')).toHaveCount(1)
+    await expect(page.getByTestId(`v3-plan-confirm-${od.id}`)).toBeVisible()
     await page.reload()
     await expect(page.getByTestId('v3-plan-bills')).toBeVisible()
     expect((await txs(page)).length).toBe(before)

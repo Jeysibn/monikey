@@ -1,0 +1,22 @@
+8c8
+<         "Main Checking": "12089125",
+---
+>         "Main Checking": "12080125",
+11c11
+<     "transactions": 20,
+---
+>     "transactions": 21,
+16c16
+<             "next_due": "2026-09-10",
+---
+>             "next_due": "2026-10-10",
+52,53c52,53
+<             "next_due": "2026-10-10",
+<             "last_paid": null
+---
+>             "next_due": "2026-10-17",
+>             "last_paid": "2026-10-10"
+56c56
+<     "recurringLedgerRows": 4
+---
+>     "recurringLedgerRows": 5

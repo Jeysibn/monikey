@@ -1,0 +1,57 @@
+{
+    "balances": {
+        "Cash": "200100",
+        "Savings": "2500000",
+        "E-Wallet": "150000",
+        "Visa Card": "120075",
+        "Ben Checking": "945000",
+        "Main Checking": "12089125",
+        "Closed Checking (archived)": "25000"
+    },
+    "transactions": 20,
+    "recurringItems": [
+        {
+            "status": "active",
+            "merchant": "Gym",
+            "next_due": "2026-09-10",
+            "last_paid": "2026-09-10"
+        },
+        {
+            "status": "active",
+            "merchant": "Hobby club",
+            "next_due": "2026-10-25",
+            "last_paid": null
+        },
+        {
+            "status": "active",
+            "merchant": "Insurance",
+            "next_due": "2027-02-28",
+            "last_paid": null
+        },
+        {
+            "status": "active",
+            "merchant": "Internet",
+            "next_due": "2026-10-30",
+            "last_paid": "2026-09-30"
+        },
+        {
+            "status": "active",
+            "merchant": "Old account bill",
+            "next_due": "2026-10-20",
+            "last_paid": null
+        },
+        {
+            "status": "paused",
+            "merchant": "Streaming",
+            "next_due": "2026-09-05",
+            "last_paid": null
+        },
+        {
+            "status": "active",
+            "merchant": "Weekly water",
+            "next_due": "2026-10-10",
+            "last_paid": null
+        }
+    ],
+    "recurringLedgerRows": 4
+}

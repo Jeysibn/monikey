@@ -18,6 +18,7 @@ const gateway = (load: FinanceGateway['load']): FinanceGateway => ({
   updateCreditCard: vi.fn(),
   archiveAccount: vi.fn(),
   archiveCreditCard: vi.fn(),
+  setFavorites: vi.fn().mockResolvedValue(undefined),
   createGoal: vi.fn(),
   addGoalFunds: vi.fn(),
   updateGoal: vi.fn(),

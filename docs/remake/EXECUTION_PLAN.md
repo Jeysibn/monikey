@@ -325,7 +325,7 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
 - **Accounts (`/v3/accounts`):** physical-card-style grid with a distinct tone per account within each kind. One expanded account at a time (`?account=ID`, deep-linkable, history-aware). Credit cards show **outstanding debt**, limit, limit used, due date and minimum payment; remaining credit is stated as a limit, not cash. The expanded panel lists the 5 most recent transactions and links to `/v3/activity?account=ID`. Add account, add credit card, edit (name, institution, last four only) and archive (confirm) go through the existing gateway; **balances cannot be edited** (no ledger bypass). Edit/archive are hidden without a backend.
 - **Navigation:** Overview account card → `/v3/accounts?account=ID`; Overview recent row → `/v3/activity?tx=ID`; Accounts → filtered Activity; Activity account links → Accounts. No fifth nav item; Settings/Security/Sync Center unchanged.
 
-### Favorite accounts — NOT implemented (needs migration, awaiting approval)
+### Favorite accounts — implemented in Stage 5A.1 (see §12); original proposal kept below
 `UserPreferences` has only notification/AI/hide-cents toggles; no table or column can store a per-user favorite list. The Overview keeps the deterministic heuristic ("Featured accounts").
 - **Proposed model:** nullable `favorite_rank SMALLINT` (1–4) on `financial_accounts`, with a partial unique index on `(user_id, favorite_rank) WHERE favorite_rank IS NOT NULL AND archived_at IS NULL`. Chosen over a JSON preferences field so ownership, archival and uniqueness are enforced by the database.
 - **API:** `PUT /api/v1/accounts/favorites` with body `{ accountIds: string[] }` (0–4 unique, owned, non-archived, otherwise 400/404); `favoriteRank` exposed on the account view and in bootstrap. Archiving an account clears its rank.
@@ -352,3 +352,40 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
 
 ### Recommendation for Stage 5B (Quick Add)
 Proceed after review. Reuse `useActivityFeed` refresh and the Activity/Accounts URL patterns; build on the existing add-transaction modal and idempotency keys rather than new ledger paths; decide favorites first, since Quick Add's account picker should honor them.
+
+## 12. Stage 5A.1 — Favorite Accounts & UX corrections (2026-10-14)
+
+### Backend
+- **Migration `20261014000000_favorite_accounts`** (additive, hand-written SQL, verified against a disposable PostgreSQL, no unrelated drift): `financial_accounts.favorite_rank SMALLINT NULL`; `CHECK (favorite_rank IS NULL OR favorite_rank BETWEEN 1 AND 4)`; partial unique index on `(user_id, favorite_rank) WHERE favorite_rank IS NOT NULL`; `user_preferences.favorites_configured BOOLEAN NOT NULL DEFAULT false`. Existing rows migrate to *no rank, unconfigured*. Rollback: drop the index, constraint and the two columns.
+- **`favorites_configured`** is the minimal preference field that separates "never configured" (Overview suggests accounts) from "intentionally empty" (Overview shows none).
+- **`PUT /api/v1/accounts/favorites`** `{ accountIds: uuid[] (max 4) }` → `{ favorites: AccountView[] }` in rank order. One transaction: the user's preference row is upserted and locked `FOR UPDATE`, every rank is cleared, then ranks are assigned `index + 1`. Concurrent replacements serialise and the final state is always exactly one submitted list. Errors: schema/more than four → 400; duplicate ids → 422 `VALIDATION_ERROR`; unknown or another user's account → 404 `UNKNOWN_ACCOUNT`; archived → 422 `ACCOUNT_ARCHIVED`; unauthenticated → 401. Failure leaves the previous selection untouched.
+- **Archiving clears the rank.** `favoriteRank` is on the account view and `favoritesConfigured` is under bootstrap `settings`.
+- **Global sorting:** `GET /transactions` accepts `sort=date|amount` and `dir=asc|desc`. Keyset cursor includes the sort key (`amountMinor`, `occurredOn`, `createdAt`, `id`), so paging is stable across the whole matching set with filters and `q`. Amount sorts by **magnitude** (exact bigint). The legacy id-only cursor still works.
+
+### Frontend
+- **Accounts (`/v3/accounts`, backend mode):** an "Overview favorites" panel (`N of 4 selected`, ordered list with Move up / Move down / Remove buttons, live status message, error alert) and a per-card toggle (`aria-pressed`, `★ Favorite 2`; disabled with "Favorites full" once four are chosen). Every change is one `PUT` that replaces the list; local state updates only after the server accepts it. Mock mode has no persistence, so the controls are hidden (as edit/archive already are).
+- **Overview:** unconfigured → the existing four suggestions; configured → only the selection, in rank order, fewer than four stays fewer, empty shows "No favorite accounts selected" with a link. Credit cards keep the "Owed … Outstanding debt" presentation. Archived accounts are not in state, so they cannot appear. No balance or calculation code changed.
+- **Activity sorting:** only **Date** and **Amount** are sortable (both server-side). Description, Category, Account and Type sorts were removed because they cannot be paged correctly across pages; the "sorted within loaded transactions" notice is gone. Sort lives in the URL (`sort`, `dir`), unknown values fall back to date, Back/Forward restore it. Under an amount sort the date headings are omitted and each row carries its date.
+- **Dock:** no layout bug reproduced: the shell already reserves `--v3-dock-clearance`. Viewport tests now enforce it (mobile 390, tablet 820, desktop 1280/1440): last row and last action end above the dock, the action is the topmost element at its centre and clickable, the detail panel opens, and the dock keeps its fixed floating, rounded, blurred style.
+- **Credit card:** "Payment due" now reads "The 20th of each month" (the backend stores only a due day; the old label implied a calendar date built from the current month). Minimum payment shows **Not set** with a caption when it is 0, instead of being hidden or implied as verified. The edit form states that credit limit, due day, minimum payment and network cannot be changed yet.
+
+### Unsupported credit-card edit fields (later milestone)
+`PATCH /accounts/:id` and the V3 edit form cover name and last four only. Credit limit, due day, minimum payment and network need a card-detail update path with ledger-neutral validation; not started here.
+
+### Results (actual)
+- Backend (disposable PostgreSQL, 127.0.0.1:58321): 58 files / 448 tests pass, including the new `stage5a1-favorites-sorting.db.test.ts` (migration defaults, order/reorder/clear, empty vs unconfigured, duplicate / over-four / invalid / foreign / archived ids with state unchanged, DB constraint rejection, archive clears rank, 12 concurrent PUTs ending in one valid list, 15 transactions walked in pages of 4 for amount/date asc/desc with ties and filters). `tsc`, `api:openapi:check` pass.
+- Frontend: 36 files / 348 vitest tests pass; `tsc -b`, build and `verify:privacy` pass; lint has warnings only (pre-existing).
+- Playwright mock suite: 151 passed, 18 skipped (the two real-backend specs), including the new viewport dock spec.
+- Real-backend Playwright (local API + Vite, test-only user): `v3-backend-local` 9/9 and `v3-favorites-backend` 9/9: unconfigured suggestions; select/order/limit of four; reload and a brand-new login session persist the selection; archive removes a favorite; clearing all stays empty after reload; axe clean; card due/minimum presentation; amount sort across 75 rows (largest first on page 1, smallest only after Load more, no duplicates), URL/reload/Back/Forward; sort plus account filter; dock clearance and detail open with 75 rows at three viewports.
+- Screenshots (real backend data): `docs/remake/screenshots/stage5a1/`.
+- Cleanup: dev servers and the disposable container are stopped after the run.
+
+### Remaining issues
+- Favorites cannot be reset to "unconfigured" (by design: an empty selection is a deliberate choice).
+- Mock mode has no persisted favorites; Overview uses suggestions there.
+- Amount sort orders by magnitude, so income and expenses of the same size interleave.
+- Card edit fields above are still unsupported; `dueDate` in the frontend model is still a synthetic current-month date (only the day is shown).
+- No migration was applied anywhere except the disposable database; nothing was pushed or deployed.
+
+### Stage 5B readiness
+Ready for review. Quick Add can rely on the favorites order for its account picker and on the Activity refresh pattern; Quick Add itself is not started.

@@ -216,7 +216,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await v1.register(bootstrap.registerRoutes)
       await v1.register((app) => goals.registerRoutes(app, ledger.service, env.APP_ORIGIN))
       await v1.register(budgetRoutes, { prisma, appOrigin: env.APP_ORIGIN })
-      await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service })
+      await v1.register(recurringRoutes, { prisma, appOrigin: env.APP_ORIGIN, ledgerService: ledger.service, confirmationsDisabled: env.RECURRING_CONFIRMATIONS_DISABLED })
       await v1.register((crypto) => cryptoPortfolioRoutes(crypto, { prisma, appOrigin: env.APP_ORIGIN, catalog: cryptoCatalog, ledgerService: ledger.service }))
       await v1.register(async (app) => receipts.registerRoutes(app, env.APP_ORIGIN))
       await v1.register(reportsRoutes, { prisma, prefix: '/reports' })

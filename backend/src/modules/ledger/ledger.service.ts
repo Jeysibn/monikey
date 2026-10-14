@@ -19,6 +19,14 @@ export class LedgerService {
     });
   }
 
+  /**
+   * Posts inside a transaction the caller already owns (and has already locked whatever it needs to
+   * lock first). Unlike `postTransactionWithCallback`, the caller does its checks BEFORE posting.
+   */
+  async postTransactionInTransaction(tx: Prisma.TransactionClient, userId: string, input: PostTransactionInput): Promise<PostTransactionResult> {
+    return this.repo.postTransaction(tx, userId, input);
+  }
+
   async reverseTransaction(userId: string, transactionId: string, input: ReverseTransactionInput): Promise<ReverseTransactionResult> {
     return this.prisma.$transaction(async (tx) => {
       return this.repo.reverseTransaction(tx, userId, transactionId, input.idempotencyKey ?? undefined);

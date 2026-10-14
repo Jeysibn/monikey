@@ -85,7 +85,7 @@ export function ConfirmBillDialog({ item, state, todayIso, onClose }: { item: Re
     void send({ expectedDueDate: dueDate, amountMinor: String(minor), accountId, paidOn })
   }
   const recordAnyway = () => { const input = lastRef.current; if (input) void send({ ...input, allowPossibleDuplicate: true }) }
-  async function usePayment(c: PaymentCandidate) {
+  async function linkPayment(c: PaymentCandidate) {
     if (submittingRef.current) return
     submittingRef.current = true
     setPhase({ kind: 'submitting' })
@@ -140,7 +140,7 @@ export function ConfirmBillDialog({ item, state, todayIso, onClose }: { item: Re
                   <span className="v3-secondary">Matches on {c.matchedOn.join(', ')}</span>
                   <span className="v3-cb__row">
                     <Link className="v3-btn v3-btn--secondary" to={`/activity?focus=${c.transactionId}`} onClick={close}>Inspect in Activity</Link>
-                    <button type="button" className="v3-btn v3-btn--secondary" onClick={() => void usePayment(c)} disabled={busy}>This is the payment: link it</button>
+                    <button type="button" className="v3-btn v3-btn--secondary" onClick={() => void linkPayment(c)} disabled={busy}>This is the payment: link it</button>
                   </span>
                 </li>
               ))}

@@ -22,6 +22,8 @@ export interface Account {
   syncStatus: string
   monthlyChangePct?: number
   manual?: boolean
+  /** 1-4 when the user pinned this account to Overview; null/undefined otherwise. */
+  favoriteRank?: number | null
 }
 
 export interface CreditCard {
@@ -37,6 +39,7 @@ export interface CreditCard {
   dueDate: string
   minPayment: number
   manual?: boolean
+  favoriteRank?: number | null
 }
 
 export type TransactionType = 'income' | 'expense' | 'transfer'
@@ -193,6 +196,8 @@ export interface ReportingPeriod {
 
 /** The complete, in-memory finance state the UI reads from. */
 export interface FinanceState {
+  /** true once the user has chosen favorites (even an empty list); false means Overview falls back to suggestions. */
+  favoritesConfigured?: boolean
   accounts: Account[]
   creditCards: CreditCard[]
   categories: Category[]

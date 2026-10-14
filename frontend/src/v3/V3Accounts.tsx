@@ -5,10 +5,11 @@ import { useFinance } from '../hooks/useFinance'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
 import { transactionAccountLabel } from '../state/financeSelectors'
 import type { Account, AccountType, CreditCard, FinanceState, Transaction } from '../domain/finance'
-import { formatDateLabel, formatDueDateLabel } from '../utils/date'
+import { formatDateLabel } from '../utils/date'
 import { formatMinorUnits } from '../utils/currency'
 import { exactMinor, parseMoneyInput } from '../utils/money'
 import { activityKind, DEFAULT_FILTERS, isReversalPart, KIND_LABEL } from './activityModel'
+import { FavoritesPanel, FavoriteToggle, useFavoriteControls } from './V3Favorites'
 import { V3AccountCard, type V3AccountKind } from './V3AccountCard'
 import { useActivityFeed } from './useActivityFeed'
 import { V3_ROUTES } from './v3Preview'
@@ -30,6 +31,15 @@ export function accountItems(state: FinanceState): Item[] {
   })
   for (const c of state.creditCards) items.push({ id: c.id, kind: 'credit', tone: next('credit'), card: c })
   return items
+}
+
+/** The backend stores only the due day of month, so say that rather than showing a made-up calendar date. */
+export function dueDayLabel(dueDate: string): string {
+  const day = Number(dueDate.slice(8, 10))
+  if (!Number.isInteger(day) || day < 1 || day > 31) return 'Not set'
+  const mod100 = day % 100
+  const suffix = mod100 >= 11 && mod100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] ?? 'th'
+  return `The ${day}${suffix} of each month`
 }
 
 function Recent({ state, accountId }: { state: FinanceState; accountId: string }) {
@@ -84,7 +94,7 @@ function EditForm({ item, onDone }: { item: Item; onDone: () => void }) {
       <div className="v3-field"><label className="v3-label" htmlFor="v3-e-name">Name</label><input id="v3-e-name" className="v3-input" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={Boolean(error) && !name.trim()} /></div>
       {!item.card && <div className="v3-field"><label className="v3-label" htmlFor="v3-e-inst">Institution (optional)</label><input id="v3-e-inst" className="v3-input" value={institution} onChange={(e) => setInstitution(e.target.value)} /></div>}
       <div className="v3-field"><label className="v3-label" htmlFor="v3-e-last">Last 4 digits{item.card ? '' : ' (optional)'}</label><input id="v3-e-last" className="v3-input" inputMode="numeric" maxLength={4} value={lastFour} onChange={(e) => setLastFour(e.target.value.replace(/\D/g, ''))} /></div>
-      <p className="v3-caption">Balances change only through transactions, so they cannot be edited here.</p>
+      <p className="v3-caption">Balances change only through transactions, so they cannot be edited here.{item.card ? ' Credit limit, due day, minimum payment and network cannot be changed here yet.' : ''}</p>
       {error && <p role="alert" className="v3-secondary v3-act-error">{error}</p>}
       <div className="v3-page-actions"><button type="submit" className="v3-btn v3-btn--primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button><button type="button" className="v3-btn v3-btn--secondary" onClick={onDone}>Cancel</button></div>
     </form>
@@ -120,9 +130,10 @@ function Details({ state, item, panelId }: { state: FinanceState; item: Item; pa
             <div><dt>Outstanding debt (you owe)</dt><dd className="v3-figure v3-figure--md v3-figure--negative" data-testid="v3-card-owed">{money(bal)}</dd></div>
             <div><dt>Credit limit</dt><dd className="v3-figure">{money(limit)}</dd></div>
             <div><dt>Limit used</dt><dd>{used}%</dd></div>
-            <div><dt>Payment due</dt><dd>{formatDueDateLabel(card.dueDate)}</dd></div>
-            {card.minPayment > 0 && <div><dt>Minimum payment</dt><dd className="v3-figure">{money(exactMinor(card.minPaymentMinor, card.minPayment))}</dd></div>}
+            <div><dt>Payment due</dt><dd data-testid="v3-card-due">{dueDayLabel(card.dueDate)}</dd></div>
+            <div><dt>Minimum payment</dt><dd className="v3-figure" data-testid="v3-card-min">{card.minPayment > 0 ? money(exactMinor(card.minPaymentMinor, card.minPayment)) : 'Not set'}</dd></div>
           </dl>
+          {card.minPayment <= 0 && <p className="v3-caption">No minimum payment has been recorded for this card; MoniKey does not assume one. Check your statement.</p>}
           <p className="v3-caption">Remaining credit is a limit, not cash you hold, so it is never counted as spendable.</p>
         </>
       ) : (
@@ -224,6 +235,7 @@ function AddCardForm({ onDone }: { onDone: () => void }) {
 
 export function V3Accounts() {
   const { state } = useFinance()
+  const favorites = useFavoriteControls(state)
   const [params, setParams] = useSearchParams()
   const [adding, setAdding] = useState<'account' | 'card' | null>(null)
   const items = useMemo(() => accountItems(state), [state])
@@ -245,6 +257,7 @@ export function V3Accounts() {
       </div>
       {adding === 'account' && <AddAccountForm onDone={() => setAdding(null)} />}
       {adding === 'card' && <AddCardForm onDone={() => setAdding(null)} />}
+      {favorites && items.length > 0 && <FavoritesPanel state={state} controls={favorites} />}
       {requested && !selected && <p role="alert" className="v3-card v3-ov-banner">That account was not found. It may have been archived.</p>}
       {items.length === 0 ? <p className="v3-card v3-secondary" data-testid="v3-acct-empty">No accounts yet. Add a bank account, e-wallet, cash wallet or credit card to get started.</p> : (
         <ul className="v3-acct-grid" aria-label="Accounts">
@@ -262,6 +275,7 @@ export function V3Accounts() {
                   expanded={expanded} controls={expanded ? panelId : undefined} onSelect={() => select(item.id)}
                   label={`${name}, ${item.card ? `outstanding debt ${money(bal)}` : `balance ${money(bal)}`}. ${expanded ? 'Hide' : 'Show'} details`}
                 />
+                {favorites && <FavoriteToggle id={item.id} name={name} controls={favorites} />}
                 {expanded && <Details state={state} item={item} panelId={panelId} />}
               </li>
             )

@@ -61,6 +61,7 @@ function Empty({ children }: { children: string }) {
 function SummaryAccounts() {
   const { state } = useFinance()
   const favorites = favoriteAccounts(state)
+  if (favorites.length === 0 && state.favoritesConfigured) return <><Empty>No favorite accounts selected. Choose up to four on the Accounts page.</Empty><Link to="/v3/accounts" className="v3-btn v3-btn--secondary v3-ov-wide-btn">Choose favorites</Link></>
   if (favorites.length === 0) return <Empty>No accounts yet. Add one from Accounts to see it here.</Empty>
   return (
     <>

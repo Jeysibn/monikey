@@ -113,12 +113,27 @@ export type FavoriteItem =
 const bankLike = (a: Account) => a.type === 'checking' || a.type === 'savings'
 
 /**
- * There is no persisted "favorite" flag in the domain or API yet. The four
- * cards are chosen deterministically: first bank, e-wallet, cash and credit
- * card in list order (one per kind), then filled with remaining accounts/cards
- * in list order. Documented as a data gap in the Stage 4 notes.
+ * Overview cards. Once the user has configured favorites (even an empty list) only their
+ * selection is shown, in rank order, and may be shorter than four. Until then the four
+ * cards are suggested deterministically: first bank, e-wallet, cash and credit card in
+ * list order (one per kind), then filled with remaining accounts/cards in list order.
  */
 export function favoriteAccounts(state: FinanceState, count = 4): FavoriteItem[] {
+  if (state.favoritesConfigured) return selectedFavorites(state).slice(0, count)
+  return suggestedFavorites(state, count)
+}
+
+const kindOfAccount = (a: Account): Exclude<V3AccountKind, 'credit'> => (bankLike(a) ? 'bank' : (a.type as 'ewallet' | 'cash'))
+
+/** The user's pinned accounts in rank order. Archived accounts are not in state, so they cannot appear. */
+export function selectedFavorites(state: FinanceState): FavoriteItem[] {
+  const items: { rank: number; item: FavoriteItem }[] = []
+  for (const a of state.accounts) if (typeof a.favoriteRank === 'number' && a.type !== 'credit_card') items.push({ rank: a.favoriteRank, item: { kind: kindOfAccount(a), account: a } })
+  for (const c of state.creditCards) if (typeof c.favoriteRank === 'number') items.push({ rank: c.favoriteRank, item: { kind: 'credit', card: c } })
+  return items.sort((x, y) => x.rank - y.rank).map((x) => x.item)
+}
+
+export function suggestedFavorites(state: FinanceState, count = 4): FavoriteItem[] {
   const assets = state.accounts.filter((a) => a.classification === 'asset' && LIQUID_TYPES.includes(a.type))
   const kindOf = (a: Account): Exclude<V3AccountKind, 'credit'> => (bankLike(a) ? 'bank' : (a.type as 'ewallet' | 'cash'))
   const picked: FavoriteItem[] = []

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { FinanceProvider } from '../state/FinanceProvider'
 import { fixedClock } from '../utils/clock'
-import { V3Accounts } from './V3Accounts'
+import { dueDayLabel, V3Accounts } from './V3Accounts'
 import { V3Activity } from './V3Activity'
 
 afterEach(cleanup)
@@ -22,6 +22,16 @@ function setup(path = '/v3/accounts') {
     </FinanceProvider>,
   )
 }
+
+describe('credit card due and minimum payment presentation', () => {
+  it('describes the due day, not a fabricated calendar date', () => {
+    expect(dueDayLabel('2026-10-01')).toBe('The 1st of each month')
+    expect(dueDayLabel('2026-10-22')).toBe('The 22nd of each month')
+    expect(dueDayLabel('2026-10-23')).toBe('The 23rd of each month')
+    expect(dueDayLabel('2026-10-11')).toBe('The 11th of each month')
+    expect(dueDayLabel('')).toBe('Not set')
+  })
+})
 
 describe('V3 Accounts', () => {
   it('expands only one account at a time and records it in the URL', () => {
@@ -46,6 +56,10 @@ describe('V3 Accounts', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Checking,/ }))
     fireEvent.click(screen.getByRole('link', { name: 'View all activity' }))
     expect(screen.getByTestId('loc').textContent).toMatch(/^\/v3\/activity\?account=/)
+  })
+  it('hides favorite controls in mock mode (nothing would persist)', () => {
+    setup()
+    expect(screen.queryByTestId('v3-fav-panel')).toBeNull()
   })
   it('does not offer balance edits and hides edit/archive without a backend', () => {
     setup()

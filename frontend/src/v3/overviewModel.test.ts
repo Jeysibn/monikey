@@ -89,6 +89,30 @@ describe('favoriteAccounts', () => {
   })
 })
 
+describe('favoriteAccounts with a saved selection', () => {
+  it('shows only the selection in rank order, fewer than four stays fewer, cards stay credit', () => {
+    const s = base()
+    const card = s.creditCards[0]!
+    s.favoritesConfigured = true
+    s.accounts = s.accounts.map((a, i) => (i === 1 ? { ...a, favoriteRank: 2 } : a))
+    s.creditCards = [{ ...card, favoriteRank: 1 }]
+    const f = favoriteAccounts(s)
+    expect(f).toHaveLength(2)
+    expect(f[0]).toMatchObject({ kind: 'credit' })
+    expect(f[1]).toMatchObject({ account: { id: s.accounts[1]!.id } })
+  })
+  it('configured-but-empty shows nothing instead of falling back to suggestions', () => {
+    const s = base()
+    s.favoritesConfigured = true
+    expect(favoriteAccounts(s)).toEqual([])
+  })
+  it('ignores ranks while unconfigured and uses suggestions', () => {
+    const s = base()
+    s.accounts = s.accounts.map((a) => ({ ...a, favoriteRank: null }))
+    expect(favoriteAccounts(s)).toHaveLength(4)
+  })
+})
+
 describe('history', () => {
   it('maps only stored snapshots and keeps exact minor units', () => {
     expect(historyFromTracked([{ date: '2026-08-01', netTrackedPosition: '123456789012345678' }])).toEqual([{ date: '2026-08-01', netMinor: 123456789012345678n }])

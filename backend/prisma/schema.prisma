@@ -352,6 +352,8 @@ model Transaction {
   splits               TransactionSplit[]
   tags                 TransactionTagOnTransaction[]
 
+  recurringOccurrence RecurringOccurrence?
+
   @@unique([userId, idempotencyKey], map: "transactions_user_id_idempotency_key_idx")
   @@index([userId, occurredOn])
   @@index([userId, categoryId, occurredOn])
@@ -459,6 +461,33 @@ enum RecurringFrequency {
   @@map("recurring_frequency")
 }
 
+enum RecurringOccurrenceStatus {
+  confirmed
+  skipped
+
+  @@map("recurring_occurrence_status")
+}
+
+// One row per addressed billing cycle. The unique (recurring_item_id, due_date) is the
+// database-level guard that a cycle can be confirmed or skipped only once.
+model RecurringOccurrence {
+  id              String                      @id @default(uuid()) @db.Uuid
+  recurringItemId String                      @map("recurring_item_id") @db.Uuid
+  dueDate         DateTime                    @map("due_date") @db.Date
+  status          RecurringOccurrenceStatus
+  transactionId   String?                     @unique @map("transaction_id") @db.Uuid
+  paidOn          DateTime?                   @map("paid_on") @db.Date
+  amountMinor     BigInt?                     @map("amount_minor")
+  accountId       String?                     @map("account_id") @db.Uuid
+  createdAt       DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recurringItem RecurringItem @relation(fields: [recurringItemId], references: [id], onDelete: Cascade)
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringItemId, dueDate])
+  @@map("recurring_occurrences")
+}
+
 enum RecurringStatus {
   active
   paused
@@ -478,12 +507,15 @@ model RecurringItem {
   autopay      Boolean            @default(false)
   status       RecurringStatus    @default(active)
   lastPaidDate DateTime?          @map("last_paid_date") @db.Date
+  // Day of month the bill is anchored to (nullable = legacy row; the due date's day is used).
+  anchorDay    Int?               @map("anchor_day") @db.SmallInt
   createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account  FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account     FinancialAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category    Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  occurrences RecurringOccurrence[]
 
   @@index([userId, nextDueDate])
   @@index([userId, status])

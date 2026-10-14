@@ -336,7 +336,7 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
 - Summary and Insights keep distinct labels for all-category spending versus budgeted-category spending.
 
 ### Results (actual)
-- Frontend vitest: 35 files / 344 tests pass (before final edits; v3 folder re-run: 54 tests pass). Typecheck, build and `verify:privacy` pass. Lint: warnings only (vendored tesseract and existing pages), no errors.
+- Frontend vitest: 35 files / 338 tests pass. Typecheck, build and `verify:privacy` pass. Lint: warnings only (vendored tesseract and existing pages), no errors.
 - Backend (disposable PostgreSQL): 57 files / 442 tests pass; `api:openapi:check` and typecheck pass.
 - Playwright mock suite: 142 passed, 9 skipped (the real-backend spec, which needs `V3_BACKEND_LOCAL=1`).
 - **Real-backend browser run** (local API on :3000, disposable DB, Vite dev server with `VITE_FINANCE_BACKEND=true`, test-only registered user, 60+ seeded transactions): 9 of 9 passed. Covered: register and load; Overview and Insights; card owed 1,500.00 (never available credit); paging across 60+ rows; literal `%` search; type filter with Back/Forward; reversal hidden and shown in audit view; card charge and repayment labels; reverse via confirm; account create, edit (no balance field), archive; account → filtered Activity and back; error state with retry and recovery; axe (WCAG 2 A/AA) and no horizontal overflow at mobile, tablet and desktop.

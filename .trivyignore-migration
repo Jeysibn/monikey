@@ -12,3 +12,13 @@ CVE-2026-14257
 CVE-2026-69152
 CVE-2026-69192
 CVE-2026-73566
+
+# npm 11.x, bundled in the node:24-alpine base image (and in the newest npm release,
+# checked 2026-10-15), vendors brace-expansion 5.0.9 and undici 6.28.0 under
+# /usr/local/lib/node_modules/npm. The fixed releases cannot be applied from this repository.
+# Exposure: the migration image only runs a one-off `prisma migrate deploy` Job with no
+# inbound traffic and no untrusted brace patterns or WebSocket peers; the API/worker runtime
+# image deletes npm entirely. Re-evaluate when the base image or npm vendors patched copies.
+CVE-2026-102276
+CVE-2026-102278
+CVE-2026-19534

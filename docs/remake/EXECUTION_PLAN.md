@@ -664,3 +664,11 @@ Deliverable: `docs/remake/STAGE8A_PRODUCTION_PREFLIGHT.md`. Read-only; nothing w
 - **New P1s:** D14 (api, worker and migrate share the mutable `latest` tag, so the running worker version is unknown and may be pre-V3) and D15 (Argo `automated`+`prune`+`selfHeal` plus a Sync-hook migration: a Git push re-runs migrations, and a stopped worker would be restored). New P2/P3: D16 postgres pinning/recovery, D17 secret custody, D18 API docs exposure.
 - **Gate:** "no unresolved P0/P1" remains FAIL (open P1: D11-A, D11-B, D11-C/D12, D14, D15).
 - **Recommendation:** NO-GO for every operational change; GO only to obtain read-only cluster access (or user-run read-only commands) and to approve a GitOps fix proposal. The refined 16-step sequence is in the report, section 11.
+
+## 20. Stage 8B: live infrastructure verification (NOT PASSED: no live access)
+
+Deliverable: `docs/remake/STAGE8B_LIVE_PREFLIGHT.md`. No kubectl/kubeconfig/argocd/helm and no authorized read-only environment exists on this machine, so no live evidence was collected and no live item was verified. The package API returned 403 (no `read:packages` scope).
+
+- New non-cluster evidence: Longhorn is configured with 1 replica on a single node and no backup target; exposure is LAN-only per Git; the last successful backend image publish was 2026-09-14 (`a49d294`), later backend/web publishes failed or were web-only, and `origin/main` contains none of the V3 migrations. **Inferred (not verified):** `monikey-api:latest` is a pre-V3 build, so the running worker is very probably the legacy auto-posting worker.
+- The minimal operator read-only command set (sections A-F) and redaction rules are in the report; the blocker matrix keeps D11-A, D11-B, D11-C/D12, D14 and D15 as P1 FAIL (Git/CI) with live NOT VERIFIED. D16/D17 (P2) and D18 (P3) remain NOT VERIFIED.
+- Recommendation: NO-GO for any operational step; GO only for the operator running the read-only commands. Dependency order: live evidence, backup, image provenance and digest pins, migration artifact, HTTPS/sessions, Argo window procedure, then dry-run and release.

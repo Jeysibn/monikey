@@ -14,6 +14,7 @@ import {
 } from './activityModel'
 import { useActivityFeed, useTransactionById } from './useActivityFeed'
 import { useMediaQuery } from './useMediaQuery'
+import { useQuickAdd } from './quickAddContext'
 import { V3_ROUTES } from './v3Preview'
 import './V3Activity.css'
 
@@ -128,6 +129,7 @@ function Detail({ state, t, onClose, onEdit, onReverse, busy, error }: { state: 
 
 export function V3Activity({ onEditTransaction }: { onEditTransaction?: (tx: Transaction) => void }) {
   const finance = useFinance()
+  const quickAdd = useQuickAdd()
   const { state } = finance
   const asyncFinance = useAsyncFinanceOptional()
   const [params, setParams] = useSearchParams()
@@ -212,6 +214,7 @@ export function V3Activity({ onEditTransaction }: { onEditTransaction?: (tx: Tra
           {feed.status === 'ready' && rows.length === 0 && (
             <div className="v3-card" data-testid="v3-act-empty">
               <p>{count > 0 ? 'No transactions match these filters.' : 'No transactions yet. Use Add to record your first one.'}</p>
+              {count === 0 && <button type="button" className="v3-btn v3-btn--primary" onClick={() => quickAdd.open()}>Add a transaction</button>}
               {count > 0 && <button type="button" className="v3-btn v3-btn--secondary" onClick={clear}>Clear filters</button>}
             </div>
           )}

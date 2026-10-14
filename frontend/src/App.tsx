@@ -67,7 +67,7 @@ export default function App() {
   if (onV3Path && v3Enabled) {
     return (
       <>
-        <V3Shell onAddTransaction={handleOpenAddTransaction}>
+        <V3Shell>
           <Routes>
             <Route path="/v3" element={<V3Overview />} />
             <Route path="/v3/activity" element={<V3Activity onEditTransaction={handleEditTransaction} />} />

@@ -1,7 +1,11 @@
-import { useEffect, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { V3Dock } from '../components/V3Dock'
 import { setV3PreviewEnabled, V3_ROUTES } from './v3Preview'
+import { V3QuickAdd } from './V3QuickAdd'
+import { QuickAddContext } from './quickAddContext'
+import { usePendingTransactions } from './usePendingTransactions'
+import type { QuickAddType } from './quickAddModel'
 import '../styles/v3-tokens.css'
 import '../styles/v3-primitives.css'
 import './V3Shell.css'
@@ -14,12 +18,28 @@ import './V3Shell.css'
  * the header utilities. The shell reserves `--v3-dock-clearance` at the bottom
  * so the fixed dock never covers content.
  */
-export function V3Shell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction: () => void }) {
+function PendingBanner() {
+  const { waiting, needsAttention } = usePendingTransactions()
+  if (waiting + needsAttention === 0) return null
+  return (
+    <p className="v3-pending-banner" role="status" data-testid="v3-pending-sync">
+      <strong>{waiting + needsAttention} transaction{waiting + needsAttention === 1 ? '' : 's'} queued, pending sync</strong>
+      <span>{needsAttention > 0 ? `${needsAttention} need attention. ` : ''}Not yet in your balances or Activity.</span>
+      <Link className="v3-link" to="/sync">Review in Sync Center</Link>
+    </p>
+  )
+}
+
+export function V3Shell({ children, onAddTransaction }: { children: ReactNode; onAddTransaction?: () => void }) {
+  const [quick, setQuick] = useState<{ type: QuickAddType } | null>(null)
+  const open = useCallback((type: QuickAddType = 'expense') => setQuick({ type }), [])
+  const api = useMemo(() => ({ open }), [open]) 
   useEffect(() => {
     document.documentElement.classList.add('v3-active')
     return () => document.documentElement.classList.remove('v3-active')
   }, [])
   return (
+    <QuickAddContext.Provider value={api}>
     <div className="v3-root v3-shell">
       <a className="v3-shell__skip v3-btn v3-btn--primary" href="#v3-main">Skip to main content</a>
       <header className="v3-shell__header">
@@ -31,9 +51,11 @@ export function V3Shell({ children, onAddTransaction }: { children: ReactNode; o
           <Link className="v3-btn v3-btn--secondary" to="/" onClick={() => setV3PreviewEnabled(false)}>Exit preview</Link>
         </nav>
       </header>
-      <main id="v3-main" className="v3-shell__main" tabIndex={-1}>{children}</main>
-      <V3Dock routes={V3_ROUTES} onAddTransaction={onAddTransaction} />
+      <main id="v3-main" className="v3-shell__main" tabIndex={-1}><PendingBanner />{children}</main>
+      <V3Dock routes={V3_ROUTES} onAddTransaction={onAddTransaction ?? (() => open())} />
+      {quick && <V3QuickAdd initialType={quick.type} onClose={() => setQuick(null)} />}
     </div>
+    </QuickAddContext.Provider>
   )
 }
 

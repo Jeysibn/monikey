@@ -9,6 +9,7 @@ import { formatMinorUnits } from '../utils/currency'
 import { exactMinor } from '../utils/money'
 import { V3AccountCard } from './V3AccountCard'
 import { V3Workspace } from './V3Shell'
+import { useQuickAdd } from './quickAddContext'
 import { budgetRows, budgetSnapshot, favoriteAccounts, positionMinor, recentActivity, type HistoryPoint } from './overviewModel'
 import { useBudgetPerformance,  useNetTrackedHistory, usePeriodReport } from './useOverviewReports'
 import './V3Overview.css'
@@ -143,8 +144,9 @@ function MonthlySnapshot() {
 
 function RecentActivity() {
   const { state } = useFinance()
+  const quickAdd = useQuickAdd()
   const rows = recentActivity(state, 6)
-  if (rows.length === 0) return <Empty>No transactions yet.</Empty>
+  if (rows.length === 0) return <><Empty>No transactions yet.</Empty><button type="button" className="v3-btn v3-btn--secondary v3-ov-wide-btn" onClick={() => quickAdd.open()}>Add a transaction</button></>
   return (
     <>
       <ul className="v3-card v3-ov-activity" aria-label="Recent transactions">

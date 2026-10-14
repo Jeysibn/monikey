@@ -57,12 +57,14 @@ export class RecurringService {
         }
       }
       return { kind: 'item' as const, item: await tx.recurringItem.update({ where: { id: itemId }, data }) }
-    })
+    }, { maxWait: 15_000 })
   }
 
   // Read-only lookup of an already-committed transaction (the ledger read path uses its own connection).
-  private async view(userId: string, transactionId: string | null): Promise<TransactionView | null> {
-    return transactionId ? this.ledger.getTransaction(userId, transactionId) : null
+  /** Read through the caller's transaction client: using the shared pool from inside an interactive transaction
+   *  needs a second connection while the first is held, which deadlocks a small pool under concurrent requests. */
+  private async view(db: Tx, userId: string, transactionId: string | null): Promise<TransactionView | null> {
+    return transactionId ? this.ledger.getTransaction(userId, transactionId, db) : null
   }
 
   /** Likely already-entered payments for this bill (never reversed, not already linked, not this cycle's own key). */
@@ -107,8 +109,8 @@ export class RecurringService {
   private async staleCycleResult(tx: Tx, item: RecurringItem, userId: string, expectedDueDate: string): Promise<RecurringConflict | null> {
     if (expectedDueDate >= isoDate(item.nextDueDate)) return null
     const legacy = await tx.transaction.findFirst({ where: { userId, idempotencyKey: occurrenceLedgerKey(item.id, expectedDueDate) } })
-    if (legacy?.reversedTransactionId) return reversedPayment(expectedDueDate, await this.view(userId, legacy.id))
-    if (legacy) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already recorded.`, { transaction: await this.view(userId, legacy.id) })
+    if (legacy?.reversedTransactionId) return reversedPayment(expectedDueDate, await this.view(tx, userId, legacy.id))
+    if (legacy) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already recorded.`, { transaction: await this.view(tx, userId, legacy.id) })
     return null
   }
 
@@ -125,10 +127,10 @@ export class RecurringService {
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${due}T00:00:00Z`) } } })
       if (existing) {
         if (existing.status === 'skipped') return conflict(409, 'RECURRING_CYCLE_SKIPPED', `The ${due} cycle was skipped, so no payment was recorded for it.`)
-        if (await this.isReversed(tx, existing.transactionId)) return reversedPayment(due, await this.view(userId, existing.transactionId))
+        if (await this.isReversed(tx, existing.transactionId)) return reversedPayment(due, await this.view(tx, userId, existing.transactionId))
         const same = existing.amountMinor === input.amountMinor && existing.accountId === accountId && existing.paidOn && isoDate(existing.paidOn) === input.paidOn
-        if (!same) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${due} cycle was already confirmed with different details. Nothing was changed.`, { transaction: await this.view(userId, existing.transactionId) })
-        return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(userId, existing.transactionId) }
+        if (!same) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${due} cycle was already confirmed with different details. Nothing was changed.`, { transaction: await this.view(tx, userId, existing.transactionId) })
+        return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(tx, userId, existing.transactionId) }
       }
       const stale = await this.staleCycleResult(tx, item, userId, due)
       if (stale) return stale
@@ -152,7 +154,7 @@ export class RecurringService {
       if (prior) {
         const occurrence = await tx.recurringOccurrence.create({ data: { recurringItemId: itemId, dueDate: new Date(`${due}T00:00:00Z`), status: 'confirmed', transactionId: prior.id, paidOn: prior.occurredOn, amountMinor: prior.amountMinor, accountId: prior.fromAccountId } })
         const updated = await tx.recurringItem.update({ where: { id: itemId }, data: { nextDueDate, lastPaidDate: prior.occurredOn } })
-        return { kind: 'ok', outcome: 'reconciled_existing', item: updated, occurrence, transaction: await this.view(userId, prior.id) }
+        return { kind: 'ok', outcome: 'reconciled_existing', item: updated, occurrence, transaction: await this.view(tx, userId, prior.id) }
       }
 
       // 4. Warn about an already-entered payment unless the user has seen the warning.
@@ -169,7 +171,7 @@ export class RecurringService {
       const occurrence = await tx.recurringOccurrence.create({ data: { recurringItemId: itemId, dueDate: new Date(`${due}T00:00:00Z`), status: 'confirmed', transactionId: posted.transaction.id, paidOn: new Date(`${input.paidOn}T00:00:00Z`), amountMinor: input.amountMinor, accountId } })
       const updated = await tx.recurringItem.update({ where: { id: itemId }, data: { nextDueDate, lastPaidDate: new Date(`${input.paidOn}T00:00:00Z`) } })
       return { kind: 'ok', outcome: 'confirmed', item: updated, occurrence, transaction: posted.transaction }
-    }, { timeout: 15_000 })
+    }, { timeout: 15_000, maxWait: 15_000 })
   }
 
   /** Skip a due/overdue cycle: advances the schedule, records the skip, never touches the ledger. */
@@ -179,8 +181,8 @@ export class RecurringService {
       if (!item) return conflict(404, 'NOT_FOUND', 'Recurring item not found.')
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`) } } })
       if (existing) {
-        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(userId, existing.transactionId))
-        if (existing.status === 'confirmed') return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already paid.`, { transaction: await this.view(userId, existing.transactionId) })
+        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(tx, userId, existing.transactionId))
+        if (existing.status === 'confirmed') return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already paid.`, { transaction: await this.view(tx, userId, existing.transactionId) })
         return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: null }
       }
       const stale = await this.staleCycleResult(tx, item, userId, expectedDueDate)
@@ -190,7 +192,7 @@ export class RecurringService {
       const occurrence = await tx.recurringOccurrence.create({ data: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`), status: 'skipped' } })
       const updated = await tx.recurringItem.update({ where: { id: itemId }, data: { nextDueDate: advanceDueDate(item.nextDueDate, item.frequency, item.anchorDay) } })
       return { kind: 'ok', outcome: 'skipped', item: updated, occurrence, transaction: null }
-    })
+    }, { maxWait: 15_000 })
   }
 
   /** Attach a payment the user already recorded (e.g. via Quick Add) to the current cycle. No ledger posting. */
@@ -200,8 +202,8 @@ export class RecurringService {
       if (!item) return conflict(404, 'NOT_FOUND', 'Recurring item not found.')
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`) } } })
       if (existing) {
-        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(userId, existing.transactionId))
-        if (existing.status === 'confirmed' && existing.transactionId === transactionId) return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(userId, transactionId) }
+        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(tx, userId, existing.transactionId))
+        if (existing.status === 'confirmed' && existing.transactionId === transactionId) return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(tx, userId, transactionId) }
         return conflict(409, existing.status === 'skipped' ? 'RECURRING_CYCLE_SKIPPED' : 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already addressed. Nothing was changed.`)
       }
       const stale = await this.staleCycleResult(tx, item, userId, expectedDueDate)
@@ -214,7 +216,7 @@ export class RecurringService {
       if (target.recurringOccurrence) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', 'That payment is already linked to another bill cycle.', { field: 'transactionId' })
       const occurrence = await tx.recurringOccurrence.create({ data: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`), status: 'confirmed', transactionId, paidOn: target.occurredOn, amountMinor: target.amountMinor, accountId: target.fromAccountId } })
       const updated = await tx.recurringItem.update({ where: { id: itemId }, data: { nextDueDate: advanceDueDate(item.nextDueDate, item.frequency, item.anchorDay), lastPaidDate: target.occurredOn } })
-      return { kind: 'ok', outcome: 'linked', item: updated, occurrence, transaction: await this.view(userId, transactionId) }
-    })
+      return { kind: 'ok', outcome: 'linked', item: updated, occurrence, transaction: await this.view(tx, userId, transactionId) }
+    }, { maxWait: 15_000 })
   }
 }

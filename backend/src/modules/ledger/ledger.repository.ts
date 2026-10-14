@@ -24,8 +24,8 @@ export class LedgerRepository {
     } catch { return null }
   }
 
-  async getTransaction(id: string, userId: string): Promise<TransactionView | null> {
-    const tx = await this.prisma.transaction.findFirst({
+  async getTransaction(id: string, userId: string, db: PrismaTx = this.prisma): Promise<TransactionView | null> {
+    const tx = await db.transaction.findFirst({
       where: { id, userId }, include: { tags: { include: { tag: true } } },
     });
     return tx ? this.mapTransaction(tx) : null;

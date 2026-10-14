@@ -54,8 +54,8 @@ export class LedgerService {
     });
   }
 
-  async getTransaction(userId: string, id: string): Promise<TransactionView | null> {
-    return this.repo.getTransaction(id, userId);
+  async getTransaction(userId: string, id: string, db?: Prisma.TransactionClient): Promise<TransactionView | null> {
+    return this.repo.getTransaction(id, userId, db);
   }
 
   async listTransactions(query: TransactionQuery): Promise<Page<TransactionView>> {

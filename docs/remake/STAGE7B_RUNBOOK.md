@@ -56,7 +56,7 @@ The IndexedDB outbox lives in each user's browser. Only `create_transaction` (pl
 - **Commit lost by a restore:** replay creates it exactly once; later replays return the same row.
 - **Concurrent replays (two tabs / retry racing the original):** one row.
 - **Replay after the transaction was reversed:** returns the original, never re-creates or re-applies it.
-- **Changed payload under the same key:** the FIRST committed content wins; the edit is not applied (the client treats outbox payloads as immutable, so this should not occur; if a user edits a queued item, re-queue it under a new key).
+- **Changed payload under the same key:** since Stage 7C the server answers `409 IDEMPOTENCY_KEY_REUSED` (amount, type, accounts, category, fee or date differ) and posts nothing; cosmetic differences (title, note) still replay the original. The outbox classifies this as a *conflict* (visible in Sync Center), never as success. Before Stage 7C the first content silently won.
 - **Keys are per user:** another user or session cannot collide with or read them. A logged-out replay gets 401 and posts nothing, so the outbox keeps the operation until login.
 - **`recurring:` key prefix** is reserved and cannot be forged from the outbox.
 - A restore does not touch browsers: after a restore, users should open Sync Center and let pending items replay; items already in the restored DB replay as no-ops. Operations that failed or conflicted stay visible for review. Clearing site data or switching browsers loses un-synced operations permanently (no server copy). Recurring confirmations are not queued offline (they need the server) and are safe to retry.

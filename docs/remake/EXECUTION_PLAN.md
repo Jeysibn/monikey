@@ -632,3 +632,22 @@ Documented in the runbook. `stage7b-offline-replay.db.test.ts` (8 tests): replay
 
 ### 17.12 Stage 7C go/no-go (deliverable 9)
 **Conditional GO to PLAN Stage 7C; NO-GO for any production execution** until the user authorizes and completes: off-host production backup verified, a real restore drill, the real-data dry-run reviewed, a production inventory with all old workers confirmed stopped, and a GitOps plan reviewed. Synthetic results are not evidence for those items. Stage 7C was not started.
+
+## 18. Stage 7C: production release readiness (planning only)
+
+Deliverable: `docs/remake/STAGE7C_RELEASE_PLAN.md` (evidence review, worker/architecture inventory commands, 20-step migration procedure with authorization levels, financial safeguards review, recurring limitation classification, backup/recovery plan, GitOps proposal, rollback/forward-recovery matrix, real-data audit checklist, smoke checklist, defect register, release gate). Nothing was executed against production, the homelab, a registry or GitOps; no data was copied; nothing pushed.
+
+### 18.1 Code change made (one correctness fix)
+Reusing an idempotency key with a materially different `POST /transactions` body used to return the first transaction silently. Now `409 IDEMPOTENCY_KEY_REUSED` (type, amount, fee, accounts, category or date differ); cosmetic differences still replay; the `recurring:` prefix keeps its cycle semantics. The offline outbox treats it as a conflict. Commit `586ab23`; `STAGE7B_RUNBOOK.md` corrected.
+
+### 18.2 Test results
+- NEW this stage: backend full suite on a fresh disposable PostgreSQL (migrated + system seed): 64 files / 507 tests passed, 0 skipped (count unchanged: the "keeps first content" test was replaced by the 409 test); `tsc --noEmit` clean; `api:openapi` regenerated with no diff and `api:openapi:check` clean; lint 22 warnings, all pre-existing.
+- NEW this stage: real-backend browser suite (`scripts/e2e-real-backend.sh`, fresh DB): first run 77 passed, 1 failed, 8 did not run - the first spec's `beforeAll` (user registration) timed out at 30 s while a backend lint was running concurrently; the clean rerun on an idle machine: **86 passed** (4.2 min). Treat the first failure as a load-related flake, not proven root cause.
+- REUSED from Stage 7B (frontend code unchanged since): frontend Vitest 42 files / 428 tests, `tsc -b`, oxlint (Crypto.tsx warnings only), build, `verify:privacy`; Playwright mock suite 151 passed / 86 skipped; HTTP smoke 58 passed; failure injection 0 failures; backup/restore drill; old-worker compatibility; real-backend suite on a restored DB 86 passed.
+- Not re-run: the HTTP smoke and the restored-DB browser run after the 409 change (the full backend suite and a fresh-DB browser run cover it).
+
+### 18.3 Gate status (details in the plan, section 12)
+All production blockers are NOT TESTED, and "no unresolved P0/P1" is FAIL because the external GitOps gaps (D11) and the missing production backup/restore/dry-run evidence (D12) are open. Code-level P1s D1 (schedule advance) and D2 (idempotency conflict) are fixed. Recurring same-cycle repay (D3) is P2, accepted for initial release with the Quick Add workaround.
+
+### 18.4 Recommendation
+GO to request separate approval for production READ-ONLY inspection, an off-host backup and an isolated restore plus real-data dry-run. NO-GO for any migration, deployment or production change.

@@ -71,7 +71,7 @@ function SummaryAccounts() {
             const limit = exactMinor(f.card.limitMinor, f.card.limit)
             return (
               <li key={f.card.id}>
-                <Link to="/accounts" className="v3-ov-card-link" aria-label={`${f.card.name} credit card, outstanding balance owed ${money(owed)}. Open Accounts`}>
+                <Link to={`/v3/accounts?account=${f.card.id}`} className="v3-ov-card-link" aria-label={`${f.card.name} credit card, outstanding balance owed ${money(owed)}. Open account details`}>
                   <V3AccountCard kind="credit" name={f.card.name} figure={`Owed ${money(owed)}`} meta={`Outstanding debt · limit ${money(limit)}${f.card.lastFour ? ` · ••${f.card.lastFour}` : ''}`} />
                 </Link>
               </li>
@@ -81,14 +81,14 @@ function SummaryAccounts() {
           const bal = exactMinor(a.balanceMinor, a.balance)
           return (
             <li key={a.id}>
-              <Link to="/accounts" className="v3-ov-card-link" aria-label={`${a.name}, balance ${money(bal)}. Open Accounts`}>
+              <Link to={`/v3/accounts?account=${a.id}`} className="v3-ov-card-link" aria-label={`${a.name}, balance ${money(bal)}. Open account details`}>
                 <V3AccountCard kind={f.kind} name={a.name} figure={money(bal)} meta={[a.institution, a.lastFour ? `••${a.lastFour}` : ''].filter(Boolean).join(' · ') || undefined} />
               </Link>
             </li>
           )
         })}
       </ul>
-      <Link to="/accounts" className="v3-btn v3-btn--secondary v3-ov-wide-btn">All accounts</Link>
+      <Link to="/v3/accounts" className="v3-btn v3-btn--secondary v3-ov-wide-btn">All accounts</Link>
     </>
   )
 }
@@ -152,7 +152,7 @@ function RecentActivity() {
           const tone = t.type === 'income' ? 'v3-figure--positive' : ''
           return (
             <li key={t.id}>
-              <Link to="/transactions" className="v3-ov-activity__row">
+              <Link to={`/v3/activity?tx=${t.id}`} className="v3-ov-activity__row">
                 <span className="v3-ov-activity__main">
                   <span className="v3-ov-activity__title">{t.title}</span>
                   <span className="v3-caption v3-secondary">{formatDateLabel(t.date)} · {t.type === 'transfer' ? 'Transfer' : accountLabel(state, t.accountId)}{t.status === 'pending' ? ' · Pending' : ''}</span>
@@ -163,7 +163,7 @@ function RecentActivity() {
           )
         })}
       </ul>
-      <Link to="/transactions" className="v3-btn v3-btn--secondary v3-ov-wide-btn">All activity</Link>
+      <Link to="/v3/activity" className="v3-btn v3-btn--secondary v3-ov-wide-btn">All activity</Link>
     </>
   )
 }

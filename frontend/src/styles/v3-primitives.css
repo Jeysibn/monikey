@@ -67,3 +67,16 @@
 .v3-root .v3-account-card__chip { width: 34px; height: 24px; border-radius: 5px; background: linear-gradient(135deg, #f1d58a, #c99a2e); }
 .v3-root .v3-account-card__figure { font-family: var(--v3-font-figure); font-variant-numeric: tabular-nums; font-size: var(--v3-text-xl); font-weight: 700; }
 .v3-root .v3-account-card__meta { font-size: var(--v3-text-xs); opacity: 0.95; }
+
+/* Account card: spans (valid inside a button), per-account colour tones, interactive variant. */
+.v3-root .v3-account-card__body { display: block; }
+.v3-root .v3-account-card__figure, .v3-root .v3-account-card__meta { display: block; }
+.v3-root .v3-account-card--tone-1 { filter: hue-rotate(38deg); }
+.v3-root .v3-account-card--tone-2 { filter: hue-rotate(-34deg) saturate(1.05); }
+.v3-root .v3-account-card--tone-3 { filter: hue-rotate(78deg); }
+.v3-root .v3-account-card--tone-1 .v3-account-card__chip { filter: hue-rotate(-38deg); }
+.v3-root .v3-account-card--tone-2 .v3-account-card__chip { filter: hue-rotate(34deg); }
+.v3-root .v3-account-card--tone-3 .v3-account-card__chip { filter: hue-rotate(-78deg); }
+.v3-root .v3-account-card--button { width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.v3-root .v3-account-card--button[aria-expanded='true'] { outline: 3px solid var(--v3-blue); outline-offset: 2px; }
+.v3-root .v3-account-card--button:focus-visible { outline: var(--v3-focus); outline-offset: 3px; }

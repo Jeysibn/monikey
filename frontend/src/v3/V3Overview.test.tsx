@@ -13,8 +13,8 @@ function renderOverview() {
       <MemoryRouter initialEntries={['/v3']}>
         <Routes>
           <Route path="/v3" element={<V3Overview />} />
-          <Route path="/accounts" element={<h1>Classic Accounts</h1>} />
-          <Route path="/transactions" element={<h1>Classic Transactions</h1>} />
+          <Route path="/v3/accounts" element={<h1>V3 Accounts</h1>} />
+          <Route path="/v3/activity" element={<h1>V3 Activity</h1>} />
         </Routes>
       </MemoryRouter>
     </FinanceProvider>,
@@ -53,18 +53,18 @@ describe('V3 Overview summary', () => {
     expect(screen.getByTestId('v3-budget-line').textContent).toMatch(/Budgeted categories: .*of .*11,600\.00/)
     expect(screen.getByRole('progressbar', { name: 'Budgeted categories used' })).toBeTruthy()
   })
-  it('lists recent activity newest first and links to existing pages', () => {
+  it('lists recent activity newest first and links to V3 Activity', () => {
     renderOverview()
     const rows = within(screen.getByRole('list', { name: 'Recent transactions' })).getAllByRole('listitem')
     expect(rows.length).toBeGreaterThan(0)
     expect(rows[0]!.textContent).toContain('Grab Ride')
     fireEvent.click(screen.getByRole('link', { name: 'All activity' }))
-    expect(screen.getByRole('heading', { name: 'Classic Transactions' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'V3 Activity' })).toBeTruthy()
   })
-  it('navigates account cards to the existing Accounts page', () => {
+  it('navigates account cards to V3 Accounts', () => {
     renderOverview()
     fireEvent.click(screen.getByRole('link', { name: /^Checking, balance/ }))
-    expect(screen.getByRole('heading', { name: 'Classic Accounts' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'V3 Accounts' })).toBeTruthy()
   })
 })
 

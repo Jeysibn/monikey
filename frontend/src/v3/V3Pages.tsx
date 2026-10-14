@@ -36,26 +36,6 @@ function ClassicLinks({ links }: { links: { to: string; label: string }[] }) {
   )
 }
 
-export function V3Activity() {
-  return (
-    <>
-      <PageHead title="Activity" summary="Compact chronological list on mobile, sortable table on desktop (coming in the Activity milestone)." />
-      <Placeholder label="Transaction list region." rows={4} />
-      <ClassicLinks links={[{ to: '/transactions', label: 'Open classic Transactions' }, { to: '/imports', label: 'Imports' }, { to: '/reconciliation', label: 'Reconciliation' }]} />
-    </>
-  )
-}
-
-export function V3Accounts() {
-  return (
-    <>
-      <PageHead title="Accounts" summary="Account cards with inline recent activity (coming in the Accounts milestone)." />
-      <Placeholder label="Account cards region." rows={3} />
-      <ClassicLinks links={[{ to: '/accounts', label: 'Open classic Accounts' }, { to: '/crypto', label: 'Crypto' }, { to: '/goals', label: 'Goals' }]} />
-    </>
-  )
-}
-
 export function V3Planning() {
   return (
     <>

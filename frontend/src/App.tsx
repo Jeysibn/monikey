@@ -20,7 +20,9 @@ import { Security } from './pages/Security'
 import { Tags } from './pages/Tags'
 import { SyncCenter } from './pages/SyncCenter'
 import { V3Shell } from './v3/V3Shell'
-import { V3Accounts, V3Activity, V3DesignSpecimen, V3Planning } from './v3/V3Pages'
+import { V3DesignSpecimen, V3Planning } from './v3/V3Pages'
+import { V3Activity } from './v3/V3Activity'
+import { V3Accounts } from './v3/V3Accounts'
 import { V3Overview } from './v3/V3Overview'
 import { isV3PreviewEnabled, setV3PreviewEnabled, v3QueryOverride } from './v3/v3Preview'
 
@@ -68,7 +70,7 @@ export default function App() {
         <V3Shell onAddTransaction={handleOpenAddTransaction}>
           <Routes>
             <Route path="/v3" element={<V3Overview />} />
-            <Route path="/v3/activity" element={<V3Activity />} />
+            <Route path="/v3/activity" element={<V3Activity onEditTransaction={handleEditTransaction} />} />
             <Route path="/v3/accounts" element={<V3Accounts />} />
             <Route path="/v3/planning" element={<V3Planning />} />
             <Route path="/v3/design" element={<V3DesignSpecimen />} />

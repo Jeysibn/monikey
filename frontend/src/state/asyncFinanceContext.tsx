@@ -29,6 +29,7 @@ export interface AsyncFinanceContextValue {
   refreshRecurring: () => Promise<boolean>
   confirmRecurringPayment: (id: string, input: ConfirmPaymentInput) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
   linkRecurringPayment: (id: string, input: { expectedDueDate: string; transactionId: string }) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
+  skipRecurringCycle: (id: string, input: { expectedDueDate: string }) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
   recurringPaymentCandidates: (id: string, query: { dueDate: string; amountMinor: string; accountId?: string }) => Promise<PaymentCandidate[]>
   addTransaction: (input: AddTransactionInput) => Promise<Transaction>
   updateTransaction: (transactionId: string, input: Partial<AddTransactionInput>) => Promise<Transaction>
@@ -137,6 +138,12 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
   const linkRecurringPayment = useCallback(async (id: string, input: { expectedDueDate: string; transactionId: string }) => {
     if (!stableRecurringGateway?.linkPayment) throw new Error('Recurring backend is not configured')
     const result = await stableRecurringGateway.linkPayment(id, input)
+    setRecurringItems((current) => current.map((item) => item.id === id ? result.recurring : item))
+    return { result, refreshed: await refreshAfterPayment() }
+  }, [stableRecurringGateway, refreshAfterPayment])
+  const skipRecurringCycle = useCallback(async (id: string, input: { expectedDueDate: string }) => {
+    if (!stableRecurringGateway?.skipCycle) throw new Error('Recurring backend is not configured')
+    const result = await stableRecurringGateway.skipCycle(id, input)
     setRecurringItems((current) => current.map((item) => item.id === id ? result.recurring : item))
     return { result, refreshed: await refreshAfterPayment() }
   }, [stableRecurringGateway, refreshAfterPayment])
@@ -305,7 +312,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableRecurringGateway.delete(id)
     setRecurringItems((current) => current.filter((item) => item.id !== id))
   }, [stableRecurringGateway])
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, skipRecurringCycle, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, skipRecurringCycle, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     recurringItems,

@@ -19,6 +19,7 @@ export interface RecurringGateway {
   confirmPayment?: (id: string, input: ConfirmPaymentInput) => Promise<ConfirmPaymentResult>
   paymentCandidates?: (id: string, query: { dueDate: string; amountMinor: string; accountId?: string }) => Promise<PaymentCandidate[]>
   linkPayment?: (id: string, input: { expectedDueDate: string; transactionId: string }) => Promise<ConfirmPaymentResult>
+  skipCycle?: (id: string, input: { expectedDueDate: string }) => Promise<ConfirmPaymentResult>
   load(): Promise<RecurringItem[]>
   add(input: AddRecurringItemInput): Promise<RecurringItem>
   setStatus(id: string, status: 'active' | 'paused'): Promise<RecurringItem>
@@ -55,6 +56,7 @@ export class ApiRecurringGateway implements RecurringGateway {
   }
   async confirmPayment(id: string, input: ConfirmPaymentInput): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/confirm-payment`, { method: 'POST', body: JSON.stringify(input) })) }
   async linkPayment(id: string, input: { expectedDueDate: string; transactionId: string }): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/link-payment`, { method: 'POST', body: JSON.stringify(input) })) }
+  async skipCycle(id: string, input: { expectedDueDate: string }): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/skip-cycle`, { method: 'POST', body: JSON.stringify(input) })) }
   async paymentCandidates(id: string, query: { dueDate: string; amountMinor: string; accountId?: string }): Promise<PaymentCandidate[]> {
     const params = new URLSearchParams({ dueDate: query.dueDate, amountMinor: query.amountMinor, ...(query.accountId ? { accountId: query.accountId } : {}) })
     return (await this.request<{ candidates: PaymentCandidate[] }>(`/recurring/${id}/payment-candidates?${params}`)).candidates

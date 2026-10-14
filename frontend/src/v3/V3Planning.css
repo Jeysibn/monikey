@@ -67,3 +67,4 @@
 .v3-root .v3-cb__done { display: grid; gap: var(--v3-space-3); }
 .v3-root dialog.v3-cb .v3-btn, .v3-root dialog.v3-cb .v3-input { min-height: var(--v3-touch); min-width: var(--v3-touch); }
 @media (min-width: 640px) { .v3-root dialog.v3-cb { inset: 0; margin: auto; width: 520px; border-radius: var(--v3-radius-lg); border-bottom: 1px solid var(--v3-border); } }
+.v3-root .v3-pl-bill__actions { display: flex; flex-wrap: wrap; gap: var(--v3-space-2); }

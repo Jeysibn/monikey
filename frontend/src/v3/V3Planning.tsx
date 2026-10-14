@@ -13,6 +13,7 @@ import { backendMode, usePeriodReport } from './useOverviewReports'
 import { usePlanningBudgets } from './usePlanningBudgets'
 import { useAsyncRecurringItems } from './useRecurringReadOnly'
 import { ConfirmBillDialog } from './V3ConfirmBill'
+import { SkipBillDialog } from './V3SkipBill'
 import type { RecurringItem } from '../domain/recurring'
 import './V3Planning.css'
 
@@ -125,6 +126,7 @@ function Bills({ todayIso }: { todayIso: string }) {
   const asyncFinance = useAsyncFinanceOptional()
   const items = useAsyncRecurringItems()
   const [confirming, setConfirming] = useState<{ item: RecurringItem; opener: HTMLElement | null } | null>(null)
+  const [skipping, setSkipping] = useState<{ item: RecurringItem; opener: HTMLElement | null } | null>(null)
   const canConfirm = Boolean(asyncFinance) && !asyncFinance?.offline
   const sorted = useMemo(() => sortBills(items, todayIso), [items, todayIso])
   return (
@@ -150,7 +152,10 @@ function Bills({ todayIso }: { todayIso: string }) {
                 </p>
                 <p className="v3-caption v3-secondary">Pays from {finance.accountLabel(item.accountId)}</p>
                 {canConfirm && (state === 'overdue' || state === 'due_today') && (
-                  <button type="button" className="v3-btn v3-btn--primary v3-pl-btn" data-testid={`v3-plan-confirm-${item.id}`} aria-label={`Record payment for ${item.merchant}`} onClick={(e) => setConfirming({ item, opener: e.currentTarget })}>Record payment</button>
+                  <div className="v3-pl-bill__actions">
+                    <button type="button" className="v3-btn v3-btn--primary v3-pl-btn" data-testid={`v3-plan-confirm-${item.id}`} aria-label={`Record payment for ${item.merchant}`} onClick={(e) => setConfirming({ item, opener: e.currentTarget })}>Record payment</button>
+                    <button type="button" className="v3-btn v3-btn--secondary v3-pl-btn" data-testid={`v3-plan-skip-${item.id}`} aria-label={`Skip this cycle of ${item.merchant} without paying`} onClick={(e) => setSkipping({ item, opener: e.currentTarget })}>Skip this cycle</button>
+                  </div>
                 )}
               </li>
             )
@@ -158,6 +163,7 @@ function Bills({ todayIso }: { todayIso: string }) {
         </ul>
       )}
       {confirming && <ConfirmBillDialog key={`${confirming.item.id}:${confirming.item.nextDueDate}`} item={confirming.item} state={finance.state} todayIso={todayIso} onClose={() => { const o = confirming.opener; setConfirming(null); setTimeout(() => (o?.isConnected ? o : document.querySelector<HTMLElement>('[data-testid="v3-planning"] h1'))?.focus?.(), 0) }} />}
+      {skipping && <SkipBillDialog key={`${skipping.item.id}:${skipping.item.nextDueDate}`} item={skipping.item} onClose={() => { const o = skipping.opener; setSkipping(null); setTimeout(() => (o?.isConnected ? o : document.querySelector<HTMLElement>('[data-testid="v3-planning"] h1'))?.focus?.(), 0) }} />}
     </section>
   )
 }

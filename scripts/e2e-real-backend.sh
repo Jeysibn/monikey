@@ -33,6 +33,6 @@ VITE_FINANCE_BACKEND=true setsid npx vite --port 5173 --strictPort >"$ROOT/test-
 VITE_PID=$!
 for i in $(seq 1 60); do curl -fs http://localhost:5173/ >/dev/null 2>&1 && break; sleep 1; done
 SPECS=("$@")
-[ ${#SPECS[@]} -eq 0 ] && SPECS=(e2e/v3-backend-local.spec.ts e2e/v3-quickadd-backend.spec.ts e2e/v3-favorites-backend.spec.ts e2e/v3-planning-backend.spec.ts e2e/v3-planning-confirm-backend.spec.ts e2e/v3-planning-skip-backend.spec.ts)
+[ ${#SPECS[@]} -eq 0 ] && SPECS=(e2e/v3-backend-local.spec.ts e2e/v3-quickadd-backend.spec.ts e2e/v3-favorites-backend.spec.ts e2e/v3-planning-backend.spec.ts e2e/v3-planning-confirm-backend.spec.ts e2e/v3-planning-skip-backend.spec.ts e2e/v3-journey-backend.spec.ts)
 echo "fresh DB $RUN on :$PGPORT"
 V3_BACKEND_LOCAL=1 PLAYWRIGHT_TEST_BASE_URL=http://localhost:5173 npx playwright test "${SPECS[@]}" --workers=1 --reporter=list

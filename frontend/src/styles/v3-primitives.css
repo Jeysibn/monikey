@@ -80,3 +80,6 @@
 .v3-root .v3-account-card--button { width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer; }
 .v3-root .v3-account-card--button[aria-expanded='true'] { outline: 3px solid var(--v3-blue); outline-offset: 2px; }
 .v3-root .v3-account-card--button:focus-visible { outline: var(--v3-focus); outline-offset: 3px; }
+/* Inline links inside body copy must be distinguishable from the surrounding text without relying on colour alone (axe link-in-text-block / color-contrast). */
+.v3-root p a:not(.v3-btn) { color: var(--v3-blue); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.v3-root p a:not(.v3-btn):hover { color: var(--v3-blue-hover); }

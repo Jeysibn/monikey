@@ -218,7 +218,7 @@ test.describe('mobile', () => {
     await sheet(page).getByLabel('Amount').fill('44')
     await sheet(page).getByLabel('Category').selectOption(catExpense)
     await sheet(page).getByRole('button', { name: 'Add expense' }).click()
-    await expect(page.getByTestId('v3-qa-queued')).toContainText('not posted yet')
+    await expect(page.getByTestId('v3-qa-queued')).toContainText('not shown as posted')
     expect((await txs(page)).length).toBe(before.length + 1) // the server did post it
     abort = false
     await page.getByTestId('v3-qa-queued').getByRole('link', { name: 'Review in Sync Center' }).click()

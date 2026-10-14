@@ -5,7 +5,7 @@ import { useFieldErrors } from '../hooks/useFieldErrors'
 import { showToast } from '../hooks/toastBus'
 import { FinanceValidationError } from '../domain/financeRules'
 import { useAsyncFinanceOptional } from '../state/asyncFinanceContext'
-import { FinanceApiError } from '../services/apiFinanceGateway'
+import { FinanceApiError, PostedRefreshError } from '../services/apiFinanceGateway'
 import { localFirstStore, newOperationId } from '../services/localFirstStore'
 import { createIdempotencyKey } from '../utils/idempotencyKey'
 import { formatMinorUnits } from '../utils/currency'
@@ -18,7 +18,7 @@ import {
 import { OUTBOX_CHANGED_EVENT } from './usePendingTransactions'
 import './V3QuickAdd.css'
 
-type Phase = 'editing' | 'submitting' | 'queued'
+type Phase = 'editing' | 'submitting' | 'queued' | 'saved_stale'
 
 const SUBMIT_LABEL: Record<QuickAddType, string> = { expense: 'Add expense', income: 'Add income', transfer: 'Add transfer', card_payment: 'Pay card' }
 const DETAIL_FIELDS: QuickAddField[] = ['title', 'date', 'time', 'note', 'fee']
@@ -58,6 +58,10 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [queuedCount, setQueuedCount] = useState(0)
+  /** Set when the post was confirmed but the follow-up reload failed. Never re-submitted. */
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshFailed, setRefreshFailed] = useState(false)
   const { errors, field, errorId, fail, clear, clearField } = useFieldErrors<QuickAddField>(QUICK_ADD_FIELD_ORDER)
 
   useEffect(() => {
@@ -119,10 +123,18 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
       onClose()
       return
     } catch (err) {
+      if (err instanceof PostedRefreshError) {
+        // Confirmed posted. Do NOT queue or resubmit; offer an independent refresh instead.
+        setSavedId(err.result.id)
+        setRefreshFailed(false)
+        setPhase('saved_stale')
+        return
+      }
       if (asyncFinance && err instanceof TypeError) {
-        // The request may or may not have reached the server. Queue it under the SAME idempotency key so a replay can never double-post.
+        // The request may or may not have reached the server (a timeout counts). Queue it under the SAME idempotency key so a replay can never double-post.
         try {
-          await localFirstStore.enqueue({ operationId: newOperationId(), idempotencyKey: keyRef.current.key, operationType: 'create_transaction', payload: input, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
+          const existing = (await localFirstStore.outbox()).some((op) => op.idempotencyKey === keyRef.current.key)
+          if (!existing) await localFirstStore.enqueue({ operationId: newOperationId(), idempotencyKey: keyRef.current.key, operationType: 'create_transaction', payload: input, createdAt: new Date().toISOString(), status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] })
           window.dispatchEvent(new Event(OUTBOX_CHANGED_EVENT))
           setQueuedCount((n) => n + 1)
           setPhase('queued')
@@ -145,6 +157,21 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
       setPhase('editing')
     } finally {
       lockRef.current = false
+    }
+  }
+
+  async function retryRefresh() {
+    if (!asyncFinance || refreshing) return
+    setRefreshing(true)
+    setRefreshFailed(false)
+    try {
+      await asyncFinance.refreshState()
+      showToast('Transaction saved. Balances updated.')
+      onClose()
+    } catch {
+      setRefreshFailed(true)
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -185,10 +212,21 @@ export function V3QuickAdd({ initialType = 'expense', onClose }: { initialType?:
           <button type="button" className="v3-btn v3-btn--ghost v3-qa__close" onClick={requestClose} aria-label="Close quick add" disabled={busy}>✕</button>
         </header>
 
-        {phase === 'queued' ? (
+        {phase === 'saved_stale' ? (
+          <section className="v3-qa__queued" role="status" data-testid="v3-qa-saved-stale">
+            <h3 className="v3-h3">Transaction saved</h3>
+            <p>Transaction saved, but the latest balances couldn't be loaded.</p>
+            <p className="v3-secondary">The server confirmed it{savedId ? ` (reference ${savedId.slice(0, 8)})` : ''}. It will not be posted again. Refresh to see up-to-date balances.</p>
+            {refreshFailed && <p className="v3-qa__error" role="alert">Still couldn't load the latest balances. Check your connection and try again.</p>}
+            <div className="v3-qa__actions">
+              <button type="button" className="v3-btn v3-btn--primary" onClick={() => void retryRefresh()} disabled={refreshing} aria-disabled={refreshing || undefined}>{refreshing ? 'Refreshing…' : 'Refresh balances'}</button>
+              <button type="button" className="v3-btn v3-btn--ghost" onClick={onClose}>Done</button>
+            </div>
+          </section>
+        ) : phase === 'queued' ? (
           <section className="v3-qa__queued" role="status" data-testid="v3-qa-queued">
             <h3 className="v3-h3">Queued — pending sync</h3>
-            <p>The server could not be reached, so this {type === 'card_payment' ? 'card payment' : type} is <strong>not posted yet</strong>. It is saved on this device and will not change your balances until it syncs.</p>
+            <p>We couldn't confirm whether this {type === 'card_payment' ? 'card payment' : type} was posted, so it is <strong>not shown as posted</strong>. It is saved on this device and will be checked when it syncs.</p>
             <p className="v3-secondary">{queuedCount > 1 ? `${queuedCount} entries queued from this sheet.` : 'It keeps its original request key, so syncing can never post it twice.'}</p>
             <div className="v3-qa__actions">
               <Link className="v3-btn v3-btn--primary" to="/sync" onClick={onClose}>Review in Sync Center</Link>

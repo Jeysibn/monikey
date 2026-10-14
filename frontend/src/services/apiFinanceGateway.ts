@@ -75,6 +75,28 @@ export class FinanceApiError extends Error {
   }
 }
 
+/**
+ * The request was abandoned after the time limit. The server may still have processed it, so this is an
+ * UNCERTAIN outcome, never proof of failure. It extends TypeError so every existing "network failure" path
+ * (outbox queueing, replay) treats it the same way.
+ */
+export class RequestTimeoutError extends TypeError {
+  constructor(message = 'The request timed out before the server answered.') { super(message); this.name = 'RequestTimeoutError' }
+}
+
+/** The transaction WAS posted and confirmed, but reloading balances afterwards failed. Not a posting failure. */
+export class PostedRefreshError extends Error {
+  readonly result: Transaction
+  constructor(result: Transaction, cause?: unknown) {
+    super("Transaction saved, but the latest balances couldn't be loaded.")
+    this.name = 'PostedRefreshError'
+    this.result = result
+    this.cause = cause
+  }
+}
+
+const REQUEST_TIMEOUT_MS = 20_000
+
 const minor = minorUnitsToMajorDisplayNumber
 
 export class ApiFinanceGateway implements FinanceGateway {
@@ -82,10 +104,27 @@ export class ApiFinanceGateway implements FinanceGateway {
   private readonly fetcher: typeof fetch
   private _todayIso: string | undefined
   get todayIso(): string | undefined { return this._todayIso }
-  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args)) { this.baseUrl = baseUrl; this.fetcher = fetcher }
+  private readonly timeoutMs: number
+  constructor(baseUrl = '/api/v1', fetcher: typeof fetch = (...args) => fetch(...args), timeoutMs = REQUEST_TIMEOUT_MS) { this.baseUrl = baseUrl; this.fetcher = fetcher; this.timeoutMs = timeoutMs }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { ...(init.body !== undefined && { 'Content-Type': 'application/json' }), ...init.headers } })
+    // Bound every request. A caller-supplied signal still aborts as before (AbortError); only OUR timer maps to a timeout.
+    const controller = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, this.timeoutMs)
+    const external = init.signal
+    const onExternalAbort = () => controller.abort()
+    if (external) { if (external.aborted) controller.abort(); else external.addEventListener('abort', onExternalAbort, { once: true }) }
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, signal: controller.signal, headers: { ...(init.body !== undefined && { 'Content-Type': 'application/json' }), ...init.headers } })
+    } catch (error) {
+      if (timedOut) throw new RequestTimeoutError()
+      throw error
+    } finally {
+      clearTimeout(timer)
+      external?.removeEventListener('abort', onExternalAbort)
+    }
     if (!response.ok) {
       const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
       throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? `Monikey API request failed: ${response.status}`, payload?.error?.field)

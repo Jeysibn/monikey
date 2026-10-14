@@ -1,7 +1,7 @@
 import { withFavorites } from '../domain/favorites'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AddCategoryInput, AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, BudgetCategory, Category, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal, UpdateAccountInput, UpdateCreditCardInput, UpdateGoalInput } from '../domain/finance'
-import { FinanceApiError, type FinanceGateway } from '../services/apiFinanceGateway'
+import { FinanceApiError, PostedRefreshError, type FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
 import type { RecurringGateway, RecurringSuggestion } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
@@ -20,6 +20,8 @@ export interface AsyncFinanceContextValue {
   error: Error | null
   offline: boolean
   retry: () => void
+  /** Re-load balances and lists without touching the ledger (used after a posted transaction whose refresh failed). */
+  refreshState: () => Promise<void>
   addTransaction: (input: AddTransactionInput) => Promise<Transaction>
   updateTransaction: (transactionId: string, input: Partial<AddTransactionInput>) => Promise<Transaction>
   reverseTransaction: (transactionId: string) => Promise<Transaction>
@@ -100,12 +102,22 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     stableRecurringGateway.suggestions?.().then(setRecurringSuggestions).catch(() => undefined)
   }, [stableRecurringGateway])
 
-  const addTransaction = useCallback(async (input: AddTransactionInput) => {
-    const result = await stableGateway.addTransaction(input)
-    // A posted transaction changes balances, goals, budget spending, and
-    // related selectors. Reload the authoritative snapshot instead of
-    // maintaining a partial client-side projection of those effects.
+  const refreshState = useCallback(async () => {
     const refreshed = await stableGateway.load()
+    if (refreshed) setState(refreshed)
+  }, [stableGateway])
+  const addTransaction = useCallback(async (input: AddTransactionInput) => {
+    // Errors thrown here mean the posting outcome is unknown or rejected; the caller classifies them.
+    const result = await stableGateway.addTransaction(input)
+    // From here on the transaction IS posted. A failed reload must never look like a failed post
+    // (that would invite a second submission or a second outbox entry), so it is reported separately.
+    // A posted transaction changes balances, goals, budget spending, and related selectors:
+    // reload the authoritative snapshot instead of maintaining a partial client-side projection.
+    let refreshed: FinanceState | undefined
+    try { refreshed = await stableGateway.load() } catch (cause) {
+      setState((current) => current ? { ...current, transactions: current.transactions.some((t) => t.id === result.id) ? current.transactions : [result, ...current.transactions] } : current)
+      throw new PostedRefreshError(result, cause)
+    }
     setState((current) => {
       if (refreshed) return refreshed.transactions.some((transaction) => transaction.id === result.id) ? refreshed : { ...refreshed, transactions: [result, ...refreshed.transactions] }
       return current ? { ...current, transactions: [result, ...current.transactions] } : current
@@ -253,7 +265,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableRecurringGateway.delete(id)
     setRecurringItems((current) => current.filter((item) => item.id !== id))
   }, [stableRecurringGateway])
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), refreshState, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, refreshState, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     recurringItems,

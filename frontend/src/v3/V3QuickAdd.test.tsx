@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom'
 import type { FinanceState, Transaction } from '../domain/finance'
 import type { FinanceGateway } from '../services/apiFinanceGateway'
-import { FinanceApiError } from '../services/apiFinanceGateway'
+import { FinanceApiError, RequestTimeoutError } from '../services/apiFinanceGateway'
 import { AsyncFinanceProvider } from '../state/asyncFinanceContext'
 import { localFirstStore } from '../services/localFirstStore'
 import { V3QuickAdd } from './V3QuickAdd'
@@ -145,12 +145,78 @@ describe('V3 Quick Add', () => {
     pickCategory('food')
     submit('Add expense')
     const panel = await screen.findByTestId('v3-qa-queued')
-    expect(panel.textContent).toMatch(/not posted yet/)
+    expect(panel.textContent).toMatch(/couldn't confirm whether/)
+    expect(panel.textContent).toMatch(/not shown as posted/)
     expect(panel.textContent).not.toMatch(/saved\b(?! on this device)/)
     expect(screen.getByRole('link', { name: 'Review in Sync Center' }).getAttribute('href')).toBe('/sync')
     const op = vi.mocked(localFirstStore.enqueue).mock.calls[0]![0]
     expect(op).toMatchObject({ operationType: 'create_transaction', status: 'pending' })
     expect(op.idempotencyKey).toBe((add.mock.calls[0]![0] as { idempotencyKey: string }).idempotencyKey)
+  })
+
+  it('B: post confirmed but the refresh fails: says saved, never queues or re-posts, and refreshes on its own', async () => {
+    const add = vi.fn().mockResolvedValue(posted)
+    const gw = gateway(add)
+    const load = vi.mocked(gw.load)
+    const onClose = vi.fn()
+    render(<MemoryRouter><AsyncFinanceProvider gateway={gw}><Gate onClose={onClose} /></AsyncFinanceProvider></MemoryRouter>)
+    await screen.findByRole('heading', { name: 'Quick add' })
+    fireEvent.change(amount(), { target: { value: '12.50' } })
+    pickCategory('food')
+    load.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    submit('Add expense')
+    const panel = await screen.findByTestId('v3-qa-saved-stale')
+    expect(panel.textContent).toContain("Transaction saved, but the latest balances couldn't be loaded.")
+    expect(panel.textContent).not.toMatch(/queued/i)
+    expect(localFirstStore.enqueue).not.toHaveBeenCalled()
+    expect(add).toHaveBeenCalledTimes(1)
+    // refresh still failing: stays on the panel with an error, and still no second post
+    load.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh balances' }))
+    await screen.findByText(/Still couldn't load/)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh balances' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(add).toHaveBeenCalledTimes(1)
+    expect(localFirstStore.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('C: a timeout is uncertain, not failed: queued under the original key once, even across repeated submits', async () => {
+    const add = vi.fn().mockRejectedValue(new RequestTimeoutError())
+    await open(add)
+    fireEvent.change(amount(), { target: { value: '9' } })
+    pickCategory('food')
+    submit('Add expense')
+    const panel = await screen.findByTestId('v3-qa-queued')
+    expect(panel.textContent).toMatch(/couldn't confirm/)
+    expect(panel.textContent).not.toMatch(/failed/i)
+    expect(vi.mocked(localFirstStore.enqueue)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(localFirstStore.enqueue).mock.calls[0]![0].idempotencyKey).toBe((add.mock.calls[0]![0] as { idempotencyKey: string }).idempotencyKey)
+  })
+
+  it('C: does not add a second outbox record for the same logical submission', async () => {
+    const add = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    await open(add)
+    fireEvent.change(amount(), { target: { value: '9' } })
+    pickCategory('food')
+    // the outbox already holds this submission's key (e.g. a previous attempt was queued)
+    vi.mocked(localFirstStore.outbox).mockImplementation(async () => add.mock.calls.length ? [{ operationId: 'o1', idempotencyKey: (add.mock.calls[0]![0] as { idempotencyKey: string }).idempotencyKey, operationType: 'create_transaction', payload: {}, createdAt: '', status: 'pending', attemptCount: 0, lastError: null, dependencyIds: [] }] : [])
+    submit('Add expense')
+    await screen.findByTestId('v3-qa-queued')
+    expect(localFirstStore.enqueue).not.toHaveBeenCalled()
+    vi.mocked(localFirstStore.outbox).mockResolvedValue([])
+  })
+
+  it('D: a backend validation rejection shows the real message, keeps the form and never queues', async () => {
+    const add = vi.fn().mockRejectedValue(new FinanceApiError(422, 'INSUFFICIENT_FUNDS', 'Insufficient funds in Checking.', 'amount'))
+    await open(add)
+    fireEvent.change(amount(), { target: { value: '9999' } })
+    pickCategory('food')
+    submit('Add expense')
+    expect(await screen.findByText('Insufficient funds in Checking.')).toBeTruthy()
+    expect(amount().value).toBe('9999')
+    expect(localFirstStore.enqueue).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('v3-qa-queued')).toBeNull()
   })
 
   it('keeps the entry and the same key after an unconfirmed 5xx; a definite rejection keeps data and re-keys only when edited', async () => {

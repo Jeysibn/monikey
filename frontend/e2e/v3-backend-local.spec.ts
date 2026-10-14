@@ -1,3 +1,4 @@
+import { isolatedClient } from './helpers/isolation'
 import { expect, test, request as pwRequest, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import fs from 'node:fs'
@@ -6,7 +7,7 @@ import path from 'node:path'
 // Real-backend V3 flow. Needs the API on :3000 (disposable DB) and the Vite dev server
 // (VITE_FINANCE_BACKEND=true) as PLAYWRIGHT_TEST_BASE_URL. Not part of the mock suite.
 const origin = process.env.PLAYWRIGHT_TEST_BASE_URL ?? 'http://localhost:5173'
-const headers = { Origin: origin }
+const headers = { Origin: origin, ...isolatedClient() }
 const stateFile = path.resolve(process.cwd(), 'test-results/v3-backend-state.json')
 const shotDir = path.resolve(process.cwd(), '../docs/remake/screenshots/stage5a')
 const VIEWPORTS = { mobile: { width: 390, height: 844 }, tablet: { width: 820, height: 1180 }, desktop: { width: 1440, height: 900 } } as const

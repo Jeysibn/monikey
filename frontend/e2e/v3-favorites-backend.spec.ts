@@ -1,3 +1,4 @@
+import { isolatedClient } from './helpers/isolation'
 import { expect, test, request as pwRequest, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import fs from 'node:fs'
@@ -6,7 +7,7 @@ import path from 'node:path'
 // Stage 5A.1 real-backend flow: persistent favorites, global sorting, dock clearance with real multi-page data.
 // Needs the API on :3000 (disposable DB) and Vite (VITE_FINANCE_BACKEND=true) as PLAYWRIGHT_TEST_BASE_URL.
 const origin = process.env.PLAYWRIGHT_TEST_BASE_URL ?? 'http://localhost:5173'
-const headers = { Origin: origin }
+const headers = { Origin: origin, ...isolatedClient() }
 const stateFile = path.resolve(process.cwd(), 'test-results/v3-favorites-state.json')
 const shotDir = path.resolve(process.cwd(), '../docs/remake/screenshots/stage5a1')
 const email = `v3-fav-${Date.now()}@monikey.test`

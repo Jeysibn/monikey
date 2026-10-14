@@ -1,3 +1,4 @@
+import { isolatedClient } from './helpers/isolation'
 import { expect, test, request as pwRequest, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import fs from 'node:fs'
@@ -47,7 +48,7 @@ const noOverflow = async (page: Page) => expect(await page.evaluate(() => docume
 const axe = async (page: Page, selector: string) => expect((await new AxeBuilder({ page }).include(selector).analyze()).violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([])
 
 test.beforeAll(async () => {
-  const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin } })
+  const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin, ...isolatedClient() } })
   expect((await api.post('/api/v1/auth/register', { data: { email, password: 'v3-confirm-password', displayName: 'Confirm Tester' } })).status()).toBe(201)
   const mk = async (url: string, data: object) => { const r = await api.post(url, { data }); expect(r.status(), url + (await r.text())).toBe(201); return (await r.json()) as { id: string } }
   ids.bdo = (await mk('/api/v1/accounts', { name: 'BDO Checking', accountType: 'checking', institution: 'BDO', openingBalanceMinor: '10000000', lastFour: '4242' })).id

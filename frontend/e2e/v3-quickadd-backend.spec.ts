@@ -1,3 +1,4 @@
+import { isolatedClient } from './helpers/isolation'
 import { expect, test, request as pwRequest, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import fs from 'node:fs'
@@ -36,7 +37,7 @@ async function openAdd(page: Page) {
 }
 
 test.beforeAll(async () => {
-  const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin } })
+  const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin, ...isolatedClient() } })
   expect((await api.post('/api/v1/auth/register', { data: { email, password: 'v3-quickadd-password', displayName: 'QuickAdd Tester' } })).status()).toBe(201)
   const mk = async (url: string, data: object) => { const r = await api.post(url, { data }); expect(r.status(), url).toBe(201); return (await r.json()) as { id: string } }
   ids.bdo = (await mk('/api/v1/accounts', { name: 'BDO Checking', accountType: 'checking', institution: 'BDO', openingBalanceMinor: '10000000', lastFour: '4242' })).id
@@ -291,7 +292,7 @@ test.describe('desktop', () => {
   })
 
   test('empty-state actions open Quick Add', async ({ page }) => {
-    const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin } })
+    const api = await pwRequest.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin, ...isolatedClient() } })
     const e = `v3-qa-empty-${Date.now()}@monikey.test`
     await api.post('/api/v1/auth/register', { data: { email: e, password: 'v3-quickadd-password', displayName: 'Empty' } })
     await api.post('/api/v1/accounts', { data: { name: 'Solo', accountType: 'checking', openingBalanceMinor: '1000' } })

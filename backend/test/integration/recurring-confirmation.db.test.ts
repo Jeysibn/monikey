@@ -173,6 +173,15 @@ describeIfDb('Stage 6B recurring confirmation (real PostgreSQL)', () => {
     expect(cands.json().candidates.find((c: { transactionId: string }) => c.transactionId === txId)).toBeUndefined()
   })
 
+  it('a manual expense with no idempotency key (NULL) is still found as a possible duplicate', async () => {
+    const { userId, cookie } = await newUser()
+    const { item, accountId, categoryId } = await bill(userId, { merchant: 'Meralco' })
+    await prisma.transaction.create({ data: { userId, type: 'expense', title: 'Meralco', categoryId, fromAccountId: accountId, occurredOn: d('2026-09-03'), amountMinor: 25000n, feeMinor: 0n, currencyCode: 'PHP', source: 'manual', status: 'cleared', idempotencyKey: null } as never })
+    const res = await confirm(cookie, item.id)
+    expect(res.statusCode).toBe(409); expect(res.json().error.code).toBe('POSSIBLE_DUPLICATE_PAYMENT'); expect(res.json().error.candidates).toHaveLength(1)
+    expect(await txCount(userId)).toBe(0)
+  })
+
   it('rejects archived account and category with specific errors and leaves state untouched', async () => {
     const { userId, cookie } = await newUser()
     const x = await bill(userId); const y = await bill(userId)

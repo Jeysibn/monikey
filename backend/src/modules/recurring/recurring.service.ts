@@ -41,7 +41,8 @@ export class RecurringService {
         userId, type: 'expense', status: 'cleared', reversedTransactionId: null, reversingTransaction: null, recurringOccurrence: null,
         occurredOn: { gte: new Date(`${addDaysIso(dueIso, -10)}T00:00:00Z`), lte: new Date(`${todayIso}T00:00:00Z`) },
         OR: [{ amountMinor }, { amountMinor: item.amountMinor }, { title: { contains: item.merchant, mode: 'insensitive' } }],
-        NOT: { idempotencyKey: { startsWith: `recurring:${item.id}:` } },
+        // `NOT startsWith` alone would drop rows whose key is NULL (SQL three-valued logic), hiding exactly the manual entries we look for.
+        AND: [{ OR: [{ idempotencyKey: null }, { NOT: { idempotencyKey: { startsWith: `recurring:${item.id}:` } } }] }],
       },
       orderBy: { occurredOn: 'desc' }, take: 5,
     })

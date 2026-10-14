@@ -389,3 +389,41 @@ Proceed after review. Reuse `useActivityFeed` refresh and the Activity/Accounts 
 
 ### Stage 5B readiness
 Ready for review. Quick Add can rely on the favorites order for its account picker and on the Activity refresh pattern; Quick Add itself is not started.
+
+## 13. Stage 5B — Quick Add (2026-10-14)
+
+### Features
+- The V3 dock Add button opens a V3 composer: native `<dialog>`, bottom sheet on mobile, compact 480px dialog at ≥720px. The legacy modal is untouched and still serves legacy routes and editing from V3 Activity.
+- Four actions: Expense, Income, Transfer, Card Payment. Main form shows only required fields (amount, account, category, from/to, pay-from + card); description, date, time, note and transfer fee sit in an expandable "optional details" section that auto-opens on an error inside it. Dates default to Asia/Manila.
+- Account pickers: favorites first (`favoriteIds` order), then others by label; archived excluded; income and transfer never offer cards; card payment offers only cards with an amount owed; similar names get the institution/last-4 appended; works with zero favorites.
+- Quick picks: recent account and category chips, and "Reuse an earlier one" (draft from a loaded transaction, dated today). No new tables, rules or AI.
+- Reliability: double-submit lock, stable idempotency key across retries, field-level validation with focus/aria, data preserved on recoverable errors, discard-confirmation on Escape/close with unsaved input.
+- Offline: network failure enqueues to the existing outbox with the SAME key and shows "Queued — pending sync, not posted yet" plus a Sync Center link; a shell banner shows pending counts. 5xx/unknown errors keep the entry and say it may already be saved (same key reused); 4xx maps to field errors.
+- Empty states in Overview and Activity offer "Add a transaction".
+
+### Reused logic (no second posting path)
+`asyncFinance.addTransaction` / gateway `POST /transactions`, `createIdempotencyKey`, `localFirstStore` outbox + `syncPendingOutbox`, Sync Center retry, `useFieldErrors`, `FinanceApiError`/`FinanceValidationError`, `favoriteIds`, `formatMinorUnits`, `parseMinorUnitInput`. Card Payment is `type:'transfer'` to the card. No backend or schema change.
+
+### Correctness and offline findings
+- Response lost after the server posted: queued under the same key; Sync Center retry posts exactly once (balance changes once).
+- If the post succeeds but the follow-up reload throws a network error, the UI conservatively says "queued"; replay is idempotent.
+- Overpayment is blocked client-side and by the server (`CARD_PAYMENT_EXCEEDS_OWED`); card limit and overdraft rules come from the server.
+- There is no auto-sync on the browser `online` event (pre-existing); the user presses Retry sync.
+
+### Tests
+- Frontend: 38 files / 381 vitest tests pass (33 new: model 22, component 11); `tsc -b`, build, `verify:privacy` pass; oxlint only pre-existing warnings.
+- Playwright mock suite: 151 passed, 30 skipped (real-backend specs).
+- Real backend (disposable Postgres, local API + Vite): `v3-quickadd-backend` 12/12, `v3-backend-local` 9/9, `v3-favorites-backend` 9/9. One stale locator in `v3-backend-local` (matched a category `<option>` once categories were seeded) was scoped to list rows.
+- Backend suite not re-run (no backend change; last run 448 passing).
+
+### Screenshots
+`docs/remake/screenshots/stage5b/`: mobile expense/income/transfer/card-payment, card-payment error, validation error, offline queued; desktop expense, card payment, optional details.
+
+### Remaining issues
+- No auto-sync on reconnect.
+- Reused drafts come only from loaded transactions (the bootstrap page in backend mode).
+- Editing still uses the legacy modal.
+- No client request timeout; a hung request stays pending until the browser fails it.
+
+### Stage 6 readiness
+Ready for review. Planning and recurring-payment work not started.

@@ -99,6 +99,9 @@ export class LedgerRepository {
     const feeMinor = typeof input.feeMinor === 'bigint' ? input.feeMinor : BigInt(input.feeMinor ?? 0);
 
     if (idempotencyKey) {
+      // Serialise concurrent requests that carry the same key: without this, two in-flight retries both pass the
+      // lookup below, and the loser dies on the unique index with a 500 instead of replaying the first result.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${idempotencyKey}`}, 0))`;
       const existing = await tx.transaction.findFirst({
         where: { userId, idempotencyKey },
         include: { balanceEffects: true },

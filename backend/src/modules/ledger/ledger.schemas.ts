@@ -7,7 +7,8 @@ export const transactionSourceSchema = z.enum(['manual', 'ocr', 'recurring', 'im
 export const transactionStatusSchema = z.enum(['cleared', 'pending']);
 
 /** JSON/API money input. Numbers are intentionally rejected at this boundary. */
-export const minorUnitTransportInput = z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string').transform((value) => BigInt(value))
+export const MAX_MINOR_UNITS = 9_223_372_036_854_775_807n // PostgreSQL BIGINT
+export const minorUnitTransportInput = z.string().regex(/^\d+$/, 'minor units must be a non-negative integer string').transform((value) => BigInt(value)).refine((value) => value <= MAX_MINOR_UNITS, 'amount is too large')
 
 export const postTransactionSchema = z.object({
   type: transactionTypeSchema,
@@ -24,7 +25,8 @@ export const postTransactionSchema = z.object({
   source: transactionSourceSchema.default('manual'),
   status: transactionStatusSchema.default('cleared'),
   note: z.string().nullable().optional(),
-  idempotencyKey: z.string().max(128).nullable().optional(),
+  // The `recurring:` namespace belongs to confirmed recurring payments (guarded in the database as well).
+  idempotencyKey: z.string().max(128).refine((key) => !key.startsWith('recurring:'), 'this idempotency key prefix is reserved').nullable().optional(),
 });
 
 export const reverseTransactionSchema = z.object({

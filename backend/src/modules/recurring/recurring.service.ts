@@ -20,13 +20,44 @@ export const occurrenceLedgerKey = (itemId: string, dueDate: string) => `recurri
 
 type Tx = Prisma.TransactionClient
 
+const reversedPayment = (due: string, transaction?: TransactionView | null): RecurringConflict => conflict(409, 'RECURRING_PAYMENT_REVERSED',
+  `The payment for the ${due} cycle was reversed, so that cycle stays closed with no payment on record. A reversed bill payment cannot be re-recorded for the same cycle. Record the correct payment as a normal expense in Quick Add; the bill's next cycle is not affected.`, { transaction })
+
 export class RecurringService {
   constructor(private prisma: PrismaClient, private ledger: LedgerService) {}
 
   private async lockItem(tx: Tx, userId: string, itemId: string): Promise<RecurringItem | null> {
     const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM recurring_items WHERE id = ${itemId}::uuid AND user_id = ${userId}::uuid FOR UPDATE`)
     if (rows.length === 0) return null
+    // Announce a user-driven schedule change to the database guard (migration 20261017000000), transaction-local.
+    await tx.$executeRaw`SELECT set_config('app.recurring_schedule_write', 'on', true)`
     return tx.recurringItem.findUnique({ where: { id: itemId } })
+  }
+
+  private async isReversed(tx: Tx, transactionId: string | null): Promise<boolean> {
+    if (!transactionId) return false
+    const row = await tx.transaction.findUnique({ where: { id: transactionId }, select: { reversedTransactionId: true } })
+    return Boolean(row?.reversedTransactionId)
+  }
+
+  /**
+   * User edit of a bill. Moving the due date onto (or before) a cycle that is already confirmed or skipped would
+   * leave the bill stuck on a settled cycle (every confirm/skip would only replay or refuse), so it is refused
+   * with an explanation. Settled occurrence records are never edited or deleted.
+   */
+  async update(userId: string, itemId: string, data: Prisma.RecurringItemUncheckedUpdateInput, newDueIso?: string): Promise<{ kind: 'item'; item: RecurringItem } | RecurringConflict> {
+    return this.prisma.$transaction(async (tx) => {
+      const item = await this.lockItem(tx, userId, itemId)
+      if (!item) return conflict(404, 'NOT_FOUND', 'Recurring item not found.')
+      if (newDueIso !== undefined && newDueIso !== isoDate(item.nextDueDate)) {
+        const settled = await tx.recurringOccurrence.findFirst({ where: { recurringItemId: itemId, dueDate: { gte: new Date(`${newDueIso}T00:00:00Z`) } }, orderBy: { dueDate: 'desc' } })
+        if (settled) {
+          const last = isoDate(settled.dueDate)
+          return conflict(409, 'RECURRING_SETTLED_CYCLE', `The ${last} cycle of this bill is already ${settled.status === 'skipped' ? 'skipped' : 'paid'}, and settled cycles cannot be reopened. Choose a due date after ${last}.`, { field: 'nextDueDate' })
+        }
+      }
+      return { kind: 'item' as const, item: await tx.recurringItem.update({ where: { id: itemId }, data }) }
+    })
   }
 
   // Read-only lookup of an already-committed transaction (the ledger read path uses its own connection).
@@ -76,6 +107,7 @@ export class RecurringService {
   private async staleCycleResult(tx: Tx, item: RecurringItem, userId: string, expectedDueDate: string): Promise<RecurringConflict | null> {
     if (expectedDueDate >= isoDate(item.nextDueDate)) return null
     const legacy = await tx.transaction.findFirst({ where: { userId, idempotencyKey: occurrenceLedgerKey(item.id, expectedDueDate) } })
+    if (legacy?.reversedTransactionId) return reversedPayment(expectedDueDate, await this.view(userId, legacy.id))
     if (legacy) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already recorded.`, { transaction: await this.view(userId, legacy.id) })
     return null
   }
@@ -93,6 +125,7 @@ export class RecurringService {
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${due}T00:00:00Z`) } } })
       if (existing) {
         if (existing.status === 'skipped') return conflict(409, 'RECURRING_CYCLE_SKIPPED', `The ${due} cycle was skipped, so no payment was recorded for it.`)
+        if (await this.isReversed(tx, existing.transactionId)) return reversedPayment(due, await this.view(userId, existing.transactionId))
         const same = existing.amountMinor === input.amountMinor && existing.accountId === accountId && existing.paidOn && isoDate(existing.paidOn) === input.paidOn
         if (!same) return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${due} cycle was already confirmed with different details. Nothing was changed.`, { transaction: await this.view(userId, existing.transactionId) })
         return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(userId, existing.transactionId) }
@@ -146,6 +179,7 @@ export class RecurringService {
       if (!item) return conflict(404, 'NOT_FOUND', 'Recurring item not found.')
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`) } } })
       if (existing) {
+        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(userId, existing.transactionId))
         if (existing.status === 'confirmed') return conflict(409, 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already paid.`, { transaction: await this.view(userId, existing.transactionId) })
         return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: null }
       }
@@ -166,6 +200,7 @@ export class RecurringService {
       if (!item) return conflict(404, 'NOT_FOUND', 'Recurring item not found.')
       const existing = await tx.recurringOccurrence.findUnique({ where: { recurringItemId_dueDate: { recurringItemId: itemId, dueDate: new Date(`${expectedDueDate}T00:00:00Z`) } } })
       if (existing) {
+        if (existing.status === 'confirmed' && await this.isReversed(tx, existing.transactionId)) return reversedPayment(expectedDueDate, await this.view(userId, existing.transactionId))
         if (existing.status === 'confirmed' && existing.transactionId === transactionId) return { kind: 'ok', outcome: 'replayed', item, occurrence: existing, transaction: await this.view(userId, transactionId) }
         return conflict(409, existing.status === 'skipped' ? 'RECURRING_CYCLE_SKIPPED' : 'RECURRING_ALREADY_CONFIRMED', `The ${expectedDueDate} cycle was already addressed. Nothing was changed.`)
       }

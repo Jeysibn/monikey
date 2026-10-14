@@ -122,7 +122,8 @@ describeIfDb('Stage 7A recurring safety and security (real PostgreSQL)', () => {
       const { userId, cookie } = await newUser()
       const { item, accountId, categoryId } = await bill(userId)
       await prisma.$transaction(async (tx) => { await tx.$executeRaw`SELECT set_config('app.recurring_confirmation', 'on', true)`; await ledger.postTransactionInTransaction(tx, userId, { type: 'expense', title: 'Rent', categoryId, goalId: null, fromAccountId: accountId, toAccountId: null, occurredOn: '2026-09-05', occurredTime: null, amountMinor: 25000, feeMinor: 0, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey: `recurring:${item.id}:2026-09-05` } as never) })
-      await prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate: d('2026-10-05') } }) // what the old worker did next
+      // fixture: the state an old worker used to leave behind (the schedule guard now blocks the worker itself; see stage7b-lifecycle)
+      await prisma.$transaction(async (tx) => { await tx.$executeRaw`SELECT set_config('app.recurring_schedule_write', 'on', true)`; await tx.recurringItem.update({ where: { id: item.id }, data: { nextDueDate: d('2026-10-05') } }) })
       const res = await call(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
       expect(res.statusCode).toBe(409); expect(res.json().error.code).toBe('RECURRING_ALREADY_CONFIRMED')
       const skip = await call(cookie, 'POST', `/recurring/${item.id}/skip-cycle`, { expectedDueDate: '2026-09-05' })

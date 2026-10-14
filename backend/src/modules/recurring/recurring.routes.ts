@@ -148,8 +148,9 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
     if (input.accountId !== undefined) updateData.accountId = input.accountId
     if (input.categoryId !== undefined) updateData.categoryId = input.categoryId
     if (input.autopay !== undefined) updateData.autopay = input.autopay
-    const updated = await options.prisma.recurringItem.update({ where: { id }, data: updateData })
-    return view(updated)
+    const result = await service.update(request.user!.id, id, updateData, input.nextDueDate)
+    if (result.kind === 'conflict') return conflictReply(reply, request, result)
+    return view(result.item)
   })
   app.delete<{ Params: { id: string } }>('/recurring/:id', { preHandler: [requireOrigin, requireAuth] }, async (request, reply) => {
     // D8: Validate UUID path parameter

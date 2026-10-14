@@ -10,5 +10,9 @@ export default defineConfig({
     // every individual test cleans up correctly. Keep cases within a file
     // fast, but serialize files for a deterministic release regression gate.
     fileParallelism: false,
+    // Hosted CI runners are slower than a workstation; the real-PostgreSQL
+    // concurrency and reconciliation cases exceeded the 5s default there.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 })

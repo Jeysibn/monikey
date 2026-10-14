@@ -25,7 +25,7 @@ const creditCardDetailResponseSchema = {
 } as const;
 const accountResponseSchema = {
   type: 'object',
-  required: ['id', 'userId', 'name', 'institution', 'accountType', 'classification', 'currencyCode', 'openingBalanceMinor', 'currentBalanceMinor', 'lastFour', 'syncStatus', 'manual', 'version', 'archivedAt', 'createdAt', 'updatedAt', 'creditCardDetail'],
+  required: ['id', 'userId', 'name', 'institution', 'accountType', 'classification', 'currencyCode', 'openingBalanceMinor', 'currentBalanceMinor', 'lastFour', 'favoriteRank', 'syncStatus', 'manual', 'version', 'archivedAt', 'createdAt', 'updatedAt', 'creditCardDetail'],
   properties: {
     id: { type: 'string', format: 'uuid' },
     userId: { type: 'string', format: 'uuid' },
@@ -37,6 +37,7 @@ const accountResponseSchema = {
     openingBalanceMinor: { type: 'string', pattern: '^-?\\d+$' },
     currentBalanceMinor: { type: 'string', pattern: '^-?\\d+$' },
     lastFour: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    favoriteRank: { anyOf: [{ type: 'integer', minimum: 1, maximum: 4 }, { type: 'null' }] },
     syncStatus: { type: 'string' },
     manual: { type: 'boolean' },
     version: { type: 'integer' },
@@ -100,6 +101,19 @@ export async function accountsRoutes(fastify: FastifyInstance, options: { servic
       const accounts = await service.listAccounts(req.user!.id);
       return accounts;
     }
+  );
+
+  // PUT /accounts/favorites — ordered replacement (position = rank); [] is an intentional empty selection.
+  f.put<{ Body: { accountIds: string[] } }>(
+    '/accounts/favorites',
+    {
+      preHandler: originCheckPreHandler({ APP_ORIGIN: process.env.APP_ORIGIN ?? 'http://localhost:8080' }),
+      schema: {
+        body: { type: 'object', required: ['accountIds'], additionalProperties: false, properties: { accountIds: { type: 'array', maxItems: 4, items: { type: 'string', format: 'uuid' } } } },
+        response: { 200: { type: 'object', required: ['favorites'], properties: { favorites: { type: 'array', items: accountResponseSchema } } } },
+      },
+    },
+    async (req) => ({ favorites: await service.replaceFavorites(req.user!.id, req.body.accountIds) }),
   );
 
   // POST /accounts

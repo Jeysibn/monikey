@@ -6,7 +6,20 @@ import { majorNumberToMinorUnits, minorUnitsToMajorDisplayNumber } from '../util
 type ApiRecurringItem = paths['/recurring']['post']['responses'][201]['content']['application/json']
 export type RecurringSuggestion = paths['/recurring/suggestions']['get']['responses'][200]['content']['application/json']['suggestions'][number]
 
+export interface ConfirmPaymentInput { expectedDueDate: string; amountMinor: string; accountId?: string; paidOn: string; allowPossibleDuplicate?: boolean }
+export interface PaymentCandidate { transactionId: string; title: string; amountMinor: string; occurredOn: string; accountId: string | null; categoryId: string | null; matchedOn: Array<'amount' | 'merchant' | 'account' | 'category'> }
+export interface ConfirmPaymentResult { outcome: 'confirmed' | 'replayed' | 'reconciled_existing' | 'skipped' | 'linked'; recurring: RecurringItem; occurrence: { dueDate: string; status: 'confirmed' | 'skipped'; transactionId: string | null }; transactionId: string | null }
+/** A refusal from the confirm endpoints that carries structured detail (possible duplicates, the already-recorded payment). */
+export class RecurringConfirmError extends FinanceApiError {
+  readonly candidates: PaymentCandidate[]
+  constructor(status: number, code: string, message: string, field: string | undefined, candidates: PaymentCandidate[]) { super(status, code, message, field); this.name = 'RecurringConfirmError'; this.candidates = candidates }
+}
+
 export interface RecurringGateway {
+  confirmPayment?: (id: string, input: ConfirmPaymentInput) => Promise<ConfirmPaymentResult>
+  paymentCandidates?: (id: string, query: { dueDate: string; amountMinor: string; accountId?: string }) => Promise<PaymentCandidate[]>
+  linkPayment?: (id: string, input: { expectedDueDate: string; transactionId: string }) => Promise<ConfirmPaymentResult>
+  skipCycle?: (id: string, input: { expectedDueDate: string }) => Promise<ConfirmPaymentResult>
   load(): Promise<RecurringItem[]>
   add(input: AddRecurringItemInput): Promise<RecurringItem>
   setStatus(id: string, status: 'active' | 'paused'): Promise<RecurringItem>
@@ -24,7 +37,8 @@ export class ApiRecurringGateway implements RecurringGateway {
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetcher(`${this.baseUrl}${path}`, { credentials: 'include', ...init, headers: { ...(init.body !== undefined && { 'Content-Type': 'application/json' }), ...init.headers } })
     if (!response.ok) {
-      const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string } } | undefined
+      const payload = await response.json().catch(() => undefined) as { error?: { code?: string; message?: string; field?: string; candidates?: PaymentCandidate[] } } | undefined
+      if (payload?.error?.candidates) throw new RecurringConfirmError(response.status, payload.error.code ?? 'INTERNAL_ERROR', payload.error.message ?? 'Request failed', payload.error.field, payload.error.candidates)
       throw new FinanceApiError(response.status, payload?.error?.code ?? 'INTERNAL_ERROR', payload?.error?.message ?? `Monikey API request failed: ${response.status}`, payload?.error?.field)
     }
     return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
@@ -40,6 +54,14 @@ export class ApiRecurringGateway implements RecurringGateway {
   async markPaid(id: string): Promise<RecurringItem> {
     return this.map(await this.request<ApiRecurringItem>(`/recurring/${id}/mark-paid`, { method: 'POST', body: '{}' }))
   }
+  async confirmPayment(id: string, input: ConfirmPaymentInput): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/confirm-payment`, { method: 'POST', body: JSON.stringify(input) })) }
+  async linkPayment(id: string, input: { expectedDueDate: string; transactionId: string }): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/link-payment`, { method: 'POST', body: JSON.stringify(input) })) }
+  async skipCycle(id: string, input: { expectedDueDate: string }): Promise<ConfirmPaymentResult> { return this.mapPayment(await this.request(`/recurring/${id}/skip-cycle`, { method: 'POST', body: JSON.stringify(input) })) }
+  async paymentCandidates(id: string, query: { dueDate: string; amountMinor: string; accountId?: string }): Promise<PaymentCandidate[]> {
+    const params = new URLSearchParams({ dueDate: query.dueDate, amountMinor: query.amountMinor, ...(query.accountId ? { accountId: query.accountId } : {}) })
+    return (await this.request<{ candidates: PaymentCandidate[] }>(`/recurring/${id}/payment-candidates?${params}`)).candidates
+  }
+  private mapPayment = (raw: { outcome: ConfirmPaymentResult['outcome']; recurring: ApiRecurringItem; occurrence: ConfirmPaymentResult['occurrence']; transaction: { id: string } | null }): ConfirmPaymentResult => ({ outcome: raw.outcome, recurring: this.map(raw.recurring), occurrence: raw.occurrence, transactionId: raw.transaction?.id ?? raw.occurrence.transactionId })
   async update(id: string, input: Partial<AddRecurringItemInput>): Promise<RecurringItem> {
     const body: Record<string, unknown> = {}
     if (input.merchant !== undefined) body.merchant = input.merchant

@@ -381,7 +381,7 @@ button {
 
 /* Forms outside the transaction modal share the same dark control geometry.
    Type=file and binary controls retain their native affordances. */
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):not(.v3-input),
 select,
 textarea {
   min-height: var(--control-height);
@@ -392,7 +392,7 @@ textarea {
   color: var(--text);
   font: inherit;
 }
-input::placeholder,
+input:not(.v3-input)::placeholder,
 textarea::placeholder {
   color: var(--text-faint);
 }
@@ -405,7 +405,7 @@ label.search-box input[type='search']:not([type='checkbox']):not([type='radio'])
   border-radius: 0;
   background: transparent;
 }
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):focus-visible,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']):not(.v3-input):focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   border-color: var(--cyan);

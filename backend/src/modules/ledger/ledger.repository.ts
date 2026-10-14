@@ -12,15 +12,15 @@ type LedgerAccount = Prisma.FinancialAccountGetPayload<{ include: { creditCardDe
 export class LedgerRepository {
   constructor(private prisma: PrismaClient) {}
 
-  private encodeCursor(row: { occurredOn: Date; createdAt: Date; id: string }): string {
-    return Buffer.from(JSON.stringify({ occurredOn: row.occurredOn.toISOString(), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url')
+  private encodeCursor(row: { occurredOn: Date; createdAt: Date; id: string; amountMinor: bigint }): string {
+    return Buffer.from(JSON.stringify({ occurredOn: row.occurredOn.toISOString(), createdAt: row.createdAt.toISOString(), id: row.id, amountMinor: row.amountMinor.toString() })).toString('base64url')
   }
 
-  private decodeCursor(cursor: string): { occurredOn: Date; createdAt: Date; id: string } | null {
+  private decodeCursor(cursor: string): { occurredOn: Date; createdAt: Date; id: string; amountMinor: bigint | null } | null {
     try {
-      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { occurredOn?: string; createdAt?: string; id?: string }
+      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { occurredOn?: string; createdAt?: string; id?: string; amountMinor?: string }
       if (!parsed.occurredOn || !parsed.createdAt || !parsed.id) return null
-      return { occurredOn: new Date(parsed.occurredOn), createdAt: new Date(parsed.createdAt), id: parsed.id }
+      return { occurredOn: new Date(parsed.occurredOn), createdAt: new Date(parsed.createdAt), id: parsed.id, amountMinor: parsed.amountMinor && /^\d+$/.test(parsed.amountMinor) ? BigInt(parsed.amountMinor) : null }
     } catch { return null }
   }
 
@@ -32,7 +32,7 @@ export class LedgerRepository {
   }
 
   async listTransactions(query: TransactionQuery): Promise<Page<TransactionView>> {
-    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId, tagId } = query;
+    const { userId, cursor, limit = 50, fromDate, toDate, type, categoryId, accountId, tagId, q, sort = 'date', dir = 'desc' } = query;
 
     const where: Prisma.TransactionWhereInput = { userId };
     if (fromDate || toDate) where.occurredOn = { ...(fromDate ? { gte: new Date(fromDate) } : {}), ...(toDate ? { lte: new Date(toDate) } : {}) };
@@ -42,27 +42,35 @@ export class LedgerRepository {
       where.AND = [{ OR: [{ fromAccountId: accountId }, { toAccountId: accountId }] }];
     }
     if (tagId) where.tags = { some: { tagId, tag: { userId } } };
+    // Prisma passes `contains` through to ILIKE unescaped; escape wildcards so '%' and '_' match literally.
+    const search = q?.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+    if (search) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: [{ title: { contains: search, mode: 'insensitive' } }, { note: { contains: search, mode: 'insensitive' } }] }];
+    }
+    // Total order (sort key, then date, creation time, id) so every page boundary is deterministic.
+    // `amount` sorts by the stored magnitude; transfers and repayments are never signed here.
+    const cmp = dir === 'asc' ? 'gt' : 'lt';
+    const keys: Array<'amountMinor' | 'occurredOn' | 'createdAt' | 'id'> = sort === 'amount' ? ['amountMinor', 'occurredOn', 'createdAt', 'id'] : ['occurredOn', 'createdAt', 'id'];
     const decodedCursor = cursor ? this.decodeCursor(cursor) : null
-    if (decodedCursor) {
-      // Cursor predicate mirrors the display order exactly: newest business
-      // date first, then creation time, then the stable UUID tie-breaker.
-      const cursorPredicate = {
-        OR: [
-        { occurredOn: { lt: decodedCursor.occurredOn } },
-        { occurredOn: decodedCursor.occurredOn, createdAt: { lt: decodedCursor.createdAt } },
-        { occurredOn: decodedCursor.occurredOn, createdAt: decodedCursor.createdAt, id: { lt: decodedCursor.id } },
-        ],
+    if (decodedCursor && (sort !== 'amount' || decodedCursor.amountMinor !== null)) {
+      const values: Record<string, Date | string | bigint | null> = { amountMinor: decodedCursor.amountMinor, occurredOn: decodedCursor.occurredOn, createdAt: decodedCursor.createdAt, id: decodedCursor.id }
+      const predicate = {
+        OR: keys.map((key, i) => ({
+          ...Object.fromEntries(keys.slice(0, i).map((k) => [k, values[k]])),
+          [key]: { [cmp]: values[key] },
+        })),
       }
-      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), cursorPredicate]
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), predicate]
     } else if (cursor) {
       // Preserve compatibility with pre-composite cursors while callers roll
       // forward to the deterministic cursor format.
       where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { id: { lt: cursor } }]
     }
 
+    const direction = dir === 'asc' ? 'asc' : 'desc';
     const transactions = await this.prisma.transaction.findMany({
       where,
-      orderBy: [{ occurredOn: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], include: { tags: { include: { tag: true } } },
+      orderBy: keys.map((k) => ({ [k]: direction })) as Prisma.TransactionOrderByWithRelationInput[], include: { tags: { include: { tag: true } } },
       take: limit + 1,
     });
 
@@ -91,11 +99,27 @@ export class LedgerRepository {
     const feeMinor = typeof input.feeMinor === 'bigint' ? input.feeMinor : BigInt(input.feeMinor ?? 0);
 
     if (idempotencyKey) {
+      // Serialise concurrent requests that carry the same key: without this, two in-flight retries both pass the
+      // lookup below, and the loser dies on the unique index with a 500 instead of replaying the first result.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${idempotencyKey}`}, 0))`;
       const existing = await tx.transaction.findFirst({
         where: { userId, idempotencyKey },
         include: { balanceEffects: true },
       });
       if (existing) {
+        // Same key with a materially different request is a client bug or a forged retry, not a replay: refuse it
+        // instead of silently returning (and appearing to accept) content the caller never sent.
+        const sameRequest =
+          existing.type === type &&
+          existing.amountMinor === amountMinor &&
+          existing.feeMinor === feeMinor &&
+          (existing.fromAccountId ?? null) === (fromAccountId ?? null) &&
+          (existing.toAccountId ?? null) === (toAccountId ?? null) &&
+          (existing.categoryId ?? null) === (categoryId ?? null) &&
+          existing.occurredOn.toISOString().slice(0, 10) === new Date(occurredOn).toISOString().slice(0, 10);
+        if (!sameRequest && !idempotencyKey.startsWith('recurring:')) {
+          throw new AppError('IDEMPOTENCY_KEY_REUSED', 'This idempotency key was already used for a different transaction. Retry the original request unchanged, or submit the new transaction with a new key.', { field: 'idempotencyKey' });
+        }
         return {
           transaction: this.mapTransaction(existing),
           balanceEffects: existing.balanceEffects.map((effect) => ({

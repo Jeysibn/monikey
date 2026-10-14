@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
 
 export async function enqueueDueBillNotifications(prisma: PrismaClient, todayIso: string, userId?: string): Promise<number> {
   const end = new Date(`${todayIso}T00:00:00Z`)
@@ -7,8 +8,9 @@ export async function enqueueDueBillNotifications(prisma: PrismaClient, todayIso
   let enqueued = 0
   for (const item of items) {
     const dueDate = item.nextDueDate.toISOString().slice(0, 10)
-    const result = await prisma.notificationOutbox.upsert({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, create: { userId: item.userId, kind: 'bill_due', dedupeKey: `bill-due:${item.id}:${dueDate}`, payload: { recurringItemId: item.id, merchant: item.merchant, amountMinor: item.amountMinor.toString(), dueDate } }, update: {} })
-    if (result.createdAt.getTime() === result.updatedAt.getTime()) enqueued += 1
+    const existed = await prisma.notificationOutbox.findUnique({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, select: { id: true } })
+    await prisma.notificationOutbox.upsert({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, create: { userId: item.userId, kind: 'bill_due', dedupeKey: `bill-due:${item.id}:${dueDate}`, payload: { recurringItemId: item.id, merchant: item.merchant, amountMinor: item.amountMinor.toString(), dueDate } }, update: {} })
+    if (!existed) enqueued += 1
   }
   return enqueued
 }
@@ -20,7 +22,7 @@ export async function enqueueWeeklySummaryNotifications(prisma: PrismaClient, to
   const users = await prisma.user.findMany({ where: { ...(userId ? { id: userId } : {}), preferences: { weeklySummaryEmail: true } }, select: { id: true } })
   let enqueued = 0
   for (const user of users) {
-    const transactions = await prisma.transaction.findMany({ where: { userId: user.id, occurredOn: { gte: start, lt: end }, status: 'cleared' }, select: { type: true, amountMinor: true } })
+    const transactions = await prisma.transaction.findMany({ where: { userId: user.id, occurredOn: { gte: start, lt: end }, status: 'cleared', ...excludeReversalPairs }, select: { type: true, amountMinor: true } })
     const incomeMinor = transactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amountMinor, 0n)
     const expenseMinor = transactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amountMinor, 0n)
     await prisma.notificationOutbox.upsert({ where: { dedupeKey: `weekly-summary:${user.id}:${todayIso}` }, create: { userId: user.id, kind: 'weekly_summary', dedupeKey: `weekly-summary:${user.id}:${todayIso}`, payload: { from: start.toISOString().slice(0, 10), to: todayIso, incomeMinor: incomeMinor.toString(), expenseMinor: expenseMinor.toString() } }, update: {} })

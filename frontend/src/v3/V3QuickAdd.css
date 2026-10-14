@@ -1,0 +1,51 @@
+/* Quick Add composer. Everything is scoped under .v3-root so legacy global dialog/input CSS cannot leak in. */
+.v3-root dialog.v3-qa { padding: 0; border: 1px solid var(--v3-border); background: var(--v3-surface); color: var(--v3-ink); font-family: var(--v3-font); color-scheme: light; box-shadow: var(--v3-shadow-2); overflow: hidden; }
+.v3-root dialog.v3-qa::backdrop { background: rgb(15 23 42 / 0.45); }
+.v3-root .v3-qa__form { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+.v3-root .v3-qa__head { display: flex; align-items: center; justify-content: space-between; padding: var(--v3-space-3) var(--v3-space-4); border-bottom: 1px solid var(--v3-border); }
+.v3-root .v3-qa__close { padding: 0; }
+.v3-root .v3-qa__body { display: grid; gap: var(--v3-space-4); padding: var(--v3-space-4); overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.v3-root .v3-qa__typebar { padding: var(--v3-space-3) var(--v3-space-4) 0; }
+.v3-root .v3-qa__types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0; padding: 4px; border: 0; border-radius: var(--v3-radius-md); background: var(--v3-sunken); }
+.v3-root .v3-qa__type { position: relative; display: flex; }
+.v3-root .v3-qa__type input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.v3-root .v3-qa__type span { flex: 1; display: flex; align-items: center; justify-content: center; min-height: var(--v3-touch); padding: 0 4px; border-radius: var(--v3-radius-sm); font-size: var(--v3-text-sm); font-weight: 700; text-align: center; color: var(--v3-ink-2); line-height: 1.15; }
+.v3-root .v3-qa__type input:checked + span { background: var(--v3-surface); color: var(--v3-blue); box-shadow: var(--v3-shadow-1); }
+.v3-root .v3-qa__type input:focus-visible + span { outline: none; box-shadow: 0 0 0 3px var(--v3-blue-ring); }
+.v3-root .v3-qa__amount { min-height: var(--v3-touch); font-family: var(--v3-font-figure); font-size: var(--v3-text-lg); font-weight: 700; }
+.v3-root .v3-qa__select { appearance: auto; min-height: var(--v3-touch); background: var(--v3-surface); color: var(--v3-ink); }
+.v3-root .v3-qa__note { min-height: 72px; padding: var(--v3-space-2) var(--v3-space-3); resize: vertical; }
+.v3-root .v3-qa__picks { display: flex; flex-wrap: wrap; gap: var(--v3-space-2); margin-top: calc(var(--v3-space-2) * -1); }
+.v3-root .v3-qa__chip { min-height: var(--v3-touch); padding: 0 var(--v3-space-4); border: 1px solid var(--v3-border-strong); border-radius: 999px; background: var(--v3-surface); color: var(--v3-ink-2); font: inherit; font-size: var(--v3-text-sm); font-weight: 600; cursor: pointer; }
+.v3-root .v3-qa__chip[aria-pressed='true'] { background: var(--v3-blue-tint); border-color: var(--v3-blue); color: var(--v3-blue); }
+.v3-root .v3-qa__chip:focus-visible, .v3-root .v3-qa__details-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--v3-blue-ring); }
+.v3-root .v3-qa__details { display: grid; gap: var(--v3-space-3); }
+.v3-root dialog.v3-qa .v3-qa__details-toggle { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding-block: var(--v3-space-2); text-align: left; border-color: var(--v3-border); }
+.v3-root .v3-qa__details-body { display: grid; gap: var(--v3-space-3); }
+.v3-root .v3-qa__details-body[hidden] { display: none; }
+.v3-root .v3-qa__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--v3-space-3); }
+.v3-root .v3-qa__error { margin: 0; color: var(--v3-negative); font-size: var(--v3-text-sm); font-weight: 600; }
+.v3-root .v3-qa__banner { margin: 0; padding: var(--v3-space-3); border: 1px solid var(--v3-negative); border-radius: var(--v3-radius-md); background: #fdf0ee; color: var(--v3-negative); font-size: var(--v3-text-sm); font-weight: 600; }
+.v3-root .v3-qa__foot { display: grid; gap: var(--v3-space-3); padding: var(--v3-space-3) var(--v3-space-4) calc(var(--v3-space-3) + env(safe-area-inset-bottom)); border-top: 1px solid var(--v3-border); background: var(--v3-surface); }
+.v3-root .v3-qa__submit { width: 100%; min-height: var(--v3-touch); }
+.v3-root .v3-qa__discard { margin: 0; }
+.v3-root .v3-qa__actions { display: flex; flex-wrap: wrap; gap: var(--v3-space-2); }
+.v3-root .v3-qa__actions > * { flex: 1 1 auto; }
+.v3-root .v3-qa__danger { background: var(--v3-negative); }
+.v3-root .v3-qa__danger:hover { background: #8f1c12; }
+.v3-root .v3-qa__queued { display: grid; gap: var(--v3-space-3); padding: var(--v3-space-4) var(--v3-space-4) calc(var(--v3-space-4) + env(safe-area-inset-bottom)); }
+.v3-root .v3-qa__queued p { margin: 0; }
+.v3-root .v3-pending-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v3-space-2) var(--v3-space-3); margin: 0 0 var(--v3-space-3); padding: var(--v3-space-3) var(--v3-space-4); border: 1px solid var(--v3-warning); border-radius: var(--v3-radius-md); background: #fff8e6; color: var(--v3-ink); font-size: var(--v3-text-sm); }
+
+/* Mobile: bottom sheet. */
+.v3-root dialog.v3-qa { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: min(92dvh, 760px); border-radius: var(--v3-radius-lg) var(--v3-radius-lg) 0 0; border-bottom: 0; animation: v3-qa-sheet 180ms ease-out; }
+/* Desktop: compact centred dialog. */
+@media (min-width: 720px) {
+  .v3-root dialog.v3-qa { inset: 0; margin: auto; width: 480px; max-height: min(90dvh, 820px); border-radius: var(--v3-radius-lg); border-bottom: 1px solid var(--v3-border); animation: v3-qa-fade 140ms ease-out; }
+}
+@keyframes v3-qa-sheet { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes v3-qa-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .v3-root dialog.v3-qa { animation: none; } }
+
+/* Primary touch targets are 48x48 CSS px inside the composer (the shared 44px control size is for dense desktop UI). */
+.v3-root dialog.v3-qa .v3-btn, .v3-root dialog.v3-qa .v3-input, .v3-root dialog.v3-qa .v3-qa__chip { min-height: var(--v3-touch); min-width: var(--v3-touch); }

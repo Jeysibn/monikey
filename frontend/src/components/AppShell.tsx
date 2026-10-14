@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useFinance } from '../hooks/useFinance'
 import { useBackendAuthOptional } from './BackendAuthContext'
 import './AppShell.css'
+import { isV3PreviewEnabled } from '../v3/v3Preview'
 import { probeMonikeyServer, type ServerConnectionState } from '../services/serverReachability'
 
 const NAV_ITEMS = [
@@ -285,10 +286,11 @@ export function AppShell({ children, onAddTransaction }: { children: ReactNode; 
           <MoreMenu />
         </nav>
         <div className="topbar-right">
+          {isV3PreviewEnabled() && <NavLink to="/v3" className="btn btn--ghost btn--compact">V3 preview</NavLink>}
           {backendAuth && <button type="button" className="btn btn--ghost btn--compact" onClick={() => void backendAuth.logout()}>Sign out</button>}
           <NotificationBell />
           {onAddTransaction && (
-            <button type="button" className="btn btn--primary btn--compact" onClick={onAddTransaction}>
+            <button type="button" className="btn btn--primary btn--compact" onClick={onAddTransaction} aria-label="Add Transaction">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>

@@ -1,8 +1,9 @@
+import { withFavorites } from '../domain/favorites'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AddCategoryInput, AddManualAccountInput, AddManualCreditCardInput, AddTransactionInput, BudgetCategory, Category, CreateGoalInput, FinanceState, Transaction, Account, CreditCard, Goal, UpdateAccountInput, UpdateCreditCardInput, UpdateGoalInput } from '../domain/finance'
-import { FinanceApiError, type FinanceGateway } from '../services/apiFinanceGateway'
+import { FinanceApiError, PostedRefreshError, type FinanceGateway } from '../services/apiFinanceGateway'
 import type { AddRecurringItemInput, RecurringItem } from '../domain/recurring'
-import type { RecurringGateway, RecurringSuggestion } from '../services/apiRecurringGateway'
+import type { ConfirmPaymentInput, ConfirmPaymentResult, PaymentCandidate, RecurringGateway, RecurringSuggestion } from '../services/apiRecurringGateway'
 import { ApiRecurringGateway } from '../services/apiRecurringGateway'
 import { ApiFinanceGateway } from '../services/apiFinanceGateway'
 import { FinanceContext, type FinanceContextValue } from './financeContext'
@@ -19,6 +20,17 @@ export interface AsyncFinanceContextValue {
   error: Error | null
   offline: boolean
   retry: () => void
+  /** Re-load balances and lists without touching the ledger (used after a posted transaction whose refresh failed). */
+  refreshState: () => Promise<void>
+  /** Bumps after every confirmed mutation or refresh. Derived views (reports, budgets, activity) key their refetch on it instead of guessing from transaction counts. */
+  financeVersion: number
+  /** Authoritative refetch of balances, transactions and recurring items. Resolves false (never throws) when any part failed. */
+  refreshAfterPayment: () => Promise<boolean>
+  refreshRecurring: () => Promise<boolean>
+  confirmRecurringPayment: (id: string, input: ConfirmPaymentInput) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
+  linkRecurringPayment: (id: string, input: { expectedDueDate: string; transactionId: string }) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
+  skipRecurringCycle: (id: string, input: { expectedDueDate: string }) => Promise<{ result: ConfirmPaymentResult; refreshed: boolean }>
+  recurringPaymentCandidates: (id: string, query: { dueDate: string; amountMinor: string; accountId?: string }) => Promise<PaymentCandidate[]>
   addTransaction: (input: AddTransactionInput) => Promise<Transaction>
   updateTransaction: (transactionId: string, input: Partial<AddTransactionInput>) => Promise<Transaction>
   reverseTransaction: (transactionId: string) => Promise<Transaction>
@@ -28,6 +40,8 @@ export interface AsyncFinanceContextValue {
   updateCreditCard: (cardId: string, input: UpdateCreditCardInput) => Promise<CreditCard>
   archiveAccount: (accountId: string) => Promise<void>
   archiveCreditCard: (cardId: string) => Promise<void>
+  /** Replaces the whole ordered favorite selection (max 4). Rejects without changing state if the server refuses. */
+  setFavorites: (accountIds: string[]) => Promise<void>
   createGoal: (input: CreateGoalInput) => Promise<Goal>
   addGoalFunds: (goalId: string, sourceAccountId: string, amount: number, date: string) => Promise<Goal>
   updateGoal: (goalId: string, input: UpdateGoalInput) => Promise<Goal>
@@ -97,18 +111,66 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     stableRecurringGateway.suggestions?.().then(setRecurringSuggestions).catch(() => undefined)
   }, [stableRecurringGateway])
 
-  const addTransaction = useCallback(async (input: AddTransactionInput) => {
-    const result = await stableGateway.addTransaction(input)
-    // A posted transaction changes balances, goals, budget spending, and
-    // related selectors. Reload the authoritative snapshot instead of
-    // maintaining a partial client-side projection of those effects.
+  const [financeVersion, setFinanceVersion] = useState(0)
+  const bump = useCallback(() => setFinanceVersion((v) => v + 1), [])
+  const refreshState = useCallback(async () => {
     const refreshed = await stableGateway.load()
+    if (refreshed) setState(refreshed)
+    bump()
+  }, [stableGateway, bump])
+  const refreshRecurring = useCallback(async () => {
+    if (!stableRecurringGateway) return false
+    try { setRecurringItems(await stableRecurringGateway.load()); return true } catch { return false }
+  }, [stableRecurringGateway])
+  const refreshAfterPayment = useCallback(async () => {
+    const [balances, recurring] = await Promise.all([refreshState().then(() => true, () => false), refreshRecurring()])
+    bump()
+    return balances && recurring
+  }, [refreshState, refreshRecurring, bump])
+  // A confirmed payment is final even when the follow-up refetch fails: the caller gets `refreshed:false` and a retry
+  // that only refetches. It never re-sends the payment.
+  const confirmRecurringPayment = useCallback(async (id: string, input: ConfirmPaymentInput) => {
+    if (!stableRecurringGateway?.confirmPayment) throw new Error('Recurring backend is not configured')
+    const result = await stableRecurringGateway.confirmPayment(id, input)
+    setRecurringItems((current) => current.map((item) => item.id === id ? result.recurring : item))
+    return { result, refreshed: await refreshAfterPayment() }
+  }, [stableRecurringGateway, refreshAfterPayment])
+  const linkRecurringPayment = useCallback(async (id: string, input: { expectedDueDate: string; transactionId: string }) => {
+    if (!stableRecurringGateway?.linkPayment) throw new Error('Recurring backend is not configured')
+    const result = await stableRecurringGateway.linkPayment(id, input)
+    setRecurringItems((current) => current.map((item) => item.id === id ? result.recurring : item))
+    return { result, refreshed: await refreshAfterPayment() }
+  }, [stableRecurringGateway, refreshAfterPayment])
+  const skipRecurringCycle = useCallback(async (id: string, input: { expectedDueDate: string }) => {
+    if (!stableRecurringGateway?.skipCycle) throw new Error('Recurring backend is not configured')
+    const result = await stableRecurringGateway.skipCycle(id, input)
+    setRecurringItems((current) => current.map((item) => item.id === id ? result.recurring : item))
+    return { result, refreshed: await refreshAfterPayment() }
+  }, [stableRecurringGateway, refreshAfterPayment])
+  const recurringPaymentCandidates = useCallback(async (id: string, query: { dueDate: string; amountMinor: string; accountId?: string }) => {
+    if (!stableRecurringGateway?.paymentCandidates) throw new Error('Recurring backend is not configured')
+    return stableRecurringGateway.paymentCandidates(id, query)
+  }, [stableRecurringGateway])
+  const addTransaction = useCallback(async (input: AddTransactionInput) => {
+    // Errors thrown here mean the posting outcome is unknown or rejected; the caller classifies them.
+    const result = await stableGateway.addTransaction(input)
+    // From here on the transaction IS posted. A failed reload must never look like a failed post
+    // (that would invite a second submission or a second outbox entry), so it is reported separately.
+    // A posted transaction changes balances, goals, budget spending, and related selectors:
+    // reload the authoritative snapshot instead of maintaining a partial client-side projection.
+    let refreshed: FinanceState | undefined
+    try { refreshed = await stableGateway.load() } catch (cause) {
+      setState((current) => current ? { ...current, transactions: current.transactions.some((t) => t.id === result.id) ? current.transactions : [result, ...current.transactions] } : current)
+      bump()
+      throw new PostedRefreshError(result, cause)
+    }
+    bump()
     setState((current) => {
       if (refreshed) return refreshed.transactions.some((transaction) => transaction.id === result.id) ? refreshed : { ...refreshed, transactions: [result, ...refreshed.transactions] }
       return current ? { ...current, transactions: [result, ...current.transactions] } : current
     })
     return result
-  }, [stableGateway])
+  }, [stableGateway, bump])
   const updateTransaction = useCallback(async (transactionId: string, input: Partial<AddTransactionInput>) => {
     const result = await stableGateway.updateTransaction(transactionId, input)
     const refreshed = await stableGateway.load()
@@ -213,6 +275,10 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableGateway.archiveAccount(accountId)
     setState((current) => current ? { ...current, accounts: current.accounts.filter((a) => a.id !== accountId) } : current)
   }, [stableGateway])
+  const setFavorites = useCallback(async (accountIds: string[]) => {
+    await stableGateway.setFavorites(accountIds)
+    setState((current) => current ? withFavorites(current, accountIds) : current)
+  }, [stableGateway])
   const archiveCreditCard = useCallback(async (cardId: string) => {
     await stableGateway.archiveCreditCard(cardId)
     setState((current) => current ? { ...current, creditCards: current.creditCards.filter((c) => c.id !== cardId) } : current)
@@ -246,7 +312,7 @@ export function AsyncFinanceProvider({ children, gateway, recurringGateway }: As
     await stableRecurringGateway.delete(id)
     setRecurringItems((current) => current.filter((item) => item.id !== id))
   }, [stableRecurringGateway])
-  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
+  const value = useMemo<AsyncFinanceContextValue>(() => ({ state, status, error, offline, retry: () => setAttempt((value) => value + 1), refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, skipRecurringCycle, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem }), [state, status, error, offline, refreshState, financeVersion, refreshAfterPayment, refreshRecurring, confirmRecurringPayment, linkRecurringPayment, skipRecurringCycle, recurringPaymentCandidates, addTransaction, updateTransaction, reverseTransaction, addManualAccount, addManualCreditCard, updateAccount, updateCreditCard, archiveAccount, archiveCreditCard, setFavorites, createGoal, addGoalFunds, updateGoal, deleteGoal, setBudgetAllocation, addCategory, updateCategory, setCategoryBudget, deleteCategory, recurringItems, recurringSuggestions, addRecurringItem, setRecurringStatus, markRecurringPaid, editRecurringItem, deleteRecurringItem])
   const financeValue = useMemo<FinanceContextValue>(() => ({
     state: state ?? { accounts: [], creditCards: [], categories: [], transactions: [], budgetCategories: [], totalBudgetAllocated: 0, goals: [], attentionItems: [], portfolio: [], budgetVsActual: [] },
     recurringItems,

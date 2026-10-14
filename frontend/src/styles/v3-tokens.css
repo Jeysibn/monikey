@@ -1,0 +1,105 @@
+/*
+ * MoniKey V3 design tokens.
+ *
+ * Scoped to `.v3-root` on purpose: the legacy UI (dark, `:root` tokens in
+ * tokens.css) stays untouched while V3 is opt-in. Nothing here targets
+ * `:root`, `body` or element selectors outside `.v3-root`.
+ *
+ * Contrast (WCAG 2.x, against --v3-surface #fff / --v3-canvas #f4f7fb):
+ *   --v3-ink 17:1 · --v3-ink-2 8.3:1 · --v3-muted 7.4:1 · --v3-blue 5.6:1
+ *   white on --v3-blue 5.6:1 · white on every --v3-card-* gradient stop >= 4.6:1
+ */
+.v3-root {
+  /* Accent */
+  --v3-blue: #0866d9;
+  --v3-blue-hover: #0757b9;
+  --v3-blue-press: #064a9c;
+  --v3-blue-tint: #eaf2fe;
+  --v3-blue-ring: rgb(8 102 217 / 0.35);
+
+  /* Surface hierarchy: canvas < surface < raised < overlay */
+  --v3-canvas: #f4f7fb;
+  --v3-surface: #ffffff;
+  --v3-raised: #ffffff;
+  --v3-sunken: #eaeff6;
+  --v3-overlay: rgb(255 255 255 / 0.92);
+  --v3-border: #d6dfeb;
+  --v3-border-strong: #b6c3d4;
+
+  /* Text */
+  --v3-ink: #0f172a;
+  --v3-ink-2: #1e293b;
+  --v3-muted: #475569;
+  --v3-on-accent: #ffffff;
+
+  /* Status (text-safe on surface) */
+  --v3-positive: #0b7a4b;
+  --v3-negative: #b42318;
+  --v3-warning: #8a5a00;
+
+  /* Account-card gradients (white text) */
+  --v3-card-bank: linear-gradient(135deg, #0a58c2 0%, #0b3f8f 100%);
+  --v3-card-ewallet: linear-gradient(135deg, #0a7c86 0%, #075a63 100%);
+  --v3-card-cash: linear-gradient(135deg, #1b7f46 0%, #14602f 100%);
+  --v3-card-credit: linear-gradient(135deg, #3b3f7a 0%, #1f2147 100%);
+
+  /* Type scale: body 14-16, secondary 12-14 */
+  --v3-font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --v3-font-figure: 'Space Grotesk', 'Manrope', system-ui, sans-serif;
+  --v3-text-xs: 0.75rem;
+  --v3-text-sm: 0.875rem;
+  --v3-text-md: 1rem;
+  --v3-text-lg: 1.25rem;
+  --v3-text-xl: 1.625rem;
+  --v3-text-2xl: 2.125rem;
+  --v3-leading: 1.5;
+
+  /* Spacing (4px base) */
+  --v3-space-1: 4px;
+  --v3-space-2: 8px;
+  --v3-space-3: 12px;
+  --v3-space-4: 16px;
+  --v3-space-5: 24px;
+  --v3-space-6: 32px;
+  --v3-space-7: 48px;
+
+  /* Shape and elevation */
+  --v3-radius-sm: 8px;
+  --v3-radius-md: 12px;
+  --v3-radius-lg: 18px;
+  --v3-radius-card: 16px;
+  --v3-shadow-1: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.05);
+  --v3-shadow-2: 0 6px 18px rgb(15 23 42 / 0.1);
+  --v3-shadow-dock: 0 16px 45px rgb(15 23 42 / 0.18), 0 2px 8px rgb(15 23 42 / 0.07);
+
+  /* Interaction */
+  --v3-touch: 48px;
+  --v3-control: 44px;
+  --v3-focus: 3px solid var(--v3-blue);
+  --v3-focus-offset: 2px;
+  --v3-ease: 150ms ease;
+
+  /* Layout */
+  --v3-gutter: 16px;
+  --v3-page-max: 1560px;
+  /* Space the shell reserves so the fixed dock never covers content. */
+  --v3-dock-clearance: calc(104px + env(safe-area-inset-bottom));
+
+  background: var(--v3-canvas);
+  color: var(--v3-ink);
+  font-family: var(--v3-font);
+  font-size: var(--v3-text-md);
+  line-height: var(--v3-leading);
+  min-height: 100vh;
+}
+
+@media (min-width: 768px) {
+  .v3-root { --v3-gutter: 24px; }
+}
+@media (min-width: 1200px) {
+  .v3-root { --v3-gutter: 32px; }
+}
+@media (max-width: 580px) {
+  /* Bottom-docked bar is flush to the edge and a little shorter. */
+  .v3-root { --v3-dock-clearance: calc(84px + env(safe-area-inset-bottom)); }
+}

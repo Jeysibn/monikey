@@ -85,10 +85,10 @@ test.describe('V3 Overview behavior', () => {
     const card = page.getByRole('link', { name: /^Checking, balance/ })
     await card.focus()
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/accounts$/)
+    await expect(page).toHaveURL(/\/v3\/accounts\?account=/)
     await page.goto('/v3')
     await page.getByRole('link', { name: 'All activity' }).click()
-    await expect(page).toHaveURL(/\/transactions$/)
+    await expect(page).toHaveURL(/\/v3\/activity$/)
   })
 
   test('timeframe selector updates the period', async ({ page }) => {

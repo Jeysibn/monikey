@@ -27,7 +27,7 @@ export function V3AccountCard({ kind, name, figure, meta, tone = 0, onSelect, ex
       </span>
       <span className="v3-account-card__body">
         <span className="v3-account-card__figure">{figure}</span>
-        {meta && <span className="v3-account-card__meta">{meta}</span>}
+        <span className="v3-account-card__meta" aria-hidden={meta ? undefined : true}>{meta ?? "\u00a0"}</span>
       </span>
     </>
   )

@@ -316,3 +316,39 @@ Frontend only. No backend, database, ledger, recurring, GitOps or deployment cha
 - Existing `/net-worth` snapshots remain wrong for backdated data; consider rebuilding or deprecating.
 - Backend-mode "Budgeted categories" on Summary still reads bootstrap budget state; Insights uses the authoritative endpoint.
 - Quarterly/yearly Summary-vs-Insights use report endpoints only in backend mode.
+
+## 11. Stage 5A — Activity & Accounts (2026-10-14)
+
+### Implemented (all opt-in V3; legacy routes untouched)
+- **Backend:** `GET /transactions` gains a literal-safe `q` search (title/note, `%`/`_`/`\` escaped). No schema change, no ledger-semantics change. OpenAPI and the generated client were regenerated.
+- **Activity (`/v3/activity`):** mobile date-grouped list, desktop (≥900px) sortable table, debounced search, collapsible filters (type, account, category, date range, sort, show-reversed). Filters, sort and the selected transaction (`?tx=`) live in URL params, so Back/Forward works and links are shareable. Server-side cursor paging (50 rows, "Load more"). Kind badges: Expense, Income, Transfer, Card charge, Card repayment (never expense/income). Reversal pairs are hidden by default and shown, badged and cross-linked, under "Show reversed (audit trail)". Edit reuses the existing modal, reverse reuses the confirm dialog. Explicit loading, error (with retry), empty, offline and pagination-error states. Sorting other than date-desc applies to loaded rows only, and the UI says so while more pages exist.
+- **Accounts (`/v3/accounts`):** physical-card-style grid with a distinct tone per account within each kind. One expanded account at a time (`?account=ID`, deep-linkable, history-aware). Credit cards show **outstanding debt**, limit, limit used, due date and minimum payment; remaining credit is stated as a limit, not cash. The expanded panel lists the 5 most recent transactions and links to `/v3/activity?account=ID`. Add account, add credit card, edit (name, institution, last four only) and archive (confirm) go through the existing gateway; **balances cannot be edited** (no ledger bypass). Edit/archive are hidden without a backend.
+- **Navigation:** Overview account card → `/v3/accounts?account=ID`; Overview recent row → `/v3/activity?tx=ID`; Accounts → filtered Activity; Activity account links → Accounts. No fifth nav item; Settings/Security/Sync Center unchanged.
+
+### Favorite accounts — NOT implemented (needs migration, awaiting approval)
+`UserPreferences` has only notification/AI/hide-cents toggles; no table or column can store a per-user favorite list. The Overview keeps the deterministic heuristic ("Featured accounts").
+- **Proposed model:** nullable `favorite_rank SMALLINT` (1–4) on `financial_accounts`, with a partial unique index on `(user_id, favorite_rank) WHERE favorite_rank IS NOT NULL AND archived_at IS NULL`. Chosen over a JSON preferences field so ownership, archival and uniqueness are enforced by the database.
+- **API:** `PUT /api/v1/accounts/favorites` with body `{ accountIds: string[] }` (0–4 unique, owned, non-archived, otherwise 400/404); `favoriteRank` exposed on the account view and in bootstrap. Archiving an account clears its rank.
+- **Migration plan:** additive, nullable, no backfill; app falls back to the heuristic when no ranks are set. Roll back by dropping the column and index.
+
+### Stage 4.1 follow-ups
+- Archived accounts are excluded from the whole net-tracked history (documented behaviour, tested). 1,500-transaction history computes exactly (BigInt) in under 3 s. Backdated and reversal cases remain covered by the Stage 4.1 tests.
+- Summary and Insights keep distinct labels for all-category spending versus budgeted-category spending.
+
+### Results (actual)
+- Frontend vitest: 35 files / 344 tests pass (before final edits; v3 folder re-run: 54 tests pass). Typecheck, build and `verify:privacy` pass. Lint: warnings only (vendored tesseract and existing pages), no errors.
+- Backend (disposable PostgreSQL): 57 files / 442 tests pass; `api:openapi:check` and typecheck pass.
+- Playwright mock suite: 142 passed, 9 skipped (the real-backend spec, which needs `V3_BACKEND_LOCAL=1`).
+- **Real-backend browser run** (local API on :3000, disposable DB, Vite dev server with `VITE_FINANCE_BACKEND=true`, test-only registered user, 60+ seeded transactions): 9 of 9 passed. Covered: register and load; Overview and Insights; card owed 1,500.00 (never available credit); paging across 60+ rows; literal `%` search; type filter with Back/Forward; reversal hidden and shown in audit view; card charge and repayment labels; reverse via confirm; account create, edit (no balance field), archive; account → filtered Activity and back; error state with retry and recovery; axe (WCAG 2 A/AA) and no horizontal overflow at mobile, tablet and desktop.
+- Screenshots (actual viewport, backend-backed): `docs/remake/screenshots/stage5a/`.
+- Test cleanup: the disposable container and dev servers are stopped after the run.
+
+### Remaining defects / risks
+- Favorites are not persisted (above). Sort other than date-desc is per loaded page set.
+- Category shows "System Groceries" for every seeded row only because the test data used one category.
+- The desktop table runs under the floating dock while scrolling (clearance exists at page end).
+- Add credit card sends minimum payment 0; editing due date, limit and minimum payment is not in this stage.
+- Credit-card "Payment due" shows day and month only.
+
+### Recommendation for Stage 5B (Quick Add)
+Proceed after review. Reuse `useActivityFeed` refresh and the Activity/Accounts URL patterns; build on the existing add-transaction modal and idempotency keys rather than new ledger paths; decide favorites first, since Quick Add's account picker should honor them.

@@ -16,7 +16,7 @@ import { buildApp } from '../../src/app.js'
 import { loadEnv } from '../../src/config/env.js'
 import { LedgerRepository } from '../../src/modules/ledger/ledger.repository.js'
 import { LedgerService } from '../../src/modules/ledger/ledger.service.js'
-import { processDueRecurringItems } from '../../src/modules/recurring/recurring.worker.js'
+import { scanDueRecurringItems } from '../../src/modules/recurring/recurring.worker.js'
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
 const describeIfDb = databaseUrl ? describe : describe.skip
@@ -396,7 +396,7 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     expect(await bal(a)).toBe(9007199254740992n)
   })
 
-  // ---- recurring ----------------------------------------------------------
+  // ---- recurring (rewritten in Stage 6B: the worker no longer posts; only explicit confirmation does) -----
   async function recurring(userId: string, over: Record<string, unknown> = {}) {
     const accountId = (over.accountId as string) ?? (await cash(userId, 100000))
     const categoryId = await category(userId, 'Bills')
@@ -404,137 +404,118 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     return { item, accountId }
   }
   const dueTxCount = (userId: string) => prisma.transaction.count({ where: { userId, source: 'recurring' } })
+  const confirmBody = (over: Record<string, unknown> = {}) => ({ expectedDueDate: '2026-09-05', amountMinor: '25000', paidOn: '2026-09-05', ...over })
 
-  it('V3 CONFLICT: the worker posts a due NON-autopay item without any confirmation', async () => {
+  it('V3 RESOLVED: the worker scan never posts, even for a due non-autopay or autopay item', async () => {
     const { userId } = await newUser()
-    const { item, accountId } = await recurring(userId, { autopay: false })
-    const r = await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)
-    expect(r).toEqual({ processed: 1, failed: 0 })
-    expect(await bal(accountId)).toBe(75000n)
-    const after = await prisma.recurringItem.findUniqueOrThrow({ where: { id: item.id } })
-    expect(after.nextDueDate.toISOString().slice(0, 10)).toBe('2026-10-05')
-    expect(after.lastPaidDate?.toISOString().slice(0, 10)).toBe('2026-09-05')
+    const a = await recurring(userId, { autopay: false })
+    const b = await recurring(userId, { autopay: true })
+    expect(await scanDueRecurringItems(prisma, '2026-09-05', undefined, userId)).toEqual({ due: 2, overdue: 0 })
+    expect(await dueTxCount(userId)).toBe(0)
+    expect(await bal(a.accountId)).toBe(100000n); expect(await bal(b.accountId)).toBe(100000n)
+    const after = await prisma.recurringItem.findUniqueOrThrow({ where: { id: a.item.id } })
+    expect(after.nextDueDate.toISOString().slice(0, 10)).toBe('2026-09-05'); expect(after.lastPaidDate).toBeNull(); expect(after.status).toBe('active')
   })
 
-  it('the worker does not post items that are not yet due, paused, or on an archived account', async () => {
+  it('the scan ignores items that are not yet due, paused, and counts overdue ones without posting', async () => {
     const { userId } = await newUser()
     await recurring(userId, { nextDueDate: new Date('2026-09-06T00:00:00Z') })
     await recurring(userId, { status: 'paused' })
-    const arch = await cash(userId, 100000); await prisma.financialAccount.update({ where: { id: arch }, data: { archivedAt: new Date() } })
-    await recurring(userId, { accountId: arch })
-    expect(await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)).toEqual({ processed: 0, failed: 0 })
+    await recurring(userId, { nextDueDate: new Date('2026-08-01T00:00:00Z') })
+    expect(await scanDueRecurringItems(prisma, '2026-09-05', undefined, userId)).toEqual({ due: 0, overdue: 1 })
     expect(await dueTxCount(userId)).toBe(0)
   })
 
-  it('the worker is idempotent: a second run the same day posts nothing more', async () => {
-    const { userId } = await newUser()
-    const { accountId } = await recurring(userId)
-    await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)
-    await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)
-    expect(await dueTxCount(userId)).toBe(1); expect(await bal(accountId)).toBe(75000n)
-  })
-
-  it('V3 CONFLICT: the worker catches up every missed cycle one per run, with no confirmation', async () => {
+  it('V3 RESOLVED: repeated worker scans over many days never catch up missed cycles', async () => {
     const { userId } = await newUser()
     const { accountId } = await recurring(userId, { nextDueDate: new Date('2026-07-05T00:00:00Z') })
-    for (const day of ['2026-09-05', '2026-09-05', '2026-09-05', '2026-09-05']) await processDueRecurringItems(prisma, ledger, day, undefined, userId)
-    expect(await dueTxCount(userId)).toBe(3) // Jul, Aug, Sep 5 — then next due is Oct, not due yet
-    expect(await bal(accountId)).toBe(25000n)
+    for (const day of ['2026-09-05', '2026-09-06', '2026-10-05', '2026-10-06']) await scanDueRecurringItems(prisma, day, undefined, userId)
+    expect(await dueTxCount(userId)).toBe(0)
+    expect(await bal(accountId)).toBe(100000n)
   })
 
-  it('a failing item (overdraft) is auto-paused without stopping other items', async () => {
-    const { userId } = await newUser()
-    const poor = await cash(userId, 100)
-    const bad = await recurring(userId, { accountId: poor })
-    const good = await recurring(userId)
-    expect(await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)).toEqual({ processed: 1, failed: 1 })
-    expect((await prisma.recurringItem.findUniqueOrThrow({ where: { id: bad.item.id } })).status).toBe('paused')
-    expect((await prisma.recurringItem.findUniqueOrThrow({ where: { id: good.item.id } })).status).toBe('active')
-  })
-
-  it('mark-paid posts the expense on the due date, once, and advances the schedule', async () => {
+  it('confirm-payment posts the expense on the actual payment date, once, and advances the schedule', async () => {
     const { userId, cookie } = await newUser()
     const { item, accountId } = await recurring(userId)
-    const res = await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)
+    const res = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody({ paidOn: '2026-09-07' }))
     expect(res.statusCode).toBe(201)
-    expect(res.json().nextDueDate).toBe('2026-10-05'); expect(res.json().lastPaidDate).toBe('2026-09-05')
+    expect(res.json().recurring.nextDueDate).toBe('2026-10-05'); expect(res.json().recurring.lastPaidDate).toBe('2026-09-07')
     expect(await bal(accountId)).toBe(75000n)
     const tx = await prisma.transaction.findFirstOrThrow({ where: { userId, source: 'recurring' } })
-    expect(tx.occurredOn.toISOString().slice(0, 10)).toBe('2026-09-05')
-    expect(tx.amountMinor).toBe(25000n)
+    expect(tx.occurredOn.toISOString().slice(0, 10)).toBe('2026-09-07'); expect(tx.amountMinor).toBe(25000n)
   })
 
-  it('V3 CONFLICT: mark-paid accepts no body — amount, account and paid date cannot be confirmed or corrected', async () => {
+  it('V3 RESOLVED: the confirmed amount, account and payment date are honoured', async () => {
     const { userId, cookie } = await newUser()
     const other = await cash(userId, 100000, 'Other')
     const { item, accountId } = await recurring(userId)
-    const res = await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`, { amountMinor: '99999', accountId: other, paidOn: '2026-09-20' })
-    // Characterize whatever happens: the schedule's amount/account/date win.
+    const res = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody({ amountMinor: '99999', accountId: other, paidOn: '2026-09-20' }))
     expect(res.statusCode).toBe(201)
     const tx = await prisma.transaction.findFirstOrThrow({ where: { userId, source: 'recurring' } })
-    expect(tx.amountMinor).toBe(25000n)
-    expect(tx.fromAccountId).toBe(accountId)
-    expect(tx.occurredOn.toISOString().slice(0, 10)).toBe('2026-09-05')
-    expect(await bal(other)).toBe(100000n)
+    expect(tx.amountMinor).toBe(99999n); expect(tx.fromAccountId).toBe(other); expect(tx.occurredOn.toISOString().slice(0, 10)).toBe('2026-09-20')
+    expect(await bal(other)).toBe(100000n - 99999n); expect(await bal(accountId)).toBe(100000n)
   })
 
-  it('V3 CONFLICT: two sequential mark-paid calls pay two cycles, and a due-date check is absent (future bills can be pre-paid)', async () => {
+  it('V3 RESOLVED: a future bill cannot be confirmed, and two sequential confirms pay two different cycles only when each is named', async () => {
     const { userId, cookie } = await newUser()
-    const { item } = await recurring(userId, { nextDueDate: new Date('2027-01-05T00:00:00Z') }) // far in the future
-    expect((await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)).statusCode).toBe(201)
-    expect((await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)).statusCode).toBe(201)
-    expect(await dueTxCount(userId)).toBe(2)
+    const future = await recurring(userId, { nextDueDate: new Date('2027-01-05T00:00:00Z') })
+    const early = await send(cookie, 'POST', `/recurring/${future.item.id}/confirm-payment`, confirmBody({ expectedDueDate: '2027-01-05', paidOn: '2026-09-05' }))
+    expect(early.statusCode).toBe(422); expect(early.json().error.code).toBe('RECURRING_NOT_DUE')
+    const { item } = await recurring(userId)
+    expect((await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())).statusCode).toBe(201)
+    const again = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
+    expect(again.statusCode).toBe(200); expect(again.json().outcome).toBe('replayed')
+    expect(await dueTxCount(userId)).toBe(1)
   })
 
-  it('concurrent mark-paid calls for the same cycle post one transaction (extra callers get 500, not a replay)', async () => {
+  it('V3 RESOLVED: concurrent confirmations of the same cycle post one transaction and every caller gets a success', async () => {
     const { userId, cookie } = await newUser()
     const { item, accountId } = await recurring(userId)
-    const rs = await Promise.all([1, 2, 3].map(() => send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)))
-    expect(await dueTxCount(userId)).toBe(1)
-    expect(await bal(accountId)).toBe(75000n)
-    // Characterized robustness gap: the loser(s) of the idempotency-key race
-    // surface as 500 INTERNAL_ERROR instead of replaying the winner's result.
-    // No double posting occurs (asserted above).
-    expect(rs.filter((r) => r.statusCode === 201)).toHaveLength(1)
-    expect(rs.filter((r) => r.statusCode === 500)).toHaveLength(2)
-    // Documented race: all callers read the same item, so the schedule advances once.
+    const rs = await Promise.all([1, 2, 3].map(() => send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())))
+    expect(rs.map((r) => r.statusCode).sort()).toEqual([200, 200, 201])
+    expect(await dueTxCount(userId)).toBe(1); expect(await bal(accountId)).toBe(75000n)
     expect((await prisma.recurringItem.findUniqueOrThrow({ where: { id: item.id } })).nextDueDate.toISOString().slice(0, 10)).toBe('2026-10-05')
   })
 
-  it('V3 CONFLICT: after the worker auto-posts a cycle, a user clicking mark-paid pays the NEXT cycle early', async () => {
+  it('V3 RESOLVED: a cycle the legacy worker already auto-posted is recognised, not paid again', async () => {
     const { userId, cookie } = await newUser()
     const { item, accountId } = await recurring(userId)
-    await processDueRecurringItems(prisma, ledger, '2026-09-05', undefined, userId)
-    const res = await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)
-    expect(res.statusCode).toBe(201)
-    expect(await dueTxCount(userId)).toBe(2) // Sep (worker) + Oct (manual, before Oct is due)
-    expect(await bal(accountId)).toBe(50000n)
+    // What the retired worker did: post under recurring:<id>:<due>, but (interrupted) never advance the schedule.
+    await ledger.postTransaction(userId, input({ fromAccountId: accountId, amountMinor: 25000, title: 'Rent', occurredOn: '2026-09-05', source: 'recurring', idempotencyKey: `recurring:${item.id}:2026-09-05` }))
+    const res = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
+    expect(res.statusCode).toBe(201); expect(res.json().outcome).toBe('reconciled_existing')
+    expect(await dueTxCount(userId)).toBe(1); expect(await bal(accountId)).toBe(75000n)
+    expect(res.json().recurring.nextDueDate).toBe('2026-10-05')
   })
 
-  it('V3 CONFLICT: a manually entered payment is not recognised, so confirming the bill double-posts it', async () => {
+  it('V3 RESOLVED: a manually entered payment is detected as a possible duplicate and nothing is posted until acknowledged', async () => {
     const { userId, cookie } = await newUser()
     const { item, accountId } = await recurring(userId)
     await ledger.postTransaction(userId, input({ fromAccountId: accountId, amountMinor: 25000, title: 'Rent', occurredOn: '2026-09-05' }))
-    await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)
+    const warned = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
+    expect(warned.statusCode).toBe(409); expect(warned.json().error.code).toBe('POSSIBLE_DUPLICATE_PAYMENT'); expect(warned.json().error.candidates).toHaveLength(1)
+    expect(await bal(accountId)).toBe(75000n)
+    const forced = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody({ allowPossibleDuplicate: true }))
+    expect(forced.statusCode).toBe(201)
     expect(await bal(accountId)).toBe(50000n)
   })
 
-  it('mark-paid is rejected (404) for paused items and other users', async () => {
+  it('confirm-payment and mark-paid are rejected (404/409) for other users and paused items', async () => {
     const owner = await newUser(); const intruder = await newUser()
     const paused = await recurring(owner.userId, { status: 'paused' })
     const live = await recurring(owner.userId)
+    expect((await send(owner.cookie, 'POST', `/recurring/${paused.item.id}/confirm-payment`, confirmBody())).statusCode).toBe(409)
     expect((await send(owner.cookie, 'POST', `/recurring/${paused.item.id}/mark-paid`)).statusCode).toBe(404)
+    expect((await send(intruder.cookie, 'POST', `/recurring/${live.item.id}/confirm-payment`, confirmBody())).statusCode).toBe(404)
     expect((await send(intruder.cookie, 'POST', `/recurring/${live.item.id}/mark-paid`)).statusCode).toBe(404)
     expect(await dueTxCount(owner.userId)).toBe(0)
   })
 
-  it('mark-paid posts the ledger transaction and advances the schedule in separate steps (non-atomic)', async () => {
-    // Characterization via failure: an overdraft rejects the post, and the
-    // schedule must then remain unchanged (post happens first).
+  it('a rejected post (overdraft) changes neither the ledger nor the schedule', async () => {
     const { userId, cookie } = await newUser()
     const poor = await cash(userId, 100)
     const { item } = await recurring(userId, { accountId: poor })
-    const res = await send(cookie, 'POST', `/recurring/${item.id}/mark-paid`)
+    const res = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
     expect(res.statusCode).toBe(422)
     const after = await prisma.recurringItem.findUniqueOrThrow({ where: { id: item.id } })
     expect(after.nextDueDate.toISOString().slice(0, 10)).toBe('2026-09-05')

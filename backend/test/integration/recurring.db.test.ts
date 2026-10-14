@@ -20,7 +20,7 @@ import { buildApp } from '../../src/app.js'
 import { loadEnv } from '../../src/config/env.js'
 import { LedgerRepository } from '../../src/modules/ledger/ledger.repository.js'
 import { LedgerService } from '../../src/modules/ledger/ledger.service.js'
-import { processDueRecurringItems } from '../../src/modules/recurring/recurring.worker.js'
+import { scanDueRecurringItems } from '../../src/modules/recurring/recurring.worker.js'
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
 const describeIfDb = databaseUrl ? describe : describe.skip
@@ -144,7 +144,7 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
     expect(crossUserRes.statusCode).toBe(404)
   })
 
-  it('mark-paid posts a ledger transaction idempotently and advances the due date', async () => {
+  it('mark-paid (legacy route) now confirms the current cycle through the safe service: one transaction, schedule advanced', async () => {
     const { userId, cookie } = await registerAndLogin(app, createdEmails)
     const accountId = await makeAccount(prisma, userId, 100000)
     const categoryId = await makeExpenseCategory(prisma, userId)
@@ -153,7 +153,7 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
     const first = await app.inject({ method: 'POST', url: `/api/v1/recurring/${item.id}/mark-paid`, headers: { origin: APP_ORIGIN, cookie } })
     expect(first.statusCode).toBe(201)
     expect(first.json().nextDueDate).toBe('2026-10-01')
-    expect(first.json().lastPaidDate).toBe('2026-09-01')
+    expect(first.json().lastPaidDate).not.toBeNull() // the actual payment date (today), not the scheduled date
 
     const account = await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })
     expect(account.currentBalanceMinor).toBe(BigInt(100000 - 1500))
@@ -188,13 +188,9 @@ describeIfDb('RecurringModule routes (real PostgreSQL, real HTTP)', () => {
   })
 })
 
-describeIfDb('processDueRecurringItems worker (real PostgreSQL)', () => {
+describeIfDb('recurring worker scan (real PostgreSQL)', () => {
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
-  const ledger = new LedgerService(prisma, new LedgerRepository(prisma))
-
-  afterAll(async () => {
-    await prisma.$disconnect()
-  })
+  afterAll(async () => { await prisma.$disconnect() })
 
   async function makeUser(suffix: string) {
     const userId = randomUUID()
@@ -202,108 +198,27 @@ describeIfDb('processDueRecurringItems worker (real PostgreSQL)', () => {
     return userId
   }
 
-  it('processes every due item in a single run (happy path)', async () => {
-    const userId = await makeUser('worker-happy')
+  it('reports due items and posts nothing for any of them (including archived-account and broken-category items)', async () => {
+    const userId = await makeUser('worker-scan')
+    const otherUserId = await makeUser('worker-scan-other')
     try {
       const accountId = await makeAccount(prisma, userId, 100000)
+      const archivedId = await makeAccount(prisma, userId, 100000)
+      await prisma.financialAccount.update({ where: { id: archivedId }, data: { archivedAt: new Date() } })
       const categoryId = await makeExpenseCategory(prisma, userId)
-      const todayIso = '2026-09-01'
-      await prisma.recurringItem.create({ data: { userId, merchant: 'Bill A', amountMinor: BigInt(1000), frequency: 'monthly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId, categoryId } })
-      await prisma.recurringItem.create({ data: { userId, merchant: 'Bill B', amountMinor: BigInt(2000), frequency: 'weekly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId, categoryId } })
-
-      const result = await processDueRecurringItems(prisma, ledger, todayIso)
-      expect(result).toEqual({ processed: 2, failed: 0 })
-
-      const account = await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })
-      expect(account.currentBalanceMinor).toBe(BigInt(100000 - 1000 - 2000))
-    } finally {
-      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
-    }
-  })
-
-  it('skips and auto-pauses an item whose linked account is archived, logs it, and still processes the other due items in the run (Defect 1 / Defect 3)', async () => {
-    const userId = await makeUser('worker-archived')
-    try {
-      const brokenAccountId = await makeAccount(prisma, userId, 100000)
-      const healthyAccountId = await makeAccount(prisma, userId, 100000)
-      const categoryId = await makeExpenseCategory(prisma, userId)
-      const todayIso = '2026-09-01'
-
-      const brokenItem = await prisma.recurringItem.create({ data: { userId, merchant: 'Broken Bill', amountMinor: BigInt(1000), frequency: 'monthly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId: brokenAccountId, categoryId } })
-      const healthyItem = await prisma.recurringItem.create({ data: { userId, merchant: 'Healthy Bill', amountMinor: BigInt(3000), frequency: 'monthly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId: healthyAccountId, categoryId } })
-
-      // Archive the account backing brokenItem after the recurring item was
-      // created (archival does not cascade — see QA Defect 3).
-      await prisma.financialAccount.update({ where: { id: brokenAccountId }, data: { archivedAt: new Date() } })
-
-      const warnings: Array<{ obj: Record<string, unknown>; msg?: string }> = []
-      const logger = { warn: (obj: Record<string, unknown>, msg?: string) => { warnings.push({ obj, msg }) } }
-
-      const result = await processDueRecurringItems(prisma, ledger, todayIso, logger)
-
-      // The archived-account item is excluded by the due-items query filter
-      // (Defect 3 fix) rather than ever reaching postTransaction, so it is
-      // neither processed nor counted as a failure here — but it also must
-      // not have crashed the loop or blocked the healthy item.
-      expect(result.processed).toBe(1)
-
-      const healthyAccount = await prisma.financialAccount.findUniqueOrThrow({ where: { id: healthyAccountId } })
-      expect(healthyAccount.currentBalanceMinor).toBe(BigInt(100000 - 3000))
-      const healthyAfter = await prisma.recurringItem.findUniqueOrThrow({ where: { id: healthyItem.id } })
-      expect(healthyAfter.status).toBe('active')
-      expect(healthyAfter.nextDueDate.toISOString().slice(0, 10)).toBe('2026-10-01')
-
-      // The broken item was left untouched by the filtered-out query path —
-      // still active and still due, but excluded from processing every run
-      // until an operator fixes/unarchives the account. It must not have
-      // caused any error to propagate out of the function.
-      const brokenAfter = await prisma.recurringItem.findUniqueOrThrow({ where: { id: brokenItem.id } })
-      expect(brokenAfter.status).toBe('active')
-    } finally {
-      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
-    }
-  })
-
-  it('logs and auto-pauses an item that fails during postTransaction for a reason the query filter does not catch, and still processes the remaining due items', async () => {
-    const userId = await makeUser('worker-broken-category')
-    const otherUserId = await makeUser('worker-broken-category-other')
-    try {
-      const accountId = await makeAccount(prisma, userId, 100000)
-      const healthyCategoryId = await makeExpenseCategory(prisma, userId)
-      const todayIso = '2026-09-01'
-
-      // A category that exists (so it satisfies the FK constraint, which
-      // real archival/deletion cannot violate) but is owned by a different
-      // user. `LedgerRepository.postTransaction` rejects this as
-      // UNKNOWN_CATEGORY — simulating the "broken downstream link" failure
-      // mode that the account-archived query filter alone cannot catch
-      // (e.g. category ownership changed or was corrupted after the
-      // recurring item was created).
-      const otherUsersCategoryId = await makeExpenseCategory(prisma, otherUserId)
-      const brokenItem = await prisma.recurringItem.create({ data: { userId, merchant: 'Broken Category Bill', amountMinor: BigInt(1000), frequency: 'monthly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId, categoryId: otherUsersCategoryId } })
-      void brokenItem
-
-      const workingItem = await prisma.recurringItem.create({ data: { userId, merchant: 'Working Bill', amountMinor: BigInt(2500), frequency: 'monthly', nextDueDate: new Date(`${todayIso}T00:00:00Z`), accountId, categoryId: healthyCategoryId } })
-
-      const warnings: Array<{ obj: Record<string, unknown>; msg?: string }> = []
-      const logger = { warn: (obj: Record<string, unknown>, msg?: string) => { warnings.push({ obj, msg }) } }
-
-      const result = await processDueRecurringItems(prisma, ledger, todayIso, logger)
-
-      expect(result.processed).toBe(1)
-      expect(result.failed).toBe(1)
-      expect(warnings.some((entry) => entry.msg === 'failed to post recurring transaction')).toBe(true)
-
-      const workingAfter = await prisma.recurringItem.findUniqueOrThrow({ where: { id: workingItem.id } })
-      expect(workingAfter.nextDueDate.toISOString().slice(0, 10)).toBe('2026-10-01')
-
-      const allItems = await prisma.recurringItem.findMany({ where: { userId, merchant: 'Broken Category Bill' } })
-      expect(allItems).toHaveLength(1)
-      expect(allItems[0]!.status).toBe('paused')
-
-      const account = await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })
-      // Only the working item's charge went through.
-      expect(account.currentBalanceMinor).toBe(BigInt(100000 - 2500))
+      const foreignCategory = await makeExpenseCategory(prisma, otherUserId)
+      const due = new Date('2026-09-01T00:00:00Z')
+      const mk = (merchant: string, over: Record<string, unknown> = {}) => prisma.recurringItem.create({ data: { userId, merchant, amountMinor: BigInt(1000), frequency: 'monthly', nextDueDate: due, accountId, categoryId, ...over } as never })
+      const a = await mk('Bill A'); await mk('Bill B', { autopay: true }); await mk('On archived account', { accountId: archivedId }); await mk('Foreign category', { categoryId: foreignCategory })
+      const warnings: string[] = []
+      const result = await scanDueRecurringItems(prisma, '2026-09-01', { warn: (_o, msg) => { warnings.push(msg ?? '') } }, userId)
+      expect(result).toEqual({ due: 4, overdue: 0 })
+      expect(warnings).toHaveLength(1)
+      expect(await prisma.transaction.count({ where: { userId } })).toBe(0)
+      expect((await prisma.financialAccount.findUniqueOrThrow({ where: { id: accountId } })).currentBalanceMinor).toBe(100000n)
+      const after = await prisma.recurringItem.findUniqueOrThrow({ where: { id: a.id } })
+      expect(after.status).toBe('active'); expect(after.nextDueDate.toISOString().slice(0, 10)).toBe('2026-09-01'); expect(after.lastPaidDate).toBeNull()
+      expect(await prisma.recurringItem.count({ where: { userId, status: 'paused' } })).toBe(0) // the scan never auto-pauses either
     } finally {
       await prisma.recurringItem.deleteMany({ where: { userId } })
       await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)

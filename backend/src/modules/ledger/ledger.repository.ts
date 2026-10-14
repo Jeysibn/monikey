@@ -107,6 +107,19 @@ export class LedgerRepository {
         include: { balanceEffects: true },
       });
       if (existing) {
+        // Same key with a materially different request is a client bug or a forged retry, not a replay: refuse it
+        // instead of silently returning (and appearing to accept) content the caller never sent.
+        const sameRequest =
+          existing.type === type &&
+          existing.amountMinor === amountMinor &&
+          existing.feeMinor === feeMinor &&
+          (existing.fromAccountId ?? null) === (fromAccountId ?? null) &&
+          (existing.toAccountId ?? null) === (toAccountId ?? null) &&
+          (existing.categoryId ?? null) === (categoryId ?? null) &&
+          existing.occurredOn.toISOString().slice(0, 10) === new Date(occurredOn).toISOString().slice(0, 10);
+        if (!sameRequest && !idempotencyKey.startsWith('recurring:')) {
+          throw new AppError('IDEMPOTENCY_KEY_REUSED', 'This idempotency key was already used for a different transaction. Retry the original request unchanged, or submit the new transaction with a new key.', { field: 'idempotencyKey' });
+        }
         return {
           transaction: this.mapTransaction(existing),
           balanceEffects: existing.balanceEffects.map((effect) => ({

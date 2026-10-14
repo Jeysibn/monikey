@@ -90,13 +90,20 @@ describeIfDb('Stage 7B offline outbox replay safety (real PostgreSQL)', () => {
     expect(await bal(u.accountId)).toBe(start)
   })
 
-  it('a replayed key keeps the FIRST committed content (a changed payload is not applied)', async () => {
+  it('reusing a key with a materially different request is a 409 conflict, never silently accepted', async () => {
     const u = await newUser(); const key = `offline-${randomUUID()}`
     const first = await post(u.cookie, op(u.accountId, key, { amountMinor: '25000' }))
-    const changed = await post(u.cookie, op(u.accountId, key, { amountMinor: '99999', title: 'edited' }))
-    expect(changed.json().transaction.id).toBe(first.json().transaction.id)
-    expect(changed.json().transaction.amountMinor).toBe('25000')
+    const changed = await post(u.cookie, op(u.accountId, key, { amountMinor: '99999' }))
+    expect(changed.statusCode).toBe(409)
+    expect(changed.json().error.code).toBe('IDEMPOTENCY_KEY_REUSED')
+    const otherDay = await post(u.cookie, op(u.accountId, key, { occurredOn: '2026-10-16' }))
+    expect(otherDay.statusCode).toBe(409)
+    expect(await count(u.userId, key)).toBe(1)
     expect(await bal(u.accountId)).toBe(975_000n)
+    // an unchanged retry (cosmetic differences only) is still a replay of the original
+    const retry = await post(u.cookie, op(u.accountId, key, { title: 'Queued offline (retry)' }))
+    expect(retry.statusCode).toBeLessThan(300)
+    expect(retry.json().transaction.id).toBe(first.json().transaction.id)
   })
 
   it('idempotency keys are scoped per user: another session or user cannot collide with or read the operation', async () => {

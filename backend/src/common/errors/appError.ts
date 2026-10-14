@@ -30,6 +30,7 @@ export type AppErrorCode =
   | 'ACCOUNT_ARCHIVED'
   | 'ACCOUNT_NOT_EMPTY'
   | 'ALREADY_REVERSED'
+  | 'IDEMPOTENCY_KEY_REUSED'
   | 'VALIDATION_ERROR'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
@@ -103,6 +104,7 @@ function defaultStatusForCode(code: AppErrorCode): number {
       return 404
     case 'IDEMPOTENCY_CONFLICT':
     case 'DUPLICATE_IMPORT':
+    case 'IDEMPOTENCY_KEY_REUSED':
       return 409
     case 'RATE_LIMITED':
       return 429

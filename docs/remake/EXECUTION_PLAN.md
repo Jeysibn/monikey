@@ -480,4 +480,48 @@ Current behaviour (facts): `processDueRecurringItems` (separate process `backend
 11. Rollout: ship worker-off flag first and verify no `source:'recurring'` rows appear; back up before any migration; stage on a copy of production-shaped data; announce the behaviour change; keep the flag as a kill switch; monitor ledger counts for two cycles.
 
 ### Stage 6 readiness
-Stage 6A complete and ready for review. Stage 6B not started.
+Stage 6A complete and ready for review. Stage 6B proposal above is superseded by §15.
+
+## 15. Stage 6B — Manual Recurring Payment Confirmation (2026-10-14)
+
+**Rule:** a recurring bill's due date never creates an expense. Only an explicit, user-confirmed payment creates a ledger transaction. Local only; no migration has been run anywhere but a disposable database.
+
+### Paths that could create recurring expenses (found)
+- Worker `processDueRecurringItems` (job `daily-finance-maintenance`) posted for every active due item regardless of `autopay`, key `recurring:${id}:${dueDate}`, non-atomic advance (`setUTCMonth`), auto-pause on failure. **Removed**: the worker no longer posts; it only enqueues reminders.
+- Legacy `POST /recurring/:id/mark-paid`: no body, no due check. **Now delegates to the safe service.**
+- `POST /transactions` with `source:'recurring'`: user-initiated; unchanged.
+- `enqueueDueBillNotifications`: non-financial reminder; unchanged.
+
+### Behaviour
+- `POST /recurring/:id/confirm-payment` (`expectedDueDate`, amount, account, `paidOn`, `allowPossibleDuplicate`): item row locked `FOR UPDATE`; ledger transaction, `recurring_occurrences` row and next due date advance in one DB transaction. `paidOn` must be ≤ today (user timezone) and the cycle must be due.
+- Also: `skip-cycle` (API only, no UI), `link-payment`, `GET payment-candidates`.
+- `anchor_day` (nullable) keeps month-end clamping (Jan 31 → Feb 28 → Mar 31, leap years).
+- Kill switch `RECURRING_CONFIRMATIONS_DISABLED` returns 503 for confirm, link and mark-paid. It can only disable; nothing can re-enable auto-posting.
+- Duplicate warning: cleared, un-reversed, unlinked expenses from due−10 days to today matching amount or merchant; 409 with up to 5 candidates unless `allowPossibleDuplicate`.
+
+### Idempotency
+Ledger key `recurring:${itemId}:${dueDate}` (same as the legacy worker) plus unique `(recurringItemId, dueDate)`. An identical retry returns 200 `replayed`; different details return 409 `RECURRING_ALREADY_CONFIRMED`. A cycle already posted by the old worker is linked and advanced (`reconciled_existing`). Missed cycles are never back-posted; each request pays only the cycle it names.
+
+### Legacy compatibility
+`mark-paid` now: 422 if not yet due, 409 on possible duplicate, 404 if paused, 503 under kill switch. `autopay` is a note only and inert (UI label and tag reworded). This is an intentional break for old clients.
+
+### Frontend
+V3 Planning "Record payment" (overdue and due-today active bills, online only). Dialog states: form, submitting, duplicate (inspect / link / record new), uncertain (Check again resends the identical payload), confirmed. "Paid" is never shown before the backend confirms. Refresh uses an explicit `financeVersion` counter instead of the heuristic; if posting succeeds but refresh fails, a confirmed state offers "Retry refresh", which never re-posts.
+
+### Rollout sequence (not executed)
+1. Back up the database. 2. Apply additive migration `20261015000000_recurring_occurrences` (adds table and nullable `anchor_day`) on a production-shaped copy first. 3. **Stop/replace the old worker before anything else**: a still-running old worker would keep auto-posting. 4. Deploy new worker, then API, then frontend. 5. Optionally deploy with the kill switch on first and verify no new `source='recurring'` rows appear.
+
+### Reconciliation checks
+- `source='recurring'` transactions vs `recurring_occurrences` (every recurring-key transaction should have an occurrence after reconcile).
+- Items whose `next_due_date` is not past the latest legacy-key transaction date.
+- No transaction after rollout whose key starts with `recurring:` and has no occurrence row.
+
+### Rollback
+Set `RECURRING_CONFIRMATIONS_DISABLED`; the table and column are additive and harmless to older code, but older code must not be run (it auto-posts).
+
+### Remaining risks
+- Skip has no UI. Legacy rows may have a drifted anchor day. The duplicate heuristic can miss or over-flag. Worker `processDate` uses Manila rather than the user timezone. Other surfaces (Activity/Overview) refresh by remount or `financeVersion`.
+- A bug found by real-backend Playwright and fixed: the duplicate check missed expenses with a NULL idempotency key (SQL three-valued logic); regression test added.
+
+### Verification (local, disposable PostgreSQL)
+Backend: 59 files / 462 tests passed, typecheck clean, lint pre-existing warnings only, `api:openapi:check` passes. Frontend: Vitest 41 files / 419 passed, `tsc -b` clean, oxlint pre-existing warnings only, build and `verify:privacy` pass. Playwright mock: 151 passed, 47 skipped (backend-only specs). Real-backend: planning, quickadd, backend-local, favorites and the new confirm spec: 47 passed. Screenshots: `docs/remake/screenshots/stage6b/`.

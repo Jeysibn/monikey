@@ -41,11 +41,11 @@ async function getJson<T>(url: string, signal: AbortSignal): Promise<T> {
  * Backend mode uses the authoritative report endpoints (cleared, reversal pairs excluded, no transaction cap);
  * mock mode derives the same semantics from the in-memory state.
  */
-export function usePeriodReport(state: FinanceState, period: ReportingPeriod): Remote<PeriodReport> {
+export function usePeriodReport(state: FinanceState, period: ReportingPeriod, refreshKey = ''): Remote<PeriodReport> {
   const enabled = backendMode()
   const from = period.start
   const to = addDaysToIso(period.end, -1)
-  const remote = useRemote<PeriodReport>(`report|${from}|${to}`, enabled, async (signal) => {
+  const remote = useRemote<PeriodReport>(`report|${from}|${to}|${refreshKey}`, enabled, async (signal) => {
     const [summary, cats] = await Promise.all([
       getJson<SummaryDto & Record<string, string>>(`/api/v1/reports/summary?view=${viewFor(from, to)}&period=${from.slice(0, 7)}`, signal),
       getJson<CategoryDto[]>(`/api/v1/reports/spending-by-category?from=${from}&to=${to}`, signal),

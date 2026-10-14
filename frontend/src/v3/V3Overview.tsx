@@ -10,7 +10,7 @@ import { exactMinor } from '../utils/money'
 import { V3AccountCard } from './V3AccountCard'
 import { V3Workspace } from './V3Shell'
 import { useQuickAdd } from './quickAddContext'
-import { budgetRows, budgetSnapshot, favoriteAccounts, positionMinor, recentActivity, type HistoryPoint } from './overviewModel'
+import { budgetRows, budgetSnapshot, snapshotOf, favoriteAccounts, positionMinor, recentActivity, type HistoryPoint } from './overviewModel'
 import { useBudgetPerformance,  useNetTrackedHistory, usePeriodReport } from './useOverviewReports'
 import './V3Overview.css'
 
@@ -115,7 +115,11 @@ function MonthlySnapshot() {
   const { state, todayIso } = finance
   const period = reportingPeriodForView(todayIso, 'monthly')
   const report = usePeriodReport(state, period)
-  const budget = budgetSnapshot(state)
+  // Backend mode reads the same month-scoped budget report as Insights and Planning; bootstrap's "latest period" can be another month.
+  const remoteBudget = useBudgetPerformance(period.start)
+  const budget = remoteBudget
+    ? remoteBudget.status === 'ready' && remoteBudget.data ? snapshotOf(remoteBudget.data.allocated, remoteBudget.data.spent) : null
+    : budgetSnapshot(state)
   return (
     <div className="v3-card" data-testid="v3-monthly">
       <h3 className="v3-h3">{reportPeriodLabel(todayIso, 'monthly')}</h3>
@@ -136,7 +140,9 @@ function MonthlySnapshot() {
             Budgeted categories: {money(budget.spent)} of {money(budget.allocated)} · {budget.over ? `${money(-budget.remaining)} over` : `${money(budget.remaining)} left`}
           </p>
         </div>
-      ) : <p className="v3-secondary">No budget set for this month. Set one in Planning.</p>}
+      ) : remoteBudget?.status === 'loading' ? <div className="v3-skeleton" role="status" aria-label="Loading budget" />
+        : remoteBudget?.status === 'error' ? <p role="alert" className="v3-secondary">Budget could not be loaded.</p>
+        : <p className="v3-secondary">No budget set for this month. <Link to="/v3/planning">Set one in Planning.</Link></p>}
       <p className="v3-caption v3-secondary">All spending is every cleared expense this month. Budgeted categories count only categories with a budget, so the two can differ. Transfers, card repayments, reversed and pending items are excluded.</p>
     </div>
   )

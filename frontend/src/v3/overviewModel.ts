@@ -87,6 +87,11 @@ export function spendingByCategory(state: FinanceState, period: ReportingPeriod)
 
 export interface BudgetSnapshot { allocated: bigint; spent: bigint; remaining: bigint; usedPct: number; over: boolean }
 
+export function snapshotOf(allocated: bigint, spent: bigint): BudgetSnapshot {
+  const usedPct = allocated > 0n ? Number((spent * 100n + allocated / 2n) / allocated) : 0
+  return { allocated, spent, remaining: allocated - spent, usedPct, over: allocated > 0n && spent > allocated }
+}
+
 export function budgetSnapshot(state: FinanceState): BudgetSnapshot | null {
   if (state.budgetCategories.length === 0) return null
   const allocated = state.totalBudgetAllocatedMinor === undefined ? BigInt(Math.round(state.totalBudgetAllocated * 100)) : BigInt(state.totalBudgetAllocatedMinor)

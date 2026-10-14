@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { V3AccountCard } from './V3AccountCard'
 
 /*
@@ -14,36 +13,6 @@ function PageHead({ title, summary }: { title: string; summary: string }) {
       <h1 className="v3-h1">{title}</h1>
       <p className="v3-secondary">{summary}</p>
     </div>
-  )
-}
-
-function Placeholder({ label, rows = 2 }: { label: string; rows?: number }) {
-  return (
-    <div className="v3-card">
-      <p className="v3-secondary">{label}</p>
-      <div className="v3-stack" aria-hidden="true" style={{ marginTop: 'var(--v3-space-3)' }}>
-        {Array.from({ length: rows }, (_, i) => <div key={i} className="v3-skeleton" />)}
-      </div>
-    </div>
-  )
-}
-
-function ClassicLinks({ links }: { links: { to: string; label: string }[] }) {
-  return (
-    <div className="v3-page-actions">
-      {links.map((link) => <Link key={link.to} className="v3-btn v3-btn--secondary" to={link.to}>{link.label}</Link>)}
-    </div>
-  )
-}
-
-export function V3Planning() {
-  return (
-    <>
-      <PageHead title="Planning" summary="Monthly category budgets first, then confirmed recurring bills (coming in the Planning milestone)." />
-      <Placeholder label="Budgets region." rows={3} />
-      <Placeholder label="Recurring bills region." rows={2} />
-      <ClassicLinks links={[{ to: '/budget', label: 'Open classic Budget' }, { to: '/recurring', label: 'Recurring & Bills' }, { to: '/reports', label: 'Reports' }]} />
-    </>
   )
 }
 

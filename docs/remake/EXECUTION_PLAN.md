@@ -651,3 +651,16 @@ All production blockers are NOT TESTED, and "no unresolved P0/P1" is FAIL becaus
 
 ### 18.4 Recommendation
 GO to request separate approval for production READ-ONLY inspection, an off-host backup and an isolated restore plus real-data dry-run. NO-GO for any migration, deployment or production change.
+
+## 19. Stage 8A: production read-only infrastructure preflight
+
+Deliverable: `docs/remake/STAGE8A_PRODUCTION_PREFLIGHT.md`. Read-only; nothing was executed against production.
+
+- **Access:** no kubectl, argocd, helm or kubeconfig on the workstation, so every live-state item (pods, replicas, digests, Argo status, PVC/cert status, PostgreSQL version, `_prisma_migrations`, backup evidence, drift) is **NOT VERIFIED**. No attempt was made to bypass this.
+- **GitOps evidence:** homelab-gitops `main` is still `0c6399b` (read via the GitHub API); it has not advanced since the 2026-09-13 audit.
+- **D11-A** present in Git: migrate Job runs `npx prisma migrate deploy` on `monikey-api:latest`, whose runtime image strips npx and Prisma; the published `monikey-migration` image is not used.
+- **D11-B** present in Git: `NODE_ENV=development`, `SESSION_SECURE=false`, `APP_ORIGIN=http://…`, no Ingress TLS (Traefik redirects 80 to 443 globally; the only issuer is self-signed and unreferenced).
+- **D11-C/D12:** no backup CronJob, script, Longhorn recurring job or off-host target in GitOps. Not configured, not observed, not verified by restore.
+- **New P1s:** D14 (api, worker and migrate share the mutable `latest` tag, so the running worker version is unknown and may be pre-V3) and D15 (Argo `automated`+`prune`+`selfHeal` plus a Sync-hook migration: a Git push re-runs migrations, and a stopped worker would be restored). New P2/P3: D16 postgres pinning/recovery, D17 secret custody, D18 API docs exposure.
+- **Gate:** "no unresolved P0/P1" remains FAIL (open P1: D11-A, D11-B, D11-C/D12, D14, D15).
+- **Recommendation:** NO-GO for every operational change; GO only to obtain read-only cluster access (or user-run read-only commands) and to approve a GitOps fix proposal. The refined 16-step sequence is in the report, section 11.

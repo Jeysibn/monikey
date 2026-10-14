@@ -1,0 +1,54 @@
+/* V3 Activity: scoped under .v3-root. Mobile list by default; the table renders at >= 900px. */
+.v3-root .v3-act-toolbar { display: flex; gap: var(--v3-space-3); align-items: end; margin-bottom: var(--v3-space-3); }
+.v3-root .v3-act-search { flex: 1; min-width: 0; }
+.v3-root .v3-act-filters { display: grid; gap: var(--v3-space-3); grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); align-items: end; margin-bottom: var(--v3-space-3); }
+.v3-root .v3-act-filters select.v3-input { appearance: auto; }
+.v3-root .v3-act-check { display: flex; align-items: center; gap: var(--v3-space-2); min-height: var(--v3-touch); font-size: var(--v3-text-sm); grid-column: 1 / -1; }
+.v3-root .v3-act-check input { width: 22px; height: 22px; }
+.v3-root .v3-act-layout { display: grid; gap: var(--v3-space-4); grid-template-columns: minmax(0, 1fr); align-items: start; }
+.v3-root .v3-act-main { min-width: 0; display: grid; gap: var(--v3-space-3); }
+.v3-root .v3-act-groups { display: grid; gap: var(--v3-space-4); }
+.v3-root .v3-act-date { margin: 0 0 var(--v3-space-2); color: var(--v3-ink-2); }
+.v3-root .v3-act-list { list-style: none; margin: 0; padding: 0; overflow: hidden; }
+.v3-root .v3-act-list > li + li { border-top: 1px solid var(--v3-border); }
+.v3-root .v3-act-row { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: var(--v3-space-3); width: 100%; min-height: var(--v3-touch); padding: var(--v3-space-3) var(--v3-space-4); cursor: pointer; color: var(--v3-ink); }
+.v3-root .v3-act-row:hover, .v3-root .v3-act-row[aria-current='true'] { background: var(--v3-blue-tint); }
+.v3-root .v3-act-row:focus-visible { outline: var(--v3-focus); outline-offset: -2px; }
+.v3-root .v3-act-row__main { display: grid; gap: 2px; min-width: 0; }
+.v3-root .v3-act-row__title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-root .v3-act-row__amt { font-size: var(--v3-text-md); }
+.v3-root .is-reversed { opacity: 0.7; }
+.v3-root .v3-act-badges { display: inline-flex; gap: var(--v3-space-1); flex-wrap: wrap; }
+.v3-root .v3-act-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--v3-text-xs); font-weight: 700; background: var(--v3-sunken); color: var(--v3-ink-2); border: 1px solid var(--v3-border); }
+.v3-root .v3-act-badge--card_charge { background: var(--v3-blue-tint); color: var(--v3-blue-press); }
+.v3-root .v3-act-badge--repayment { background: #e7f6ee; color: #11623b; }
+.v3-root .v3-act-badge--income { background: #e7f6ee; color: #11623b; }
+.v3-root .v3-act-badge--reversed { background: #fdf1d9; color: #6b4500; border-color: #e8c981; }
+.v3-root .v3-act-foot { display: grid; gap: var(--v3-space-2); justify-items: start; }
+.v3-root .v3-act-error { color: var(--v3-negative); }
+.v3-root .v3-act-detail { display: grid; gap: var(--v3-space-3); min-width: 0; }
+.v3-root .v3-act-detail__head { display: flex; justify-content: space-between; align-items: start; gap: var(--v3-space-3); }
+.v3-root .v3-act-detail__head h2:focus { outline: none; }
+.v3-root .v3-act-dl { display: grid; gap: var(--v3-space-2); margin: 0; }
+.v3-root .v3-act-dl > div { display: flex; justify-content: space-between; gap: var(--v3-space-4); border-top: 1px solid var(--v3-border); padding-top: var(--v3-space-2); font-size: var(--v3-text-md); }
+.v3-root .v3-act-dl dt { color: var(--v3-muted); }
+.v3-root .v3-act-dl dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.v3-root .v3-act-tablewrap { padding: 0; overflow-x: auto; }
+.v3-root .v3-act-table { width: 100%; border-collapse: collapse; font-size: var(--v3-text-md); }
+.v3-root .v3-act-table th, .v3-root .v3-act-table td { padding: var(--v3-space-3) var(--v3-space-3); text-align: left; border-bottom: 1px solid var(--v3-border); vertical-align: middle; }
+.v3-root .v3-act-table thead th { background: var(--v3-sunken); position: sticky; top: 0; font-size: var(--v3-text-sm); }
+.v3-root .v3-act-table .is-num { text-align: right; }
+.v3-root .v3-act-table tr.is-selected { background: var(--v3-blue-tint); }
+.v3-root .v3-act-sort, .v3-root .v3-act-titlebtn { all: unset; box-sizing: border-box; cursor: pointer; font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; color: inherit; }
+.v3-root .v3-act-titlebtn { color: var(--v3-ink); text-align: left; }
+.v3-root .v3-act-titlebtn:hover { text-decoration: underline; }
+.v3-root .v3-act-sort:focus-visible, .v3-root .v3-act-titlebtn:focus-visible { outline: var(--v3-focus); outline-offset: 2px; }
+.v3-root .v3-act-actions { white-space: nowrap; text-align: right; }
+.v3-root .v3-act-actions .v3-btn { min-height: 36px; min-width: 0; padding: 0 var(--v3-space-2); }
+@media (min-width: 900px) {
+  .v3-root .v3-act-layout.has-detail { grid-template-columns: minmax(0, 1fr) 360px; }
+  .v3-root .v3-act-detail { position: sticky; top: var(--v3-space-4); }
+}
+@media (max-width: 899px) {
+  .v3-root .v3-act-detail { position: fixed; inset: auto var(--v3-space-3) calc(var(--v3-dock-clearance) - var(--v3-space-2)) var(--v3-space-3); max-height: 70vh; overflow-y: auto; z-index: 20; box-shadow: var(--v3-shadow-2); }
+}

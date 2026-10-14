@@ -21,7 +21,7 @@ type CreateAccountRequest = paths['/accounts']['post']['requestBody']['content']
 type CreateCreditCardRequest = paths['/credit-cards']['post']['requestBody']['content']['application/json']
 type UpdateAccountRequest = paths['/accounts/{id}']['patch']['requestBody']['content']['application/json']
 type UpdateTransactionRequest = paths['/transactions/{id}']['patch']['requestBody']['content']['application/json']
-type ApiTransaction = paths['/transactions']['post']['responses'][201]['content']['application/json']['transaction']
+export type ApiTransaction = paths['/transactions']['post']['responses'][201]['content']['application/json']['transaction']
 type TransactionMutationResponse = paths['/transactions']['post']['responses'][201]['content']['application/json']
 type ReverseTransactionResponse = paths['/transactions/{id}/reverse']['post']['responses'][201]['content']['application/json']
 type ApiGoal = paths['/goals']['post']['responses'][201]['content']['application/json']
@@ -248,7 +248,7 @@ export class ApiFinanceGateway implements FinanceGateway {
     await this.request<void>(`/categories/${categoryId}`, { method: 'DELETE', signal })
   }
 
-  private mapTransaction = (t: ApiTransaction): Transaction => ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amountMinor: t.type === 'expense' ? `-${t.amountMinor}` : t.amountMinor, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), feeMinor: t.feeMinor ?? undefined, fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined, reversedTransactionId: t.reversedTransactionId ?? undefined, tags: t.tags ?? [] })
+  private mapTransaction = mapApiTransaction
   private mapGoal = (g: ApiGoal): Goal => ({ id: g.id, name: g.name, targetMinor: g.targetMinor, currentMinor: g.currentMinor, monthlyContributionMinor: g.monthlyContributionMinor ?? undefined, targetAmount: minor(g.targetMinor), currentAmount: minor(g.currentMinor), targetDate: g.targetDate, completedDate: g.completedDate ?? undefined, monthlyContribution: g.monthlyContributionMinor == null ? undefined : minor(g.monthlyContributionMinor), status: g.status as Goal['status'], active: g.active })
 }
 
@@ -261,4 +261,9 @@ function mapInvestmentHoldings(trades: ApiInvestmentTrade[]): FinanceState['port
     positions.set(trade.ticker, current)
   }
   return Array.from(positions.entries()).filter(([, position]) => position.units > 0).map(([ticker, position]) => ({ ticker, name: ticker, price: position.price, changePct: 0, units: position.units, history: [position.price] }))
+}
+
+/** Maps an API transaction view to the domain Transaction (expenses are negative; transfers keep their sign). */
+export function mapApiTransaction(t: ApiTransaction): Transaction {
+  return ({ id: t.id, type: t.type, title: t.title, categoryId: t.categoryId ?? undefined, goalId: t.goalId ?? undefined, accountId: t.type === 'expense' || t.type === 'income' ? (t.fromAccountId ?? t.toAccountId ?? undefined) : undefined, fromAccountId: t.fromAccountId ?? undefined, toAccountId: t.toAccountId ?? undefined, date: t.occurredOn, time: t.occurredTime ? t.occurredTime.slice(0, 5) : undefined, amountMinor: t.type === 'expense' ? `-${t.amountMinor}` : t.amountMinor, amount: t.type === 'expense' ? -minor(t.amountMinor) : minor(t.amountMinor), feeMinor: t.feeMinor ?? undefined, fee: t.feeMinor ? minor(t.feeMinor) : undefined, source: t.source, status: t.status, note: t.note ?? undefined, reversedTransactionId: t.reversedTransactionId ?? undefined, tags: t.tags ?? [] })
 }

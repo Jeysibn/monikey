@@ -1,0 +1,2 @@
+fresh DB: 86 passed (4.3m)
+restored+migrated rehearsal DB (monikey_7b_browser): 86 passed (4.2m)

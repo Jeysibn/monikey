@@ -509,6 +509,7 @@ export function createMockFinanceRepository(clock: AppClock = demoClock): Financ
         source: 'manual',
         status: 'cleared',
         note: `Reversal of transaction ${transaction.id}`,
+        reversedTransactionId: transaction.id,
       }
 
       let accounts = state.accounts

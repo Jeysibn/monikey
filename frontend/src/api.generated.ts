@@ -570,6 +570,9 @@ export interface paths {
                     categoryId?: string;
                     accountId?: string;
                     tagId?: string;
+                    q?: string;
+                    sort?: "date" | "amount";
+                    dir?: "asc" | "desc";
                 };
                 header?: never;
                 path?: never;
@@ -1035,6 +1038,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1104,6 +1108,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1128,6 +1133,84 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        accountIds: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            favorites: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                name: string;
+                                institution: string | null;
+                                /** @enum {string} */
+                                accountType: "cash" | "checking" | "savings" | "ewallet" | "credit_card";
+                                /** @enum {string} */
+                                classification: "asset" | "liability";
+                                currencyCode: string;
+                                openingBalanceMinor: string;
+                                currentBalanceMinor: string;
+                                lastFour: string | null;
+                                favoriteRank: number | null;
+                                syncStatus: string;
+                                manual: boolean;
+                                version: number;
+                                archivedAt: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                creditCardDetail: {
+                                    /** @enum {string} */
+                                    network: "visa" | "mastercard";
+                                    creditLimitMinor: string;
+                                    dueDay: number;
+                                    minimumPaymentMinor: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    /** Format: date-time */
+                                    updatedAt: string;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1191,6 +1274,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -1275,6 +1359,7 @@ export interface paths {
                             openingBalanceMinor: string;
                             currentBalanceMinor: string;
                             lastFour: string | null;
+                            favoriteRank: number | null;
                             syncStatus: string;
                             manual: boolean;
                             version: number;
@@ -2126,6 +2211,818 @@ export interface paths {
         };
         trace?: never;
     };
+    "/recurring/{id}/confirm-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        expectedDueDate: string;
+                        amountMinor: string;
+                        /** Format: uuid */
+                        accountId?: string;
+                        /** Format: date */
+                        paidOn: string;
+                        allowPossibleDuplicate?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recurring/{id}/payment-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    dueDate?: string;
+                    amountMinor?: string;
+                    accountId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date */
+                            dueDate: string;
+                            candidates: {
+                                transactionId: string;
+                                title: string;
+                                amountMinor: string;
+                                occurredOn: string;
+                                accountId?: string | null;
+                                categoryId?: string | null;
+                                matchedOn: string[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recurring/{id}/skip-cycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        expectedDueDate: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recurring/{id}/link-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: date */
+                        expectedDueDate: string;
+                        /** Format: uuid */
+                        transactionId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            outcome: "confirmed" | "replayed" | "reconciled_existing" | "skipped" | "linked";
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                merchant: string;
+                                amountMinor: string;
+                                /** @enum {string} */
+                                frequency: "weekly" | "monthly" | "yearly";
+                                /** Format: date */
+                                nextDueDate: string;
+                                /** Format: uuid */
+                                accountId: string;
+                                /** Format: uuid */
+                                categoryId: string;
+                                autopay: boolean;
+                                /** @enum {string} */
+                                status: "active" | "paused";
+                                lastPaidDate: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                            };
+                            occurrence: {
+                                /** Format: date */
+                                dueDate: string;
+                                /** @enum {string} */
+                                status: "confirmed" | "skipped";
+                                transactionId: string | null;
+                                paidOn: string | null;
+                            };
+                            transaction: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recurring/{id}/mark-paid": {
         parameters: {
             query?: never;
@@ -2175,6 +3072,118 @@ export interface paths {
                             createdAt: string;
                             /** Format: date-time */
                             updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                field?: string;
+                                requestId: string;
+                                transaction?: {
+                                    [key: string]: unknown;
+                                } | null;
+                                candidates?: {
+                                    transactionId: string;
+                                    title: string;
+                                    amountMinor: string;
+                                    occurredOn: string;
+                                    accountId?: string | null;
+                                    categoryId?: string | null;
+                                    matchedOn: string[];
+                                }[];
+                            };
                         };
                     };
                 };
@@ -4044,6 +5053,65 @@ export interface paths {
                             liabilityTotal: string;
                             netWorth: string;
                         }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/net-tracked-position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    from: string;
+                    to: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date */
+                            date: string;
+                            liquidTotal: string;
+                            cardDebt: string;
+                            netTrackedPosition: string;
+                        }[];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                requestId: string;
+                            };
+                        };
                     };
                 };
             };

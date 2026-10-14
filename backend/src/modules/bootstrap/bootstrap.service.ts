@@ -88,6 +88,7 @@ export interface BootstrapResponse {
     budgetNearLimitWarnings: boolean;
     weeklySummaryEmail: boolean;
     hideCents: boolean;
+    favoritesConfigured: boolean;
     externalAiEnabled: boolean;
     externalOcrEnabled: boolean;
     detailedAiContextEnabled: boolean;
@@ -192,6 +193,7 @@ export class BootstrapService {
         externalAiEnabled: preferences?.externalAiEnabled ?? false,
         externalOcrEnabled: preferences?.externalOcrEnabled ?? false,
         detailedAiContextEnabled: preferences?.detailedAiContextEnabled ?? false,
+        favoritesConfigured: preferences?.favoritesConfigured ?? false,
       },
       serverDate: localDateIso(user.timezone),
       dataVersion: '1.0',

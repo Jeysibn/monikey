@@ -106,7 +106,12 @@
     justify-self: center;
   }
   .topbar-right {
-    gap: 8px;
+    gap: 6px;
+    min-width: 0;
+  }
+  /* With the V3 preview link and Sign out present, the full-width compact buttons pushed the header (and the Add button) 42px off a 390px screen. */
+  .topbar-right .btn--compact {
+    padding-inline: 9px;
   }
   .add-tx-label {
     display: none;

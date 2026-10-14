@@ -44,6 +44,8 @@ export interface AccountView {
   openingBalanceMinor: string;
   currentBalanceMinor: string;
   lastFour: string | null;
+  /** 1-4 when pinned as a favorite, otherwise null. */
+  favoriteRank: number | null;
   syncStatus: string;
   manual: boolean;
   version: number;

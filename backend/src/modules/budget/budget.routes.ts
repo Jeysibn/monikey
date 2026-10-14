@@ -4,8 +4,8 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
-import { getUTCDateForLocalDateTime } from '../../common/timezone.js'
 import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
+import { excludeReversalPairs } from '../ledger/reportingSemantics.js'
 
 const periodSchema = z.object({ periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), incomePoolMinor: minorUnitTransportInput.default(0n) })
 const allocationSchema = z.object({ categoryId: z.string().uuid(), allocatedMinor: minorUnitTransportInput })
@@ -43,6 +43,7 @@ async function attachSpentMinor(prisma: PrismaClient, userId: string, period: Pe
         userId,
         type: 'expense',
         status: 'cleared',
+        ...excludeReversalPairs,
         categoryId: { in: categoryIds },
         occurredOn: { gte: period.periodStart, lte: period.periodEnd },
       },
@@ -123,16 +124,12 @@ export async function budgetRoutes(app: FastifyInstance, options: { prisma: Pris
   })
   app.post('/budgets', { preHandler: originCheckPreHandler({ APP_ORIGIN: appOrigin }), schema: { body: periodBodyJson, response: { 201: periodJson } } }, async (request, reply) => {
     const input = periodSchema.parse(request.body)
-    const userTimezone = request.user!.timezone
 
-    // Parse period dates from local dates to UTC using user's timezone
-    // Period start: YYYY-MM-DD at 00:00:00 local → UTC
-    const [startYear, startMonth, startDay] = input.periodStart.split('-').map(Number) as [number, number, number]
-    const periodStartUTC = getUTCDateForLocalDateTime(startYear, startMonth, startDay, 0, 0, 0, userTimezone)
-
-    // Period end: YYYY-MM-DD at 00:00:00 local → UTC
-    const [endYear, endMonth, endDay] = input.periodEnd.split('-').map(Number) as [number, number, number]
-    const periodEndUTC = getUTCDateForLocalDateTime(endYear, endMonth, endDay, 0, 0, 0, userTimezone)
+    // Period dates are calendar dates stored in @db.Date columns: persist the
+    // submitted YYYY-MM-DD literally (UTC midnight), with an inclusive end. No
+    // timezone conversion — that shifted the period a day early for UTC+ users.
+    const periodStartUTC = new Date(`${input.periodStart}T00:00:00.000Z`)
+    const periodEndUTC = new Date(`${input.periodEnd}T00:00:00.000Z`)
 
     const period = await prisma.budgetPeriod.upsert({ where: { userId_periodStart_periodEnd: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC } }, create: { userId: request.user!.id, periodStart: periodStartUTC, periodEnd: periodEndUTC, incomePoolMinor: BigInt(input.incomePoolMinor) }, update: { incomePoolMinor: BigInt(input.incomePoolMinor) }, include: { allocations: true } })
     return reply.code(201).send(await attachSpentMinor(prisma, request.user!.id, period))

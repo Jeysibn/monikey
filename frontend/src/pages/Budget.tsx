@@ -17,8 +17,8 @@ export function projectPeriodEndSpend(spent: number, periodStart: string, period
   const start = Date.parse(`${periodStart}T00:00:00Z`)
   const end = Date.parse(`${periodEnd}T00:00:00Z`)
   const today = Date.parse(`${todayIso}T00:00:00Z`)
-  const totalDays = Math.max(1, Math.round((end - start) / 86_400_000))
-  const elapsedDays = Math.min(totalDays, Math.max(1, Math.round((Math.min(today, end - 86_400_000) - start) / 86_400_000) + 1))
+  const totalDays = Math.max(1, Math.round((end - start) / 86_400_000) + 1) // periodEnd is inclusive
+  const elapsedDays = Math.min(totalDays, Math.max(1, Math.round((Math.min(today, end) - start) / 86_400_000) + 1))
   return Math.round((spent * totalDays) / elapsedDays)
 }
 

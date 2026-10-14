@@ -2,9 +2,18 @@ import { PrismaClient } from '@prisma/client'
 
 let client: PrismaClient | undefined
 
+/**
+ * Prisma's default `maxWait` (2s) is how long an interactive transaction may wait for a pooled
+ * connection. A burst of concurrent writes to one row (double-click, offline replay) queues behind a row
+ * lock while holding connections, so on a small pool the queued requests used to fail with a 500
+ * ("Unable to start a transaction in the given time") instead of waiting their turn and replaying.
+ * Keep `timeout` at its default; individual calls may still raise it.
+ */
+const transactionOptions = { maxWait: 15_000 }
+
 /** Lazily-constructed singleton Prisma client, shared across app/worker within one process. */
 export function getPrismaClient(): PrismaClient {
-  client ??= new PrismaClient()
+  client ??= new PrismaClient({ transactionOptions })
   return client
 }
 
@@ -13,6 +22,7 @@ export function getPrismaClient(): PrismaClient {
  */
 export function createPrismaClient(databaseUrl: string): PrismaClient {
   return new PrismaClient({
+    transactionOptions,
     datasources: {
       db: {
         url: databaseUrl,

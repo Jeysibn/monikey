@@ -307,7 +307,7 @@ function AddRecurringItemForm({
 
       <label className="rec-autopay-field">
         <input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} />
-        <span className="tx-label">Autopay — charged automatically, no manual action needed</span>
+        <span className="tx-label">Paid automatically by my bank — a note only. MoniKey never records a bill payment by itself; you confirm each one.</span>
       </label>
 
       <div className="new-category-actions">
@@ -456,7 +456,7 @@ export function Recurring() {
                     >
                       {finance.categoryName(item.categoryId)}
                     </span>
-                    {item.autopay && <Tag tone="cleared">Autopay</Tag>}
+                    {item.autopay && <Tag tone="neutral">Bank autopay (note)</Tag>}
                   </div>
                   <div className="rec-row-meta">
                     <span className="tx-acct">

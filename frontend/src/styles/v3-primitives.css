@@ -1,0 +1,85 @@
+/* MoniKey V3 primitives. Every selector is namespaced `.v3-*` and expects `.v3-root`. */
+/* Selectors are prefixed with .v3-root so they out-rank legacy global element rules (a:hover, input, ...). */
+
+.v3-root *, .v3-root *::before, .v3-root *::after { box-sizing: border-box; }
+.v3-root :focus-visible { outline: var(--v3-focus); outline-offset: var(--v3-focus-offset); }
+
+/* Typography */
+.v3-root .v3-h1 { font-size: var(--v3-text-xl); line-height: 1.2; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+.v3-root .v3-h2 { font-size: var(--v3-text-lg); line-height: 1.25; font-weight: 700; margin: 0; }
+.v3-root .v3-h3 { font-size: var(--v3-text-md); line-height: 1.3; font-weight: 700; margin: 0; }
+.v3-root .v3-body { font-size: var(--v3-text-md); }
+.v3-root .v3-secondary { font-size: var(--v3-text-sm); color: var(--v3-muted); }
+.v3-root .v3-caption { font-size: var(--v3-text-xs); color: var(--v3-muted); }
+.v3-root .v3-eyebrow { font-size: var(--v3-text-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--v3-muted); }
+
+/* Financial figures: tabular, never wrapped mid-number */
+.v3-root .v3-figure { font-family: var(--v3-font-figure); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.v3-root .v3-figure--lg { font-size: var(--v3-text-2xl); line-height: 1.1; }
+.v3-root .v3-figure--md { font-size: var(--v3-text-lg); }
+.v3-root .v3-figure--positive { color: var(--v3-positive); }
+.v3-root .v3-figure--negative { color: var(--v3-negative); }
+
+/* Cards */
+.v3-root .v3-card { background: var(--v3-surface); border: 1px solid var(--v3-border); border-radius: var(--v3-radius-card); box-shadow: var(--v3-shadow-1); padding: var(--v3-space-4); }
+.v3-root .v3-card--raised { box-shadow: var(--v3-shadow-2); }
+.v3-root .v3-card__header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--v3-space-3); margin-bottom: var(--v3-space-3); }
+
+/* Buttons */
+.v3-root .v3-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--v3-space-2); min-height: var(--v3-control); min-width: var(--v3-control); padding: 0 var(--v3-space-4); border: 1px solid transparent; border-radius: var(--v3-radius-md); font: inherit; font-size: var(--v3-text-sm); font-weight: 700; text-decoration: none; cursor: pointer; transition: background-color var(--v3-ease), border-color var(--v3-ease), color var(--v3-ease); }
+.v3-root .v3-btn--primary { background: var(--v3-blue); color: var(--v3-on-accent); }
+.v3-root .v3-btn--primary:hover { background: var(--v3-blue-hover); }
+.v3-root .v3-btn--primary:active { background: var(--v3-blue-press); }
+.v3-root .v3-btn--secondary { background: var(--v3-surface); color: var(--v3-blue); border-color: var(--v3-border-strong); }
+.v3-root .v3-btn--secondary:hover { background: var(--v3-blue-tint); }
+.v3-root .v3-btn--ghost { background: transparent; color: var(--v3-ink-2); }
+.v3-root .v3-btn--ghost:hover { background: var(--v3-sunken); }
+.v3-root .v3-btn:disabled, .v3-root .v3-btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+@media (pointer: coarse) { .v3-root .v3-btn { min-height: var(--v3-touch); min-width: var(--v3-touch); } }
+
+/* Inputs */
+.v3-root .v3-field { display: grid; gap: var(--v3-space-1); }
+.v3-root .v3-label { font-size: var(--v3-text-sm); font-weight: 600; color: var(--v3-ink-2); }
+.v3-root .v3-input { width: 100%; min-height: var(--v3-control); padding: 0 var(--v3-space-3); border: 1px solid var(--v3-border-strong); border-radius: var(--v3-radius-md); background: var(--v3-surface); color: var(--v3-ink); font: inherit; font-size: var(--v3-text-md); transition: border-color var(--v3-ease), box-shadow var(--v3-ease); }
+.v3-root .v3-input:hover { border-color: var(--v3-muted); }
+.v3-root .v3-input:focus-visible { outline: none; border-color: var(--v3-blue); box-shadow: 0 0 0 3px var(--v3-blue-ring); }
+.v3-root .v3-input[aria-invalid='true'] { border-color: var(--v3-negative); }
+.v3-root .v3-input::placeholder { color: var(--v3-muted); opacity: 1; }
+@media (pointer: coarse) { .v3-root .v3-input { min-height: var(--v3-touch); } }
+
+/* Links */
+.v3-root .v3-link { color: var(--v3-blue); font-weight: 600; text-underline-offset: 3px; }
+.v3-root .v3-link:hover { color: var(--v3-blue-hover); }
+
+/* Utilities */
+.v3-root .v3-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.v3-root .v3-skeleton { background: var(--v3-sunken); border-radius: var(--v3-radius-md); min-height: 64px; }
+
+/* Account card: physical-card visual language. Content is supplied by the page. */
+.v3-root .v3-account-card { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: var(--v3-space-4); min-height: 148px; padding: var(--v3-space-4) var(--v3-space-5); border-radius: var(--v3-radius-lg); color: #fff; box-shadow: var(--v3-shadow-2); overflow: hidden; isolation: isolate; }
+.v3-root .v3-account-card::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, rgb(255 255 255 / 0.22), transparent 60%); }
+.v3-root .v3-account-card--bank { background: var(--v3-card-bank); }
+.v3-root .v3-account-card--ewallet { background: var(--v3-card-ewallet); }
+.v3-root .v3-account-card--cash { background: var(--v3-card-cash); }
+.v3-root .v3-account-card--credit { background: var(--v3-card-credit); }
+.v3-root .v3-account-card__top { display: flex; justify-content: space-between; align-items: center; gap: var(--v3-space-3); font-size: var(--v3-text-sm); font-weight: 700; }
+.v3-root .v3-account-card__kind { font-size: var(--v3-text-xs); letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.95; }
+.v3-root .v3-account-card__chip { width: 34px; height: 24px; border-radius: 5px; background: linear-gradient(135deg, #f1d58a, #c99a2e); }
+.v3-root .v3-account-card__figure { font-family: var(--v3-font-figure); font-variant-numeric: tabular-nums; font-size: var(--v3-text-xl); font-weight: 700; }
+.v3-root .v3-account-card__meta { font-size: var(--v3-text-xs); opacity: 0.95; }
+
+/* Account card: spans (valid inside a button), per-account colour tones, interactive variant. */
+.v3-root .v3-account-card__body { display: block; }
+.v3-root .v3-account-card__figure, .v3-root .v3-account-card__meta { display: block; }
+.v3-root .v3-account-card--tone-1 { filter: hue-rotate(38deg); }
+.v3-root .v3-account-card--tone-2 { filter: hue-rotate(-34deg) saturate(1.05); }
+.v3-root .v3-account-card--tone-3 { filter: hue-rotate(78deg); }
+.v3-root .v3-account-card--tone-1 .v3-account-card__chip { filter: hue-rotate(-38deg); }
+.v3-root .v3-account-card--tone-2 .v3-account-card__chip { filter: hue-rotate(34deg); }
+.v3-root .v3-account-card--tone-3 .v3-account-card__chip { filter: hue-rotate(-78deg); }
+.v3-root .v3-account-card--button { width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.v3-root .v3-account-card--button[aria-expanded='true'] { outline: 3px solid var(--v3-blue); outline-offset: 2px; }
+.v3-root .v3-account-card--button:focus-visible { outline: var(--v3-focus); outline-offset: 3px; }
+/* Inline links inside body copy must be distinguishable from the surrounding text without relying on colour alone (axe link-in-text-block / color-contrast). */
+.v3-root p a:not(.v3-btn) { color: var(--v3-blue); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.v3-root p a:not(.v3-btn):hover { color: var(--v3-blue-hover); }

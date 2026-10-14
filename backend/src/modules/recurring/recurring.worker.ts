@@ -1,57 +1,25 @@
 import type { PrismaClient } from '@prisma/client'
-import type { LedgerService } from '../ledger/ledger.service.js'
 
 export interface RecurringWorkerLogger {
   warn(obj: Record<string, unknown>, msg?: string): void
 }
 
-export interface RecurringRunResult {
-  processed: number
-  failed: number
+export interface RecurringScanResult {
+  due: number
+  overdue: number
 }
 
 /**
- * Processes all active definitions due on or before `todayIso`. The ledger
- * idempotency key is derived from the definition and its due date, so a
- * second worker or a retry cannot create a second financial charge.
- *
- * A failure on one item (e.g. its linked account/category was archived or
- * removed after the recurring item was created) must never abort the rest of
- * the run — see QA Phase 5 Attempt 1, Defects 1 and 3. Each item is processed
- * in its own try/catch: a failure is logged and the item is auto-paused so it
- * stops retrying against a permanently-broken link, while every other due
- * item in the same run still gets processed.
+ * Stage 6B: a due date NEVER creates a financial transaction. This scan is read-only: it counts active
+ * bills that are due today or overdue so the worker can log and the notification step can remind the user.
+ * It does not post to the ledger, change a balance, advance a schedule, set `lastPaidDate`, pause an item
+ * or write anything at all. Only an explicit user confirmation (RecurringService.confirm) records a payment.
+ * There is intentionally no flag that turns automatic posting back on.
  */
-export async function processDueRecurringItems(prisma: PrismaClient, ledgerService: LedgerService, todayIso: string, logger?: RecurringWorkerLogger, userId?: string): Promise<RecurringRunResult> {
-  const dueItems = await prisma.recurringItem.findMany({ where: { status: 'active', ...(userId ? { userId } : {}), nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) }, account: { archivedAt: null } }, orderBy: { nextDueDate: 'asc' } })
-  let processed = 0
-  let failed = 0
-  for (const item of dueItems) {
-    const dueDate = item.nextDueDate.toISOString().slice(0, 10)
-    const idempotencyKey = `recurring:${item.id}:${dueDate}`
-    try {
-      await ledgerService.postTransaction(item.userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: item.accountId, toAccountId: null, occurredOn: dueDate, occurredTime: null, amountMinor: item.amountMinor, feeMinor: 0n, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment', idempotencyKey })
-      await prisma.recurringItem.update({ where: { id: item.id }, data: { nextDueDate: advanceDueDate(item.nextDueDate, item.frequency), lastPaidDate: item.nextDueDate } })
-      processed += 1
-    } catch (err) {
-      failed += 1
-      logger?.warn({ itemId: item.id, err }, 'failed to post recurring transaction')
-      // Auto-pause rather than retry forever against a permanently-broken
-      // link (deleted/archived category, etc.). Best-effort: if even the
-      // pause update fails, log it too but keep processing the remaining
-      // due items — a stuck item must never stop the run.
-      await prisma.recurringItem.update({ where: { id: item.id }, data: { status: 'paused' } }).catch((pauseErr: unknown) => {
-        logger?.warn({ itemId: item.id, err: pauseErr }, 'failed to auto-pause recurring item after error')
-      })
-    }
-  }
-  return { processed, failed }
-}
-
-function advanceDueDate(date: Date, frequency: 'weekly' | 'monthly' | 'yearly'): Date {
-  const next = new Date(date)
-  if (frequency === 'weekly') next.setUTCDate(next.getUTCDate() + 7)
-  else if (frequency === 'monthly') next.setUTCMonth(next.getUTCMonth() + 1)
-  else next.setUTCFullYear(next.getUTCFullYear() + 1)
-  return next
+export async function scanDueRecurringItems(prisma: PrismaClient, todayIso: string, logger?: RecurringWorkerLogger, userId?: string): Promise<RecurringScanResult> {
+  const items = await prisma.recurringItem.findMany({ where: { status: 'active', ...(userId ? { userId } : {}), nextDueDate: { lte: new Date(`${todayIso}T00:00:00Z`) } }, select: { id: true, nextDueDate: true } })
+  const today = new Date(`${todayIso}T00:00:00Z`).getTime()
+  const overdue = items.filter((item) => item.nextDueDate.getTime() < today).length
+  if (items.length > 0) logger?.warn({ due: items.length - overdue, overdue, userId }, 'recurring bills are waiting for the user to confirm payment (nothing was posted)')
+  return { due: items.length - overdue, overdue }
 }

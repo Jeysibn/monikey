@@ -2,8 +2,7 @@ import pino from 'pino'
 import { loadEnv, EnvValidationError } from './config/env.js'
 import { buildLoggerOptions } from './config/logger.js'
 import { getPrismaClient, disconnectPrisma, pingDatabase } from './db/client.js'
-import { createLedgerModule } from './modules/ledger/ledger.module.js'
-import { processDueRecurringItems } from './modules/recurring/recurring.worker.js'
+import { scanDueRecurringItems } from './modules/recurring/recurring.worker.js'
 import { enqueueDueBillNotifications, enqueueWeeklySummaryNotifications } from './modules/notifications/outbox.js'
 import { createEmailProvider } from './modules/notifications/email.js'
 import { deliverNotificationOutbox } from './modules/notifications/delivery.js'
@@ -24,7 +23,6 @@ async function main(): Promise<void> {
   const prisma = getPrismaClient()
 
   await pingDatabase(prisma)
-  const ledger = createLedgerModule(prisma)
   const emailProvider = createEmailProvider(env)
   const quoteProvider = createQuoteProvider(env, fetch, { prisma, logger })
   const fxProvider = createFxRatesProvider(env, fetch, { prisma, logger })
@@ -40,9 +38,7 @@ async function main(): Promise<void> {
       const userTodayIso = localDateIso(user.timezone)
       await enqueueDueBillNotifications(prisma, userTodayIso, user.id)
       if (new Date(`${userTodayIso}T00:00:00Z`).getUTCDay() === 1) await enqueueWeeklySummaryNotifications(prisma, userTodayIso, user.id)
-      const result = await processDueRecurringItems(prisma, ledger.service, userTodayIso, logger, user.id)
-      if (result.processed > 0) logger.info({ processed: result.processed, userId: user.id, todayIso: userTodayIso }, 'processed recurring payments')
-      if (result.failed > 0) logger.warn({ failed: result.failed, userId: user.id, todayIso: userTodayIso }, 'some recurring items failed and were paused')
+      await scanDueRecurringItems(prisma, userTodayIso, logger, user.id) // read-only: never posts a recurring payment
       const generated = await generateDailySnapshots(prisma, new Date(`${userTodayIso}T00:00:00Z`), user.id)
       if (generated > 0) logger.info({ generated, userId: user.id, todayIso: userTodayIso }, 'generated daily finance snapshots')
     }

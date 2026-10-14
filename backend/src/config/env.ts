@@ -29,6 +29,10 @@ const envSchema = z.object({
     .min(1, 'DATABASE_URL is required')
     .regex(/^postgres(ql)?:\/\/\S+$/, 'DATABASE_URL must be a postgres:// or postgresql:// connection string'),
 
+  // Stage 6B kill switch: true makes POST /recurring/:id/confirm-payment (and mark-paid) answer 503.
+  // There is deliberately NO setting that re-enables automatic posting.
+  RECURRING_CONFIRMATIONS_DISABLED: booleanFromString.default(false),
+
   SESSION_SECURE: booleanFromString.default(false),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(60),

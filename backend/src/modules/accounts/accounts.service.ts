@@ -36,4 +36,8 @@ export class AccountsService {
       return this.repo.archiveAccount(tx, userId, id);
     });
   }
+
+  async replaceFavorites(userId: string, accountIds: string[]): Promise<AccountView[]> {
+    return this.prisma.$transaction((tx) => this.repo.replaceFavorites(tx, userId, accountIds));
+  }
 }

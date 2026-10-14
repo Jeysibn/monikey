@@ -130,8 +130,30 @@ export class AccountsRepository {
 
     await tx.financialAccount.update({
       where: { id },
-      data: { archivedAt: new Date() },
+      // An archived account can never stay a favorite.
+      data: { archivedAt: new Date(), favoriteRank: null },
     });
+  }
+
+  /**
+   * Atomically replaces the user's favorites with `accountIds` (rank = position + 1). The
+   * user's preferences row is locked first so concurrent replacements serialize instead of
+   * tripping the partial unique index. An empty list is an intentional "no favorites".
+   */
+  async replaceFavorites(tx: PrismaTx, userId: string, accountIds: string[]): Promise<AccountView[]> {
+    await tx.userPreferences.upsert({ where: { userId }, create: { userId }, update: {} });
+    await tx.$queryRaw`SELECT user_id FROM user_preferences WHERE user_id = ${userId}::uuid FOR UPDATE`;
+    if (new Set(accountIds).size !== accountIds.length) throw new AppError('VALIDATION_ERROR', 'Favorites must not contain duplicate accounts.', { field: 'accountIds' });
+    const owned = await tx.financialAccount.findMany({ where: { userId, id: { in: accountIds } } });
+    if (owned.length !== accountIds.length) throw new AppError('UNKNOWN_ACCOUNT', 'One or more accounts were not found.', { field: 'accountIds' });
+    if (owned.some((a) => a.archivedAt)) throw new AppError('ACCOUNT_ARCHIVED', 'Archived accounts cannot be favorites.', { field: 'accountIds' });
+    await tx.financialAccount.updateMany({ where: { userId, favoriteRank: { not: null } }, data: { favoriteRank: null } });
+    for (const [index, id] of accountIds.entries()) {
+      await tx.financialAccount.update({ where: { id }, data: { favoriteRank: index + 1 } });
+    }
+    await tx.userPreferences.update({ where: { userId }, data: { favoritesConfigured: true } });
+    const favorites = await tx.financialAccount.findMany({ where: { userId, favoriteRank: { not: null } }, include: { creditCardDetail: true }, orderBy: { favoriteRank: 'asc' } });
+    return favorites.map(this.mapAccount);
   }
 
   private mapAccount(account: AccountWithCreditCard): AccountView {
@@ -146,6 +168,7 @@ export class AccountsRepository {
         openingBalanceMinor: String(account.openingBalanceMinor),
         currentBalanceMinor: String(account.currentBalanceMinor),
       lastFour: account.lastFour,
+      favoriteRank: account.favoriteRank,
       syncStatus: account.syncStatus,
       manual: account.manual,
       version: account.version,

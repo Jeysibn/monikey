@@ -941,6 +941,40 @@
             "in": "query",
             "name": "tagId",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "date",
+                "amount"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "dir",
+            "required": false
           }
         ],
         "responses": {
@@ -1959,6 +1993,7 @@
                       "openingBalanceMinor",
                       "currentBalanceMinor",
                       "lastFour",
+                      "favoriteRank",
                       "syncStatus",
                       "manual",
                       "version",
@@ -2023,6 +2058,18 @@
                         "anyOf": [
                           {
                             "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "favoriteRank": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4
                           },
                           {
                             "type": "null"
@@ -2197,6 +2244,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2261,6 +2309,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"
@@ -2342,6 +2402,228 @@
                           "type": "null"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/favorites": {
+      "put": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accountIds"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "accountIds": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "favorites"
+                  ],
+                  "properties": {
+                    "favorites": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "userId",
+                          "name",
+                          "institution",
+                          "accountType",
+                          "classification",
+                          "currencyCode",
+                          "openingBalanceMinor",
+                          "currentBalanceMinor",
+                          "lastFour",
+                          "favoriteRank",
+                          "syncStatus",
+                          "manual",
+                          "version",
+                          "archivedAt",
+                          "createdAt",
+                          "updatedAt",
+                          "creditCardDetail"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "institution": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "accountType": {
+                            "type": "string",
+                            "enum": [
+                              "cash",
+                              "checking",
+                              "savings",
+                              "ewallet",
+                              "credit_card"
+                            ]
+                          },
+                          "classification": {
+                            "type": "string",
+                            "enum": [
+                              "asset",
+                              "liability"
+                            ]
+                          },
+                          "currencyCode": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 3
+                          },
+                          "openingBalanceMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "currentBalanceMinor": {
+                            "type": "string",
+                            "pattern": "^-?\\d+$"
+                          },
+                          "lastFour": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "favoriteRank": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 4
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "syncStatus": {
+                            "type": "string"
+                          },
+                          "manual": {
+                            "type": "boolean"
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "archivedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "creditCardDetail": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "network",
+                                  "creditLimitMinor",
+                                  "dueDay",
+                                  "minimumPaymentMinor",
+                                  "createdAt",
+                                  "updatedAt"
+                                ],
+                                "properties": {
+                                  "network": {
+                                    "type": "string",
+                                    "enum": [
+                                      "visa",
+                                      "mastercard"
+                                    ]
+                                  },
+                                  "creditLimitMinor": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "dueDay": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 31
+                                  },
+                                  "minimumPaymentMinor": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "updatedAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -2450,6 +2732,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2514,6 +2797,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"
@@ -2680,6 +2975,7 @@
                     "openingBalanceMinor",
                     "currentBalanceMinor",
                     "lastFour",
+                    "favoriteRank",
                     "syncStatus",
                     "manual",
                     "version",
@@ -2744,6 +3040,18 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "favoriteRank": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
                         },
                         {
                           "type": "null"
@@ -4262,6 +4570,2219 @@
         }
       }
     },
+    "/recurring/{id}/confirm-payment": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedDueDate",
+                  "amountMinor",
+                  "paidOn"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "expectedDueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "amountMinor": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "accountId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "paidOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "allowPossibleDuplicate": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recurring/{id}/payment-candidates": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "dueDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            "in": "query",
+            "name": "amountMinor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "query",
+            "name": "accountId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "dueDate",
+                    "candidates"
+                  ],
+                  "properties": {
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "transactionId",
+                          "title",
+                          "amountMinor",
+                          "occurredOn",
+                          "matchedOn"
+                        ],
+                        "properties": {
+                          "transactionId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "amountMinor": {
+                            "type": "string",
+                            "pattern": "^\\d+$"
+                          },
+                          "occurredOn": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "categoryId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "matchedOn": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recurring/{id}/skip-cycle": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedDueDate"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "expectedDueDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recurring/{id}/link-payment": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedDueDate",
+                  "transactionId"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "expectedDueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "transactionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "outcome",
+                    "recurring",
+                    "occurrence",
+                    "transaction"
+                  ],
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "replayed",
+                        "reconciled_existing",
+                        "skipped",
+                        "linked"
+                      ]
+                    },
+                    "recurring": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "userId",
+                        "merchant",
+                        "amountMinor",
+                        "frequency",
+                        "nextDueDate",
+                        "accountId",
+                        "categoryId",
+                        "autopay",
+                        "status",
+                        "lastPaidDate",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "merchant": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "weekly",
+                            "monthly",
+                            "yearly"
+                          ]
+                        },
+                        "nextDueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "accountId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "autopay": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "lastPaidDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "occurrence": {
+                      "type": "object",
+                      "required": [
+                        "dueDate",
+                        "status",
+                        "transactionId",
+                        "paidOn"
+                      ],
+                      "properties": {
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "skipped"
+                          ]
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "paidOn": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "transaction": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/recurring/{id}/mark-paid": {
       "post": {
         "parameters": [
@@ -4361,6 +6882,342 @@
                     "updatedAt": {
                       "type": "string",
                       "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "transaction": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "transactionId",
+                              "title",
+                              "amountMinor",
+                              "occurredOn",
+                              "matchedOn"
+                            ],
+                            "properties": {
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "amountMinor": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              },
+                              "occurredOn": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "matchedOn": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -8408,6 +11265,106 @@
                       "netWorth": {
                         "type": "string",
                         "pattern": "^-?\\d+$"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/net-tracked-position": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "from",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "to",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "date",
+                      "liquidTotal",
+                      "cardDebt",
+                      "netTrackedPosition"
+                    ],
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "liquidTotal": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "cardDebt": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      },
+                      "netTrackedPosition": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        }
                       }
                     }
                   }

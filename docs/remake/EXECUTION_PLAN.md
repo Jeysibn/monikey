@@ -427,3 +427,57 @@ Ready for review. Quick Add can rely on the favorites order for its account pick
 
 ### Stage 6 readiness
 Ready for review. Planning and recurring-payment work not started.
+
+## 14. Stage 6A — Planning & Budgets (2026-10-14)
+
+Commits: `987d504` (Quick Add reliability), `6d225da` (planning model), `c2c0ecd` (Planning page, Overview consistency), plus the real-backend spec/screenshots commit and this doc. No backend, schema, OpenAPI or recurring-worker change.
+
+### Quick Add reliability (Task 0)
+- A. Posted + refreshed: "Transaction saved"; balances, Activity, Accounts and Overview update.
+- B. Posted + refresh failed: `PostedRefreshError`; panel `v3-qa-saved-stale` says "Transaction saved, but the latest balances couldn't be loaded.", keeps the confirmed id, enqueues nothing, and "Refresh balances" retries only the refresh.
+- C. Uncertain (network error, lost response, timeout): the same idempotency key is kept; the transaction is queued in the existing outbox (checked first so no duplicate record) and described as "not shown as posted … will be checked when it syncs". Sync Center retry replays with the same key.
+- D. 4xx: real server error shown, form kept, nothing queued. 5xx: "may have been saved" with the key reused.
+- Gateway requests have a bounded timeout (20 s). `RequestTimeoutError extends TypeError` so a timeout is an uncertain outcome; caller aborts are not timeouts.
+
+### Planning
+- `v3/planningModel.ts` (pure BigInt), `usePlanningBudgets.ts`, `V3Planning.tsx/.css`. Month navigation −12/+1 months (backend mode; demo mode is the current month only). Summary, category rows with accessible progress bars and Over/Near-limit (≥80 %) states, unbudgeted categories, read-only recurring bills, empty/loading/error/offline states.
+- Spend values are the server's `spentMinor` (cleared expenses, reversal pairs excluded, inclusive month bounds); transfers and card repayments are not spending and card purchases count once. "Spent in budgeted categories" is shown separately from "All spending this month" (outside-budget = total − budgeted, clamped at 0).
+- Budget semantics: `POST /budgets` is an upsert that resets `incomePoolMinor`, so a period is created only when the month has none and never re-posted. Period selection: exact month, else covering period. No allocation-delete endpoint exists, so "remove" saves 0 and a 0 allocation is treated as unallocated.
+- Overview consistency: `MonthlySnapshot` used bootstrap's most recent period (possibly another month); it now uses `/reports/budget-performance?period=` like Planning. Verified equal in the real-backend spec (700.00 of 1,800.00).
+- Recurring bills are read-only: no buttons, no `mark-paid`, no schedule changes. Wording: reference only; MoniKey may record a bill by itself once due, so check Activity before paying. Opening Planning does not post (verified: transaction count and `nextDueDate` unchanged).
+
+### Verification (executed)
+- Frontend: `tsc -b` clean; Vitest 40 files / 410 tests passed; build and `verify:privacy` passed; oxlint: 17 warnings, all pre-existing (none in Planning files).
+- Playwright mock suite: 151 passed, 38 skipped (backend-gated specs, incl. the 8 new real-backend tests).
+- Real backend (disposable Postgres, API :3000, Vite :5173): `v3-planning-backend` 8/8, `v3-quickadd-backend` 12/12, `v3-backend-local` 9/9, `v3-favorites-backend` 9/9. Planning spec covers create/allocate/edit, expense, card purchase once, repayment ignored, reversal, month boundary (prior month last day excluded), Planning = Overview = report, active/paused/overdue bills with no posting, error recovery + Back/Forward, Quick Add refresh failure, axe (no serious/critical), overflow and dock clearance.
+- Backend tests/typecheck were not re-run (backend untouched; last known 58 files / 448 tests).
+- Screenshots: `docs/remake/screenshots/stage6a/`.
+
+### Remaining issues
+- No allocation-delete endpoint (0 used instead); no auto-sync on reconnect.
+- Gateway `setCategoryBudget` (legacy/demo path) re-posts the period and resets the income pool.
+- Recurring items load once at provider mount; Planning does not refresh them.
+- Demo-mode month is the current month only.
+- Planning's spend refresh key is a heuristic (transaction count + first id).
+- The 20 s request timeout is fixed.
+- Desktop dock floats over the bottom of scrolled content (padding clears it at the end of the page).
+
+### Stage 6B proposal (not implemented)
+Requirement: a recurring due date must never automatically create an expense; only explicit user confirmation posts one.
+
+Current behaviour (facts): `processDueRecurringItems` (separate process `backend/src/worker.ts`) posts an expense for every active item with `nextDueDate <= today` and a non-archived account regardless of `autopay`, key `recurring:${id}:${dueDate}`, `source:'recurring'`; it then advances `nextDueDate` (UTC `setUTCMonth`, month-end drift) and sets `lastPaidDate` in a separate, non-atomic step; failures auto-pause the item.
+
+1. Disable auto-posting: remove the posting path from the worker (keep it as a due/overdue marker only) behind a feature flag defaulting off, then delete after rollout.
+2. `autopay`: stop honouring it; keep the column for compatibility, force false on write, hide from UI, and drop in a later migration.
+3. Confirmation: `POST /recurring/:id/confirm` with `{amountMinor, accountId, paidOn, idempotencyKey}`, pre-filled with the scheduled values, so the user confirms the actual amount, account and date.
+4. Atomicity: one DB transaction creates the ledger transaction and advances the schedule (`nextDueDate`, `lastPaidDate`), with row lock on the recurring item.
+5. Idempotency/concurrency: key `recurring-confirm:${id}:${dueDate}` plus `SELECT … FOR UPDATE`; a second request returns the first result; a stale `dueDate` is rejected with 409.
+6. Previously auto-posted payments: leave them untouched (no history repair); label by `source:'recurring'`; optional report of items whose last auto-post is within N days so the user can check.
+7. Duplicate detection: warn (not block) when a cleared expense with similar amount, account and merchant/category exists within ±N days of the due date, including prior auto-posts.
+8. Missed cycles/overdue: never back-post. Overdue bills stay overdue with a "confirm, skip or reschedule" choice; skipping advances without a ledger entry. Replace UTC month arithmetic with clamped end-of-month logic in the user's timezone.
+9. Migration/compat: no schema change is strictly needed (an optional `skippedThrough` or audit table is the only candidate and needs approval); older clients calling `mark-paid` must keep working, routed through the same confirm path.
+10. Tests: worker never posts; confirm posts once and advances atomically; concurrent and replayed confirms; failure mid-transaction rolls back both; skip; month-end/leap/timezone advance; duplicate warning; legacy `mark-paid` compatibility; real-backend Planning confirm flow.
+11. Rollout: ship worker-off flag first and verify no `source:'recurring'` rows appear; back up before any migration; stage on a copy of production-shaped data; announce the behaviour change; keep the flag as a kill switch; monitor ledger counts for two cycles.
+
+### Stage 6 readiness
+Stage 6A complete and ready for review. Stage 6B not started.

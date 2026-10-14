@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { authGuard } from '../../common/auth/authGuard.js'
 import { originCheckPreHandler } from '../../common/auth/originCheck.js'
 import { LedgerService } from '../ledger/ledger.service.js'
-import { minorUnitTransportInput } from '../ledger/ledger.schemas.js'
+import { MAX_MINOR_UNITS, minorUnitTransportInput } from '../ledger/ledger.schemas.js'
 import { detectMonthlyCandidates } from './detection.js'
 import { RecurringService, type RecurringConflict, type RecurringResult } from './recurring.service.js'
 import { isoDate } from './recurring.schedule.js'
@@ -93,6 +93,7 @@ export async function recurringRoutes(app: FastifyInstance, options: { prisma: P
   })
   app.get<{ Params: { id: string }; Querystring: { dueDate?: string; amountMinor?: string; accountId?: string } }>('/recurring/:id/payment-candidates', { preHandler: requireAuth, schema: { params: paramsJson, querystring: { type: 'object', properties: { dueDate: dateJson, amountMinor: minorJson, accountId: { type: 'string', format: 'uuid' } } }, response: { 200: { type: 'object', required: ['dueDate', 'candidates'], properties: { dueDate: dateJson, candidates: { type: 'array', items: candidateJson } } }, 404: conflictJson } } }, async (request, reply) => {
     const { id } = recurringIdParamSchema.parse(request.params)
+    if (request.query.amountMinor && BigInt(request.query.amountMinor) > MAX_MINOR_UNITS) return conflictReply(reply, request, { kind: 'conflict', status: 422, code: 'VALIDATION_ERROR', message: 'Amount is too large.', field: 'amountMinor' })
     const found = await service.candidates(request.user!.id, id, request.query.dueDate, todayFor(request), request.query.amountMinor ? BigInt(request.query.amountMinor) : undefined, request.query.accountId)
     if (!found) return conflictReply(reply, request, { kind: 'conflict', status: 404, code: 'NOT_FOUND', message: 'Recurring item not found.' })
     return { dueDate: found.dueDate, candidates: found.candidates }

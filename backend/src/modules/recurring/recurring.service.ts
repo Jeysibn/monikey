@@ -130,6 +130,8 @@ export class RecurringService {
 
       // 5. Post + record the occurrence + advance the schedule in this one transaction. Any throw (overdraft,
       //    category rule, a failing update) rolls all of it back.
+      // Announce the user-confirmed payment to the database guard (migration 20261016000000), transaction-local.
+      await tx.$executeRaw`SELECT set_config('app.recurring_confirmation', 'on', true)`
       const posted = await this.ledger.postTransactionInTransaction(tx, userId, { type: 'expense', title: item.merchant, categoryId: item.categoryId, goalId: null, fromAccountId: accountId, toAccountId: null, occurredOn: input.paidOn, occurredTime: null, amountMinor: input.amountMinor, feeMinor: 0n, currencyCode: 'PHP', source: 'recurring', status: 'cleared', note: 'Recurring payment (confirmed by you)', idempotencyKey: key })
       const occurrence = await tx.recurringOccurrence.create({ data: { recurringItemId: itemId, dueDate: new Date(`${due}T00:00:00Z`), status: 'confirmed', transactionId: posted.transaction.id, paidOn: new Date(`${input.paidOn}T00:00:00Z`), amountMinor: input.amountMinor, accountId } })
       const updated = await tx.recurringItem.update({ where: { id: itemId }, data: { nextDueDate, lastPaidDate: new Date(`${input.paidOn}T00:00:00Z`) } })

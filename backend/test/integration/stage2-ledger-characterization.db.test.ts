@@ -481,7 +481,8 @@ describeIfDb('Stage 2 ledger characterization (real PostgreSQL)', () => {
     const { userId, cookie } = await newUser()
     const { item, accountId } = await recurring(userId)
     // What the retired worker did: post under recurring:<id>:<due>, but (interrupted) never advance the schedule.
-    await ledger.postTransaction(userId, input({ fromAccountId: accountId, amountMinor: 25000, title: 'Rent', occurredOn: '2026-09-05', source: 'recurring', idempotencyKey: `recurring:${item.id}:2026-09-05` }))
+    // (Since migration 20261016 the database refuses this unless the transaction announces a confirmed payment, so the fixture does.)
+    await prisma.$transaction(async (tx) => { await tx.$executeRaw`SELECT set_config('app.recurring_confirmation', 'on', true)`; await ledger.postTransactionInTransaction(tx, userId, input({ fromAccountId: accountId, amountMinor: 25000, title: 'Rent', occurredOn: '2026-09-05', source: 'recurring', idempotencyKey: `recurring:${item.id}:2026-09-05` })) })
     const res = await send(cookie, 'POST', `/recurring/${item.id}/confirm-payment`, confirmBody())
     expect(res.statusCode).toBe(201); expect(res.json().outcome).toBe('reconciled_existing')
     expect(await dueTxCount(userId)).toBe(1); expect(await bal(accountId)).toBe(75000n)

@@ -525,3 +525,54 @@ Set `RECURRING_CONFIRMATIONS_DISABLED`; the table and column are additive and ha
 
 ### Verification (local, disposable PostgreSQL)
 Backend: 59 files / 462 tests passed, typecheck clean, lint pre-existing warnings only, `api:openapi:check` passes. Frontend: Vitest 41 files / 419 passed, `tsc -b` clean, oxlint pre-existing warnings only, build and `verify:privacy` pass. Playwright mock: 151 passed, 47 skipped (backend-only specs). Real-backend: planning, quickadd, backend-local, favorites and the new confirm spec: 47 passed. Screenshots: `docs/remake/screenshots/stage6b/`.
+
+## 16. Stage 7A — Release Readiness (2026-10-15)
+
+Local commits only (nothing pushed, merged or deployed; no production/homelab access). Runbook: `docs/remake/STAGE7A_RUNBOOK.md` (prepared, NOT executed).
+
+### 16.1 Audit results
+Journeys exercised on a real backend + disposable PostgreSQL (`e2e/v3-journey-backend.spec.ts`, 32 tests): create account in V3 → Quick Add expense → set budget → recurring confirm + replay → Overview/Insights equal a raw-ledger sum → reload persistence → failed report shows an alert; then 3 viewports (mobile 390×844, tablet 820×1180, desktop 1440×900) × 8 screens with touch-target, overflow and axe (serious/critical) checks, reduced motion, Quick Add focus trap/Escape. Auth, Activity, Accounts/favorites, Quick Add types, Planning, confirm/skip and Settings/Security/Sync are covered by the other real-backend specs and backend suites. V3 stays opt-in; legacy default verified.
+
+### 16.2 Defect register
+| Sev | Defect | Repro (before fix) | Status |
+|---|---|---|---|
+| P1 | Old/running worker or API binary could keep auto-posting recurring expenses after migration | Run old worker after rollout | Fixed: DB guard trigger (`c574b9e`). Old workers still must be stopped |
+| P1/P2 | Concurrent same-key `POST /transactions` → 500 | 10 parallel identical requests | Fixed (`22a5f9c`, advisory lock) |
+| P2 | Forged `recurring:` idempotency key → 500; amount beyond BIGINT → 500 | POST with such payload | Fixed (`22a5f9c`) |
+| P2 | Stale bill reminders sent for paid/skipped cycles | Pay bill after reminder enqueued | Fixed (`99c739c`) |
+| P3 | Float money formatting in emails; inaccurate enqueue count | large/odd amounts | Fixed (`99c739c`) |
+| P2 | Legacy header overflowed at 390px with V3 opted in; icon-only Add had no accessible name | open /v3 on mobile/tablet, axe | Fixed (`d1849d5`) |
+| P2 | Inline links in V3 paragraphs failed contrast/link-in-text-block | axe on Overview/Planning | Fixed (`d1849d5`); underline regression on cards re-checked in `journey-05-overview.png` (none) |
+| P3 | Record payment and Skip buttons touched | Planning bills row | Fixed (`e1a3778`) |
+| P2 | Sync Center, Settings, Security open in the legacy dark shell | click header links in V3 | Open, known limitation (visual discontinuity) |
+| P3 | Mobile V3 header ≈190px tall; Overview favorites card blank space; half-width budgeted card on wide Planning; fixed-width account card; legacy mobile header "V3 preview"/"Sign out" labels wrap in Settings | view screenshots | Open, cosmetic |
+
+### 16.3 Recurring safety findings
+Guard trigger blocks `recurring:*` keys without the confirmation flag (P0001 `RECURRING_AUTOPOST_BLOCKED`); forged keys rejected at API; same-key concurrency posts once; confirm/skip idempotent; skip creates no ledger row and is not "paid". Kill switch (default `RECURRING_CONFIRMATIONS_DISABLED=false`) controls confirmation only; the new worker has no posting switch. Old worker hitting the guard auto-pauses the bill (resume afterwards). Evidence: `stage7a-recurring-safety.db.test.ts` (21), `recurring-confirmation.db.test.ts`.
+
+### 16.4 Reconciliation evidence
+`stage7a-reconciliation.db.test.ts` (6 tests): independent oracle from raw rows matches API for balances, spend, income, budgets, net position; leap day, year boundary, ₱90bn BIGINT, transfer/card repayment excluded from income/expense, reversal not inflating spend, favorites not affecting totals, 10 concurrent identical requests. No mismatches.
+
+### 16.5 Legacy migration assessment
+`backend/scripts/legacy-dry-run.ts` (SELECT-only inside a READ ONLY transaction; `legacy-dry-run.db.test.ts` proves it flags seeded legacy favorites anomalies, archived refs, odd budget periods, legacy auto-posts without occurrence, drifted/stale due dates, paused bills, snapshot gaps/inconsistency, and changes nothing; legacy `source='recurring'` rows stay readable). Offline outbox is client-side IndexedDB and not visible to SQL. Nothing is normalized. Balance-adjustment: not launch-required; design-only in the runbook (separate non-expense ledger event, never a balance overwrite).
+
+### 16.6 Screenshots
+`docs/remake/screenshots/stage7a/` (34 files): `audit-{mobile,tablet,desktop}-*`, `desktop-skip-*`, `mobile-planning-skip-button`, `journey-*`. Viewed with Read: skip dialog (desktop/mobile), skip success, mobile/tablet/desktop audit screens (overview, insights, activity, accounts, planning), mobile settings, journey overview, legacy tablet/mobile sync. Not individually viewed: remaining settings/security and journey-0x images (covered by axe/overflow assertions).
+
+### 16.7 Test results (this stage, disposable DB)
+- Backend: 62 files / 491 tests passed, 0 skipped; `tsc` clean; `api:openapi` regenerated with no diff; `api:openapi:check` clean; oxlint warnings pre-existing only.
+- Frontend: Vitest 42 files / 426 passed; `tsc -b` clean; oxlint warnings only (Crypto.tsx); build OK; `verify:privacy` passed.
+- Playwright mock suite: 151 passed, 86 skipped (backend-only specs), 0 failed.
+- Real-backend suite (`scripts/e2e-real-backend.sh`, fresh DB each run): run 1 = 86 passed; run 2 = 86 passed (≈4.2 min each); no flakes or failures. Axe scans are inside these specs.
+
+### 16.8 Deployment and rollback runbook
+See `docs/remake/STAGE7A_RUNBOOK.md` (not executed): reverting to an old auto-posting worker is not a safe rollback; the kill switch controls confirmation only; old workers must be stopped during rollout even with the guard.
+
+### 16.9 Known limitations
+Backward `nextDueDate` edit onto a confirmed/skipped cycle sticks; reversed payment not re-payable for that cycle; skip has no kill switch (no ledger effect); legacy rows without `anchor_day` stay drifted until edited; duplicate heuristic approximate; legacy auto-posted cycles lack occurrence rows; unknown body fields stripped; no rate-limit change (default limits unchanged, E2E uses per-spec `X-Forwarded-For` via trusted loopback, no bypass); error responses use the `{error:{code,message}}` envelope and logs were not found to include credentials in reviewed paths (review of tests/code, not a full log audit).
+
+### 16.10 Stage 7B go/no-go
+**Conditional GO** for a rehearsal in an isolated environment following the runbook; **NO-GO** for production until: off-host backup/restore is verified, all old workers are confirmed stopped, and the dry-run is run on a copy of real data and reviewed. Open P2 (legacy-shell Settings/Security) is non-blocking.
+
+### 16.11 Local commits
+`c574b9e` guard; `22a5f9c` ledger concurrency/bounds; `99c739c` notifications; `fa795c7` reconciliation + safety tests; `e1a3778` Skip Cycle UI; `d1849d5` UI fixes; `57de4ae` E2E runner/specs; `eb4e61d` legacy dry-run; `4184ea4` runbook; `99bb1d6` runner spec list + screenshots; plus the §16 docs commit.

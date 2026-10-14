@@ -576,3 +576,59 @@ Backward `nextDueDate` edit onto a confirmed/skipped cycle sticks; reversed paym
 
 ### 16.11 Local commits
 `c574b9e` guard; `22a5f9c` ledger concurrency/bounds; `99c739c` notifications; `fa795c7` reconciliation + safety tests; `e1a3778` Skip Cycle UI; `d1849d5` UI fixes; `57de4ae` E2E runner/specs; `eb4e61d` legacy dry-run; `4184ea4` runbook; `99bb1d6` runner spec list + screenshots; plus the §16 docs commit.
+
+## 17. Stage 7B: isolated migration and recovery rehearsal
+
+Scope: rehearsal only, on disposable PostgreSQL 18.6 containers with synthetic data. No production or homelab access, no `homelab-gitops` change, no push, merge or deploy. Evidence: `docs/remake/stage7b/`; scripts: `backend/scripts/rehearsal/`; runbook: `docs/remake/STAGE7B_RUNBOOK.md`.
+
+### 17.1 Environment and revisions
+Fresh `postgres:18-alpine` containers (source, restore, and an alpine "vault"); the Stage 7A DB container was verified removed; unrelated containers untouched. Legacy baseline schema = the 26 migrations up to `20260913100000_crypto_activity_sequence`, applied with `prisma migrate deploy`; synthetic data from `legacy-seed.sql` (2 users, 7 accounts incl. credit card and an archived account, 6 categories incl. archived, 19 transactions incl. 3 reversal pairs, transfers, a card repayment, legacy `source='recurring'` rows, 7 recurring bills incl. drifted, stale, paused, archived-account, archived-category and overdue non-autopay, 3 budget periods incl. an odd-date one, 3 snapshots incl. a gap and an inconsistency). Legacy worker revision: `2f8b119` (last commit before manual-only recurring). App revision under test: this branch HEAD (see 17.10).
+
+### 17.2 Migration rehearsal (deliverable 1)
+Four additive migrations since the baseline (`favorite_accounts`, `recurring_occurrences`, `recurring_posting_guard`, new `recurring_schedule_guard`) applied in about 1 s. `migration-validation.log`: new columns empty, both guards present, constraint probes (favorite rank range/uniqueness, schedule edit without flag blocked, forged `recurring:` key blocked, ordinary insert OK) behave, dry-run counts on the fixtures: archived-account bills 1, archived-category bills 1, odd budget period 1, overlapping periods 1, legacy auto-posts without occurrence 4, drifted due dates 1, stale due date vs legacy key 1, paused bills 1, snapshot gaps 2, inconsistent snapshot 1. Nothing was normalized.
+
+### 17.3 Backup/restore (deliverable 2) - `backup-restore-drill-01.log`
+2026-10-14T18:32:35Z, PostgreSQL 18.6: `pg_dump -Fc` 0.18 s (122,318 bytes); TOC integrity check parsed 267 entries; AES-256 (pbkdf2) encrypted, sha256 identical after transfer to the vault container and after copy-back; decrypted copy byte-identical; `pg_restore` 1.15 s; oracle output of source and restore byte-identical (users, accounts, transactions, totals, ids, recurring state). **The vault is a local container, not an off-host location: this is a rehearsal of the procedure, not an independently verified production backup.** No failures. The restored DB was then migrated (`oracle-04`) and runs the app (smoke below).
+
+### 17.4 Old-worker guard compatibility (deliverable 3) - `old-worker-compat.log`
+Worker entrypoints: `node dist/worker.js` (`npm run start:worker`, legacy `src/worker.ts`); inventory found no running workers or other sessions on the rehearsal DBs. Control (legacy-complete schema, no guard): the old worker posted a recurring expense (balance 12,089,125 -> 12,080,125, +1 transaction), advanced Gym and Weekly water, and processed a bill with `autopay=false`. Guarded DB (all four migrations): no ledger row, no balance change, no schedule advance, nothing marked paid; the only change is the old worker pausing the two due bills (its error handler) plus derived snapshots. **Defect P1 found and fixed:** with only the 7A posting guard an old worker could still advance `next_due_date` when a legacy ledger row for the cycle existed (replay succeeded, no payment); migration `20261017000000_recurring_schedule_guard` blocks it (`P0001 RECURRING_SCHEDULE_WRITE_BLOCKED`); the new API sets the allow flag inside `RecurringService.lockItem`. Consequences: old API mark-paid/due-date edits fail at the DB; the old worker still auto-pauses due bills (review after shutdown). Normal ledger posting still works (probe + smoke).
+
+### 17.5 Financial reconciliation (deliverable 4)
+`oracle.sql` is independent of the app (SQL on legacy-baseline columns; balances re-derived from transaction rows with reversal rows inverted; md5 of every financial table). Pre-migration (`oracle-01`) = restored pre-migration (`oracle-02`) = after all four migrations (`oracle-03`), byte-identical. After migrating the restored copy (`oracle-04`) the only differences are the 8 seeded system categories (authorized metadata change; categories hash only). Anchors: Main Checking 12,089,125; Ana liquid 14,939,225; card debt 120,075; net position 14,819,150 (liquid minus card debt); October income 4,500,000 / expense 287,025 (transfers, card repayment and reversals excluded, card purchase once); Groceries October 275,025; Ben 945,000. The API reported the same numbers (smoke checks compare to the oracle values, not to the app). After the smoke run (`oracle-05`): 7/7 accounts balanced with only the deliberate deltas. Metadata changes: favorites ranks, system categories, synthetic password hashes, snapshots, worker pauses; none are financial mutations.
+
+### 17.6 Recurring lifecycle defects (deliverable 5)
+1. Due-date edit onto a confirmed/skipped cycle left the bill stuck -> now refused `409 RECURRING_SETTLED_CYCLE` with an explanation; later dates and no-op edits allowed. 2. Reversed confirmed payment blocked correction -> confirm/skip/link now return `409 RECURRING_PAYMENT_REVERSED` explaining the cycle stays closed and the correct payment goes through Quick Add; the occurrence, reversal and audit trail are untouched, duplicates impossible. A true same-cycle repay needs a data-model change (attempt model designed in the runbook) and was **not** implemented. Tests: `stage7b-lifecycle.db.test.ts` (8) and V3 confirm-dialog tests for both 409 messages (2).
+
+### 17.7 Recovery and failure injection (deliverable 6) - `failure-injection.log`, 0 failures
+F1 before migration, F2 during migration (broken 3rd migration; partial state shown, restore into a fresh DB and re-migrate, oracle identical, guards present), F3 after migration before API, F4 worker `kill -9` and restart, F5 API-only and worker-only, F6 backend terminated mid-confirmation (atomic, retry posts once, replay thereafter), F7 restore-point loss (the 2 writes after the backup were listed for reconciliation, nothing invented, restored DB balanced). The old worker was never used for recovery.
+
+### 17.8 Offline and browser data
+Documented in the runbook. `stage7b-offline-replay.db.test.ts` (8 tests): replay after commit, commit lost by restore, concurrent replays, replay after reversal, changed payload keeps the first content, per-user keys, logged-out 401, reserved prefix. IndexedDB contents are not in a PG backup; clearing site data loses un-synced operations. Existing frontend outbox/Sync Center tests and the real-backend specs ran green.
+
+### 17.9 Test results (deliverable 7)
+- HTTP smoke on the restored+migrated DB (`smoke-restored-db.log`): 58 passed, 0 failed (auth incl. bad password and missing Origin, Overview/Insights vs oracle, Activity filters/pagination/reversal rows, favorites, Quick Add four types + replay + reverse, Planning/budgets, confirm/replay/reconcile/refused cases, skip, link, legacy PATCH status, user isolation).
+- Backend: 64 files / 507 tests passed, 0 skipped (Stage 7A: 62/491; +2 files, +16 tests: lifecycle 8, offline replay 8); `tsc` clean; `api:openapi` regenerated with no diff, `api:openapi:check` clean; lint warnings pre-existing only.
+- Frontend: Vitest 42 files / 428 tests (7A: 426; +2); `tsc -b` clean; oxlint warnings only (Crypto.tsx, pre-existing); build OK; `verify:privacy` passed.
+- Playwright mock suite: 151 passed, 86 skipped (backend-only specs), 0 failed.
+- Real-backend browser suite (`scripts/e2e-real-backend.sh`, fresh DB): 86 passed. Same 7 specs against the restored and migrated rehearsal DB (API on that DB, Vite V3): 86 passed. Includes axe and the journey spec. No screenshots were added; the regenerated stage 5-7A screenshots were reverted with `git checkout`.
+- Failure injection 0 failures; backup/restore drill 0 failures.
+
+### 17.10 Local commits (deliverable 10)
+`22e72b7` schedule guard + lifecycle fixes; `46f1944` synthetic dataset, oracle, backup/restore and old-worker scripts with evidence; `e165728` migration validation + post-migration oracle; `d381761` rollout rehearsal and smoke; `318e786` failure injection; `8ff4bf6` offline replay tests; `39b7261` V3 409 message tests; `4d3883a` runbook; plus the §17 docs commit. Not pushed.
+
+### 17.11 Stage 7C release gate checklist (deliverable 9)
+| Gate | Status |
+|---|---|
+| Independent off-host production backup verification | **NOT YET AUTHORIZED - not done.** Rehearsal used a local container only |
+| Actual production-backup restore drill | **NOT YET AUTHORIZED - not done** (synthetic restore passed) |
+| Real-data legacy dry-run | **NOT YET AUTHORIZED - not done** (synthetic fixtures only) |
+| Old worker inventory and verified shutdown procedure | Procedure written and rehearsed; **production inventory not done** |
+| Migration rehearsal success | Done (synthetic) |
+| Financial reconciliation success | Done (synthetic): zero unexplained differences |
+| Recurring-cycle correctness | Done: guards, refusal messages, regression tests; same-cycle repay after reversal is a documented limitation |
+| Emergency stop and recovery procedure | Written and failure-injected (synthetic) |
+| Outstanding P0/P1/P2 | P0: none known. P1: none open (schedule-advance hole found and fixed). P2: no same-cycle repay after reversal (design ready); old worker pauses due bills incl. non-autopay (review after shutdown); old API mark-paid/due-date edits fail at DB; legacy-shell Settings/Security (carried over); legacy rows without `anchor_day` remain drifted until edited; duplicate-payment heuristic approximate; offline operations in a browser whose site data is cleared are unrecoverable |
+| GitOps rollout and smoke-test plan | Not done: needs the homelab-gitops change (out of scope, not modified). Smoke plan = `smoke.ts` + oracle + e2e specs; migration job must run before API/worker rollout |
+
+### 17.12 Stage 7C go/no-go (deliverable 9)
+**Conditional GO to PLAN Stage 7C; NO-GO for any production execution** until the user authorizes and completes: off-host production backup verified, a real restore drill, the real-data dry-run reviewed, a production inventory with all old workers confirmed stopped, and a GitOps plan reviewed. Synthetic results are not evidence for those items. Stage 7C was not started.

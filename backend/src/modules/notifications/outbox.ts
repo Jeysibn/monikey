@@ -8,8 +8,9 @@ export async function enqueueDueBillNotifications(prisma: PrismaClient, todayIso
   let enqueued = 0
   for (const item of items) {
     const dueDate = item.nextDueDate.toISOString().slice(0, 10)
-    const result = await prisma.notificationOutbox.upsert({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, create: { userId: item.userId, kind: 'bill_due', dedupeKey: `bill-due:${item.id}:${dueDate}`, payload: { recurringItemId: item.id, merchant: item.merchant, amountMinor: item.amountMinor.toString(), dueDate } }, update: {} })
-    if (result.createdAt.getTime() === result.updatedAt.getTime()) enqueued += 1
+    const existed = await prisma.notificationOutbox.findUnique({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, select: { id: true } })
+    await prisma.notificationOutbox.upsert({ where: { dedupeKey: `bill-due:${item.id}:${dueDate}` }, create: { userId: item.userId, kind: 'bill_due', dedupeKey: `bill-due:${item.id}:${dueDate}`, payload: { recurringItemId: item.id, merchant: item.merchant, amountMinor: item.amountMinor.toString(), dueDate } }, update: {} })
+    if (!existed) enqueued += 1
   }
   return enqueued
 }

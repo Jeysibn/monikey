@@ -62,21 +62,9 @@ check set.
 
 Validation concurrency cancels an older run for the same ref.
 The required workflow deliberately does not build Docker images, scan images,
-start Compose, or run backend-mode browser tests. Those responsibilities belong
-to the separate `full-stack.yaml` release/nightly/manual tier. Do not describe
+start Compose, or run backend-mode browser tests. The former `full-stack.yaml`
+tier was removed; run the Compose checks locally when needed. Do not describe
 the fast workflow as complete release certification.
-
-`full-stack.yaml` validates `docker compose config`, builds and starts a
-disposable PostgreSQL 18/migration/API/worker/nginx topology, checks readiness,
-runs the explicit system-category seed required by browser fixtures, then runs
-the worker-isolated backend regression suite, backend-mode Playwright journeys,
-and the shared finance contract against the Compose API (serialized because
-registration flows share the rate-limit bucket), captures logs on failure, and
-tears down volumes. CI uses the stub
-provider settings from `.env.example`; it never calls real external providers.
-The disposable HTTP localhost edge explicitly sets `COMPOSE_NODE_ENV=test`;
-normal Compose and deployment defaults remain production and still require an
-HTTPS `APP_ORIGIN`.
 
 ## Publication: publish.yaml
 

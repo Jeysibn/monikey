@@ -5,6 +5,7 @@ import { cn } from 'cn'
 import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/MoneyInput'
 import { FieldError, FormField } from '@/components/FormField'
 import { InlineNotice } from '@/components/InlineNotice'
 import { SegmentedControl } from '@/components/SegmentedControl'
@@ -229,24 +230,16 @@ export function TransactionForm({
           )}
 
           <FormField id="qa-amount" label="Amount" error={amountError}>
-            <div className="relative">
-              <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-xl font-semibold text-muted-foreground">
-                ₱
-              </span>
-              <Input
-                id="qa-amount"
-                ref={amountRef}
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder="0.00"
-                value={values.amount}
-                onChange={(e) => set({ amount: e.target.value }, 'amount')}
-                onBlur={() => blur('amount')}
-                aria-invalid={!!amountError}
-                aria-describedby={describedBy('qa-amount', amountError)}
-                className="h-14 pl-9 text-2xl font-semibold"
-              />
-            </div>
+            <MoneyInput
+              id="qa-amount"
+              inputRef={amountRef}
+              large
+              value={values.amount}
+              onChange={(amount) => set({ amount }, 'amount')}
+              onBlur={() => blur('amount')}
+              invalid={!!amountError}
+              describedBy={describedBy('qa-amount', amountError)}
+            />
           </FormField>
           {!editing && values.kind === 'payment' && owed > 0 && (
             <Button type="button" variant="secondary" className="-mt-2 w-full" onClick={() => set({ amount: amountText(owed) }, 'amount')}>

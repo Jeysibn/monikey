@@ -168,7 +168,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   }
 
   /* ------------------------------------------------ dialogs, keyboard, semantics */
-  group = "Stand-in dialogs and keyboard";
+  group = "Dialogs and keyboard";
   for (const W of [375, 1280]) await safe(async () => {
     const p = await open(W, { height: 800 });
     const opens = async (name, title, regex) => {
@@ -179,8 +179,8 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     };
     await opens("Pay card, Blue Card", "Pay credit card", /Blue Card/);
     await opens("Pay card, Everyday Card", "Pay credit card", /Everyday Card/);
-    await opens("Add credit card", "Add account", /a credit card/);
-    await opens(W < 768 ? "Add account" : "Add account", "Add account", /an account/);
+    await opens("Add credit card", "Add account", /Credit limit/);
+    await opens(W < 768 ? "Add account" : "Add account", "Add account", /Current balance/);
     await p.context().close();
   });
   await safe(async () => {

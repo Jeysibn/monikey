@@ -19,7 +19,7 @@ import type { MockData } from '@/types'
  *                     and available credit, which is NOT cash and is never part of "money you have".
  * Below 1024px the sections stack; from 1024px they sit in two equal columns, each top-aligned (they are
  * not stretched to the same height). Balances are "as of today", so there is no month select here.
- * Read-only: accounts can't be edited or deleted in v1, and Add account is a stand-in for now.
+ * Read-only: accounts can't be edited or deleted in v1, and Add account opens the shared dialog in App.
  */
 function Bar({ className }: { className: string }) {
   return <span aria-hidden="true" className={cn('block rounded-chip bg-secondary', className)} />

@@ -3,7 +3,8 @@ import { cn } from 'cn'
 
 /*
  * A row of mutually exclusive choices built from native radio inputs (keyboard: arrows move, Tab leaves).
- * The chosen one has a check mark and a raised surface, so it is not told apart by colour alone.
+ * The chosen one has a raised, outlined surface, and (up to three options) a check mark, so it is not told
+ * apart by colour alone. Four options are too narrow for a check mark beside the longest label on a 360px phone.
  */
 export function SegmentedControl<T extends string>({
   legend,
@@ -34,11 +35,13 @@ export function SegmentedControl<T extends string>({
             />
             <span
               className={cn(
-                'flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold text-muted-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring',
+                'flex h-11 cursor-pointer items-center justify-center rounded-full font-semibold',
+                options.length > 3 ? 'px-0.5 text-sm whitespace-nowrap' : 'gap-1.5 text-[15px]',
+                'text-muted-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring',
                 value === o.value && 'bg-card text-foreground shadow-[0_0_0_1px_var(--rule)]',
               )}
             >
-              {value === o.value && <Check aria-hidden="true" className="size-4" />}
+              {value === o.value && options.length <= 3 && <Check aria-hidden="true" className="size-4" />}
               {o.label}
             </span>
           </label>

@@ -1,4 +1,4 @@
-import type { ActivityItem, Centavos, MockData } from '../types.ts'
+import type { AccountType, ActivityItem, Centavos, MockData } from '../types.ts'
 import { amountText, parseAmount, type EntryKind, type EntryValues } from './entryForm.ts'
 import { cardStatus, formatDate, isCard, monthOf } from './finance.ts'
 import { formatPeso } from './money.ts'
@@ -10,6 +10,14 @@ import { formatPeso } from './money.ts'
  * New ids are max + 1; `createdAt` is passed in so the reducer stays pure (and testable).
  */
 export type LedgerAction =
+  | {
+      type: 'add-account'
+      name: string
+      accountType: AccountType
+      openingBalance: Centavos
+      openingDebt: Centavos
+      creditLimit: Centavos | null
+    }
   | {
       type: 'add-transaction'
       accountId: number
@@ -61,6 +69,21 @@ const nextId = (rows: { id: number }[]) => rows.reduce((max, r) => Math.max(max,
 
 export function ledgerReducer(data: MockData, action: LedgerAction | LedgerEdit): MockData {
   switch (action.type) {
+    case 'add-account':
+      return {
+        ...data,
+        accounts: [
+          ...data.accounts,
+          {
+            id: nextId(data.accounts),
+            name: action.name,
+            type: action.accountType,
+            openingBalance: action.openingBalance,
+            openingDebt: action.openingDebt,
+            creditLimit: action.creditLimit,
+          },
+        ],
+      }
     case 'add-transaction':
       return {
         ...data,

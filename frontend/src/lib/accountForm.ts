@@ -1,0 +1,76 @@
+import type { AccountType, Centavos, MockData } from '../types.ts'
+import { parseMoney } from './entryForm.ts'
+import type { LedgerAction } from './ledger.ts'
+
+/*
+ * The rules of the Add account form (UI_UX_SPEC section 9), free of React so they can be tested.
+ * The plain labels people see map onto the API's fields: "Current balance" is opening_balance,
+ * "Amount you owe today" is opening_debt, "Credit limit" is credit_limit. Messages are the spec's.
+ * A duplicate name is the API's 409 in real life; the mock checks it here, and the real client will
+ * show the same message when the API answers 409.
+ */
+export interface AccountValues {
+  type: AccountType
+  name: string
+  balance: string // cash, bank, e-wallet: what is in it right now
+  limit: string // credit card: the most the bank lets you charge
+  owed: string // credit card: what you still owe today
+}
+
+export type AccountField = 'name' | 'balance' | 'limit' | 'owed'
+export type AccountErrors = Partial<Record<AccountField, string>>
+
+export const MAX_NAME = 60
+export const isCardType = (type: AccountType) => type === 'credit_card'
+
+type MoneyField = 'balance' | 'limit' | 'owed'
+const NEGATIVE = /^\s*[-−]/
+
+/** Parses one money field. Balance and owed may be zero; the limit may not; none may be negative. */
+export function parseAccountMoney(text: string, field: MoneyField): { ok: true; centavos: Centavos } | { ok: false; error: string } {
+  if (NEGATIVE.test(text)) {
+    return { ok: false, error: field === 'limit' ? 'Credit limit must be more than ₱0.00.' : 'Use 0.00 or more.' }
+  }
+  const result = parseMoney(text, field !== 'limit')
+  if (!result.ok && field === 'limit' && result.error === 'Amount must be more than ₱0.00.') {
+    return { ok: false, error: 'Credit limit must be more than ₱0.00.' }
+  }
+  return result
+}
+
+export function validateAccount(v: AccountValues, data: MockData): AccountErrors {
+  const errors: AccountErrors = {}
+  const name = v.name.trim()
+  if (name === '') errors.name = 'Give the account a name.'
+  else if (name.length > MAX_NAME) errors.name = 'Keep the name under 60 characters.'
+  else if (data.accounts.some((a) => a.name.trim().toLowerCase() === name.toLowerCase())) {
+    errors.name = 'You already have an account with that name.'
+  }
+
+  if (isCardType(v.type)) {
+    const limit = parseAccountMoney(v.limit, 'limit')
+    if (!limit.ok) errors.limit = limit.error
+    const owed = parseAccountMoney(v.owed, 'owed')
+    if (!owed.ok) errors.owed = owed.error
+  } else {
+    const balance = parseAccountMoney(v.balance, 'balance')
+    if (!balance.ok) errors.balance = balance.error
+  }
+  return errors
+}
+
+/** Turns validated values into a ledger action. Call only when `validateAccount()` found no errors. */
+export function toAccountAction(v: AccountValues): LedgerAction {
+  const name = v.name.trim()
+  if (isCardType(v.type)) {
+    const limit = parseAccountMoney(v.limit, 'limit')
+    const owed = parseAccountMoney(v.owed, 'owed')
+    if (!limit.ok || !owed.ok) throw new Error('toAccountAction needs valid values')
+    return { type: 'add-account', name, accountType: v.type, openingBalance: 0, openingDebt: owed.centavos, creditLimit: limit.centavos }
+  }
+  const balance = parseAccountMoney(v.balance, 'balance')
+  if (!balance.ok) throw new Error('toAccountAction needs valid values')
+  return { type: 'add-account', name, accountType: v.type, openingBalance: balance.centavos, openingDebt: 0, creditLimit: null }
+}
+
+export const accountSavedMessage = (v: AccountValues): string => `Account added: ${v.name.trim()}.`

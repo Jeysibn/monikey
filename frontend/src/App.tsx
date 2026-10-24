@@ -1,19 +1,10 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 
 import { AppShell, type View } from '@/components/AppShell'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { AddAccountDialog } from '@/components/AddAccountDialog'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
+import { accountSavedMessage, toAccountAction, validateAccount, type AccountValues } from '@/lib/accountForm'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { monthOf } from '@/lib/finance'
 import {
@@ -47,11 +38,6 @@ import { OverviewView } from '@/views/OverviewView'
 const demo = new URLSearchParams(window.location.search).get('demo')
 const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many']
 
-interface Notice {
-  title: string
-  message: string
-}
-
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 const FAILED_DELETE = "Couldn't delete. Nothing was changed. Try again."
 const GONE_ON_EDIT = 'This entry was removed, maybe in another tab. Your changes are still here.'
@@ -64,13 +50,13 @@ function App() {
   const [view, setView] = useState<View>('overview')
   const [month, setMonth] = useState(() => monthOf(data.today))
   const [accountFilter, setAccountFilter] = useState<number | null>(null) // Activity's account filter
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [accountForm, setAccountForm] = useState<AccountValues | null>(null)
   const [session, setSession] = useState<EntrySession | null>(null)
   const [status, setStatus] = useState<StatusNote | null>(null)
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
   const lastAccount = useRef<number | null>(null)
   const lastPayFrom = useRef<number | null>(null)
-  const failNextWrite = useRef(demo === 'save-error') // the first save or delete fails once, to show the error path
+  const failNextWrite = useRef(demo === 'save-error') // the first save, delete or new account fails once, to show the error path
   const opener = useRef<HTMLElement | null>(null) // the control that opened the dialog, so focus can go back to it
   const loading = demo === 'loading'
   const addDisabled = data.accounts.length === 0
@@ -99,12 +85,6 @@ function App() {
   const rememberOpener = (from?: HTMLElement) => {
     opener.current = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
   }
-  // Add account is built in a later milestone; until then it opens a stand-in.
-  const show = (next: Notice, from?: HTMLElement) => {
-    rememberOpener(from)
-    setNotice(next)
-  }
-
   const startEntry = (kind: EntryKind, cardId: number | null): EntryValues => {
     const last = kind === 'payment' ? lastPayFrom.current : lastAccount.current
     const usable = last !== null && accountsFor(kind, 'account', data).some((a) => a.id === last)
@@ -177,11 +157,23 @@ function App() {
     setStatus({ text: done })
     setSession(null)
   }
-  const openAddAccount = (kind: 'account' | 'credit card' = 'account') =>
-    show({
-      title: 'Add account',
-      message: `Adding ${kind === 'credit card' ? 'a credit card' : 'an account'} is part of Add account, built in a later milestone.`,
-    })
+  const openAddAccount = (kind: 'account' | 'credit card' = 'account') => {
+    rememberOpener()
+    setAccountForm({ type: kind === 'credit card' ? 'credit_card' : 'cash', name: '', balance: '', limit: '', owed: '' })
+  }
+  const saveAccount = async (values: AccountValues) => {
+    await Promise.resolve() // the real API call goes here; the mock answers at once
+    if (failNextWrite.current) {
+      failNextWrite.current = false
+      throw new Error(FAILED_SAVE)
+    }
+    // The API answers 409 for a duplicate name; the mock re-checks so a second tab cannot slip one through.
+    const taken = validateAccount(values, data).name
+    if (taken) throw new Error(taken)
+    dispatch(toAccountAction(values))
+    setStatus({ text: accountSavedMessage(values) })
+    setAccountForm(null)
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -237,24 +229,13 @@ function App() {
         onClosed={restoreFocus}
       />
 
-      <Dialog open={notice !== null} onOpenChange={(open) => !open && setNotice(null)}>
-        <DialogContent onCloseAutoFocus={restoreFocus}>
-          <DialogHeader>
-            <DialogTitle>{notice?.title}</DialogTitle>
-            <DialogDescription>Stand-in for a feature that is not built yet.</DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <p>{notice?.message}</p>
-          </DialogBody>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="secondary" className="flex-1">
-                Close
-              </Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddAccountDialog
+        initial={accountForm}
+        data={data}
+        onSubmit={saveAccount}
+        onOpenChange={(open) => !open && setAccountForm(null)}
+        onClosed={restoreFocus}
+      />
     </>
   )
 }

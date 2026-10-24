@@ -29,8 +29,11 @@ const MAX_CENTAVOS = 999_999_999_999 // NUMERIC(12,2): 9,999,999,999.99
 
 export type AmountResult = { ok: true; centavos: Centavos } | { ok: false; error: string }
 
-/** "385", "1,250.50", ".5" and a leading "₱" are accepted. Checks run in the order of the spec's table. */
-export function parseAmount(text: string): AmountResult {
+/**
+ * "385", "1,250.50", ".5" and a leading "₱" are accepted. Checks run in the order of the spec's table.
+ * A transaction amount must be more than zero; an account's opening balance or debt may be zero (`allowZero`).
+ */
+export function parseMoney(text: string, allowZero = false): AmountResult {
   const t = text.trim().replace(/^₱\s*/, '')
   if (t === '') return { ok: false, error: 'Enter an amount.' }
   if (!/\d/.test(t) || !/^(\d{1,3}(,\d{3})+|\d+)?(\.\d*)?$/.test(t)) {
@@ -41,10 +44,12 @@ export function parseAmount(text: string): AmountResult {
   const digits = whole.replace(/,/g, '').replace(/^0+/, '')
   if (digits.length > 12) return { ok: false, error: 'That amount is too large.' }
   const centavos = Number(digits || '0') * 100 + Number(fraction.padEnd(2, '0'))
-  if (centavos === 0) return { ok: false, error: 'Amount must be more than ₱0.00.' }
+  if (centavos === 0 && !allowZero) return { ok: false, error: 'Amount must be more than ₱0.00.' }
   if (centavos > MAX_CENTAVOS) return { ok: false, error: 'That amount is too large.' }
   return { ok: true, centavos }
 }
+
+export const parseAmount = (text: string): AmountResult => parseMoney(text)
 
 /** Whole centavos as text a person can edit: 1425000 -> "14250.00". Used to fill the amount from "Pay full". */
 export function amountText(centavos: Centavos): string {

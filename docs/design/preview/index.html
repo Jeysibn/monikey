@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MoniKey design mock — viewer</title>
+<style>
+  body{margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#d9dde1;color:#1B1D1F}
+  header{position:sticky;top:0;background:#fff;border-bottom:1px solid #ccc;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;z-index:2}
+  header strong{margin-right:8px}
+  button{font:inherit;min-height:36px;padding:0 14px;border:1px solid #858B92;border-radius:8px;background:#fff;cursor:pointer}
+  button[aria-pressed=true]{background:#1D5FD6;border-color:#1D5FD6;color:#fff;font-weight:600}
+  .note{color:#5C6064;margin-left:auto;font-size:13px}
+  .stage{display:flex;justify-content:center;padding:20px 12px}
+  iframe{border:1px solid #9aa0a6;background:#F3F5F7;border-radius:12px;height:calc(100vh - 110px);min-height:560px;max-width:100%;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+</style>
+</head>
+<body>
+<header>
+  <strong>MoniKey design mock</strong>
+  <span id="btns"></span>
+  <span class="note">Throwaway preview · fictional data · not the production app</span>
+</header>
+<div class="stage"><iframe id="f" src="app.html" title="MoniKey design mock"></iframe></div>
+<script>
+  const sizes=[[360,"360 phone"],[375,"375 phone"],[768,"768 tablet"],[1024,"1024"],[1280,"1280 desktop"]];
+  const f=document.getElementById("f"), box=document.getElementById("btns");
+  function set(w){ f.style.width=w+"px"; [...box.children].forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.w)===w))); }
+  sizes.forEach(([w,l])=>{ const b=document.createElement("button"); b.textContent=l; b.dataset.w=w; b.style.marginRight="6px"; b.onclick=()=>set(w); box.appendChild(b); });
+  set(375);
+</script>
+</body>
+</html>

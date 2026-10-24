@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status (Milestone 4.2):** the application shell (bottom bar, rail, sidebar) and the Overview page are built with typed fictional data. Activity and Accounts are placeholders; Quick Add, Pay card and Add account open stand-in dialogs. See [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
+**Status (Milestone 4.3):** the application shell (bottom bar, rail, sidebar), the Overview page and the read-only Accounts screen are built with typed fictional data. Activity is a placeholder; Quick Add, Pay card and Add account open stand-in dialogs. See [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md) and [`/docs/design/FRONTEND_ACCOUNTS_4_3.md`](../docs/design/FRONTEND_ACCOUNTS_4_3.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
 
 ## Commands
 
@@ -23,17 +23,17 @@ npm test          # unit tests for money formatting and the accounting rules (No
 | `src/types.ts` | Account, Category, Transaction, CreditCardPayment, FinancialSummary … (money = whole centavos) |
 | `src/mockData.ts` | Fictional ledger in centavos + `?demo=` scenarios for rare states |
 | `src/lib/money.ts`, `src/lib/finance.ts` | Peso formatting; balances, debt, available credit, net position, monthly totals, activity list |
-| `src/components/` | `AppShell`, `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary` |
+| `src/components/` | `AppShell`, `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary`, `AccountRow` |
 | `src/components/ui/` | The five vendored shadcn/ui components (restyled to DESIGN.md) |
-| `src/views/` | `OverviewView`, `PlaceholderView` (Activity and Accounts stand-ins) |
+| `src/views/` | `OverviewView`, `AccountsView`, `PlaceholderView` (Activity stand-in) |
 | `src/App.tsx` | The only state: current view, selected month, stand-in dialog |
 | `src/index.css` | Design tokens, self-hosted Manrope `@font-face`, `@theme inline` |
 | `tests/finance.test.ts` | Unit tests (`npm test`) |
-| `scripts/verify-overview.cjs` | Browser checks (needs a local Chromium + playwright-core; see the script header) |
+| `scripts/verify-overview.cjs`, `scripts/verify-accounts.cjs` | Browser checks (need a local Chromium + playwright-core; see the script headers) |
 | `public/fonts/` | Manrope WOFF2 and its OFL licence; no CDN |
 | `components.json` | shadcn/ui configuration |
 
-**Preview hook:** open the app with `?demo=loading`, `?demo=overpaid`, `?demo=negative` or `?demo=no-accounts` to see those states.
+**Preview hook:** open the app with `?demo=loading`, `overpaid`, `negative`, `no-accounts`, `over-limit` or `paid-off` to see those states.
 
 ## Rules to keep
 

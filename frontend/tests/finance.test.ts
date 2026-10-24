@@ -10,6 +10,7 @@ import {
   buildActivity,
   cardStatus,
   cardStatuses,
+  liquidAccounts,
   liquidBalance,
   monthLabel,
   monthOf,
@@ -185,6 +186,54 @@ describe('credit card payments', () => {
     assert.equal(summarize(after, OCT).monthExpenses, s0.monthExpenses)
     assert.equal(summarize(after, '2026-09').monthExpenses, 0)
     assert.equal(summarize(after, OCT).liquidBalance, s0.liquidBalance - 500_000)
+  })
+})
+
+describe('accounts list (Accounts screen)', () => {
+  it('lists cash, bank and e-wallet accounts in that order, never cards, with calculated balances', () => {
+    const rows = liquidAccounts(getMockData())
+    assert.deepEqual(rows.map((r) => [r.account.name, r.account.type, r.balance]), [
+      ['Cash on hand', 'cash', 235_000],
+      ['Main Savings', 'bank', 4_872_550],
+      ['GCash', 'ewallet', 312_075],
+    ])
+  })
+  it('the rows add up to money you have', () => {
+    const data = getMockData()
+    assert.equal(liquidAccounts(data).reduce((a, r) => a + r.balance, 0), summarize(data, OCT).liquidBalance)
+  })
+  it('orders by type first, then by id, whatever order the accounts were created in', () => {
+    const d = getMockData()
+    const shuffled: MockData = { ...d, accounts: [d.accounts[2], d.accounts[4], d.accounts[1], d.accounts[3], d.accounts[0]] }
+    assert.deepEqual(liquidAccounts(shuffled).map((r) => r.account.name), ['Cash on hand', 'Main Savings', 'GCash'])
+  })
+  it('shows a negative balance as negative', () => {
+    const rows = liquidAccounts(getMockData('negative'))
+    assert.equal(rows.find((r) => r.account.name === 'GCash')?.balance, -87_925)
+  })
+  it('is empty on first run', () => assert.deepEqual(liquidAccounts(getMockData('no-accounts')), []))
+  it('does not change when entries are added to a card', () => {
+    const d = getMockData()
+    const after = addTx(d, { accountId: BLUE, categoryId: EXPENSE_SHOPPING, amount: 100_000 })
+    assert.deepEqual(liquidAccounts(after), liquidAccounts(d))
+  })
+})
+
+describe('demo scenarios used to show rare card states', () => {
+  it('over-limit: owed exceeds the limit, so available credit is negative', () => {
+    const d = getMockData('over-limit')
+    const everyday = cardStatus(account(d, EVERYDAY), d)
+    assert.equal(everyday.owed, 3_680_000)
+    assert.equal(everyday.availableCredit, -680_000)
+    assert.equal(everyday.credit, 0)
+  })
+  it('paid-off: the card owes nothing, has no credit, and its whole limit is available; net position unchanged', () => {
+    const d = getMockData('paid-off')
+    const blue = cardStatus(account(d, BLUE), d)
+    assert.equal(blue.owed, 0)
+    assert.equal(blue.credit, 0)
+    assert.equal(blue.availableCredit, blue.creditLimit)
+    assert.equal(summarize(d, OCT).netPosition, summarize(getMockData(), OCT).netPosition)
   })
 })
 

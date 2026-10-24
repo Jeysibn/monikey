@@ -1,6 +1,6 @@
 # MoniKey
 
-MoniKey is a beginner-friendly, three-tier personal finance tracker. This repository is being prepared for its UI/UX design phase; finance-tracking features have not been implemented.
+MoniKey is a beginner-friendly, three-tier personal finance tracker. The frontend shell, Overview and Accounts screens exist and run on mock data. The backend and database are not initialized, and frontend–backend integration is future work.
 
 ## Approved stack
 
@@ -10,12 +10,12 @@ MoniKey is a beginner-friendly, three-tier personal finance tracker. This reposi
 - Delivery: GitHub Actions and GHCR
 - Deployment: existing Kubernetes cluster managed through Argo CD GitOps
 
-The frontend has the Vite React + TypeScript scaffold with Tailwind CSS v4, the five approved shadcn/ui components, Lucide, self-hosted Manrope and the approved design tokens (Milestone 4.1). Application screens and features are not built yet; they follow in later approved milestones.
+The frontend has the Vite React + TypeScript scaffold with Tailwind CSS v4, the five approved shadcn/ui components, Lucide, self-hosted Manrope and the approved design tokens (Milestone 4.1). The Overview and Accounts screens are built with mock data (Milestones 4.2–4.3); the remaining screens and API integration follow in later approved milestones.
 
 ## Workspace layout
 
 ```text
-frontend/             React + TypeScript + Vite + Tailwind v4 + shadcn/ui scaffold (design system only)
+frontend/             React + TypeScript + Vite + Tailwind v4 + shadcn/ui app (shell, Overview, Accounts; mock data)
 backend/              Backend workspace (not initialized)
 database/             Database workspace (not initialized)
 docs/architecture/    Architecture documentation

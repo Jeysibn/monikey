@@ -1,14 +1,16 @@
 # MoniKey Component Inventory
 
-**Status: APPROVED by the owner (Milestone 3); implementation in progress (shell and Overview built in 4.1–4.2).** The smallest set of React pieces needed for the three views, Quick Add, Pay Card and Add Account. Nothing here is built yet. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md).
+**Status: APPROVED by the owner (Milestone 3); implementation in progress (shell and Overview built in 4.1–4.2, Accounts in 4.3).** The smallest set of React pieces needed for the three views, Quick Add, Pay Card and Add Account. The tables below list the planned design and do not mark implementation status; see *Status after Milestone 4.3* for what is built. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md).
 
 **Rule of thumb for an entry-level developer:** a component exists only if it is used in at least two places *or* it hides a tricky accessibility detail. Everything else stays inline in the view.
 
 ---
 
-## Status after Milestone 4.2
+## Status after Milestone 4.3
 
-Built so far (see [`FRONTEND_OVERVIEW_4_2.md`](FRONTEND_OVERVIEW_4_2.md)): the five shadcn components, plus `AppShell` (with its nav parts and `BrandMark` inside), `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary` and two views (`OverviewView`, `PlaceholderView`). The hero, *This month* and the loading bars stayed **inside `OverviewView`** because each is used once. **Not built yet:** `SummaryCard` (not needed — the hero and rows are inline), `AccountRow`, `TransactionForm`, `AccountForm`, `SegmentedControl`, `FormField`, `ConfirmDeleteDialog`, `InlineNotice`, `SkeletonValue` (loading uses a 6-line `Bar` helper in `OverviewView`; promote it only if a second view needs it). Money formatting is `lib/money.ts`; accounting is `lib/finance.ts`.
+Milestone 4.3 ([`FRONTEND_ACCOUNTS_4_3.md`](FRONTEND_ACCOUNTS_4_3.md)) added `AccountRow` and `AccountsView`; everything else it needed was reused. The inventory below is the current status after Milestone 4.3 (for the earlier Overview work, see [`FRONTEND_OVERVIEW_4_2.md`](FRONTEND_OVERVIEW_4_2.md)):
+
+Built so far: the five shadcn components, plus the custom components `AppShell` (with its nav parts and `BrandMark` inside), `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary` and `AccountRow`, and three views (`OverviewView`, `PlaceholderView`, `AccountsView`). The hero, *This month* and the loading bars stayed **inside `OverviewView`** because each is used once. **Not built yet:** `SummaryCard` (not needed — the hero and rows are inline), `TransactionForm`, `AccountForm`, `SegmentedControl`, `FormField`, `ConfirmDeleteDialog`, `InlineNotice`, `SkeletonValue` (loading uses a 6-line `Bar` helper in `OverviewView`; promote it only if a second view needs it). Money formatting is `lib/money.ts`; accounting is `lib/finance.ts`.
 
 ---
 
@@ -123,7 +125,7 @@ One token source: shadcn's generated block in `src/index.css`, edited to our val
 
 ## 7. Lucide icons (confirm names against the installed version)
 
-`House`, `List`, `Wallet`, `Plus`, `Banknote`, `Landmark`, `Smartphone`, `CreditCard`, `Pencil`, `Trash2`, `ArrowDownLeft`, `ArrowUpRight`, `ArrowRightLeft`, `CircleCheck`, `CircleAlert`, `TriangleAlert`, `Info`, `LoaderCircle`, `RotateCw`, `X`. `lucide-react` is not installed yet, so these names are **unverified**.
+`House`, `List`, `Wallet`, `Plus`, `Banknote`, `Landmark`, `Smartphone`, `CreditCard`, `Pencil`, `Trash2`, `ArrowDownLeft`, `ArrowUpRight`, `ArrowRightLeft`, `CircleCheck`, `CircleAlert`, `TriangleAlert`, `Info`, `LoaderCircle`, `RotateCw`, `X`. `lucide-react` is installed (`frontend/package.json`). Names imported by the built components: `House`, `List`, `Wallet`, `Plus`, `Banknote`, `Landmark`, `Smartphone`, `CreditCard`, `TriangleAlert`, `ArrowDownLeft`, `ArrowUpRight`, `ArrowRightLeft` (plus `X`, as `XIcon`, in the Dialog). Still **planned and unchecked** — confirm each exists in the installed version when first used: `Pencil`, `Trash2`, `CircleCheck`, `CircleAlert`, `Info`, `LoaderCircle`, `RotateCw`.
 
 ## 8. Understanding map (what an entry-level developer learns from each)
 

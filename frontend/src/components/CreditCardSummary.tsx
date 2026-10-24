@@ -1,4 +1,4 @@
-import { CreditCard } from 'lucide-react'
+import { CreditCard, TriangleAlert } from 'lucide-react'
 import { cn } from 'cn'
 
 import { MoneyText } from '@/components/MoneyText'
@@ -16,14 +16,18 @@ export function CreditCardSummary({
   status,
   onPay,
   className,
+  fullWidthPay = false,
 }: {
   status: CardStatus
   onPay: (cardId: number) => void
   className?: string
+  /** Pay card fills the row below `lg` (Accounts view); Overview keeps the auto-width button. */
+  fullWidthPay?: boolean
 }) {
   const { account, owed, credit, creditLimit, availableCredit } = status
   const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((owed * 100) / creditLimit)) : 0
   const reason = credit > 0 ? 'No debt to pay' : owed === 0 ? 'Nothing to pay' : null
+  const reasonId = `pay-card-reason-${account.id}`
   const overLimit = owed > 0 && availableCredit <= 0
 
   return (
@@ -61,21 +65,29 @@ export function CreditCardSummary({
         <div className="h-full rounded-full bg-debt" style={{ width: `${usedPercent}%` }} />
       </div>
 
-      <div className="flex items-end justify-between gap-3">
+      <div className={cn('flex justify-between gap-3', fullWidthPay ? 'flex-col lg:flex-row lg:items-end' : 'items-end')}>
         <div className="min-w-0 text-sm leading-[1.45] text-muted-foreground">
           <div className="font-semibold text-foreground">
             {availableCredit > 0 ? `${formatPeso(availableCredit)} available` : 'No credit available'}
           </div>
           <div>
             Limit {formatPeso(creditLimit)}
-            {reason && ` · ${reason}`}
-            {overLimit && ' · Over your limit'}
+            {reason && <span id={reasonId}>{` · ${reason}`}</span>}
+            {overLimit && (
+              <span className="inline-flex items-center gap-1">
+                {' · '}
+                <TriangleAlert aria-hidden className="size-3.5" />
+                Over your limit
+              </span>
+            )}
           </div>
         </div>
         <Button
           variant="secondary"
           size="sm"
+          className={fullWidthPay ? 'w-full lg:w-auto' : undefined}
           disabled={reason !== null}
+          aria-describedby={reason ? reasonId : undefined}
           onClick={() => onPay(account.id)}
           aria-label={`Pay card, ${account.name}`}
         >

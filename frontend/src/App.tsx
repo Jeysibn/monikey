@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { monthLabel, monthOf } from '@/lib/finance'
 import { getMockData, type DemoScenario } from '@/mockData'
+import { AccountsView } from '@/views/AccountsView'
 import { OverviewView } from '@/views/OverviewView'
 import { PlaceholderView } from '@/views/PlaceholderView'
 
@@ -21,11 +22,12 @@ import { PlaceholderView } from '@/views/PlaceholderView'
  * App state is deliberately tiny (TLD section 4): which view is showing, which month is selected, and
  * which stand-in dialog is open. No router, no store, no persistence.
  *
- * Preview hook for design review and tests: open the app with ?demo=loading | overpaid | negative | no-accounts
+ * Preview hook for design review and tests: open the app with
+ * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off
  * to see a loading state or a rare state without editing code. Anything else shows the normal ledger.
  */
 const demo = new URLSearchParams(window.location.search).get('demo')
-const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts']
+const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off']
 
 interface Notice {
   title: string
@@ -65,8 +67,11 @@ function App() {
     const card = data.accounts.find((a) => a.id === cardId)
     show({ title: 'Pay credit card', message: `Paying ${card?.name ?? 'a card'} is part of Quick Add, built in a later milestone.` })
   }
-  const openAddAccount = () =>
-    show({ title: 'Add account', message: 'Adding accounts is built together with the Accounts screen, in a later milestone.' })
+  const openAddAccount = (kind: 'account' | 'credit card' = 'account') =>
+    show({
+      title: 'Add account',
+      message: `Adding ${kind === 'credit card' ? 'a credit card' : 'an account'} is part of Add account, built in a later milestone.`,
+    })
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -84,7 +89,7 @@ function App() {
             addDisabled={addDisabled}
             onMonthChange={setMonth}
             onAdd={openAdd}
-            onAddAccount={openAddAccount}
+            onAddAccount={() => openAddAccount()}
             onPayCard={openPay}
             onOpenActivity={(m) => {
               setMonth(m)
@@ -101,12 +106,7 @@ function App() {
           />
         )}
         {view === 'accounts' && (
-          <PlaceholderView
-            title="Accounts"
-            message="Account balances, credit cards and Add account arrive with the Accounts screen."
-            onAdd={openAdd}
-            addDisabled={addDisabled}
-          />
+          <AccountsView data={data} loading={loading} onAdd={openAdd} onAddAccount={openAddAccount} onPayCard={openPay} />
         )}
       </AppShell>
 

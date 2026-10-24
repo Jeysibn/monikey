@@ -74,8 +74,10 @@ const base: MockData = { today: '2026-10-25', accounts, categories, transactions
  *  - "overpaid": ₱20,000 sent from Main Savings to Everyday Card, which only owed ₱6,800 (card credit)
  *  - "negative": ₱4,000 sent from GCash, which only held ₱3,120.75 (account below zero)
  *  - "no-accounts": first run, nothing added yet
+ *  - "over-limit": a ₱30,000.00 purchase on Everyday Card (limit ₱30,000.00), so it is over its limit
+ *  - "paid-off": Blue Card paid in full (₱14,250.00 from Main Savings), so it owes nothing
  */
-export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts'
+export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off'
 
 export function getMockData(scenario?: DemoScenario | null): MockData {
   if (scenario === 'overpaid') {
@@ -83,6 +85,12 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
   }
   if (scenario === 'negative') {
     return { ...base, payments: [...payments, { id: 2, sourceAccountId: 3, cardAccountId: 4, amount: 400_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
+  }
+  if (scenario === 'over-limit') {
+    return { ...base, transactions: [...transactions, { id: 18, accountId: 5, categoryId: 8, amount: 3_000_000, date: '2026-10-25', note: 'Laptop', createdAt: '2026-10-25T09:00:00' }] }
+  }
+  if (scenario === 'paid-off') {
+    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 4, amount: 1_425_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
   }
   if (scenario === 'no-accounts') {
     return { today: base.today, accounts: [], categories, transactions: [], payments: [] }

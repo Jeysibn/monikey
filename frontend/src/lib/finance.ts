@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountBalance,
   ActivityItem,
   CardStatus,
   Centavos,
@@ -101,6 +102,16 @@ export function cardStatus(card: Account, data: MockData): CardStatus {
     creditLimit,
     availableCredit: availableCredit(creditLimit, signedDebt),
   }
+}
+
+const TYPE_ORDER: Record<Account['type'], number> = { cash: 0, bank: 1, ewallet: 2, credit_card: 3 }
+
+/** Cash, bank and e-wallet accounts with their balances, in the order the Accounts screen shows them (Cash, Bank, E-wallet). */
+export function liquidAccounts(data: MockData): AccountBalance[] {
+  return data.accounts
+    .filter((a): a is AccountBalance['account'] => !isCard(a))
+    .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.id - b.id)
+    .map((account) => ({ account, balance: liquidBalance(account, data) }))
 }
 
 export function cardStatuses(data: MockData): CardStatus[] {

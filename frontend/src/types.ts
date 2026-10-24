@@ -57,6 +57,14 @@ export interface FinancialSummary {
   monthExpenses: Centavos // card payments are never included
 }
 
+/** A cash, bank or e-wallet account with its current balance (negative when below zero). */
+export type LiquidAccountType = Exclude<AccountType, 'credit_card'>
+
+export interface AccountBalance {
+  account: Account & { type: LiquidAccountType }
+  balance: Centavos
+}
+
 /** Current state of one credit card. */
 export interface CardStatus {
   account: Account

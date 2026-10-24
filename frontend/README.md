@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status (Milestone 4.3):** the application shell (bottom bar, rail, sidebar), the Overview page and the read-only Accounts screen are built with typed fictional data. Activity is a placeholder; Quick Add, Pay card and Add account open stand-in dialogs. See [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md) and [`/docs/design/FRONTEND_ACCOUNTS_4_3.md`](../docs/design/FRONTEND_ACCOUNTS_4_3.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
+**Status (Milestone 4.4):** the application shell (bottom bar, rail, sidebar), the Overview page, the read-only Accounts screen and the Activity list (month and account filters, Load more) are built with typed fictional data. Quick Add, Pay card, Add account, Edit and Delete open stand-in dialogs. See [`/docs/design/FRONTEND_ACTIVITY_4_4.md`](../docs/design/FRONTEND_ACTIVITY_4_4.md), [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md) and [`/docs/design/FRONTEND_ACCOUNTS_4_3.md`](../docs/design/FRONTEND_ACCOUNTS_4_3.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
 
 ## Commands
 
@@ -25,7 +25,7 @@ npm test          # unit tests for money formatting and the accounting rules (No
 | `src/lib/money.ts`, `src/lib/finance.ts` | Peso formatting; balances, debt, available credit, net position, monthly totals, activity list |
 | `src/components/` | `AppShell`, `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary`, `AccountRow` |
 | `src/components/ui/` | The five vendored shadcn/ui components (restyled to DESIGN.md) |
-| `src/views/` | `OverviewView`, `AccountsView`, `PlaceholderView` (Activity stand-in) |
+| `src/views/` | `OverviewView`, `AccountsView`, `ActivityView` |
 | `src/App.tsx` | The only state: current view, selected month, stand-in dialog |
 | `src/index.css` | Design tokens, self-hosted Manrope `@font-face`, `@theme inline` |
 | `tests/finance.test.ts` | Unit tests (`npm test`) |

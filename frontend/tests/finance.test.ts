@@ -6,10 +6,13 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  activityPage,
   availableCredit,
   buildActivity,
   cardStatus,
   cardStatuses,
+  dayHeading,
+  groupByDate,
   liquidAccounts,
   liquidBalance,
   monthLabel,
@@ -342,6 +345,52 @@ describe('activity list', () => {
   it('uses the note as the title, or the category name when there is no note', () => {
     const d = addTx(getMockData(), { accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, note: null, date: '2026-10-27' })
     assert.equal(buildActivity(d, OCT, 1)[0].title, 'Food')
+  })
+})
+
+describe('activity filters and paging', () => {
+  const data = getMockData()
+  it('an account filter keeps only that account, and a card payment matches either side', () => {
+    const gcash = buildActivity(data, OCT, undefined, GCASH)
+    assert.deepEqual([...new Set(gcash.map((i) => i.accountName))], ['GCash'])
+    const viaSource = buildActivity(data, OCT, undefined, MAIN).filter((i) => i.kind === 'payment')
+    const viaCard = buildActivity(data, OCT, undefined, BLUE).filter((i) => i.kind === 'payment')
+    assert.equal(viaSource.length, 1)
+    assert.equal(viaCard.length, 1)
+    assert.equal(buildActivity(data, OCT, undefined, EVERYDAY).filter((i) => i.kind === 'payment').length, 0)
+  })
+  it('filters before the limit, so a capped list never hides a match', () => {
+    const many = getMockData('many')
+    const all = buildActivity(many, OCT, undefined, GCASH)
+    assert.ok(all.length > 5)
+    assert.deepEqual(buildActivity(many, OCT, 5, GCASH), all.slice(0, 5)) // the first five GCash entries, not GCash entries among the first five
+  })
+  it('activityPage shows `limit` entries and says whether there are more', () => {
+    const many = getMockData('many')
+    const first = activityPage(many, OCT, null, 50)
+    assert.equal(first.items.length, 50)
+    assert.equal(first.hasMore, true)
+    const second = activityPage(many, OCT, null, 100)
+    assert.equal(second.items.length, 58) // 17 + 1 payment + 40 extra
+    assert.equal(second.hasMore, false)
+    assert.equal(activityPage(data, OCT, null, 18).hasMore, false) // exactly one full page is not "more"
+    assert.equal(activityPage(data, OCT, null, 17).hasMore, true)
+    assert.deepEqual(second.items.slice(0, 50), first.items) // loading more never reorders what was already shown
+  })
+  it('an empty month and an unmatched filter both return nothing', () => {
+    assert.deepEqual(activityPage(data, '2026-09', null, 50), { items: [], hasMore: false })
+    assert.equal(activityPage(data, OCT, EVERYDAY, 50).items.length, 2) // Everyday Card has two October purchases
+    assert.equal(activityPage(data, OCT, 999, 50).items.length, 0)
+  })
+  it('day headings are calendar-exact and groups keep the newest-first order', () => {
+    assert.equal(dayHeading('2026-10-24'), 'Sat, Oct 24')
+    assert.equal(dayHeading('2026-10-01'), 'Thu, Oct 1')
+    assert.equal(dayHeading('2024-02-29'), 'Thu, Feb 29')
+    const groups = groupByDate(buildActivity(data, OCT))
+    assert.equal(groups.reduce((n, g) => n + g.items.length, 0), 18)
+    const dates = groups.map((g) => g.date)
+    assert.deepEqual(dates, [...dates].sort().reverse())
+    assert.equal(new Set(dates).size, dates.length) // one group per day
   })
 })
 

@@ -76,8 +76,9 @@ const base: MockData = { today: '2026-10-25', accounts, categories, transactions
  *  - "no-accounts": first run, nothing added yet
  *  - "over-limit": a ₱30,000.00 purchase on Everyday Card (limit ₱30,000.00), so it is over its limit
  *  - "paid-off": Blue Card paid in full (₱14,250.00 from Main Savings), so it owes nothing
+ *  - "many": 40 extra October entries (58 in all) so the Activity list is longer than one page
  */
-export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off'
+export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many'
 
 export function getMockData(scenario?: DemoScenario | null): MockData {
   if (scenario === 'overpaid') {
@@ -91,6 +92,21 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
   }
   if (scenario === 'paid-off') {
     return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 4, amount: 1_425_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
+  }
+  if (scenario === 'many') {
+    const extra: Transaction[] = Array.from({ length: 40 }, (_, i) => {
+      const day = String(1 + (i % 24)).padStart(2, '0')
+      return {
+        id: 100 + i,
+        accountId: [1, 2, 3, 4][i % 4],
+        categoryId: 4 + (i % 6),
+        amount: 10_000 + i * 1_300,
+        date: `2026-10-${day}`,
+        note: `Extra entry ${i + 1}`,
+        createdAt: `2026-10-${day}T${String(8 + (i % 10)).padStart(2, '0')}:30:00`,
+      }
+    })
+    return { ...base, transactions: [...transactions, ...extra] }
   }
   if (scenario === 'no-accounts') {
     return { today: base.today, accounts: [], categories, transactions: [], payments: [] }

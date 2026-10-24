@@ -139,13 +139,16 @@ export function summarize(data: MockData, month: string): FinancialSummary {
  * Income, expenses and card payments for one month as a single list, newest first.
  * Order: date, then creation time, then expenses/income before payments, then id (all descending),
  * so entries on the same day never swap places between renders.
+ * `accountId` keeps entries that use that account (for a card payment, either side) and is applied
+ * BEFORE the limit, as the API will do: filtering a capped list afterwards could drop matches.
  */
-export function buildActivity(data: MockData, month: string, limit?: number): ActivityItem[] {
+export function buildActivity(data: MockData, month: string, limit?: number, accountId?: number | null): ActivityItem[] {
   const account = (id: number) => data.accounts.find((a) => a.id === id)
   const items: (ActivityItem & { createdAt: string })[] = []
 
   for (const t of data.transactions) {
     if (monthOf(t.date) !== month) continue
+    if (accountId != null && t.accountId !== accountId) continue
     const category = data.categories.find((c) => c.id === t.categoryId)
     const acct = account(t.accountId)
     if (!category || !acct) continue
@@ -165,6 +168,7 @@ export function buildActivity(data: MockData, month: string, limit?: number): Ac
   }
   for (const p of data.payments) {
     if (monthOf(p.date) !== month) continue
+    if (accountId != null && p.sourceAccountId !== accountId && p.cardAccountId !== accountId) continue
     const source = account(p.sourceAccountId)
     const card = account(p.cardAccountId)
     if (!source || !card) continue
@@ -193,4 +197,39 @@ export function buildActivity(data: MockData, month: string, limit?: number): Ac
   )
   const list = items.map(({ createdAt: _createdAt, ...item }) => item)
   return limit === undefined ? list : list.slice(0, limit)
+}
+
+/**
+ * One page of the Activity list. Asks for `limit + 1` entries and shows `limit`; the extra one only
+ * says whether "Load more" is needed (the API contract B1-B2 in docs/design/DESIGN_REVIEW.md).
+ */
+export function activityPage(
+  data: MockData,
+  month: string,
+  accountId: number | null,
+  limit: number,
+): { items: ActivityItem[]; hasMore: boolean } {
+  const rows = buildActivity(data, month, limit + 1, accountId)
+  return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "2026-10-24" -> "Sat, Oct 24". Calendar arithmetic only, so the result never depends on the time zone. */
+export function dayHeading(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  return `${weekday}, ${MONTH_SHORT[m - 1]} ${d}`
+}
+
+/** Groups an already-sorted list by date, keeping the order. */
+export function groupByDate(items: ActivityItem[]): { date: string; items: ActivityItem[] }[] {
+  const groups: { date: string; items: ActivityItem[] }[] = []
+  for (const item of items) {
+    const last = groups[groups.length - 1]
+    if (last?.date === item.date) last.items.push(item)
+    else groups.push({ date: item.date, items: [item] })
+  }
+  return groups
 }

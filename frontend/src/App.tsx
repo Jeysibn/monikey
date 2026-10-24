@@ -12,22 +12,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { monthLabel, monthOf } from '@/lib/finance'
+import { monthOf } from '@/lib/finance'
+import type { ActivityItem } from '@/types'
 import { getMockData, type DemoScenario } from '@/mockData'
 import { AccountsView } from '@/views/AccountsView'
+import { ActivityView } from '@/views/ActivityView'
 import { OverviewView } from '@/views/OverviewView'
-import { PlaceholderView } from '@/views/PlaceholderView'
 
 /*
  * App state is deliberately tiny (TLD section 4): which view is showing, which month is selected, and
  * which stand-in dialog is open. No router, no store, no persistence.
  *
  * Preview hook for design review and tests: open the app with
- * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off
+ * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many
  * to see a loading state or a rare state without editing code. Anything else shows the normal ledger.
  */
 const demo = new URLSearchParams(window.location.search).get('demo')
-const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off']
+const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many']
 
 interface Notice {
   title: string
@@ -57,8 +58,9 @@ function App() {
   // Quick Add, Pay card and Add account are built in later milestones; until then these open a stand-in.
   // Radix only returns focus to a <DialogTrigger>, and these dialogs are opened from ordinary buttons,
   // so remember the opener here and put focus back on it when the dialog closes.
-  const show = (next: Notice) => {
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const show = (next: Notice, from?: HTMLElement) => {
+    // Safari does not focus a button when it is clicked, so rows pass their button in explicitly.
+    opener.current = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
     setNotice(next)
   }
   const openAdd = () =>
@@ -72,6 +74,18 @@ function App() {
       title: 'Add account',
       message: `Adding ${kind === 'credit card' ? 'a credit card' : 'an account'} is part of Add account, built in a later milestone.`,
     })
+  const entryName = (item: ActivityItem) =>
+    item.kind === 'payment' ? 'card payment' : item.kind === 'income' ? 'income' : 'expense'
+  const openEdit = (item: ActivityItem, from: HTMLElement) =>
+    show(
+      { title: `Edit ${entryName(item)}`, message: `Editing "${item.title}" is built with Quick Add in a later milestone.` },
+      from,
+    )
+  const openDelete = (item: ActivityItem, from: HTMLElement) =>
+    show(
+      { title: `Delete ${entryName(item)}`, message: `Deleting "${item.title}" is built with Quick Add in a later milestone. Nothing was changed.` },
+      from,
+    )
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -98,11 +112,15 @@ function App() {
           />
         )}
         {view === 'activity' && (
-          <PlaceholderView
-            title="Activity"
-            message={`The transaction list for ${monthLabel(month)} arrives with the Activity screen.`}
-            onAdd={openAdd}
+          <ActivityView
+            data={data}
+            month={month}
+            loading={loading}
             addDisabled={addDisabled}
+            onMonthChange={setMonth}
+            onAdd={openAdd}
+            onEdit={openEdit}
+            onDelete={openDelete}
           />
         )}
         {view === 'accounts' && (

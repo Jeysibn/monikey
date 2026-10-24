@@ -48,14 +48,14 @@ export function DeleteConfirm({
         <div className="grid gap-3.5">
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
           <p className="text-base font-semibold">{summary.entry}</p>
-          <p className="text-[15px] text-muted-foreground">{summary.effect}</p>
+          <p className="text-[0.9375rem] text-muted-foreground">{summary.effect}</p>
         </div>
       </DialogBody>
       <DialogFooter>
-        <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={deleting} autoFocus>
+        <Button type="button" variant="secondary" className="grow" onClick={onCancel} disabled={deleting} autoFocus>
           Cancel
         </Button>
-        <Button type="button" variant="destructive" className="flex-[1.4]" onClick={confirm} disabled={deleting}>
+        <Button type="button" variant="destructive" className="grow-[1.4]" onClick={confirm} disabled={deleting}>
           {deleting ? (
             <>
               <LoaderCircle aria-hidden="true" className="animate-spin" />

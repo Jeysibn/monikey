@@ -20,8 +20,8 @@ export function PageHeader({
   addDisabled?: boolean
 }) {
   return (
-    <div className="mb-[18px] flex items-center justify-between gap-3">
-      <h1 tabIndex={-1} className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] md:text-[28px]">
+    <div className="mb-[18px] flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h1 tabIndex={-1} className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] md:text-[1.75rem]">
         {title}
       </h1>
       <div className="flex items-center gap-2.5">

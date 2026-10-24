@@ -95,7 +95,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-1 px-5 pt-[18px] pr-16 pb-1.5", className)}
+      className={cn("flex flex-col gap-1 px-5 pt-[18px] pr-[60px] pb-1.5", className)}
       {...props}
     />
   )
@@ -117,7 +117,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex gap-3 border-t border-rule bg-card px-5 pt-3.5 pb-[calc(14px+env(safe-area-inset-bottom))]",
+        "flex flex-wrap gap-3 border-t border-rule bg-card px-5 pt-3.5 pb-[calc(14px+env(safe-area-inset-bottom))]",
         className
       )}
       {...props}

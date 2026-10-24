@@ -84,26 +84,27 @@ export function OverviewView({
           >
             <div className="min-w-0">
               <div className="flex items-baseline justify-between gap-3 lg:justify-start lg:gap-3.5">
-                <h2 id="net-position-label" className="text-[15px] font-semibold text-hero-muted">
+                <h2 id="net-position-label" className="text-[0.9375rem] font-semibold text-hero-muted">
                   Net position
                 </h2>
-                <span className="text-[13px] text-hero-muted">As of today</span>
+                <span className="text-[0.8125rem] text-hero-muted">As of today</span>
               </div>
               {loading ? (
                 <Bar className="my-2.5 h-9 w-52 bg-white/15 lg:h-11" />
               ) : (
                 <MoneyText
+                  wrap
                   centavos={summary.netPosition}
                   className={cn(
                     'my-2 block leading-[1.05] font-semibold tracking-[-0.03em]',
-                    longHero ? 'text-3xl md:text-4xl lg:text-[40px]' : 'text-4xl md:text-[40px] lg:text-[44px]',
+                    longHero ? 'text-3xl md:text-4xl lg:text-[2.5rem]' : 'text-4xl md:text-[2.5rem] lg:text-[2.75rem]',
                   )}
                 />
               )}
               {loading ? (
                 <Bar className="h-12 w-full max-w-[44ch] bg-white/15" />
               ) : (
-                <p className="max-w-[44ch] text-[15px] leading-normal text-hero-muted">
+                <p className="max-w-[44ch] text-[0.9375rem] leading-normal text-hero-muted">
                   You have {formatPeso(summary.liquidBalance)} in cash, bank and{' '}
                   <span className="whitespace-nowrap">e-wallets</span> and owe {formatPeso(summary.outstandingDebt)} on
                   credit cards.
@@ -121,34 +122,34 @@ export function OverviewView({
               }
               className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 border-t border-hero-line pt-[18px] lg:mt-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10"
             >
-              <div>
-                <div className="mb-0.5 text-[13px] font-medium text-hero-muted">Money you have</div>
+              <div className="min-w-0">
+                <div className="mb-0.5 text-[0.8125rem] font-medium text-hero-muted [overflow-wrap:anywhere]">Money you have</div>
                 {loading ? (
                   <Bar className="h-6 w-28 bg-white/15" />
                 ) : (
-                  <MoneyText centavos={summary.liquidBalance} className="block text-[21px] leading-[1.2] font-semibold tracking-[-0.015em]" />
+                  <MoneyText wrap centavos={summary.liquidBalance} className="block text-[1.3125rem] leading-[1.2] max-[359px]:text-[1.125rem] font-semibold tracking-[-0.015em]" />
                 )}
               </div>
               <span aria-hidden="true" className="pb-[3px] text-2xl leading-none text-hero-muted">
                 {'−'}
               </span>
-              <div>
-                <div className="mb-0.5 text-[13px] font-medium text-hero-muted">Card debt</div>
+              <div className="min-w-0">
+                <div className="mb-0.5 text-[0.8125rem] font-medium text-hero-muted">Card debt</div>
                 {loading ? (
                   <Bar className="h-6 w-28 bg-white/15" />
                 ) : (
-                  <MoneyText centavos={summary.outstandingDebt} className="block text-[21px] leading-[1.2] font-semibold tracking-[-0.015em] text-hero-debt" />
+                  <MoneyText wrap centavos={summary.outstandingDebt} className="block text-[1.3125rem] leading-[1.2] max-[359px]:text-[1.125rem] font-semibold tracking-[-0.015em] text-hero-debt" />
                 )}
               </div>
             </div>
 
             {!loading && summary.cardCredit > 0 && (
-              <p className="mt-3.5 text-[13px] text-hero-muted lg:col-span-2">
+              <p className="mt-3.5 text-[0.8125rem] text-hero-muted lg:col-span-2">
                 Plus {formatPeso(summary.cardCredit)} card credit (overpaid), included in your net position.
               </p>
             )}
             {!loading && hasNegativeAccount && (
-              <p className="mt-3.5 flex items-center gap-1.5 text-[13px] text-hero-muted lg:col-span-2">
+              <p className="mt-3.5 flex items-center gap-1.5 text-[0.8125rem] text-hero-muted lg:col-span-2">
                 <TriangleAlert aria-hidden="true" className="size-4" />
                 An account is below zero.
               </p>
@@ -209,15 +210,15 @@ export function OverviewView({
             <CardDescription>{label} · card payments aren&rsquo;t counted as expenses</CardDescription>
             <dl>
               <div className="flex items-baseline justify-between gap-3 pt-1.5 pb-3">
-                <dt className="text-[15px] font-medium text-muted-foreground">Income</dt>
-                <dd>
-                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText centavos={summary.monthIncome} kind="income" className="text-2xl font-semibold tracking-[-0.015em]" />}
+                <dt className="text-[0.9375rem] font-medium text-muted-foreground">Income</dt>
+                <dd className="min-w-0 text-right">
+                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthIncome} kind="income" className="text-2xl font-semibold tracking-[-0.015em]" />}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-rule py-3">
-                <dt className="text-[15px] font-medium text-muted-foreground">Expenses</dt>
-                <dd>
-                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText centavos={summary.monthExpenses} className="text-2xl font-semibold tracking-[-0.015em]" />}
+                <dt className="text-[0.9375rem] font-medium text-muted-foreground">Expenses</dt>
+                <dd className="min-w-0 text-right">
+                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthExpenses} className="text-2xl font-semibold tracking-[-0.015em]" />}
                 </dd>
               </div>
             </dl>

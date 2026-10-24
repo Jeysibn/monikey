@@ -21,7 +21,7 @@ export function MonthSelect({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-11 cursor-pointer rounded-full border border-input bg-card pl-4 text-[15px] font-semibold text-foreground ${className}`}
+        className={`h-11 cursor-pointer rounded-full border border-input bg-card pl-4 text-[0.9375rem] font-semibold text-foreground ${className}`}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

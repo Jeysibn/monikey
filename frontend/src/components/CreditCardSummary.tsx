@@ -33,25 +33,25 @@ export function CreditCardSummary({
   return (
     <div className={cn('py-4 first:pt-1.5', className)}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 text-base font-semibold whitespace-nowrap">
-          <CreditCard aria-hidden="true" className="size-4 text-muted-foreground" />
-          {account.name}
+        <div className="flex min-w-0 items-center gap-2 text-base font-semibold">
+          <CreditCard aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{account.name}</span>
         </div>
-        <div className="text-right">
+        <div className="max-w-[65%] shrink-0 text-right">
           {credit > 0 ? (
             <>
-              <MoneyText centavos={credit} className="block text-[22px] leading-[1.15] font-semibold tracking-[-0.015em] text-primary-ink" />
-              <div className="text-[13px] font-medium text-muted-foreground">card credit</div>
+              <MoneyText wrap centavos={credit} className="block text-[1.375rem] leading-[1.15] font-semibold tracking-[-0.015em] text-primary-ink" />
+              <div className="text-[0.8125rem] font-medium text-muted-foreground">card credit</div>
             </>
           ) : owed === 0 ? (
             <>
-              <MoneyText centavos={0} className="block text-[22px] leading-[1.15] font-semibold tracking-[-0.015em]" />
-              <div className="text-[13px] font-medium text-muted-foreground">nothing owed</div>
+              <MoneyText wrap centavos={0} className="block text-[1.375rem] leading-[1.15] font-semibold tracking-[-0.015em]" />
+              <div className="text-[0.8125rem] font-medium text-muted-foreground">nothing owed</div>
             </>
           ) : (
             <>
-              <MoneyText centavos={owed} kind="debt" className="block text-[22px] leading-[1.15] font-semibold tracking-[-0.015em]" />
-              <div className="text-[13px] font-medium text-debt">owed</div>
+              <MoneyText wrap centavos={owed} kind="debt" className="block text-[1.375rem] leading-[1.15] font-semibold tracking-[-0.015em]" />
+              <div className="text-[0.8125rem] font-medium text-debt">owed</div>
             </>
           )}
         </div>
@@ -65,8 +65,8 @@ export function CreditCardSummary({
         <div className="h-full rounded-full bg-debt" style={{ width: `${usedPercent}%` }} />
       </div>
 
-      <div className={cn('flex justify-between gap-3', fullWidthPay ? 'flex-col lg:flex-row lg:items-end' : 'items-end')}>
-        <div className="min-w-0 text-sm leading-[1.45] text-muted-foreground">
+      <div className={cn('flex justify-between gap-x-3 gap-y-2', fullWidthPay ? 'flex-col lg:flex-row lg:items-end' : 'flex-wrap items-end')}>
+        <div className="min-w-0 flex-1 basis-32 text-sm leading-[1.45] text-muted-foreground">
           <div className="font-semibold text-foreground">
             {availableCredit > 0 ? `${formatPeso(availableCredit)} available` : 'No credit available'}
           </div>

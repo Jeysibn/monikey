@@ -106,7 +106,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     check("Overview: expenses +₱120.00 (₱27,127.40 → ₱27,247.40)", before.expenses === "₱27,127.40" && after.expenses === "₱27,247.40", `${before.expenses} → ${after.expenses}`);
     check("Overview: net position down by ₱120.00", before.net === "₱33,146.25" && after.net === "₱33,026.25", `${before.net} → ${after.net}`);
     await nav(p, "Accounts"); check("Accounts: Cash on hand ₱2,350.00 → ₱2,230.00", /Cash on hand Cash ₱2,230\.00/.test(await mainText(p)));
-    await nav(p, "Activity"); check("Activity: the new entry is the newest row", /Expense: Coffee −₱120\.00 Food · Cash on hand/.test(await p.locator("main section ul li").first().innerText().then(T)), await p.locator("main section ul li").first().innerText().then(T));
+    await nav(p, "Activity"); check("Activity: the new entry is the newest row", /Expense: Coffee Food · Cash on hand −₱120\.00/.test(await p.locator("main section ul li").first().innerText().then(T)), await p.locator("main section ul li").first().innerText().then(T));
     await openAdd(p);
     eq("the last account used is preselected next time", await p.inputValue("#qa-account"), "1");
     eq("the category is deliberately NOT remembered", await dlg(p).locator("input[name=qa-category]:checked").count(), 0);

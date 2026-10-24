@@ -36,38 +36,38 @@ export function TransactionItem({
   const { Icon, word } = kinds[item.kind]
   const onCard = item.accountType === 'credit_card'
   const withActions = onEdit !== undefined && onDelete !== undefined
-  const grid = 'grid w-full grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-px py-3.5 text-left'
+  // Icon, text and amount in a row that wraps: the amount drops under the text only when there is not
+  // enough room (a very narrow screen or a big text-size setting), instead of squeezing the title to nothing.
+  const grid = 'flex w-full flex-wrap items-center gap-x-3 gap-y-1 py-3.5 text-left'
 
   const content = (
     <>
-      <Icon aria-hidden="true" className="col-start-1 row-span-2 size-4 self-center text-muted-foreground" />
-      <span className="col-start-2 truncate text-base font-medium">
-        <span className="sr-only">{word}: </span>
-        {item.title}
-      </span>
-      <MoneyText
-        centavos={item.amount}
-        kind={item.kind}
-        className="col-start-3 row-span-2 row-start-1 self-center text-base font-semibold"
-      />
-      <span className="col-start-2 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-        <span className="truncate">
-          {item.kind === 'payment' ? (
-            `${item.accountName} → ${item.cardName}`
-          ) : (
-            <>
-              {item.categoryName} ·{' '}
-              {onCard && <CreditCard aria-hidden="true" className="mr-1 inline size-4 align-[-3px]" />}
-              {item.accountName}
-            </>
+      <Icon aria-hidden="true" className="mr-1 size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 basis-28">
+        <span className="block truncate text-base font-medium">
+          <span className="sr-only">{word}: </span>
+          {item.title}
+        </span>
+        <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+          <span className="truncate">
+            {item.kind === 'payment' ? (
+              `${item.accountName} → ${item.cardName}`
+            ) : (
+              <>
+                {item.categoryName} ·{' '}
+                {onCard && <CreditCard aria-hidden="true" className="mr-1 inline size-4 align-[-3px]" />}
+                {item.accountName}
+              </>
+            )}
+          </span>
+          {item.kind === 'payment' && (
+            <span className="hidden shrink-0 rounded-full bg-secondary px-2 text-xs font-semibold text-secondary-foreground md:inline">
+              Payment
+            </span>
           )}
         </span>
-        {item.kind === 'payment' && (
-          <span className="hidden shrink-0 rounded-full bg-secondary px-2 text-xs font-semibold text-secondary-foreground md:inline">
-            Payment
-          </span>
-        )}
-      </span>
+      </div>
+      <MoneyText centavos={item.amount} kind={item.kind} className="ml-auto shrink-0 text-base font-semibold" />
     </>
   )
 
@@ -96,9 +96,9 @@ export function TransactionItem({
       >
         {content}
       </button>
-      <div className={cn(grid, 'min-h-[68px] max-md:hidden md:grid-cols-[20px_minmax(0,1fr)_auto_auto]')}>
+      <div className={cn(grid, 'min-h-[68px] max-md:hidden')}>
         {content}
-        <div className="col-start-4 row-span-2 row-start-1 flex gap-1 self-center">
+        <div className="flex shrink-0 gap-1">
           <Button
             variant="ghost"
             size="icon"

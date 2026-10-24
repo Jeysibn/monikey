@@ -88,7 +88,7 @@ export function ActivityView({
         {loading ? 'Loading activity' : ''}
       </p>
 
-      <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:flex">
+      <div className="mb-3.5 grid grid-cols-1 gap-2.5 min-[360px]:grid-cols-2 md:flex">
         <MonthSelect value={month} options={monthOptions(data.today)} onChange={onMonthChange} className="min-w-0 md:w-auto" />
         <label htmlFor="activity-account" className="sr-only">
           Account
@@ -97,7 +97,7 @@ export function ActivityView({
           id="activity-account"
           value={accountId ?? ''}
           onChange={(e) => onAccountChange(e.target.value === '' ? null : Number(e.target.value))}
-          className="h-11 min-w-0 cursor-pointer rounded-full border border-input bg-card pl-4 text-[15px] font-semibold text-foreground md:w-auto"
+          className="h-11 min-w-0 cursor-pointer rounded-full border border-input bg-card pl-4 text-[0.9375rem] font-semibold text-foreground md:w-auto"
         >
           <option value="">All accounts</option>
           {accounts.map((a) => (

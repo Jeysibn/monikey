@@ -65,14 +65,14 @@ export function AccountsView({
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2 lg:items-start">
         {/* Money you have */}
         <Card role="region" aria-labelledby="money-you-have-title">
-          <div className="flex items-baseline justify-between gap-3">
-            <CardTitle id="money-you-have-title" className="whitespace-nowrap">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <CardTitle id="money-you-have-title">
               Money you have
             </CardTitle>
             {loading ? (
               <Bar className="h-6 w-28" />
             ) : (
-              <MoneyText centavos={summary.liquidBalance} className="text-[22px] font-semibold tracking-[-0.015em] md:text-2xl" />
+              <MoneyText wrap centavos={summary.liquidBalance} className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
             )}
           </div>
           <CardDescription>Cash, bank and e-wallet balances</CardDescription>
@@ -105,15 +105,15 @@ export function AccountsView({
         {/* Money you owe */}
         <section aria-labelledby="money-you-owe-title" className="grid min-w-0 gap-4 md:gap-6">
           <Card>
-            <div className="flex items-baseline justify-between gap-3">
-              <CardTitle id="money-you-owe-title" className="whitespace-nowrap">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <CardTitle id="money-you-owe-title">
                 Money you owe
               </CardTitle>
               {loading ? (
                 <Bar className="h-6 w-28" />
               ) : (
-                <span className="whitespace-nowrap">
-                  <MoneyText centavos={summary.outstandingDebt} kind="debt" className="text-[22px] font-semibold tracking-[-0.015em] md:text-2xl" />
+                <span>
+                  <MoneyText wrap centavos={summary.outstandingDebt} kind="debt" className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
                   {' '}
                   <span className="text-sm font-medium text-debt">owed</span>
                 </span>
@@ -155,7 +155,7 @@ export function AccountsView({
                 <button
                   type="button"
                   onClick={() => onAddAccount('credit card')}
-                  className="flex min-h-14 w-full cursor-pointer items-center justify-center gap-1.5 rounded-card border-[1.5px] border-dashed border-input p-4 text-[15px] font-semibold text-muted-foreground transition-colors duration-150 hover:bg-card motion-reduce:transition-none"
+                  className="flex min-h-14 w-full cursor-pointer items-center justify-center gap-1.5 rounded-card border-[1.5px] border-dashed border-input p-4 text-[0.9375rem] font-semibold text-muted-foreground transition-colors duration-150 hover:bg-card motion-reduce:transition-none"
                 >
                   <Plus aria-hidden="true" className="size-4" />
                   Add credit card

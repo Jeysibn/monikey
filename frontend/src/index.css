@@ -152,6 +152,16 @@
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
+  /* The fixed bottom bar (phones) must never cover the control that has keyboard focus (WCAG 2.2, 2.4.11):
+     when the browser scrolls a focused control into view it leaves this much room under it. */
+  html {
+    scroll-padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    html {
+      scroll-padding-bottom: 0;
+    }
+  }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;

@@ -64,7 +64,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     check("dialog closed", !(await dialogOpen(p)));
     eq("one confirmation message", await status(p), "Expense saved: −₱485.00 from GCash.");
     check("focus returns to the row that was tapped", await activeAria(p) === "t-17");
-    check("Activity row shows the new amount", /Lunch with team −₱485\.00/.test(await firstRow(p)), await firstRow(p));
+    check("Activity row shows the new amount", /Lunch with team Food · GCash −₱485\.00/.test(await firstRow(p)), await firstRow(p));
     eq("still 18 entries (changed, not added)", (await p.locator("main p[role=status]").allInnerTexts().then(a => a.map(T).find(x => /entries/.test(x)))), "18 entries · October 2026");
     const after = await overview(p);
     check("Overview: expenses +₱100.00 and net position −₱100.00", before.expenses === "₱27,127.40" && after.expenses === "₱27,227.40" && after.net === "₱33,046.25", `${after.expenses} / ${after.net}`);

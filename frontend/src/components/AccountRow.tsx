@@ -19,9 +19,9 @@ export function AccountRow({ item }: { item: AccountBalance }) {
   const { Icon, label } = types[account.type]
 
   return (
-    <li className="grid min-h-[68px] grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-3.5 border-t border-rule py-2.5 first:border-t-0">
-      <Icon aria-hidden="true" className="size-[22px] text-muted-foreground" />
-      <div className="min-w-0">
+    <li className="flex min-h-[68px] flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-rule py-2.5 first:border-t-0">
+      <Icon aria-hidden="true" className="size-[22px] shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 basis-28">
         <div className="truncate text-base font-medium">{account.name}</div>
         <div className="text-sm text-muted-foreground">
           {label}
@@ -33,7 +33,7 @@ export function AccountRow({ item }: { item: AccountBalance }) {
           )}
         </div>
       </div>
-      <MoneyText centavos={balance} className="text-lg font-semibold tracking-[-0.01em]" />
+      <MoneyText wrap centavos={balance} className="ml-auto shrink-0 text-lg font-semibold tracking-[-0.01em]" />
     </li>
   )
 }

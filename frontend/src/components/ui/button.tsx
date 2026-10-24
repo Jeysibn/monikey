@@ -10,7 +10,7 @@ import { cn } from "cn"
  * - No press animation, no opacity tricks. Colour transitions only, and only if motion is allowed.
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-control border border-transparent text-[15px] font-semibold whitespace-nowrap transition-colors duration-150 select-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-disabled-fg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-control border border-transparent text-[0.9375rem] font-semibold whitespace-nowrap transition-colors duration-150 select-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-disabled-fg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {

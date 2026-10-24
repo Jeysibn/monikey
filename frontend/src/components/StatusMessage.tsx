@@ -17,13 +17,13 @@ export function StatusMessage({ note, onDismiss }: { note: StatusNote | null; on
   return (
     <div role="status" aria-live="polite">
       {note && (
-        <div className="mb-[18px] flex items-start gap-2 rounded-control bg-success-soft py-2 pr-1.5 pl-4 text-[15px] text-income-ink">
+        <div className="mb-[18px] flex items-start gap-2 rounded-control bg-success-soft py-2 pr-1.5 pl-4 text-[0.9375rem] text-income-ink">
           <p className="min-w-0 flex-1 py-1.5">
             {note.text}
             {note.action && (
               <>
                 {' '}
-                <Button variant="link" className="min-h-0 px-0 align-baseline text-[15px] text-income-ink underline" onClick={note.action.run}>
+                <Button variant="link" className="min-h-0 px-0 align-baseline text-[0.9375rem] text-income-ink underline" onClick={note.action.run}>
                   {note.action.label}
                 </Button>
               </>

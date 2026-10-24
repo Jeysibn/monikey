@@ -39,9 +39,9 @@ function NavButton({ view, label, Icon, active, onNavigate }: { view: View; labe
       aria-current={active ? 'page' : undefined}
       onClick={() => onNavigate(view)}
       className={cn(
-        'flex min-h-[52px] cursor-pointer flex-col items-center justify-center gap-[3px] rounded-[14px] text-xs font-semibold text-muted-foreground hover:text-foreground',
+        'flex min-h-[52px] min-w-0 cursor-pointer flex-col items-center justify-center gap-[3px] rounded-[14px] text-[length:min(0.75rem,14px)] font-semibold text-muted-foreground hover:text-foreground',
         'md:min-h-[60px] md:gap-1',
-        'lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-2.5 lg:text-[15px] lg:hover:bg-secondary',
+        'lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-2.5 lg:text-[0.9375rem] lg:hover:bg-secondary',
         active && 'text-foreground lg:bg-primary-soft lg:text-primary-ink lg:hover:bg-primary-soft',
       )}
     >
@@ -54,7 +54,7 @@ function NavButton({ view, label, Icon, active, onNavigate }: { view: View; labe
       >
         <Icon aria-hidden="true" className="size-5" />
       </span>
-      <span>{label}</span>
+      <span className="max-w-full truncate">{label}</span>
     </button>
   )
 }
@@ -82,7 +82,7 @@ export function AppShell({
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col gap-1.5 border-r border-border bg-background px-2 py-[18px] md:flex lg:w-56 lg:px-3.5 lg:py-[22px]">
         <div className="mb-[18px] flex flex-col items-center gap-1 text-primary lg:mb-6 lg:flex-row lg:gap-2.5 lg:px-2.5">
           <BrandMark className="size-8" />
-          <span className="hidden text-[19px] font-bold tracking-[-0.015em] text-foreground lg:inline">MoniKey</span>
+          <span className="hidden text-[1.1875rem] font-bold tracking-[-0.015em] text-foreground lg:inline">MoniKey</span>
         </div>
         <nav aria-label="Main" className="flex flex-col gap-1.5">
           {items}
@@ -103,16 +103,16 @@ export function AppShell({
       {/* Phone bottom bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(3,1fr)_1.3fr] gap-1.5 border-t border-border bg-card px-2.5 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.3fr)] gap-1.5 border-t border-border bg-card px-2.5 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {items}
         <Button
-          className="h-[52px] self-center rounded-[14px] text-[15px]"
+          className="h-[52px] min-w-0 self-center rounded-[14px] px-2 text-[length:min(0.9375rem,18px)]"
           onClick={onAdd}
           disabled={addDisabled}
           aria-label={addDisabled ? 'Add transaction (add an account first)' : 'Add transaction'}
         >
-          <Plus aria-hidden="true" />
+          <Plus aria-hidden="true" className="size-[min(1.25rem,24px)]" />
           Add
         </Button>
       </nav>

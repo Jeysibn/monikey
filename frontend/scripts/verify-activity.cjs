@@ -60,7 +60,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     eq("first day heading", f.days[0], "Sat, Oct 24");
     check("one heading per day, newest first", f.days.length === new Set(f.days).size && f.days.length >= 10, f.days.join(" | "));
     eq("18 rows", f.rows.length, 18);
-    check("first row is Lunch with team −₱385.00, Food · GCash", /^Expense: Lunch with team −₱385\.00 Food · GCash$/.test(f.rows[0]), f.rows[0]);
+    check("first row is Lunch with team −₱385.00, Food · GCash", /^Expense: Lunch with team Food · GCash −₱385\.00$/.test(f.rows[0]), f.rows[0]);
     const pay = f.rows.find(r => /Card payment/.test(r));
     check("card payment: 'Main Savings → Blue Card', ₱5,000.00, no sign, 'Payment' chip", /Main Savings → Blue Card/.test(pay) && /₱5,000\.00/.test(pay) && !/[−+]₱5,000/.test(pay) && /Payment/.test(pay), pay);
     check("income shows a + sign", f.rows.some(r => /October salary.*\+₱32,000\.00/.test(r)));

@@ -182,10 +182,10 @@ export function AccountForm({
       </DialogBody>
 
       <DialogFooter>
-        <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={saving}>
+        <Button type="button" variant="secondary" className="grow" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" className="flex-[1.4]" disabled={saving}>
+        <Button type="submit" className="grow-[1.4]" disabled={saving}>
           {saving ? (
             <>
               <LoaderCircle aria-hidden="true" className="animate-spin" />

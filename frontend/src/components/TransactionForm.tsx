@@ -304,7 +304,7 @@ export function TransactionForm({
                     />
                     <span
                       className={cn(
-                        'flex h-11 cursor-pointer items-center gap-1.5 rounded-full border border-input bg-card px-4 text-[15px] font-medium peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:cursor-not-allowed',
+                        'flex h-11 cursor-pointer items-center gap-1.5 rounded-full border border-input bg-card px-4 text-[0.9375rem] font-medium peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:cursor-not-allowed',
                         values.categoryId === c.id && 'border-primary bg-primary-soft font-semibold text-primary-ink',
                         categoryError && values.categoryId !== c.id && 'border-destructive',
                       )}
@@ -374,10 +374,10 @@ export function TransactionForm({
             Delete
           </Button>
         )}
-        <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={saving}>
+        <Button type="button" variant="secondary" className="grow" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" className="flex-[1.4]" disabled={saving}>
+        <Button type="submit" className="grow-[1.4]" disabled={saving}>
           {saving ? (
             <>
               <LoaderCircle aria-hidden="true" className="animate-spin" />

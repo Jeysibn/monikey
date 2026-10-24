@@ -170,8 +170,12 @@ export function notices(v: EntryValues, data: MockData): string[] {
   return out
 }
 
-/** The text of the select option: balance for ordinary accounts, available credit for cards. */
-export function accountOptionLabel(a: Account, data: MockData): string {
+/**
+ * The text of the select option: balance for ordinary accounts, available credit for cards.
+ * `withFigures` is false when editing: those figures already include the entry being edited and would mislead.
+ */
+export function accountOptionLabel(a: Account, data: MockData, withFigures = true): string {
+  if (!withFigures) return a.name
   if (isCard(a)) {
     const available = cardStatus(a, data).availableCredit
     return `${a.name} — ${available > 0 ? `${formatPeso(available)} available` : 'No credit available'}`

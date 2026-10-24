@@ -18,7 +18,18 @@ import {
   type EntryValues,
 } from '../src/lib/entryForm.ts'
 import { cardStatus, liquidBalance, summarize } from '../src/lib/finance.ts'
-import { ledgerReducer, saveMessage, toAction } from '../src/lib/ledger.ts'
+import {
+  deleteSummary,
+  entryExists,
+  entryValues,
+  ledgerReducer,
+  saveMessage,
+  targetOf,
+  toAction,
+  toDeleteAction,
+  toUpdateAction,
+  type EntryTarget,
+} from '../src/lib/ledger.ts'
 import { getMockData } from '../src/mockData.ts'
 
 const OCT = '2026-10'
@@ -227,4 +238,91 @@ describe('ledger: confirmation messages (spec section 7)', () => {
     assert.match(run({ ...pay, amount: '20,000', cardId: EVERYDAY }), /Everyday Card now has ₱13,200\.00 card credit\./))
   it('a payment in full says the card owes nothing', () =>
     assert.match(run({ ...pay, amount: '14,250' }), /Blue Card now owes nothing\./))
+})
+
+describe('ledger: editing and deleting (Milestone 4.5b)', () => {
+  const tx = (id: number): EntryTarget => ({ table: 'transaction', id })
+  const payment: EntryTarget = { table: 'payment', id: 1 }
+  const edit = (d: typeof data, v: EntryValues, t: EntryTarget) => ledgerReducer(d, toUpdateAction(v, t))
+
+  it('loads an entry into form values (kind from the category, amount as editable text)', () => {
+    assert.deepEqual(entryValues(data, tx(17)), { kind: 'expense', amount: '385.00', accountId: GCASH, cardId: null, categoryId: FOOD, date: '2026-10-24', note: 'Lunch with team' })
+    assert.equal(entryValues(data, tx(11))!.kind, 'income')
+    assert.deepEqual(entryValues(data, payment), { kind: 'payment', amount: '5000.00', accountId: MAIN, cardId: BLUE, categoryId: null, date: '2026-10-20', note: '' })
+    assert.equal(entryValues(data, tx(999)), null)
+  })
+  it('editing the amount re-derives every balance and total (journey U4)', () => {
+    const v = { ...entryValues(data, tx(17))!, amount: '485' }
+    const after = edit(data, v, tx(17))
+    assert.equal(liquidBalance(after.accounts[2], after), liquidBalance(data.accounts[2], data) - 10_000)
+    assert.equal(summarize(after, OCT).monthExpenses, summarize(data, OCT).monthExpenses + 10_000)
+    assert.equal(after.transactions.length, data.transactions.length) // changed, not added
+    assert.equal(after.transactions.find((t) => t.id === 17)!.createdAt, data.transactions.find((t) => t.id === 17)!.createdAt)
+  })
+  it('moving an expense to a card moves the amount from cash to debt, still one expense', () => {
+    const after = edit(data, { ...entryValues(data, tx(17))!, accountId: BLUE }, tx(17))
+    assert.equal(liquidBalance(after.accounts[2], after), liquidBalance(data.accounts[2], data) + 38_500)
+    assert.equal(cardStatus(after.accounts[3], after).owed, 1_425_000 + 38_500)
+    assert.equal(summarize(after, OCT).monthExpenses, summarize(data, OCT).monthExpenses)
+  })
+  it('editing a payment keeps it a payment: expenses and net position stay put', () => {
+    const after = edit(data, { ...entryValues(data, payment)!, amount: '8,000' }, payment)
+    assert.equal(cardStatus(after.accounts[3], after).owed, 1_425_000 - 300_000)
+    assert.equal(summarize(after, OCT).monthExpenses, summarize(data, OCT).monthExpenses)
+    assert.equal(summarize(after, OCT).netPosition, summarize(data, OCT).netPosition)
+  })
+  it('deleting reverses the entry exactly (add then delete returns to the starting figures)', () => {
+    const added = ledgerReducer(data, toAction(pay, '2026-10-25T12:00:00'))
+    const id = Math.max(...added.payments.map((p) => p.id))
+    const back = ledgerReducer(added, toDeleteAction({ table: 'payment', id }))
+    assert.deepEqual(back.payments, data.payments)
+    assert.equal(cardStatus(back.accounts[3], back).owed, cardStatus(data.accounts[3], data).owed)
+    const gone = ledgerReducer(data, toDeleteAction(tx(17)))
+    assert.equal(gone.transactions.length, 16)
+    assert.equal(liquidBalance(gone.accounts[2], gone), liquidBalance(data.accounts[2], data) + 38_500)
+    assert.equal(summarize(gone, OCT).monthExpenses, summarize(data, OCT).monthExpenses - 38_500)
+  })
+  it('a missing entry is detected, and the reducer leaves the data untouched (the 404 cases)', () => {
+    assert.equal(entryExists(data, tx(17)), true)
+    assert.equal(entryExists(data, tx(999)), false)
+    assert.equal(ledgerReducer(data, toDeleteAction(tx(999))), data) // same object: a no-op
+    assert.equal(ledgerReducer(data, toDeleteAction({ table: 'payment', id: 999 })), data)
+    assert.equal(ledgerReducer(data, { type: 'update-transaction', id: 999, accountId: 1, categoryId: 4, amount: 100, date: '2026-10-01', note: null }), data)
+  })
+  it('targetOf maps an Activity row to its table and id', () => {
+    assert.deepEqual(targetOf({ key: 'p-1', kind: 'payment', id: 1 } as never), payment)
+    assert.deepEqual(targetOf({ key: 't-5', kind: 'income', id: 5 } as never), tx(5))
+  })
+  it('the delete confirmation names the entry and its effect, per kind (spec section 10)', () => {
+    assert.deepEqual(deleteSummary(data, tx(17), OCT), {
+      title: 'Delete this expense?',
+      entry: 'Lunch with team · −₱385.00 · Oct 24, 2026 · GCash',
+      effect: "GCash goes up by ₱385.00 and this month's expenses drop by ₱385.00. This can't be undone.",
+      button: 'Delete expense',
+      done: 'Expense deleted.',
+    })
+    assert.equal(deleteSummary(data, tx(16), OCT)!.effect, "Blue Card owed goes down by ₱2,846.50 and this month's expenses drop by ₱2,846.50. This can't be undone.")
+    assert.equal(deleteSummary(data, tx(11), OCT)!.effect, "Main Savings goes down by ₱32,000.00 and this month's income drops by ₱32,000.00. This can't be undone.")
+    const p = deleteSummary(data, payment, OCT)!
+    assert.equal(p.title, 'Delete this card payment?')
+    assert.equal(p.effect, "Main Savings goes up by ₱5,000.00 and Blue Card owed goes up by ₱5,000.00. Your expenses don't change. This can't be undone.")
+    assert.equal(p.entry, 'Card payment · ₱5,000.00 · Oct 20, 2026 · Main Savings → Blue Card')
+    assert.equal(p.button, 'Delete payment')
+  })
+  it('a card in credit gets its real before and after, not "owed goes up by the full amount" (overpaid demo)', () => {
+    const over = getMockData('overpaid') // a ₱20,000 payment on Everyday Card, which owed ₱6,800: now ₱13,200 credit
+    const del = deleteSummary(over, { table: 'payment', id: 2 }, OCT)!
+    assert.equal(del.effect, "Main Savings goes up by ₱20,000.00 and Everyday Card goes from ₱13,200.00 card credit to ₱6,800.00 owed. Your expenses don't change. This can't be undone.")
+    // a purchase on a card that is in credit: deleting it moves the card back toward credit
+    const credit = ledgerReducer(over, toAction({ ...base, accountId: EVERYDAY, amount: '5,000', categoryId: SHOPPING }, '2026-10-26T09:00:00'))
+    const id = Math.max(...credit.transactions.map((t) => t.id))
+    assert.equal(deleteSummary(credit, { table: 'transaction', id }, OCT)!.effect, "Everyday Card goes from ₱8,200.00 card credit to ₱13,200.00 card credit and this month's expenses drop by ₱5,000.00. This can't be undone.")
+    // a payment that took the card exactly to zero never crosses it, so the plain wording is exact
+    const zero = getMockData('paid-off') // Blue Card paid in full
+    assert.equal(deleteSummary(zero, { table: 'payment', id: 2 }, OCT)!.effect, "Main Savings goes up by ₱14,250.00 and Blue Card owed goes up by ₱14,250.00. Your expenses don't change. This can't be undone.")
+  })
+  it('the monthly clause is left out for an entry outside the month being viewed', () => {
+    assert.equal(deleteSummary(data, tx(17), '2026-09')!.effect, "GCash goes up by ₱385.00. This can't be undone.")
+    assert.equal(deleteSummary(data, tx(11), '2026-09')!.effect, "Main Savings goes down by ₱32,000.00. This can't be undone.")
+  })
 })

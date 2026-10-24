@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status (Milestone 4.5a):** the application shell, Overview, Accounts and Activity are built, and **Quick Add and Pay card now work** against an in-memory ledger (a reducer standing in for the API; a reload restores the starting data). Add account, Edit and Delete still open stand-in dialogs. See [`/docs/design/FRONTEND_QUICKADD_4_5A.md`](../docs/design/FRONTEND_QUICKADD_4_5A.md), [`FRONTEND_ACTIVITY_4_4.md`](../docs/design/FRONTEND_ACTIVITY_4_4.md), [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md) and [`/docs/design/FRONTEND_ACCOUNTS_4_3.md`](../docs/design/FRONTEND_ACCOUNTS_4_3.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
+**Status (Milestone 4.5b):** the application shell, Overview, Accounts and Activity are built, and **Quick Add, Pay card, Edit and Delete work** against an in-memory ledger (a reducer standing in for the API; a reload restores the starting data). Only Add account still opens a stand-in dialog. See [`/docs/design/FRONTEND_EDITDELETE_4_5B.md`](../docs/design/FRONTEND_EDITDELETE_4_5B.md), [`FRONTEND_QUICKADD_4_5A.md`](../docs/design/FRONTEND_QUICKADD_4_5A.md), [`FRONTEND_ACTIVITY_4_4.md`](../docs/design/FRONTEND_ACTIVITY_4_4.md), [`/docs/design/FRONTEND_OVERVIEW_4_2.md`](../docs/design/FRONTEND_OVERVIEW_4_2.md) and [`/docs/design/FRONTEND_ACCOUNTS_4_3.md`](../docs/design/FRONTEND_ACCOUNTS_4_3.md). Earlier: [`FRONTEND_SCAFFOLD_4_1.md`](../docs/design/FRONTEND_SCAFFOLD_4_1.md).
 
 ## Commands
 

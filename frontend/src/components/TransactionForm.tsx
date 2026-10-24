@@ -51,13 +51,13 @@ const FIELD_ID: Record<EntryField, string> = {
 const FIELD_ORDER: EntryField[] = ['amount', 'account', 'card', 'category', 'date', 'note']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 
-function AccountOptions({ accounts, data }: { accounts: Account[]; data: MockData }) {
+function AccountOptions({ accounts, data, withFigures }: { accounts: Account[]; data: MockData; withFigures: boolean }) {
   const group = (label: string, list: Account[]) =>
     list.length > 0 && (
       <optgroup label={label}>
         {list.map((a) => (
           <option key={a.id} value={a.id}>
-            {accountOptionLabel(a, data)}
+            {accountOptionLabel(a, data, withFigures)}
           </option>
         ))}
       </optgroup>
@@ -72,6 +72,8 @@ function AccountOptions({ accounts, data }: { accounts: Account[]; data: MockDat
 }
 
 export function TransactionForm({
+  mode,
+  hidden = false,
   data,
   initial,
   amountRef,
@@ -79,7 +81,10 @@ export function TransactionForm({
   onSavingChange,
   onSubmit,
   onCancel,
+  onDeleteRequest,
 }: {
+  mode: 'add' | 'edit'
+  hidden?: boolean // the delete confirmation is showing: keep what was typed, show nothing
   data: MockData
   initial: EntryValues
   amountRef: RefObject<HTMLInputElement | null>
@@ -87,7 +92,9 @@ export function TransactionForm({
   onSavingChange: (saving: boolean) => void // the dialog ignores Escape and outside clicks while saving
   onSubmit: (values: EntryValues) => Promise<void>
   onCancel: () => void
+  onDeleteRequest: () => void
 }) {
+  const editing = mode === 'edit'
   const [values, setValues] = useState(initial)
   const [touched, setTouched] = useState<Set<EntryField>>(new Set())
   const [submitted, setSubmitted] = useState(false)
@@ -152,10 +159,13 @@ export function TransactionForm({
   const owed = card ? cardStatus(card, data).owed : 0
   const from = data.accounts.find((a) => a.id === values.accountId)
   const categories = data.categories.filter((c) => c.type === values.kind)
-  const preview = previewFor(values, data)
-  const warnings = notices(values, data)
+  // Previews and warnings compare against figures that already include the entry being edited, so edit mode has none.
+  const preview = editing ? null : previewFor(values, data)
+  const warnings = editing ? [] : notices(values, data)
   const amountValid = parseAmount(values.amount).ok
-  const title = values.kind === 'payment' ? 'Pay credit card' : 'Add transaction'
+  const kindWord = values.kind === 'payment' ? 'card payment' : values.kind
+  const title = editing ? `Edit ${kindWord}` : values.kind === 'payment' ? 'Pay credit card' : 'Add transaction'
+  const saveLabel = editing ? 'Save changes' : SAVE_LABEL[values.kind]
 
   const accountError = shown('account')
   const amountError = shown('amount')
@@ -165,18 +175,22 @@ export function TransactionForm({
   const noteError = shown('note')
   const accountHelp =
     values.kind === 'expense' && from && isCard(from) ? "Counts as an expense and adds to the card's debt." : undefined
-  const cardHelp = card
+  const cardHelp = card && !editing
     ? `Owed now: ${formatPeso(owed)}. No category — payments aren't expenses.`
     : "No category — payments aren't expenses."
 
   const select = 'h-12 w-full min-w-0 cursor-pointer rounded-control border border-input bg-card pl-3.5 text-base text-foreground disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-disabled-fg aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive'
 
   return (
-    <form noValidate onSubmit={submit} aria-busy={saving} className="flex min-h-0 flex-1 flex-col">
-      <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription className="sr-only">Record an expense, income or card payment.</DialogDescription>
-      </DialogHeader>
+    <form noValidate hidden={hidden} onSubmit={submit} aria-busy={saving} className="flex min-h-0 flex-1 flex-col">
+      {!hidden && (
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {editing ? 'Change this entry, or delete it.' : 'Record an expense, income or card payment.'}
+          </DialogDescription>
+        </DialogHeader>
+      )}
 
       <DialogBody>
         <fieldset disabled={saving} className="m-0 grid min-w-0 gap-4 border-0 p-0">
@@ -197,8 +211,14 @@ export function TransactionForm({
             </div>
           )}
 
-          <SegmentedControl legend="Type" name="qa-kind" value={values.kind} options={KINDS} onChange={changeKind} />
-          {values.kind === 'expense' && (
+          {editing ? (
+            <p className="text-sm text-muted-foreground">
+              Type: <span className="font-semibold text-foreground">{kindWord.charAt(0).toUpperCase() + kindWord.slice(1)}</span>
+            </p>
+          ) : (
+            <SegmentedControl legend="Type" name="qa-kind" value={values.kind} options={KINDS} onChange={changeKind} />
+          )}
+          {!editing && values.kind === 'expense' && (
             <p className="-mt-2 text-sm text-muted-foreground">
               Paying a card bill?{' '}
               <button type="button" className="cursor-pointer font-semibold text-primary underline" onClick={() => changeKind('payment')}>
@@ -228,7 +248,7 @@ export function TransactionForm({
               />
             </div>
           </FormField>
-          {values.kind === 'payment' && owed > 0 && (
+          {!editing && values.kind === 'payment' && owed > 0 && (
             <Button type="button" variant="secondary" className="-mt-2 w-full" onClick={() => set({ amount: amountText(owed) }, 'amount')}>
               Pay full {formatPeso(owed)}
             </Button>
@@ -245,7 +265,7 @@ export function TransactionForm({
               className={select}
             >
               <option value="">{values.kind === 'payment' ? 'Choose where to pay from' : 'Choose an account'}</option>
-              <AccountOptions accounts={accountsFor(values.kind, 'account', data)} data={data} />
+              <AccountOptions accounts={accountsFor(values.kind, 'account', data)} data={data} withFigures={!editing} />
             </select>
           </FormField>
 
@@ -263,7 +283,7 @@ export function TransactionForm({
                 <option value="">Choose a card</option>
                 {accountsFor('payment', 'card', data).map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} — owed {formatPeso(cardStatus(a, data).owed)}
+                    {editing ? a.name : `${a.name} — owed ${formatPeso(cardStatus(a, data).owed)}`}
                   </option>
                 ))}
               </select>
@@ -349,6 +369,18 @@ export function TransactionForm({
       </DialogBody>
 
       <DialogFooter>
+        {editing && (
+          <Button
+            id="qa-delete"
+            type="button"
+            variant="ghost"
+            className="text-destructive hover:bg-error-soft hover:text-error-ink"
+            onClick={onDeleteRequest}
+            disabled={saving}
+          >
+            Delete
+          </Button>
+        )}
         <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
@@ -359,7 +391,7 @@ export function TransactionForm({
               Saving…
             </>
           ) : (
-            SAVE_LABEL[values.kind]
+            saveLabel
           )}
         </Button>
       </DialogFooter>

@@ -12,11 +12,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { QuickAddDialog } from '@/components/QuickAddDialog'
+import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { monthOf } from '@/lib/finance'
-import { ledgerReducer, saveMessage, toAction } from '@/lib/ledger'
+import {
+  deleteSummary,
+  entryExists,
+  entryValues,
+  ledgerReducer,
+  saveMessage,
+  targetOf,
+  toAction,
+  toDeleteAction,
+  toUpdateAction,
+  type EntryTarget,
+} from '@/lib/ledger'
 import type { ActivityItem } from '@/types'
 import { getMockData, type DemoScenario } from '@/mockData'
 import { AccountsView } from '@/views/AccountsView'
@@ -42,6 +53,8 @@ interface Notice {
 }
 
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
+const FAILED_DELETE = "Couldn't delete. Nothing was changed. Try again."
+const GONE_ON_EDIT = 'This entry was removed, maybe in another tab. Your changes are still here.'
 const STATUS_SECONDS = 8
 
 const involvesAccount = (v: EntryValues, id: number) => v.accountId === id || v.cardId === id
@@ -52,12 +65,12 @@ function App() {
   const [month, setMonth] = useState(() => monthOf(data.today))
   const [accountFilter, setAccountFilter] = useState<number | null>(null) // Activity's account filter
   const [notice, setNotice] = useState<Notice | null>(null)
-  const [quickAdd, setQuickAdd] = useState<EntryValues | null>(null)
+  const [session, setSession] = useState<EntrySession | null>(null)
   const [status, setStatus] = useState<StatusNote | null>(null)
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
   const lastAccount = useRef<number | null>(null)
   const lastPayFrom = useRef<number | null>(null)
-  const failNextSave = useRef(demo === 'save-error')
+  const failNextWrite = useRef(demo === 'save-error') // the first save or delete fails once, to show the error path
   const opener = useRef<HTMLElement | null>(null) // the control that opened the dialog, so focus can go back to it
   const loading = demo === 'loading'
   const addDisabled = data.accounts.length === 0
@@ -86,7 +99,7 @@ function App() {
   const rememberOpener = (from?: HTMLElement) => {
     opener.current = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
   }
-  // Add account, Edit and Delete are built in later milestones; until then they open a stand-in.
+  // Add account is built in a later milestone; until then it opens a stand-in.
   const show = (next: Notice, from?: HTMLElement) => {
     rememberOpener(from)
     setNotice(next)
@@ -99,24 +112,35 @@ function App() {
   }
   const openAdd = () => {
     rememberOpener()
-    setQuickAdd(startEntry('expense', null))
+    setSession({ mode: 'add', values: startEntry('expense', null) })
   }
   const openPay = (cardId: number) => {
     rememberOpener()
-    setQuickAdd(startEntry('payment', cardId))
+    setSession({ mode: 'add', values: startEntry('payment', cardId) })
   }
 
-  const saveEntry = async (values: EntryValues) => {
+  const openEdit = (item: ActivityItem, from: HTMLElement, confirmFirst = false) => {
+    const target = targetOf(item)
+    const values = entryValues(data, target)
+    if (!values) return // already gone
+    rememberOpener(from)
+    setSession({ mode: 'edit', values, target, confirmFirst })
+  }
+
+  const saveEntry = async (values: EntryValues, target?: EntryTarget) => {
     await Promise.resolve() // the real API call goes here; the mock answers at once
-    if (failNextSave.current) {
-      failNextSave.current = false
+    if (failNextWrite.current) {
+      failNextWrite.current = false
       throw new Error(FAILED_SAVE)
     }
-    const action = toAction(values, new Date().toISOString().slice(0, 19))
+    if (target && !entryExists(data, target)) throw new Error(GONE_ON_EDIT)
+    const action = target ? toUpdateAction(values, target) : toAction(values, new Date().toISOString().slice(0, 19))
     const after = ledgerReducer(data, action)
     dispatch(action)
-    if (values.kind === 'payment') lastPayFrom.current = values.accountId
-    else lastAccount.current = values.accountId
+    if (!target) {
+      if (values.kind === 'payment') lastPayFrom.current = values.accountId
+      else lastAccount.current = values.accountId
+    }
 
     let text = saveMessage(values, after)
     let again: StatusNote['action']
@@ -134,25 +158,30 @@ function App() {
       }
     }
     setStatus({ text, action: again })
-    setQuickAdd(null)
+    setSession(null)
+  }
+
+  const deleteEntry = async (target: EntryTarget) => {
+    await Promise.resolve()
+    if (failNextWrite.current) {
+      failNextWrite.current = false
+      throw new Error(FAILED_DELETE)
+    }
+    if (!entryExists(data, target)) {
+      setStatus({ text: 'It was already deleted.' }) // the list is already up to date; nothing to change
+      setSession(null)
+      return
+    }
+    const done = deleteSummary(data, target, month)?.done ?? 'Deleted.'
+    dispatch(toDeleteAction(target))
+    setStatus({ text: done })
+    setSession(null)
   }
   const openAddAccount = (kind: 'account' | 'credit card' = 'account') =>
     show({
       title: 'Add account',
       message: `Adding ${kind === 'credit card' ? 'a credit card' : 'an account'} is part of Add account, built in a later milestone.`,
     })
-  const entryName = (item: ActivityItem) =>
-    item.kind === 'payment' ? 'card payment' : item.kind === 'income' ? 'income' : 'expense'
-  const openEdit = (item: ActivityItem, from: HTMLElement) =>
-    show(
-      { title: `Edit ${entryName(item)}`, message: `Editing "${item.title}" is built with Quick Add in a later milestone.` },
-      from,
-    )
-  const openDelete = (item: ActivityItem, from: HTMLElement) =>
-    show(
-      { title: `Delete ${entryName(item)}`, message: `Deleting "${item.title}" is built with Quick Add in a later milestone. Nothing was changed.` },
-      from,
-    )
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -189,8 +218,8 @@ function App() {
             onMonthChange={setMonth}
             onAccountChange={setAccountFilter}
             onAdd={openAdd}
-            onEdit={openEdit}
-            onDelete={openDelete}
+            onEdit={(item, from) => openEdit(item, from)}
+            onDelete={(item, from) => openEdit(item, from, true)}
           />
         )}
         {view === 'accounts' && (
@@ -200,9 +229,11 @@ function App() {
 
       <QuickAddDialog
         data={data}
-        initial={quickAdd}
+        session={session}
+        month={month}
         onSubmit={saveEntry}
-        onOpenChange={(open) => !open && setQuickAdd(null)}
+        onDelete={deleteEntry}
+        onOpenChange={(open) => !open && setSession(null)}
         onClosed={restoreFocus}
       />
 

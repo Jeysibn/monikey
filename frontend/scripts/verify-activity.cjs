@@ -98,7 +98,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     eq("no Edit/Delete icon buttons visible on phones", f.editIcons + f.deleteIcons, 0);
     const row = p.locator('li button[data-row="t-17"]:visible');
     await row.focus(); await row.click(); await p.waitForTimeout(150);
-    check("row tap opens the Edit expense stand-in", await p.locator('[role=dialog] h2:has-text("Edit expense")').isVisible());
+    check("row tap opens 'Edit expense'", await p.locator('[role=dialog] h2:has-text("Edit expense")').isVisible());
     await p.keyboard.press("Escape"); await p.waitForTimeout(150);
     check("focus returns to the same row", await p.evaluate(() => document.activeElement?.getAttribute("data-row")) === "t-17");
     await shot(p, "activity-375.png");
@@ -109,7 +109,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const p = await open(1280);
     const del = p.locator('button[aria-label="Delete Lunch with team, ₱385.00"]');
     await del.click(); await p.waitForTimeout(150);
-    check("Delete opens the 'Delete expense' stand-in saying nothing changed", await p.locator('[role=dialog] h2:has-text("Delete expense")').isVisible() && /Nothing was changed/.test(await p.locator("[role=dialog]").innerText()));
+    check("Delete opens the confirmation ('Delete this expense?', built in 4.5b)", await p.locator('[role=dialog] h2:has-text("Delete this expense?")').isVisible());
     await p.keyboard.press("Escape"); await p.waitForTimeout(150);
     check("focus returns to that Delete button", await p.evaluate(() => document.activeElement?.getAttribute("aria-label")) === "Delete Lunch with team, ₱385.00");
     const edit = p.locator('button[aria-label="Edit October salary, ₱32,000.00"]');

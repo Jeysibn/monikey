@@ -1,26 +1,100 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import { DeleteConfirm } from '@/components/DeleteConfirm'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { TransactionForm } from '@/components/TransactionForm'
 import type { EntryValues } from '@/lib/entryForm'
+import { deleteSummary, type EntryTarget } from '@/lib/ledger'
 import type { MockData } from '@/types'
 
 /*
- * Quick Add as a dialog (a bottom sheet on phones, see ui/dialog.tsx). It mounts the form only while open,
- * so each opening starts fresh from `initial`. Focus goes to Amount first. Escape and clicks outside are
- * ignored while saving, and a click outside is ignored once something has been typed; Cancel and the
+ * Quick Add, Edit and Delete in one dialog (a bottom sheet on phones, see ui/dialog.tsx). The content is
+ * mounted only while a session is open, so each opening starts fresh. Focus goes to Amount first (or to
+ * Cancel when the dialog opens straight on the delete confirmation). Escape and outside clicks are ignored
+ * while saving or deleting, and a click outside is ignored once something has been typed; Cancel and the
  * close button always work (except while saving). Focus returning to the opener is handled by `onClosed`.
+ * In edit mode "Delete" swaps the content for the confirmation; Cancel there goes back to the form with
+ * everything still typed (the form stays mounted, only hidden).
  */
-export function QuickAddDialog({
+export interface EntrySession {
+  mode: 'add' | 'edit'
+  values: EntryValues
+  target?: EntryTarget // edit only
+  confirmFirst?: boolean // open on the delete confirmation (the desktop row's Delete button)
+}
+
+function Body({
+  session,
   data,
-  initial,
+  month,
+  amountRef,
+  onDirty,
+  onSavingChange,
   onSubmit,
+  onDelete,
+  onClose,
+}: {
+  session: EntrySession
+  data: MockData
+  month: string
+  amountRef: React.RefObject<HTMLInputElement | null>
+  onDirty: () => void
+  onSavingChange: (saving: boolean) => void
+  onSubmit: (values: EntryValues, target?: EntryTarget) => Promise<void>
+  onDelete: (target: EntryTarget) => Promise<void>
+  onClose: () => void
+}) {
+  const [confirming, setConfirming] = useState(session.confirmFirst === true)
+  const wasConfirming = useRef(confirming)
+  const { target } = session
+  const summary = target ? deleteSummary(data, target, month) : null
+
+  // Back from the confirmation: put focus on the form's Delete button, where the person was.
+  useEffect(() => {
+    if (wasConfirming.current && !confirming) document.getElementById('qa-delete')?.focus()
+    wasConfirming.current = confirming
+  }, [confirming])
+
+  return (
+    <>
+      <TransactionForm
+        mode={session.mode}
+        hidden={confirming}
+        data={data}
+        initial={session.values}
+        amountRef={amountRef}
+        onDirty={onDirty}
+        onSavingChange={onSavingChange}
+        onSubmit={(values) => onSubmit(values, target)}
+        onCancel={onClose}
+        onDeleteRequest={() => setConfirming(true)}
+      />
+      {confirming && target && summary && (
+        <DeleteConfirm
+          summary={summary}
+          onCancel={() => (session.confirmFirst ? onClose() : setConfirming(false))}
+          onConfirm={() => onDelete(target)}
+          onSavingChange={onSavingChange}
+        />
+      )}
+    </>
+  )
+}
+
+export function QuickAddDialog({
+  session,
+  data,
+  month,
+  onSubmit,
+  onDelete,
   onOpenChange,
   onClosed,
 }: {
+  session: EntrySession | null // null while the dialog is closed
   data: MockData
-  initial: EntryValues | null // what the form starts with; null while the dialog is closed
-  onSubmit: (values: EntryValues) => Promise<void>
+  month: string // the month being viewed: the delete text only mentions "this month" for entries in it
+  onSubmit: (values: EntryValues, target?: EntryTarget) => Promise<void>
+  onDelete: (target: EntryTarget) => Promise<void>
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
 }) {
@@ -29,16 +103,17 @@ export function QuickAddDialog({
 
   return (
     <Dialog
-      open={initial !== null}
+      open={session !== null}
       onOpenChange={(next) => {
         if (!next && guard.current.saving) return
         onOpenChange(next)
       }}
     >
-      {initial && (
+      {session && (
         <DialogContent
           onOpenAutoFocus={(e) => {
             guard.current = { dirty: false, saving: false }
+            if (session.confirmFirst) return // Cancel takes focus itself
             e.preventDefault()
             amountRef.current?.focus()
           }}
@@ -46,16 +121,18 @@ export function QuickAddDialog({
           onInteractOutside={(e) => (guard.current.saving || guard.current.dirty) && e.preventDefault()}
           onCloseAutoFocus={onClosed}
         >
-          <TransactionForm
-            // a fresh form (and guard) for every opening
-            key={`${initial.kind}-${initial.cardId}-${initial.accountId}`}
+          <Body
+            // a fresh form (and confirmation) for every opening
+            key={`${session.mode}-${session.target?.table}-${session.target?.id}-${session.confirmFirst}-${session.values.kind}-${session.values.cardId}-${session.values.accountId}`}
+            session={session}
             data={data}
-            initial={initial}
+            month={month}
             amountRef={amountRef}
             onDirty={() => (guard.current.dirty = true)}
             onSavingChange={(saving) => (guard.current.saving = saving)}
             onSubmit={onSubmit}
-            onCancel={() => onOpenChange(false)}
+            onDelete={onDelete}
+            onClose={() => onOpenChange(false)}
           />
         </DialogContent>
       )}

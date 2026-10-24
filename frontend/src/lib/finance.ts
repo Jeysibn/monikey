@@ -223,6 +223,12 @@ export function dayHeading(date: string): string {
   return `${weekday}, ${MONTH_SHORT[m - 1]} ${d}`
 }
 
+/** "2026-10-24" -> "Oct 24, 2026" */
+export function formatDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return `${MONTH_SHORT[m - 1]} ${d}, ${y}`
+}
+
 /** Groups an already-sorted list by date, keeping the order. */
 export function groupByDate(items: ActivityItem[]): { date: string; items: ActivityItem[] }[] {
   const groups: { date: string; items: ActivityItem[] }[] = []

@@ -15,7 +15,7 @@ import type { ActivityItem, MockData } from '@/types'
  * Two filters (month, account) and nothing else. No totals here: the browser never adds money
  * (the summary endpoint is month-only), so the count line only counts entries.
  * The account filter is applied before the page limit, like the API will: see activityPage().
- * Edit and Delete are stand-ins until Milestone 4.5.
+ * Edit and Delete open the shared dialog in App (QuickAddDialog); this view only reports which row was chosen.
  */
 const PAGE_SIZE = 50
 

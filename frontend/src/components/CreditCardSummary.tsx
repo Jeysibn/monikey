@@ -74,11 +74,11 @@ export function CreditCardSummary({
             Limit {formatPeso(creditLimit)}
             {reason && <span id={reasonId}>{` · ${reason}`}</span>}
             {overLimit && (
-              <span className="inline-flex items-center gap-1">
+              <>
                 {' · '}
-                <TriangleAlert aria-hidden className="size-3.5" />
+                <TriangleAlert aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
                 Over your limit
-              </span>
+              </>
             )}
           </div>
         </div>

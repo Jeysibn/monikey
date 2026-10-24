@@ -26,23 +26,26 @@ function Bar({ className }: { className: string }) {
 export function ActivityView({
   data,
   month,
+  accountId,
   loading,
   addDisabled,
   onMonthChange,
+  onAccountChange,
   onAdd,
   onEdit,
   onDelete,
 }: {
   data: MockData
   month: string
+  accountId: number | null // lives in App so a save can say "hidden by your filters" and clear them
   loading: boolean
   addDisabled: boolean
   onMonthChange: (month: string) => void
+  onAccountChange: (accountId: number | null) => void
   onAdd: () => void
   onEdit: (item: ActivityItem, opener: HTMLElement) => void
   onDelete: (item: ActivityItem, opener: HTMLElement) => void
 }) {
-  const [accountId, setAccountId] = useState<number | null>(null)
   // The page size belongs to one combination of filters; a different month or account starts again at one page.
   const filterKey = `${month}|${accountId}`
   const [paged, setPaged] = useState({ key: filterKey, size: PAGE_SIZE })
@@ -93,7 +96,7 @@ export function ActivityView({
         <select
           id="activity-account"
           value={accountId ?? ''}
-          onChange={(e) => setAccountId(e.target.value === '' ? null : Number(e.target.value))}
+          onChange={(e) => onAccountChange(e.target.value === '' ? null : Number(e.target.value))}
           className="h-11 min-w-0 cursor-pointer rounded-full border border-input bg-card pl-4 text-[15px] font-semibold text-foreground md:w-auto"
         >
           <option value="">All accounts</option>
@@ -127,7 +130,7 @@ export function ActivityView({
           <EmptyState
             message="Nothing matches these filters."
             action={
-              <Button variant="secondary" onClick={() => setAccountId(null)}>
+              <Button variant="secondary" onClick={() => onAccountChange(null)}>
                 Clear filters
               </Button>
             }

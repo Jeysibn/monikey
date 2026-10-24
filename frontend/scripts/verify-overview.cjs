@@ -137,7 +137,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         check(`${name}: h1, aria-current and focus move to the new page`, s.h1 === name && s.current.join() === name && s.focusIsH1, JSON.stringify(s));
       }
       await go("Activity");
-      check("Activity placeholder has a heading, explanation and working header", /Coming in a later milestone/.test(await p.locator("main").innerText()) && (await p.locator("h1").innerText()) === "Activity");
+      check("Activity (built in 4.4) has its heading and the month filter", (await p.locator("h1").innerText()) === "Activity" && await p.locator("#month").isVisible());
       // keyboard: Tab to a nav item and press Enter
       await go("Overview");
       await p.keyboard.press("Tab");

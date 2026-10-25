@@ -176,3 +176,63 @@ describe('errors', () => {
     assert.equal(isNotFound(new Error('x')), false)
   })
 })
+
+describe('demo behaviours for failing and slow data (Milestone 4.9)', () => {
+  const settled = async (p: Promise<unknown>) => p.then(() => 'ok', (e: unknown) => (e instanceof ApiError ? `${e.status}` : (e as Error).name))
+
+  it('readFailures "once" fails each distinct request the first time it is answered, and then answers it', async () => {
+    const source = createMockSource({ readFailures: 'once' })
+    assert.equal(await settled(source.loadSummary(OCT, signal)), '500')
+    assert.equal(await settled(source.loadSummary(OCT, signal)), 'ok') // Retry works
+    assert.equal(await settled(source.loadSummary('2026-09', signal)), '500') // another request fails once too
+    assert.equal(await settled(source.loadAccounts(signal)), '500')
+    assert.equal(await settled(source.loadAccounts(signal)), 'ok')
+  })
+  it('an abandoned request is not counted (React\'s development double-mount, a quick change of month)', async () => {
+    const source = createMockSource({ readFailures: 'once' })
+    const abandoned = new AbortController()
+    const first = source.loadSummary(OCT, abandoned.signal)
+    abandoned.abort()
+    assert.equal(await settled(first), 'AbortError')
+    assert.equal(await settled(source.loadSummary(OCT, signal)), '500') // this is still the first answered request
+  })
+  it('readFailures "second" lets the first answer through and fails the second of each kind once', async () => {
+    const source = createMockSource({ readFailures: 'second' })
+    assert.equal(await settled(source.loadSummary(OCT, signal)), 'ok')
+    assert.equal(await settled(source.loadSummary('2026-09', signal)), '500')
+    assert.equal(await settled(source.loadSummary('2026-08', signal)), 'ok')
+    assert.equal(await settled(source.loadActivity({ month: OCT, accountId: null, limit: 5 }, signal)), 'ok') // its own count
+  })
+  it('"always" fails every read; offline also fails every write', async () => {
+    const source = createMockSource({ readFailures: 'always', writeFailures: 'always' })
+    for (let i = 0; i < 3; i++) assert.equal(await settled(source.loadAccounts(signal)), '500')
+    for (let i = 0; i < 2; i++) assert.equal(await settled(source.saveEntry(expense)), '500')
+    assert.equal(await settled(source.deleteEntry({ table: 'transaction', id: 17 })), '500')
+    assert.equal(await settled(source.addAccount(wallet)), '500')
+  })
+  it('invalidNextWrite refuses the first save or new account with a 422 and the field, then accepts', async () => {
+    const source = createMockSource({ invalidNextWrite: true })
+    const err = await rejection(source.saveEntry(expense))
+    assert.deepEqual([err.status, err.code, err.field], [422, 'invalid_field', 'amount'])
+    await source.saveEntry(expense) // the next one is accepted
+    const acc = createMockSource({ invalidNextWrite: true })
+    assert.equal((await rejection(acc.addAccount(wallet))).field, 'name')
+    await acc.addAccount(wallet)
+  })
+  it('readFailureKinds makes only the named kinds of read fail (?failing=summary)', async () => {
+    const source = createMockSource({ readFailures: 'always', readFailureKinds: ['summary'] })
+    assert.equal(await settled(source.loadSummary(OCT, signal)), '500')
+    assert.equal(await settled(source.loadAccounts(signal)), 'ok')
+    assert.equal(await settled(source.loadCategories(signal)), 'ok')
+    assert.equal(await settled(source.loadActivity({ month: OCT, accountId: null, limit: 5 }, signal)), 'ok')
+  })
+  it('delays hold an answer back (slow demo)', async () => {
+    const source = createMockSource({ readDelayMs: 40, writeDelayMs: 40 })
+    let t = Date.now()
+    await source.loadSummary(OCT, signal)
+    assert.ok(Date.now() - t >= 35, 'read was held back')
+    t = Date.now()
+    await source.saveEntry(expense)
+    assert.ok(Date.now() - t >= 35, 'write was held back')
+  })
+})

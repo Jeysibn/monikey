@@ -3,12 +3,16 @@ import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
+import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
 import { ACTIVITY_MAX_ROWS, dayHeading, groupByDate, monthLabel, monthOptions } from '@/lib/finance'
-import type { ActivityItem, ActivityPage, LedgerSnapshot } from '@/types'
+import { useDelayedFlag } from '@/useDelayedFlag'
+import type { Resource } from '@/useResource'
+import type { AccountsSnapshot, ActivityItem, ActivityPage, AddState } from '@/types'
 
 /*
  * Activity: every income, expense and card payment for one month, newest first, grouped by day.
@@ -26,12 +30,12 @@ function Bar({ className }: { className: string }) {
 
 export function ActivityView({
   today,
-  snapshot,
-  page,
+  accounts: accountsRes,
+  page: pageRes,
   month,
   accountId,
-  loading,
-  addDisabled,
+  loading: forcedLoading,
+  addState,
   onMonthChange,
   onAccountChange,
   onLoadMore,
@@ -40,12 +44,12 @@ export function ActivityView({
   onDelete,
 }: {
   today: string
-  snapshot: LedgerSnapshot | undefined
-  page: ActivityPage | undefined // the newest page that arrived
+  accounts: Resource<AccountsSnapshot> // only for the account filter's choices
+  page: Resource<ActivityPage> // the list; the newest page that arrived stays visible while the next one loads
   month: string
   accountId: number | null // lives in App so a save can say "hidden by your filters" and clear them
-  loading: boolean
-  addDisabled: boolean
+  loading: boolean // ?demo=loading: show the skeleton whatever has arrived
+  addState: AddState
   onMonthChange: (month: string) => void
   onAccountChange: (accountId: number | null) => void
   onLoadMore: () => void
@@ -53,8 +57,11 @@ export function ActivityView({
   onEdit: (item: ActivityItem, opener: HTMLElement) => void
   onDelete: (item: ActivityItem, opener: HTMLElement) => void
 }) {
-  const items = page?.items ?? NO_ITEMS
-  const hasMore = page?.hasMore ?? false
+  const snapshot = accountsRes.data
+  const items = pageRes.data?.items ?? NO_ITEMS
+  const hasMore = pageRes.data?.hasMore ?? false
+  const loading = forcedLoading || (!pageRes.data && !pageRes.error)
+  const updating = useDelayedFlag(pageRes.stale, 400)
   const groups = groupByDate(items)
   const label = monthLabel(month)
   const filtered = accountId !== null
@@ -83,7 +90,7 @@ export function ActivityView({
 
   return (
     <div aria-busy={loading}>
-      <PageHeader title="Activity" onAdd={onAdd} addDisabled={addDisabled} />
+      <PageHeader title="Activity" onAdd={onAdd} addState={addState} />
       <p role="status" className="sr-only">
         {loading ? 'Loading activity' : ''}
       </p>
@@ -108,12 +115,17 @@ export function ActivityView({
         </select>
       </div>
 
-      {!loading && (
-        <p role="status" className="mb-2 text-sm text-muted-foreground">
-          {count} · {label}
-        </p>
+      {!loading && !pageRes.error && (
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
+          <p role="status" className="text-sm text-muted-foreground">
+            {count} · {label}
+          </p>
+          <UpdatingStamp show={updating} />
+        </div>
       )}
-      {loading ? (
+      {pageRes.error ? (
+        <ErrorBlock what="activity" updatedAt={pageRes.updatedAt} onRetry={pageRes.retry} focusAfter="main h1" />
+      ) : loading ? (
         <ul aria-hidden="true">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <li key={i} className="flex min-h-[68px] items-center justify-between gap-4 border-t border-rule py-3.5 first:border-t-0">
@@ -139,9 +151,9 @@ export function ActivityView({
           <EmptyState
             message={`No activity in ${label}.`}
             action={
-              <Button variant="secondary" onClick={onAdd} disabled={addDisabled}>
+              <Button variant="secondary" onClick={onAdd} disabled={addBlocked(addState)}>
                 <Plus aria-hidden="true" />
-                {addDisabled ? 'Add an account first' : 'Add transaction'}
+                {addLabel(addState)}
               </Button>
             }
           />

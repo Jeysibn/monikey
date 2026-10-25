@@ -4,6 +4,8 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InlineNotice } from '@/components/InlineNotice'
+import { SLOW_SAVE_MS, WriteError } from '@/lib/apiErrors'
+import { useDelayedFlag } from '@/useDelayedFlag'
 import type { DeleteSummary } from '@/lib/entryText'
 
 /*
@@ -24,6 +26,7 @@ export function DeleteConfirm({
 }) {
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const slow = useDelayedFlag(deleting, SLOW_SAVE_MS)
 
   const confirm = async () => {
     setError(null)
@@ -32,7 +35,7 @@ export function DeleteConfirm({
     try {
       await onConfirm()
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "Couldn't delete. Nothing was changed. Try again.")
+      setError(err instanceof WriteError ? err.message : "Couldn't delete. Nothing was changed. Try again.")
       setDeleting(false)
       onSavingChange(false)
     }
@@ -47,6 +50,11 @@ export function DeleteConfirm({
       <DialogBody>
         <div className="grid gap-3.5">
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
+          {slow && (
+            <InlineNotice tone="warning">
+              <span role="status">This is taking longer than usual. Keep this open.</span>
+            </InlineNotice>
+          )}
           <p className="text-base font-semibold">{summary.entry}</p>
           <p className="text-[0.9375rem] text-muted-foreground">{summary.effect}</p>
         </div>

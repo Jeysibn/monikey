@@ -3,15 +3,19 @@ import { cn } from 'cn'
 
 import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
+import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { monthLabel, monthOptions } from '@/lib/finance'
 import { formatPeso } from '@/lib/money'
-import type { ActivityItem, FinancialSummary, LedgerSnapshot } from '@/types'
+import { useDelayedFlag } from '@/useDelayedFlag'
+import type { Resource } from '@/useResource'
+import type { AccountsSnapshot, ActivityItem, ActivityPage, AddState, FinancialSummary } from '@/types'
 
 /*
  * Overview (docs/design/UI_UX_SPEC.md section 4). Question it answers: "After what I owe, how much do I
@@ -31,12 +35,12 @@ const NO_SUMMARY: FinancialSummary = { liquidBalance: 0, outstandingDebt: 0, car
 
 export function OverviewView({
   today,
-  snapshot,
-  summary: loadedSummary,
-  recent,
+  accounts: accountsRes,
+  summary: summaryRes,
+  recent: recentRes,
   month,
-  loading,
-  addDisabled,
+  loading: forcedLoading,
+  addState,
   onMonthChange,
   onAdd,
   onAddAccount,
@@ -44,39 +48,54 @@ export function OverviewView({
   onOpenActivity,
 }: {
   today: string
-  snapshot: LedgerSnapshot | undefined
-  summary: FinancialSummary | undefined
-  recent: ActivityItem[] | undefined
+  accounts: Resource<AccountsSnapshot> // the accounts' figures (not the categories, which only the forms need)
+  summary: Resource<FinancialSummary>
+  recent: Resource<ActivityPage>
   month: string
-  loading: boolean
-  addDisabled: boolean
+  loading: boolean // ?demo=loading: show the skeleton whatever has arrived
+  addState: AddState
   onMonthChange: (month: string) => void
   onAdd: () => void
   onAddAccount: () => void
   onPayCard: (cardId: number) => void
   onOpenActivity: (month: string) => void
 }) {
-  const summary = loadedSummary ?? NO_SUMMARY
+  const summary = summaryRes.data ?? NO_SUMMARY
+  const snapshot = accountsRes.data
   const cards = snapshot?.cards ?? []
-  const items = recent ?? []
+  const items = recentRes.data?.items ?? []
   const label = monthLabel(month)
-  const hasAccounts = (snapshot?.accounts.length ?? 0) > 0
+  // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
+  const hasAccounts = snapshot ? snapshot.accounts.length > 0 : true
   const hasNegativeAccount = snapshot?.liquid.some((l) => l.balance < 0) ?? false
   const longHero = formatPeso(summary.netPosition).length > 12 // very large amounts step down one size
   const openActivity = (item?: ActivityItem) => onOpenActivity(item ? item.date.slice(0, 7) : month)
 
+  // Each block loads, fails and recovers on its own (spec section 4): "Only the failed block shows".
+  const summaryWaiting = forcedLoading || (!summaryRes.data && !summaryRes.error)
+  const snapshotWaiting = forcedLoading || (!accountsRes.data && !accountsRes.error)
+  const recentWaiting = forcedLoading || (!recentRes.data && !recentRes.error)
+  const positionLoading = summaryWaiting || snapshotWaiting
+  const anyLoading = positionLoading || recentWaiting
+  const updating = useDelayedFlag(summaryRes.stale || recentRes.stale || accountsRes.stale, 400)
+
   return (
-    <div aria-busy={loading}>
+    <div aria-busy={anyLoading}>
       <p role="status" className="sr-only">
-        {loading ? 'Loading your overview' : ''}
+        {anyLoading ? 'Loading your overview' : ''}
       </p>
-      <PageHeader title="Overview" onAdd={onAdd} addDisabled={addDisabled}>
+      <PageHeader title="Overview" onAdd={onAdd} addState={addState}>
+        <UpdatingStamp show={updating} />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
         {/* 1. Position card: the one flat deep-blue field of colour */}
-        {!hasAccounts && !loading ? (
+        {summaryRes.error ? (
+          <div className="order-1 min-w-0 lg:order-none lg:col-span-12">
+            <ErrorBlock what="your summary" updatedAt={summaryRes.updatedAt} onRetry={summaryRes.retry} focusAfter="main h1" />
+          </div>
+        ) : !hasAccounts && !positionLoading ? (
           <Card className="order-1 text-center lg:order-none lg:col-span-12">
             <p className="text-lg font-semibold">
               Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.
@@ -98,7 +117,7 @@ export function OverviewView({
                 </h2>
                 <span className="text-[0.8125rem] text-hero-muted">As of today</span>
               </div>
-              {loading ? (
+              {positionLoading ? (
                 <Bar className="my-2.5 h-9 w-52 bg-white/15 lg:h-11" />
               ) : (
                 <MoneyText
@@ -110,7 +129,7 @@ export function OverviewView({
                   )}
                 />
               )}
-              {loading ? (
+              {positionLoading ? (
                 <Bar className="h-12 w-full max-w-[44ch] bg-white/15" />
               ) : (
                 <p className="max-w-[44ch] text-[0.9375rem] leading-normal text-hero-muted">
@@ -133,7 +152,7 @@ export function OverviewView({
             >
               <div className="min-w-0">
                 <div className="mb-0.5 text-[0.8125rem] font-medium text-hero-muted [overflow-wrap:anywhere]">Money you have</div>
-                {loading ? (
+                {positionLoading ? (
                   <Bar className="h-6 w-28 bg-white/15" />
                 ) : (
                   <MoneyText wrap centavos={summary.liquidBalance} className="block text-[1.3125rem] leading-[1.2] max-[359px]:text-[1.125rem] font-semibold tracking-[-0.015em]" />
@@ -144,7 +163,7 @@ export function OverviewView({
               </span>
               <div className="min-w-0">
                 <div className="mb-0.5 text-[0.8125rem] font-medium text-hero-muted">Card debt</div>
-                {loading ? (
+                {positionLoading ? (
                   <Bar className="h-6 w-28 bg-white/15" />
                 ) : (
                   <MoneyText wrap centavos={summary.outstandingDebt} className="block text-[1.3125rem] leading-[1.2] max-[359px]:text-[1.125rem] font-semibold tracking-[-0.015em] text-hero-debt" />
@@ -152,12 +171,12 @@ export function OverviewView({
               </div>
             </div>
 
-            {!loading && summary.cardCredit > 0 && (
+            {!positionLoading && summary.cardCredit > 0 && (
               <p className="mt-3.5 text-[0.8125rem] text-hero-muted lg:col-span-2">
                 Plus {formatPeso(summary.cardCredit)} card credit (overpaid), included in your net position.
               </p>
             )}
-            {!loading && hasNegativeAccount && (
+            {!positionLoading && hasNegativeAccount && (
               <p className="mt-3.5 flex items-center gap-1.5 text-[0.8125rem] text-hero-muted lg:col-span-2">
                 <TriangleAlert aria-hidden="true" className="size-4" />
                 An account is below zero.
@@ -170,12 +189,14 @@ export function OverviewView({
         <div className="order-3 min-w-0 lg:order-none lg:col-span-7">
           <Card aria-labelledby="recent-activity-title" role="region">
             <CardHeader>
-              <CardTitle id="recent-activity-title">Recent activity</CardTitle>
+              <CardTitle id="recent-activity-title" tabIndex={-1}>Recent activity</CardTitle>
               <Button variant="link" onClick={() => openActivity()}>
                 View all
               </Button>
             </CardHeader>
-            {loading ? (
+            {recentRes.error ? (
+              <ErrorBlock what="recent activity" updatedAt={recentRes.updatedAt} onRetry={recentRes.retry} focusAfter="#recent-activity-title" />
+            ) : recentWaiting ? (
               <ul aria-hidden="true">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <li key={i} className="flex min-h-[68px] items-center justify-between gap-4 border-t border-rule py-3.5 first:border-t-0">
@@ -191,9 +212,9 @@ export function OverviewView({
               <EmptyState
                 message={`Nothing recorded in ${label} yet.`}
                 action={
-                  <Button onClick={onAdd} disabled={addDisabled}>
+                  <Button onClick={onAdd} disabled={addBlocked(addState)}>
                     <Plus aria-hidden="true" />
-                    {addDisabled ? 'Add an account first' : 'Add transaction'}
+                    {addLabel(addState)}
                   </Button>
                 }
               />
@@ -217,27 +238,33 @@ export function OverviewView({
           <Card role="region" aria-labelledby="this-month-title">
             <CardTitle id="this-month-title">This month</CardTitle>
             <CardDescription>{label} · card payments aren&rsquo;t counted as expenses</CardDescription>
+            {summaryRes.error ? (
+              <p className="text-muted-foreground">Not available until your summary loads.</p>
+            ) : (
             <dl>
               <div className="flex items-baseline justify-between gap-3 pt-1.5 pb-3">
                 <dt className="text-[0.9375rem] font-medium text-muted-foreground">Income</dt>
                 <dd className="min-w-0 text-right">
-                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthIncome} kind="income" className="text-2xl font-semibold tracking-[-0.015em]" />}
+                  {summaryWaiting ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthIncome} kind="income" className="text-2xl font-semibold tracking-[-0.015em]" />}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-rule py-3">
                 <dt className="text-[0.9375rem] font-medium text-muted-foreground">Expenses</dt>
                 <dd className="min-w-0 text-right">
-                  {loading ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthExpenses} className="text-2xl font-semibold tracking-[-0.015em]" />}
+                  {summaryWaiting ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthExpenses} className="text-2xl font-semibold tracking-[-0.015em]" />}
                 </dd>
               </div>
             </dl>
+            )}
           </Card>
 
           {/* 3. Credit cards. Balances are "as of today", so they do not change with the month. */}
           <Card role="region" aria-labelledby="credit-cards-title">
-            <CardTitle id="credit-cards-title">Credit cards</CardTitle>
+            <CardTitle id="credit-cards-title" tabIndex={-1}>Credit cards</CardTitle>
             <CardDescription>Available credit isn&rsquo;t cash.</CardDescription>
-            {loading ? (
+            {accountsRes.error ? (
+              <ErrorBlock what="your credit cards" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#credit-cards-title" />
+            ) : snapshotWaiting ? (
               <div aria-hidden="true" className="grid gap-5">
                 {[0, 1].map((i) => (
                   <div key={i} className="grid gap-3">

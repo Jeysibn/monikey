@@ -29,6 +29,11 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     page.on("console", m => { if (m.type() === "error" || m.type() === "warning") errors.push(`console.${m.type()}@${width}${query}: ${m.text().slice(0, 140)}`); });
     page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); });
     await page.goto(BASE + query); await page.evaluate(() => document.fonts.ready);
+    // Figures arrive a moment after the page (the data source answers on a later turn); wait for them, unless the demo is meant to stay loading.
+    if (!/demo=loading/.test(query)) {
+      await page.waitForSelector('main [aria-busy="false"]', { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(250); // the Add button fades from disabled to enabled (150ms) once the accounts are known
+    }
     page.W = width; page.big = width >= 768;
     return page;
   }

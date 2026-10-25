@@ -4,11 +4,13 @@ import { cn } from 'cn'
 import { AccountRow } from '@/components/AccountRow'
 import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBlock, InlineFailure } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
-import type { FinancialSummary, LedgerSnapshot } from '@/types'
+import type { Resource } from '@/useResource'
+import type { AccountsSnapshot, AddState, FinancialSummary } from '@/types'
 
 /*
  * Accounts (docs/design/UI_UX_SPEC.md section 6). Question: "What do I have, and what do I owe, account
@@ -28,24 +30,35 @@ function Bar({ className }: { className: string }) {
 const NO_SUMMARY: FinancialSummary = { liquidBalance: 0, outstandingDebt: 0, cardCredit: 0, netPosition: 0, monthIncome: 0, monthExpenses: 0 }
 
 export function AccountsView({
-  snapshot,
-  summary: loadedSummary,
-  loading,
+  accounts: accountsRes,
+  summary: summaryRes,
+  loading: forcedLoading,
+  addState,
   onAdd,
   onAddAccount,
   onPayCard,
 }: {
-  snapshot: LedgerSnapshot | undefined
-  summary: FinancialSummary | undefined
-  loading: boolean
+  accounts: Resource<AccountsSnapshot> // the rows and cards
+  summary: Resource<FinancialSummary> // the two totals
+  loading: boolean // ?demo=loading: show the skeleton whatever has arrived
+  addState: AddState
   onAdd: () => void
   onAddAccount: (kind: 'account' | 'credit card') => void
   onPayCard: (cardId: number) => void
 }) {
-  const hasAccounts = (snapshot?.accounts.length ?? 0) > 0
-  const summary = loadedSummary ?? NO_SUMMARY
+  const snapshot = accountsRes.data
+  // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
+  const hasAccounts = snapshot ? snapshot.accounts.length > 0 : true
+  const summary = summaryRes.data ?? NO_SUMMARY
   const rows = snapshot?.liquid ?? []
   const cards = snapshot?.cards ?? []
+  // Two requests feed this screen, and each failure is shown for what it affects and with its own time: the accounts
+  // (the rows and cards) fail both sections; the summary (the two totals) fails only the totals, next to rows that loaded.
+  const accountsFailed = accountsRes.error !== null
+  const summaryFailed = summaryRes.error !== null
+  const rowsLoading = forcedLoading || (!accountsFailed && !accountsRes.data)
+  const totalsLoading = forcedLoading || (!summaryFailed && !summaryRes.data)
+  const loading = rowsLoading || totalsLoading
   // With no accounts yet, Add account is the single primary action and Add transaction is disabled.
   const addAccountVariant = hasAccounts ? 'secondary' : 'default'
 
@@ -54,7 +67,7 @@ export function AccountsView({
       <p role="status" className="sr-only">
         {loading ? 'Loading your accounts' : ''}
       </p>
-      <PageHeader title="Accounts" onAdd={onAdd} addDisabled={!hasAccounts}>
+      <PageHeader title="Accounts" onAdd={onAdd} addState={addState}>
         <Button variant={addAccountVariant} className="hidden md:inline-flex" onClick={() => onAddAccount('account')}>
           Add account
         </Button>
@@ -68,19 +81,27 @@ export function AccountsView({
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2 lg:items-start">
         {/* Money you have */}
+        {accountsFailed ? (
+          <Card role="region" aria-labelledby="money-you-have-title">
+            <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
+            <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
+          </Card>
+        ) : (
         <Card role="region" aria-labelledby="money-you-have-title">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <CardTitle id="money-you-have-title">
+            <CardTitle id="money-you-have-title" tabIndex={-1}>
               Money you have
             </CardTitle>
-            {loading ? (
+            {totalsLoading ? (
               <Bar className="h-6 w-28" />
+            ) : summaryFailed ? (
+              <InlineFailure what="the totals" onRetry={summaryRes.retry} focusAfter="#money-you-have-title" live />
             ) : (
               <MoneyText wrap centavos={summary.liquidBalance} className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
             )}
           </div>
           <CardDescription>Cash, bank and e-wallet balances</CardDescription>
-          {loading ? (
+          {rowsLoading ? (
             <ul aria-hidden="true">
               {[0, 1, 2].map((i) => (
                 <li key={i} className="flex min-h-[68px] items-center justify-between gap-4 border-t border-rule py-2.5 first:border-t-0">
@@ -105,16 +126,28 @@ export function AccountsView({
             </ul>
           )}
         </Card>
+        )}
 
         {/* Money you owe */}
+        {accountsFailed ? (
+          <section aria-labelledby="money-you-owe-title" className="grid min-w-0 gap-4 md:gap-6">
+            <Card>
+              <CardTitle id="money-you-owe-title" tabIndex={-1}>Money you owe</CardTitle>
+              {/* The same failure as in the other section: only one of the two is announced. */}
+              <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-owe-title" live={false} className="mt-3" />
+            </Card>
+          </section>
+        ) : (
         <section aria-labelledby="money-you-owe-title" className="grid min-w-0 gap-4 md:gap-6">
           <Card>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <CardTitle id="money-you-owe-title">
+              <CardTitle id="money-you-owe-title" tabIndex={-1}>
                 Money you owe
               </CardTitle>
-              {loading ? (
+              {totalsLoading ? (
                 <Bar className="h-6 w-28" />
+              ) : summaryFailed ? (
+                <InlineFailure what="the totals" onRetry={summaryRes.retry} focusAfter="#money-you-owe-title" />
               ) : (
                 <span>
                   <MoneyText wrap centavos={summary.outstandingDebt} kind="debt" className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
@@ -128,7 +161,7 @@ export function AccountsView({
             </CardDescription>
           </Card>
 
-          {loading ? (
+          {rowsLoading ? (
             [0, 1].map((i) => (
               <Card key={i} aria-hidden="true">
                 <div className="grid gap-3">
@@ -168,6 +201,7 @@ export function AccountsView({
             </>
           )}
         </section>
+        )}
       </div>
     </div>
   )

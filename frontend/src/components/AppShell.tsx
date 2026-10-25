@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 import { House, List, Plus, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 
+import { addBlocked } from '@/components/addState'
 import { Button } from '@/components/ui/button'
+import type { AddState } from '@/types'
 
 /*
  * The frame around every screen (DESIGN.md section D). One set of three destinations, shown three ways:
@@ -63,13 +65,13 @@ export function AppShell({
   view,
   onNavigate,
   onAdd,
-  addDisabled = false,
+  addState = 'ready',
   children,
 }: {
   view: View
   onNavigate: (view: View) => void
   onAdd: () => void
-  addDisabled?: boolean
+  addState?: AddState
   children: ReactNode
 }) {
   const items = destinations.map((d) => (
@@ -109,8 +111,8 @@ export function AppShell({
         <Button
           className="h-[52px] min-w-0 self-center rounded-[14px] px-2 text-[length:min(0.9375rem,18px)]"
           onClick={onAdd}
-          disabled={addDisabled}
-          aria-label={addDisabled ? 'Add transaction (add an account first)' : 'Add transaction'}
+          disabled={addBlocked(addState)}
+          aria-label={addState === 'no-accounts' ? 'Add transaction (add an account first)' : 'Add transaction'}
         >
           <Plus aria-hidden="true" className="size-[min(1.25rem,24px)]" />
           Add

@@ -142,3 +142,6 @@ export interface MockData {
   transactions: Transaction[]
   payments: CreditCardPayment[]
 }
+
+/** Whether Add transaction can be used: not until the accounts have loaded, and not before the first account exists. */
+export type AddState = 'ready' | 'loading' | 'no-accounts'

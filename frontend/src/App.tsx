@@ -2,17 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
+import { ErrorBlock } from '@/components/ErrorBlock'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
-import { isNotFound, type DataSource } from '@/dataSource'
+import type { DataSource } from '@/dataSource'
 import { accountSavedMessage, type AccountValues } from '@/lib/accountForm'
+import { describeWriteError } from '@/lib/apiErrors'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthOf, nextPageSize } from '@/lib/finance'
 import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
+import type { MockOptions } from '@/mockSource'
 import { useResource } from '@/useResource'
-import type { ActivityItem, EntryTarget, LedgerSnapshot } from '@/types'
+import type { ActivityItem, AddState, EntryTarget, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
 import { OverviewView } from '@/views/OverviewView'
@@ -25,12 +28,37 @@ import { OverviewView } from '@/views/OverviewView'
  * confirmation message is built from the fresh ones; there are no optimistic updates.
  *
  * Preview hook for design review and tests: open the app with
- * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | save-error
- * to see a loading state, a rare state or a failed first save without editing code.
- * Anything else shows the normal ledger.
+ * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge
+ *       | save-error | invalid | load-error | flaky | offline | slow
+ * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity; comma-separated)
+ * to make only those reads fail.
+ * to see a loading state, a rare state, a failed save, a refused save, a failed first load, a failed reload,
+ * no connection at all, or slow answers, without editing code. Anything else shows the normal ledger.
  */
-const demo = new URLSearchParams(window.location.search).get('demo')
+const params = new URLSearchParams(window.location.search)
+const demo = params.get('demo')
+const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
 const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge']
+
+/** The mock's behaviour for the demos that are about failing or being slow (not about what the ledger holds). */
+const demoBehaviour = (d: string | null): MockOptions => {
+  switch (d) {
+    case 'save-error':
+      return { failNextWrite: true }
+    case 'invalid':
+      return { invalidNextWrite: true }
+    case 'load-error':
+      return { readFailures: 'once' }
+    case 'flaky':
+      return { readFailures: 'second' }
+    case 'offline':
+      return { readFailures: 'always', writeFailures: 'always' }
+    case 'slow':
+      return { readDelayMs: 1500, writeDelayMs: 16_000 }
+    default:
+      return {}
+  }
+}
 
 const STATUS_SECONDS = 8
 const RECENT_COUNT = 6 // rows on Overview
@@ -46,7 +74,7 @@ async function freshSnapshot(source: DataSource): Promise<LedgerSnapshot> {
 
 function App() {
   const [source] = useState<DataSource>(() =>
-    createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, failNextWrite: demo === 'save-error' }),
+    createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(demo), readFailureKinds: failing }),
   )
   const [version, setVersion] = useState(0) // bumped after a write so every screen fetches again
   const [view, setView] = useState<View>('overview')
@@ -86,7 +114,9 @@ function App() {
     () => (accounts.data && categories.data ? { ...accounts.data, categories: categories.data } : undefined),
     [accounts.data, categories.data],
   )
-  const addDisabled = snapshot !== undefined && snapshot.accounts.length === 0
+  // The screens show the accounts' figures (each failure and time stays with the request that failed); the
+  // categories are only needed by the forms, so a failure to load them is reported on its own (below).
+  const addState: AddState = demoLoading || !accounts.data ? 'loading' : accounts.data.accounts.length === 0 ? 'no-accounts' : !snapshot ? 'loading' : 'ready'
 
   // The confirmation clears itself after a few seconds; a new one restarts the timer.
   useEffect(() => {
@@ -134,7 +164,11 @@ function App() {
   }
 
   const saveEntry = async (values: EntryValues, target?: EntryTarget) => {
-    await source.saveEntry(values, target) // rejects with the message to show; the form keeps what was typed
+    try {
+      await source.saveEntry(values, target)
+    } catch (err) {
+      throw describeWriteError(err, target ? 'edit-entry' : 'add-entry') // the form keeps what was typed and shows this
+    }
     if (!target) {
       if (values.kind === 'payment') lastPayFrom.current = values.accountId
       else lastAccount.current = values.accountId
@@ -170,10 +204,11 @@ function App() {
     try {
       await source.deleteEntry(target)
     } catch (err) {
-      if (!isNotFound(err)) throw err
+      const failure = describeWriteError(err, 'delete-entry')
+      if (!failure.gone) throw failure
       // Gone already (another tab): nothing to undo; show the lists as they are now.
       setVersion((v) => v + 1)
-      setStatus({ text: 'It was already deleted.' })
+      setStatus({ text: failure.message })
       setSession(null)
       return
     }
@@ -187,7 +222,11 @@ function App() {
     setAccountForm({ type: kind === 'credit card' ? 'credit_card' : 'cash', name: '', balance: '', limit: '', owed: '' })
   }
   const saveAccount = async (values: AccountValues) => {
-    await source.addAccount(values) // a duplicate name rejects with the API's message
+    try {
+      await source.addAccount(values)
+    } catch (err) {
+      throw describeWriteError(err, 'add-account') // a duplicate name is shown under Name
+    }
     setVersion((v) => v + 1)
     setStatus({ text: accountSavedMessage(values) })
     setAccountForm(null)
@@ -200,17 +239,26 @@ function App() {
 
   return (
     <>
-      <AppShell view={view} onNavigate={setView} onAdd={openAdd} addDisabled={addDisabled}>
+      <AppShell view={view} onNavigate={setView} onAdd={openAdd} addState={addState}>
         <StatusMessage note={status} onDismiss={() => setStatus(null)} />
+        {categories.error && (
+          <ErrorBlock
+            what="the categories"
+            updatedAt={categories.updatedAt}
+            onRetry={categories.retry}
+            focusAfter="main h1"
+            className="mb-[18px]"
+          />
+        )}
         {view === 'overview' && (
           <OverviewView
             today={source.today}
-            snapshot={snapshot}
-            summary={summary.data}
-            recent={recent.data?.items}
+            accounts={accounts}
+            summary={summary}
+            recent={recent}
             month={month}
-            loading={demoLoading || !snapshot || !summary.data || !recent.data}
-            addDisabled={addDisabled}
+            loading={demoLoading}
+            addState={addState}
             onMonthChange={setMonth}
             onAdd={openAdd}
             onAddAccount={() => openAddAccount()}
@@ -224,12 +272,12 @@ function App() {
         {view === 'activity' && (
           <ActivityView
             today={source.today}
-            snapshot={snapshot}
-            page={activity.data}
+            accounts={accounts}
+            page={activity}
             month={month}
             accountId={accountFilter}
-            loading={demoLoading || !snapshot || !activity.data}
-            addDisabled={addDisabled}
+            loading={demoLoading}
+            addState={addState}
             onMonthChange={setMonth}
             onAccountChange={setAccountFilter}
             onLoadMore={() => setPaged({ key: filterKey, size: nextPageSize(pageSize) })}
@@ -240,9 +288,10 @@ function App() {
         )}
         {view === 'accounts' && (
           <AccountsView
-            snapshot={snapshot}
-            summary={summary.data}
-            loading={demoLoading || !snapshot || !summary.data}
+            accounts={accounts}
+            summary={summary}
+            loading={demoLoading}
+            addState={addState}
             onAdd={openAdd}
             onAddAccount={openAddAccount}
             onPayCard={openPay}

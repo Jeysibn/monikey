@@ -95,7 +95,7 @@ export interface Ledger {
 |---|---|---|
 | S0 | Settle §5; agree JSON fixtures (§6) | **all blocking answers** |
 | S1 | Introduce `DataSource` (the plan's `Ledger`) and the view models; screens consume snapshots; mock behind the seam; no visible change. **Done in Milestone 4.8** ([`FRONTEND_SEAM_4_8.md`](FRONTEND_SEAM_4_8.md)) | nothing |
-| S2 | Loading, error and "Updating…" states, "Last updated 09:14" + **Retry**, the 15-second slow-save notice, mapping of 400/404/409/422 to the spec's messages; test with `?demo=load-error` and `?demo=slow` on the mock | the error shape (N1) only |
+| S2 | **Done in Milestone 4.9** ([`FRONTEND_STATES_4_9.md`](FRONTEND_STATES_4_9.md)). Loading, error and "Updating…" states, "Last updated 09:14" + **Retry**, the 15-second slow-save notice, mapping of 400/404/409/422 to the spec's messages; test with `?demo=load-error` and `?demo=slow` on the mock | the error shape (N1) only |
 | S3 | `wire.ts` mappers + `httpLedger` + Vite proxy; contract tests against the fixtures | a running backend |
 | S4 | End-to-end run against the real backend; flip the default flag; real-device checklist | backend + owner |
 

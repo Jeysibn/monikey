@@ -21,10 +21,12 @@ import {
   type EntryKind,
   type EntryValues,
 } from '@/lib/entryForm'
+import { SLOW_SAVE_MS, SLOW_SAVE_TEXT, WriteError } from '@/lib/apiErrors'
 import { describedBy } from '@/lib/describedBy'
 import { isCard } from '@/lib/finance'
 import { accountById, cardOf } from '@/lib/snapshot'
 import { amountText, formatPeso } from '@/lib/money'
+import { useDelayedFlag } from '@/useDelayedFlag'
 import type { AccountInfo, LedgerSnapshot } from '@/types'
 
 /*
@@ -102,16 +104,21 @@ export function TransactionForm({
   const [failedSubmits, setFailedSubmits] = useState(0)
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  // A field the server refused (422) or a message that belongs under a field (409); cleared when that field is edited.
+  const [serverField, setServerField] = useState<{ field: EntryField; message: string } | null>(null)
+  const slow = useDelayedFlag(saving, SLOW_SAVE_MS)
   const summaryRef = useRef<HTMLDivElement>(null)
   // Fields the person has actually changed. Leaving an untouched field shows no error: the message would
   // grow the bottom sheet and push the control the person is tapping out from under their finger.
   const edited = useRef<Set<EntryField>>(new Set())
 
   const errors = validate(values, snapshot)
-  const shown = (field: EntryField) => (submitted || touched.has(field) ? errors[field] : undefined)
+  const shown = (field: EntryField) =>
+    (submitted || touched.has(field) ? errors[field] : undefined) ?? (serverField?.field === field ? serverField.message : undefined)
   const failing = FIELD_ORDER.filter((f) => errors[f])
   const set = (patch: Partial<EntryValues>, field: EntryField) => {
     edited.current.add(field)
+    if (serverField?.field === field) setServerField(null)
     onDirty()
     setValues((v) => ({ ...v, ...patch }))
   }
@@ -124,6 +131,9 @@ export function TransactionForm({
   }, [failedSubmits])
 
   const focusField = (field: EntryField) => document.getElementById(FIELD_ID[field])?.focus()
+  useEffect(() => {
+    if (serverField) document.getElementById(FIELD_ID[serverField.field])?.focus() // take the person to the field the server refused
+  }, [serverField])
 
   const changeKind = (kind: EntryKind) => {
     onDirty()
@@ -145,12 +155,16 @@ export function TransactionForm({
       return
     }
     setServerError(null)
+    setServerField(null)
     setSaving(true)
     onSavingChange(true)
     try {
       await onSubmit(values)
     } catch (err) {
-      setServerError(err instanceof Error && err.message ? err.message : FAILED_SAVE)
+      const failure = err instanceof WriteError ? err : new WriteError(FAILED_SAVE)
+      const field = FIELD_ORDER.find((f) => f === failure.field)
+      setServerError(field && failure.inline ? null : failure.message) // a message under its field is not repeated at the top
+      if (field) setServerField({ field, message: failure.inline ? failure.message : 'Check this field.' })
       setSaving(false)
       onSavingChange(false)
     }
@@ -196,6 +210,11 @@ export function TransactionForm({
       <DialogBody>
         <fieldset disabled={saving} className="m-0 grid min-w-0 gap-4 border-0 p-0">
           {serverError && <InlineNotice tone="error">{serverError}</InlineNotice>}
+          {slow && (
+            <InlineNotice tone="warning">
+              <span role="status">{SLOW_SAVE_TEXT}</span>
+            </InlineNotice>
+          )}
 
           {submitted && failing.length > 0 && (
             <div ref={summaryRef} tabIndex={-1} role="alert" className="rounded-control bg-error-soft px-3.5 py-3 text-sm text-error-ink outline-offset-2">

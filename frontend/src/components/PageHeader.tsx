@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 
+import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
+import type { AddState } from '@/types'
 
 /*
  * Page title (a noun) on the left; actions on the right. The "Add transaction" button lives here from
@@ -12,12 +14,12 @@ export function PageHeader({
   title,
   children,
   onAdd,
-  addDisabled = false,
+  addState = 'ready',
 }: {
   title: string
   children?: ReactNode
   onAdd: () => void
-  addDisabled?: boolean
+  addState?: AddState
 }) {
   return (
     <div className="mb-[18px] flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -26,9 +28,9 @@ export function PageHeader({
       </h1>
       <div className="flex items-center gap-2.5">
         {children}
-        <Button className="hidden md:inline-flex" onClick={onAdd} disabled={addDisabled}>
+        <Button className="hidden md:inline-flex" onClick={onAdd} disabled={addBlocked(addState)}>
           <Plus aria-hidden="true" />
-          {addDisabled ? 'Add an account first' : 'Add transaction'}
+          {addLabel(addState)}
         </Button>
       </div>
     </div>

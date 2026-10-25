@@ -40,6 +40,11 @@ const PAGE_HELPERS = `
     page.on("console", m => { if (m.type() === "error" || m.type() === "warning") errors.push(`console.${m.type()}@${width}${query}: ${m.text().slice(0, 140)}`); });
     page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); });
     await page.goto(BASE + query); await page.evaluate(() => document.fonts.ready);
+    // Figures arrive a moment after the page, and the Add button fades from disabled to enabled over 150ms: measure the settled page.
+    if (!/demo=loading/.test(query)) {
+      await page.waitForSelector('main [aria-busy="false"]', { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(300);
+    }
     await page.addScriptTag({ content: PAGE_HELPERS });
     page.W = width; page.big = width >= 768;
     if (view !== "Overview") await nav(page, view);
@@ -114,6 +119,7 @@ const PAGE_HELPERS = `
   await safe("contrast over-limit", () => contrastRun("Accounts", "?demo=over-limit"));
   await safe("contrast overpaid", () => contrastRun("Overview", "?demo=overpaid"));
   await safe("contrast negative", () => contrastRun("Accounts", "?demo=negative"));
+  for (const v of VIEWS) await safe("contrast offline " + v, () => contrastRun(v, "?demo=offline")); // the failure blocks and their Retry buttons
 
   /* ------------------------------------------------------------ 3. targets, overflow, truncation across widths */
   group = "Responsive: width sweep";

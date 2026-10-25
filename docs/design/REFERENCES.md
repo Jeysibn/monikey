@@ -1,6 +1,6 @@
 # MoniKey Design References
 
-**Status: APPROVED by the owner (Milestone 3); implementation in progress (shell and Overview built in 4.1–4.2).** What was studied, what was actually learned, and what MoniKey adopts or rejects. References inform **interaction patterns and information hierarchy only**. No branding, screenshots, copy, icons or layouts are copied. No third-party image was added to the repository.
+**Status: APPROVED by the owner; mock-backed frontend implemented through Milestone 4.9.** What was studied, what was actually learned, and what MoniKey adopts or rejects. References inform **interaction patterns and information hierarchy only**. No branding, screenshots, copy, icons or layouts are copied. No third-party image was added to the repository. See the [frontend verification reports](FRONTEND_STATES_4_9.md) for current implementation evidence.
 
 Related: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`DESIGN_REVIEW.md`](DESIGN_REVIEW.md)
 

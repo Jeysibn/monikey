@@ -94,6 +94,7 @@ export interface ActivityItem {
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid
+  createdAt: string // ISO timestamp; retained for a precise merge of transaction and payment rows
   entry: EntryValues // the stored entry in form shape, so Edit and Delete need no lookup
 }
 

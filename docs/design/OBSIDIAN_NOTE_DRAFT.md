@@ -1,5 +1,6 @@
 <!--
 DRAFT ONLY — NOT WRITTEN TO THE VAULT.
+Historical draft for the original design milestone; its progress and next-step statements below are not current project status. See `docs/design/README.md` for the current repository snapshot.
 Suggested target: ~/main-brain/Projects/MoniKey/Design Milestone - UI UX Design System.md
 Writing outside this repository needs the owner's explicit approval. If approved, copy everything below the line
 and rephrase the "What I should learn" section in your own words (OBSIDIAN_GUIDE: agent notes are drafts).

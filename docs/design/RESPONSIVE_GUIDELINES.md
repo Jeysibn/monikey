@@ -1,6 +1,6 @@
 # MoniKey Responsive Guidelines
 
-**Status: APPROVED by the owner (Milestone 3); implementation in progress (shell and Overview built in 4.1–4.2).** Mobile-first. Designed at **360–375px**; evaluated at **375, 768 and 1280px** as required, plus 360 (Roadmap acceptance width), 320 (WCAG reflow floor) and 1024 (the breakpoint where the layout changes most). No layout here has been rendered or measured yet; all arithmetic is from the design.
+**Status: APPROVED by the owner.** This is the intended responsive behavior. The frontend has been rendered and audited in Chromium at the widths and states documented in [Milestone 4.7](A11Y_RESPONSIVE_4_7.md) and [Milestone 4.9](FRONTEND_STATES_4_9.md). Real-device, Firefox/WebKit, screen-reader, and some focus-ring/icon-contrast checks remain outstanding; see [REAL_DEVICE_CHECKLIST.md](REAL_DEVICE_CHECKLIST.md).
 
 Related: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`COMPONENT_INVENTORY.md`](COMPONENT_INVENTORY.md)
 

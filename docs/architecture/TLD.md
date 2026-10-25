@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed; implementation and cluster state **not yet verified**  
+**Status:** Requirements and technical direction agreed. The frontend prototype is implemented through mock-backed Milestone 4.9; backend, database, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -91,7 +91,7 @@ flowchart TD
 
 **Monetary contract:** API JSON money values are decimal strings like `"350.00"`, never floating-point totals computed in React. Format only for display; don't sum JS `number` values as authoritative balances. `Date` input is a local calendar string (`YYYY-MM-DD`); avoid UTC-conversion shifts.
 
-**API client boundary (target example; documentation, not implemented yet):**
+**API client boundary (implemented frontend contract):**
 
 ```typescript
 // src/types.ts
@@ -106,17 +106,17 @@ export interface Transaction {
   note: string | null;
 }
 
-// src/api.ts — a tiny typed fetch wrapper, no Axios/React Query
-export async function getTransactions(month: string): Promise<Transaction[]> {
-  const response = await fetch(`/api/transactions?month=${encodeURIComponent(month)}`);
+// frontend/src/httpSource.ts uses relative same-origin URLs.
+export async function getTransactions(month: string, signal: AbortSignal): Promise<Transaction[]> {
+  const response = await fetch(`/api/transactions?month=${encodeURIComponent(month)}`, { signal });
   if (!response.ok) throw new Error(`Failed to load transactions (${response.status})`);
   return (await response.json()) as Transaction[];
 }
 ```
 
-The `as Transaction[]` cast describes a contract; integration tests must confirm the server produces it. If runtime schema drift becomes a demonstrated issue, evaluate a validator in a future ADR rather than adding one by default.
+The frontend implementation now uses strict runtime mappers in `frontend/src/wire.ts`, rather than relying on this illustrative cast. API values are checked and money strings are converted with exact integer arithmetic; tests cover synthetic responses. The actual FastAPI response contract still needs verification against a running backend and shared fixtures.
 
-**Vite dev proxy (reference snippet):**
+**Vite dev proxy (implemented in `frontend/vite.config.ts`):**
 
 ```typescript
 // frontend/vite.config.ts (styling-aware illustration; add @ alias for shadcn)

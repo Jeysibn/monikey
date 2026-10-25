@@ -1,6 +1,6 @@
-# API client plan and contract questions (planning only)
+# API client plan and contract
 
-**Status: plan for review. Nothing here is implemented.** Owner of the client: Claude Code (frontend). Owner of the API and database: Codex. The client and the load-error states can only be finished once the contract questions in §5 are answered and a backend exists (`backend/` is still empty). The TLD (§4, §6) is the source for the endpoints; this document fills the gaps the finished UI has exposed.
+**Status:** The API decisions are settled; frontend S1 (data-source seam), S2 (loading/error states), and S3 (HTTP source and wire mappers) are implemented. S3 was tested with synthetic response bodies. No FastAPI backend or shared `docs/api-fixtures/` exists yet, so S4 live integration remains unverified. The TLD (§4, §6) defines the endpoints; this document records the clarified contract. See [S3 implementation and verification](FRONTEND_API_CLIENT_S3.md).
 
 Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DESIGN_REVIEW.md) §5 (B1–B7, Q4) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) §5–§7, §13
 
@@ -68,11 +68,11 @@ New view-model types the screens will consume instead of raw rows (see §3): `Ac
 
 ## 3. How the client fits beside the mock ledger
 
-Today `App` holds `MockData` and every screen computes from it synchronously. The API is asynchronous and server-authoritative, so the screens must stop reading raw rows. The plan is a **seam**, built and proven on the mock first:
+`App` selects one `DataSource` at build time. Both sources implement the same asynchronous interface, so views and forms do not know whether figures came from the fictional in-memory ledger or HTTP:
 
 ```ts
-// src/ledger.ts
-export interface Ledger {
+// src/dataSource.ts
+export interface DataSource {
   loadAccounts(signal: AbortSignal): Promise<AccountsSnapshot>
   loadCategories(signal: AbortSignal): Promise<Category[]>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
@@ -83,20 +83,20 @@ export interface Ledger {
 }
 ```
 
-- **`mockLedger`** wraps what exists today: the reducer, `finance.ts`, `entryForm.ts`. It answers the same shapes with a small delay and can fail on demand. It stays forever as the demo, the unit-test fixture and the target of the six browser harnesses, so they keep running without a backend.
-- **`httpLedger`** is `src/api.ts` from the TLD: `fetch('/api/…')` (relative, same origin; Vite proxies `/api` to FastAPI without stripping it), one `ApiError { status, code, message, field }`, `AbortController` on every read. No Axios, no React Query, no store (TLD §4).
-- **Choosing one:** a build-time flag (`VITE_DATA_SOURCE=mock|http`; it is public and holds no secret). Vite folds the constant, so a production build with `http` does not contain the mock or the `?demo=` hooks.
+- **`createMockSource`** wraps the reducer and `finance.ts`; it remains the demo and unit-test source.
+- **`createHttpSource`** in `src/httpSource.ts` uses `fetch('/api/…')` (relative, same origin; Vite preserves `/api` when proxying to FastAPI), `ApiError { status, code, message, field }`, and abortable reads with a 30-second timeout. `src/wire.ts` validates and maps API JSON. There is no Axios, React Query, or store (TLD §4).
+- **Choosing one:** `VITE_DATA_SOURCE=mock|http` is a public build-time setting. The default is mock; Vite folds the constant, and an HTTP production build tree-shakes the mock and `?demo=` behavior. It contains no secrets.
 - **State:** `App` keeps `useState` for view, month, account filter and dialogs; server data lives in small per-screen hooks (`useEffect` + `AbortController`, stale result kept visible with "Updating…", per UI_UX_SPEC §5). After a successful write the client re-fetches (spec §7): accounts, the selected month's summary and the visible list; the confirmation message is built from the **re-fetched** figures. No optimistic updates.
 - **What changes in existing code:** `saveMessage`, `deleteSummary`, `previewFor`, `notices`, `accountOptionLabel` and `entryValues` take an `AccountsSnapshot` / `ActivityItem` instead of `MockData`; `finance.ts` accounting helpers remain as the mock's engine only.
 
-**Order of work (each step ends with the full harness suite green on the mock):**
+**Order of work and completion state:**
 
 | Step | Work | Needs from Codex |
 |---|---|---|
-| S0 | Settle §5; agree JSON fixtures (§6) | **all blocking answers** |
+| S0 | Settle §5; agree JSON fixtures (§6) | **Contract decisions are recorded below. Shared JSON fixtures remain to be added with backend implementation.** |
 | S1 | Introduce `DataSource` (the plan's `Ledger`) and the view models; screens consume snapshots; mock behind the seam; no visible change. **Done in Milestone 4.8** ([`FRONTEND_SEAM_4_8.md`](FRONTEND_SEAM_4_8.md)) | nothing |
 | S2 | **Done in Milestone 4.9** ([`FRONTEND_STATES_4_9.md`](FRONTEND_STATES_4_9.md)). Loading, error and "Updating…" states, "Last updated 09:14" + **Retry**, the 15-second slow-save notice, mapping of 400/404/409/422 to the spec's messages; test with `?demo=load-error` and `?demo=slow` on the mock | the error shape (N1) only |
-| S3 | `wire.ts` mappers + `httpLedger` + Vite proxy; contract tests against the fixtures | a running backend |
+| S3 | `wire.ts` mappers + `httpSource` + Vite proxy; client tests against synthetic responses | **Done** ([S3 report](FRONTEND_API_CLIENT_S3.md)); no backend needed for implementation |
 | S4 | End-to-end run against the real backend; flip the default flag; real-device checklist | backend + owner |
 
 ## 4. Decisions on the frontend side (owner)
@@ -108,7 +108,9 @@ export interface Ledger {
 | F3 | Ship the mock and `?demo=` hooks in the production bundle? | No: compile them out when `VITE_DATA_SOURCE=http` | **Decided:** compile out. Verify in the production build when the client is implemented |
 | F4 | Owed and credit per card: computed in the browser as `max(±signed_debt, 0)`, or returned by the API? | The API returns `owed` and `credit` | **Decided:** ask the API (added to B4) so the server stays authoritative for calculated values |
 
-## 5. Questions for Codex (answer inline; B1–B4 block implementation)
+## 5. Contract questions raised during planning (answered below)
+
+These questions are retained as decision history. The response table below settles them; they are not current blockers for the frontend client. A running backend is still required for S4 end-to-end verification.
 
 **B1. Payments need an account filter.** `GET /api/credit-card-payments` has no `account_id`.
 Proposal: add `account_id`, matching **either** `source_account_id` or `card_account_id`, applied **before** `limit`. The browser must not filter a capped list.
@@ -175,14 +177,14 @@ These decisions settle the API behavior for frontend planning. They do not claim
 
 ## 6. Contract tests
 
-- A shared fixture folder (proposal: `docs/api-fixtures/*.json`, owned jointly). Codex's API tests assert the real responses match; the frontend's mapper tests parse the same files.
-- Frontend: unit tests for `toCentavos`/`fromCentavos`, every mapper, the merge, and the error mapping; the six existing harnesses keep running on the mock.
-- The first run against the real backend (S4) repeats the journeys U1–U8 from the spec and the accounting facts (a card payment changes neither expenses nor net position; an expense on a card raises debt and expenses).
+- The backend phase will add sanitized shared fixtures under `docs/api-fixtures/`; backend response tests and frontend mapper tests should use them. They do not exist in the repository yet.
+- The frontend currently tests exact decimal mapping, account/category/summary/entry mapping, field mapping, HTTP methods/routes/bodies, filtering, list merging, timestamp ordering, and errors with synthetic response bodies in `frontend/tests/wire.test.ts` and `frontend/tests/httpSource.test.ts`.
+- S4 must repeat journeys U1–U8 against the real backend and prove the accounting facts: a card payment changes neither expenses nor net position; a card purchase increases both debt and expenses.
 
 ## 7. Risks
 
-1. **S1 is the largest piece**: every screen and several pure helpers move from raw rows to snapshots. It is a refactor with no visible change, and the 6 harnesses plus 103 unit tests are the safety net.
-2. **Decimal strings must never pass through floats**; the mapper is strict and tested.
-3. **Stale and concurrent data**: 404 on edit or delete is mapped to the spec's messages; concurrent edits are last-write-wins (spec).
-4. **Very large numbers**: server sums can exceed the 12-digit input limit; the UI already shows ₱10,000,021,049.99 at a readable size, but the API should state its maximum for sums.
-5. **Slow or failing backend**: nothing today has timeouts; S2 adds the 15-second notice and Retry. No retry of writes (they could duplicate).
+1. **The backend is the remaining integration dependency.** The HTTP client is implemented, but its response assumptions have not been verified against a server or shared fixtures.
+2. **Decimal strings must never pass through floats.** The client uses exact integer conversion and rejects malformed/out-of-bound values; server aggregate limits still need to be honored.
+3. **Concurrent edits are last-write-wins** per the agreed contract; 404 edit/delete paths are mapped in the UI. No cross-tab integration test is possible without the backend.
+4. **Read requests time out after 30 seconds.** Writes are not automatically canceled or retried because a timed-out response could leave commit status unknown. The UI shows its existing slow-save notice while waiting.
+5. **No live network check has been completed.** The local API, request/response fixtures, accounting behavior, persistence, and real-device journey checks remain for S4 and later milestones.

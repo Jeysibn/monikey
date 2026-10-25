@@ -14,7 +14,7 @@ Read the relevant project documents before work:
 - [Frontend setup](architecture/FRONTEND_SETUP.md) and [Obsidian guide](architecture/OBSIDIAN_GUIDE.md) as relevant
 - Root [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md), and approved [DESIGN.md](../DESIGN.md)
 
-The architecture documents came from `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are cataloged in [architecture/README.md](architecture/README.md). Their status is an approved design baseline; it is not proof of implementation or live cluster state.
+The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The design remains the approved baseline. Current repository state: the frontend prototype and contract-driven HTTP client are implemented through API-plan S3; backend/database, CI/CD, and cluster state are not implemented or verified. Live API integration and Milestone 5 final review remain. See [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
 
 ## Agent roles
 
@@ -54,7 +54,7 @@ Recommended invocation by phase:
 1. `/ui-ux-pro-max` during design-system and interaction planning. A Claude Code read-only session invoked it successfully without running its search script or generating a MoniKey design.
 2. `/design-taste-frontend` while building or refining actual screens; use its app-screen workflow for MoniKey's working dashboard UI.
 3. `/impeccable critique` or `/impeccable audit` after an interface exists; run the engine with a project-local cache setting to avoid global writes.
-4. Playwright Test for functional browser checks once interactive flows exist. The Codex user's existing `playwright-cli` skill can help with browser review; the project does not yet include Playwright Test or browser binaries.
+4. The project currently uses its local browser harness scripts with `playwright-core` and an available Chromium; it does not include `@playwright/test` or browser binaries. Keep the existing approach unless a reviewed need justifies a change.
 
 Do not ask a design skill to invent architecture, add dependencies, generate a full dashboard template, or override a human-approved `DESIGN.md`.
 
@@ -81,4 +81,4 @@ The application repository is authoritative for application architecture and cod
 
 ## Current readiness state
 
-The v1.3 architecture sources and agent guides are present. The Vite starter exists, but the approved design system is still a placeholder and no finance feature exists. See [AI agent verification](AI_AGENT_VERIFICATION.md) for test evidence and the exact next milestone gate.
+The approved design system, mock-backed finance frontend, and contract-driven HTTP client are implemented through API-plan S3. No backend or database exists yet; live integration is the remaining frontend verification. The [AI agent verification](AI_AGENT_VERIFICATION.md) is a historical onboarding record, not current application test evidence. Current gates and frontend evidence are linked from [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).

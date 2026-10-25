@@ -2,6 +2,8 @@
 
 **Status: APPROVED by the owner (Milestone 3), after Codex's read-only review (§5a) and an independent Chromium review (§0). Corrections were applied and verified (see [`VERIFICATION.md`](VERIFICATION.md)).** Findings, concerns, tradeoffs and recommendations from the UI/UX design milestone, written by Claude Code (design owner).
 
+> The recommendations below are the original design-review record. Design approval, Manrope verification, owner choices Q1–Q10, and API contract answers B1–B4/N1–N8 are now recorded. The frontend is implemented through mock-backed Milestone 4.9; use [ROADMAP.md](../architecture/ROADMAP.md#current-progress-and-next-gate) for current gates. Real-device/browser/screen-reader review and backend implementation remain outstanding.
+
 Documents reviewed: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`COMPONENT_INVENTORY.md`](COMPONENT_INVENTORY.md) · [`RESPONSIVE_GUIDELINES.md`](RESPONSIVE_GUIDELINES.md)
 
 ---
@@ -179,26 +181,25 @@ Codex also could not verify rendering, contrast, font glyphs, screen readers or 
 
 ## 7. Recommendations
 
-1. **Approve or amend the direction** (Q1) before any scaffold work.
-2. **Settle fonts first** (Q2): download Manrope's `woff2` files into the repo, check tabular figures and ₱ in a browser at Milestone 2, and fall back to IBM Plex Sans if either fails.
-3. **Ask Codex for the B1–B7 answers** so the typed mock data and later `api.ts` match.
-4. Run the **Milestone 5 acceptance matrix** (`RESPONSIVE_GUIDELINES.md` §10) on a real phone and desktop, including `break-ui`-style worst-case data.
-5. **Colour-vision simulation** of Overview and Accounts before approving the debt/warning colours.
-6. Keep an eye on **component count (15)** during implementation; prefer deleting one over adding one.
+1. Design direction and font choice are approved; Manrope and peso/tabular rendering were verified in Chromium.
+2. Contract questions B1–B4/N1–N8 are answered inline in [API_CLIENT_PLAN.md](API_CLIENT_PLAN.md); the client must follow those decisions.
+3. The API client is implemented; exercise the interface against a running backend when one exists.
+4. Complete the real-device checklist and any remaining non-Chromium/screen-reader review; automated Chromium checks are recorded in the Milestone 4.7/4.9 reports.
+5. Keep the component/dependency scope within ADR-015; any expansion needs a demonstrated need and appropriate review.
 
 ---
 
-## Open decisions for the owner
+## Owner decisions recorded
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Approve the visual direction (pastel-consumer, restrained; light theme; cobalt primary; expenses in ink; separate debt hue)? | Approve, with the colour-vision check. |
+| Q1 | Approve the visual direction (pastel-consumer, restrained; light theme; cobalt primary; expenses in ink; separate debt hue)? | **Approved by owner.** Automated color-vision simulation is recorded in Milestone 4.7; real-device checks remain. |
 | Q2 | **Fonts** | **Decided by owner:** self-host Manrope if ₱ and tabular figures work — they do (verified). |
 | Q3 | **Numbering** | **Decided by owner:** keep this work under Roadmap Milestone 3. (The Roadmap's own M3 is "Overview with typed mock data"; the Playbook uses a different numbering — still worth aligning separately.) |
 | Q4 | Display-only browser arithmetic (limit track, before/after estimate, over-pay / below-zero / over-limit notices) | **Approved by owner.** The backend remains the only source of saved figures and totals; the confirmation message after saving is built from server figures. **Extended by the owner (Milestone 4 follow-up): also covers the before/after effect text in the edit and delete confirmations, as display-only estimates.** |
 | Q5 | One form for Quick Add and Pay card | **Preserved by owner:** amount-first Quick Add and a distinct Pay card workflow. |
-| Q6 | **Add transaction** disabled until an account exists (vs. prompting inline)? | Disabled with a visible reason. |
-| Q7 | Note length cap and any other server-side limits? | Decide with Codex (B6). |
+| Q6 | **Add transaction** disabled until an account exists (vs. prompting inline)? | **Decided and implemented:** disabled with a visible reason when the ledger has no accounts. |
+| Q7 | Note length cap and any other server-side limits? | **Settled in API contract N5:** notes are trimmed, blank is null, maximum 120 characters. |
 | Q8 | Allow the owner-approved exception to ADR-015 for shadcn `Field`? | No — keep `FormField`. |
 | Q9 | "Net position" label | **Decided by owner:** keep the label and its supporting sentence/equation. |
 | Q10 | Category chips, no remembered category | **Approved by owner** (last account and last *Pay from* are still remembered). |

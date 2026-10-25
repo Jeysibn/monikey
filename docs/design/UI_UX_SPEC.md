@@ -1,6 +1,6 @@
 # MoniKey UI/UX Specification
 
-**Status: APPROVED by the owner (Milestone 3); implementation in progress (shell and Overview built in 4.1–4.2).** Specifies *what the screens do and contain*. Visual rules (colour, type, spacing) are in [`DESIGN.md`](../../DESIGN.md). Nothing here is implemented.
+**Status: APPROVED by the owner.** This document specifies *what the screens do and contain*. Visual rules (colour, type, spacing) are in [`DESIGN.md`](../../DESIGN.md). The three screens and mock-backed v1 flows are implemented through Milestone 4.9; see [frontend status](FRONTEND_STATES_4_9.md) and [API client plan](API_CLIENT_PLAN.md) for remaining work and evidence. The API and database are not implemented.
 
 All people, accounts and amounts are **fictional**. The wireframes are low-fidelity ASCII layouts, not pixel designs; no hi-fi preview tool was available or installed.
 

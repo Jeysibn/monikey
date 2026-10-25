@@ -1,6 +1,6 @@
 # Milestone 4.8 — The data-source seam (S1 of the API client plan)
 
-**Status: implemented and verified; awaiting Codex review. Left uncommitted on purpose** (HEAD is `f3eb65f`). Scope: step S1 of [`API_CLIENT_PLAN.md`](API_CLIENT_PLAN.md): put a `DataSource` between the screens and the numbers, with the mock behind it, **without changing what a person sees**. **Not built:** the API client, wire mappers, load-error and "Updating…" states (S2/S3). No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.**
+**Historical milestone status:** implemented and verified at S1; later committed in `a7c1d37`. At the time of the original report, it was awaiting review and the working tree had HEAD `f3eb65f`. This report describes S1 only; S2/S3 are recorded separately. No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.**
 
 Related: [`API_CLIENT_PLAN.md`](API_CLIENT_PLAN.md) §3 · [`CODEX_REVIEW_BRIEF_4_8.md`](CODEX_REVIEW_BRIEF_4_8.md)
 
@@ -8,9 +8,9 @@ Related: [`API_CLIENT_PLAN.md`](API_CLIENT_PLAN.md) §3 · [`CODEX_REVIEW_BRIEF_
 **Before:** `App` held the whole mock ledger and every screen and helper worked figures out from raw rows. **After:** screens read what a `DataSource` reports, and send it writes.
 
 ```
-App ── useResource ──► DataSource ◄── createMockSource()   (today)
+App ── useResource ──► DataSource ◄── createMockSource()   (demo/tests)
  │                          ▲
- └ dialogs ── saveEntry / deleteEntry / addAccount          ◄── httpSource (S3, later)
+ └ dialogs ── saveEntry / deleteEntry / addAccount          ◄── httpSource (implemented in S3)
 ```
 
 | Piece | What it is |
@@ -53,4 +53,4 @@ The credit-crossing wording in a delete confirmation is now labelled, as the own
 - The previously stale-looking figure when a month changes (old month's numbers for the instant before the new reply) is invisible with the mock; S2 labels it.
 
 ## 5. Next
-S2 (loading, error and "Updating…" states, Retry, the 15-second notice, the 404/409/422 mapping, tested with `?demo=load-error` and `?demo=slow` on the mock), then S3 once the backend exists.
+This original next-step note is superseded: S2 is implemented in [Milestone 4.9](FRONTEND_STATES_4_9.md), and S3 is implemented in [FRONTEND_API_CLIENT_S3.md](FRONTEND_API_CLIENT_S3.md). S4 requires a running backend for end-to-end verification.

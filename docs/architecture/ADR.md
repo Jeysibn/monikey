@@ -2,7 +2,7 @@
 
 **Version:** 1.3  
 **Date:** 2026-10-24  
-**Status:** Adopted as design baseline; not yet verified as implemented  
+**Status:** Adopted as the design baseline. A mock-backed frontend prototype exists through Milestone 4.9; backend/database and production architecture remain unimplemented. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for repository status.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.

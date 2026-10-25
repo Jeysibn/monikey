@@ -1,6 +1,6 @@
 # Milestone 4.7 — Accessibility and responsive pass
 
-**Status: implemented and verified; awaiting Codex review. Left uncommitted on purpose** (4.6 is committed as `10db430`). Scope: an automated and by-eye audit of every screen and dialog, and the fixes it found. **Not done:** anything that needs a real phone, another browser engine or a screen reader (see [`REAL_DEVICE_CHECKLIST.md`](REAL_DEVICE_CHECKLIST.md)). No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.** The Impeccable engine was **not** run (its launcher downloads a binary; that needs your approval): the audit is a project script instead.
+**Historical milestone status:** implemented and verified; committed as `85a483c`. At the time of the original report, it was awaiting Codex review. Scope: an automated and by-eye audit of every screen and dialog, and the fixes it found. **Not done:** anything that needs a real phone, another browser engine or a screen reader (see [`REAL_DEVICE_CHECKLIST.md`](REAL_DEVICE_CHECKLIST.md)). No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.** The Impeccable engine was **not** run; the project audit script was used instead.
 
 Related: [`RESPONSIVE_GUIDELINES.md`](RESPONSIVE_GUIDELINES.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`CODEX_REVIEW_BRIEF_4_7.md`](CODEX_REVIEW_BRIEF_4_7.md)
 
@@ -54,4 +54,4 @@ Uses `playwright-core` and the Chromium already on this machine; no network, not
 - The audit is Chromium only and a first pass; it complements, never replaces, manual testing.
 
 ## 6. Next
-Run the real-device checklist; then the typed API client and load-error states once B1–B4 are settled with Codex and the backend exists.
+This historical report's next-step note is superseded. The HTTP client and load/error states are now implemented; complete the real-device checklist and verify the HTTP source against FastAPI when a backend exists.

@@ -1,6 +1,6 @@
 # Milestone 4.9 — Loading, error and slow states (S2 of the API client plan)
 
-**Status: implemented and verified; awaiting Codex review. Left uncommitted on purpose** (HEAD is `a7c1d37`). Scope: step S2 of [`API_CLIENT_PLAN.md`](API_CLIENT_PLAN.md): the states the screens need before a real network exists, built and tested on the mock. **Not built:** the API client and wire mappers (S3), which still need a backend. No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.**
+**Historical milestone status:** implemented and verified at S2; committed as `6a04f46`. At the time of the original report, it was awaiting review and the working tree had HEAD `a7c1d37`. S3 is now implemented separately in [FRONTEND_API_CLIENT_S3.md](FRONTEND_API_CLIENT_S3.md). No backend, database, CI/CD, Kubernetes or GitOps file was touched. **No dependency changed.**
 
 Related: [`UI_UX_SPEC.md`](UI_UX_SPEC.md) §4–§7 · [`FRONTEND_SEAM_4_8.md`](FRONTEND_SEAM_4_8.md) · [`CODEX_REVIEW_BRIEF_4_9.md`](CODEX_REVIEW_BRIEF_4_9.md)
 
@@ -67,9 +67,9 @@ A request that is abandoned (React's development double-mount, a quick change of
 ## 5. Not verified / limitations
 - The 15-second notice is proved in the browser for **Quick Add** only; Add account and Delete use the same hook and notice but were not run for 16 seconds each.
 - A 409 under a field cannot be produced from the UI on the mock (the form blocks duplicates first); it is covered by the mapping tests and shares the 422 code path.
-- No timeout on a request that never answers (the page waits); S3 should add one with the real client.
+- At the time of this milestone, no timeout existed for a request that never answers; S3 now gives reads a 30-second timeout. Writes remain open after the slow-save warning because a client timeout cannot establish whether the server committed.
 - Real phones, Firefox/WebKit, screen readers: still the checklist in `REAL_DEVICE_CHECKLIST.md` (including how the new alerts are read).
-- `?demo=` hooks and the mock are still in the production bundle (decision F3, with S3).
+- The default mock build includes `?demo=` hooks. An HTTP production build now tree-shakes the mock and demo hooks, per F3 (verified in the S3 report).
 
 ## 6. Next
-S3 needs the backend: `wire.ts` mappers with the shared fixtures, `httpSource`, the Vite proxy, a request timeout, contract tests, then the first end-to-end run (S4).
+S3 is implemented in [FRONTEND_API_CLIENT_S3.md](FRONTEND_API_CLIENT_S3.md) and verified against synthetic responses. S4 still needs a running backend and shared fixtures for end-to-end verification.

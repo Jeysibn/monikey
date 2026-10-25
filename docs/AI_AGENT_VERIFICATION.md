@@ -1,6 +1,6 @@
 # AI Agent Onboarding Verification
 
-**Scope:** configuration, documentation, and skill readiness only. No application screen, API, database schema, or Kubernetes resource was implemented.
+**Historical scope:** configuration, documentation, and skill readiness only. At the time of this report, no application screen, API, database schema, or Kubernetes resource had been implemented. The frontend has since been built through Milestone 4.9; this file records the onboarding checks below, not current application readiness. See [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
 
 ## Status definitions
 

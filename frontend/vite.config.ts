@@ -10,4 +10,8 @@ export default defineConfig({
     // `@/components/...` means `src/components/...` (the alias shadcn/ui expects)
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  server: {
+    // Keep the /api prefix intact; FastAPI owns routes under /api.
+    proxy: { '/api': { target: 'http://localhost:8000', changeOrigin: true } },
+  },
 })

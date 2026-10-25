@@ -220,8 +220,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       rank(b) - rank(a) ||
       b.id - a.id,
   )
-  const list = items.map(({ createdAt: _createdAt, ...item }) => item)
-  return limit === undefined ? list : list.slice(0, limit)
+  return limit === undefined ? items : items.slice(0, limit)
 }
 
 /**

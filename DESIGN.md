@@ -1,6 +1,6 @@
 # MoniKey Design System
 
-**Status: APPROVED by the owner (Milestone 3, after an independent browser review).** Canonical for visual rules (`AGENTS.md` / `CLAUDE.md`); behavior and screens live in [`docs/design/UI_UX_SPEC.md`](docs/design/UI_UX_SPEC.md); design-mock test evidence is in [`docs/design/VERIFICATION.md`](docs/design/VERIFICATION.md). Implemented so far: the tokens, fonts and components (Milestone 4.1) and the application shell and Overview page (4.2); Activity, Accounts and Quick Add are not built yet.
+**Status: APPROVED by the owner.** Canonical for visual rules (`AGENTS.md` / `CLAUDE.md`); behavior and screens live in [`docs/design/UI_UX_SPEC.md`](docs/design/UI_UX_SPEC.md); frontend implementation evidence is in [`docs/design/FRONTEND_STATES_4_9.md`](docs/design/FRONTEND_STATES_4_9.md) and the linked milestone records. The design tokens, frontend shell, Overview, Accounts, Activity, and all mock-backed entry flows are implemented. The remaining frontend work is the HTTP data source and integration against a backend; see [`docs/design/API_CLIENT_PLAN.md`](docs/design/API_CLIENT_PLAN.md).
 
 Related: [UI/UX spec](docs/design/UI_UX_SPEC.md) · [Component inventory](docs/design/COMPONENT_INVENTORY.md) · [Responsive guidelines](docs/design/RESPONSIVE_GUIDELINES.md) · [Design review](docs/design/DESIGN_REVIEW.md) · [ADR-015](docs/architecture/ADR.md) (Tailwind v4, shadcn/ui, Lucide)
 
@@ -8,7 +8,7 @@ All amounts in this repository's design documents are **fictional** Philippine p
 
 ---
 
-> **Implementation (Milestone 4.1):** these tokens now live in [`frontend/src/index.css`](frontend/src/index.css) as CSS variables (shadcn/ui's names plus MoniKey additions) mapped to Tailwind utilities with `@theme inline`. Change a value there and in this file together; components never use raw hex values. See [`docs/design/FRONTEND_SCAFFOLD_4_1.md`](docs/design/FRONTEND_SCAFFOLD_4_1.md). Milestone 4.2 implements the shell and the Overview page from these tokens: [`docs/design/FRONTEND_OVERVIEW_4_2.md`](docs/design/FRONTEND_OVERVIEW_4_2.md).
+> **Implementation:** these tokens live in [`frontend/src/index.css`](frontend/src/index.css) as CSS variables (shadcn/ui's names plus MoniKey additions) mapped to Tailwind utilities with `@theme inline`. Change a value there and in this file together; components use semantic tokens. The shell and three screens use this system. See the frontend milestone reports linked above.
 
 ## A. Visual identity
 
@@ -125,7 +125,7 @@ Note: `income` and `success` intentionally share a value; `expense` and `text` a
 | `ring` on `surface` / `background` | 5.74 / 5.25 | 3.0 | pass |
 | `border` on `surface` / `background` | 1.24 / 1.14 | decorative only | n/a — never the only cue for a control |
 
-These ratios were computed during design; they have **not** been re-measured in a browser. Re-check after implementation (Milestone 5).
+These ratios were computed during design. Rendered text and field contrast were checked in Chromium during the Milestone 4.7 and 4.9 audits; see the milestone reports for coverage and limitations. Real-device, browser-engine, and screen-reader checks remain outstanding.
 
 ### Colour rules
 
@@ -147,7 +147,7 @@ These ratios were computed during design; they have **not** been re-measured in 
 2. **The true minus sign `−` (U+2212) is drawn by Manrope** in row amounts.
 3. **Tabular figures work:** with `font-variant-numeric: tabular-nums`, `1111`, `0000` and `8888` are all the same width (79.38px at 32px/600); without it they differ (54.03 / 82.19 / 77 px). Manrope's default digits are **proportional**, so `tabular-nums` is **required** on every amount (it is, via the base style).
 
-**Delivery:** the mock self-hosts the `latin` and `latin-ext` subsets (≈40 KB of WOFF2, from Google Fonts' own files) in `docs/design/preview/fonts/`; `latin-ext` is the subset that contains ₱ (U+20B1). Production will copy the same two files into `frontend/public/fonts/` with `@font-face` and `font-display: swap` at Milestone 2 — no CDN, no runtime third-party request, no npm dependency. If the font ever fails to load, the fallback stack keeps the layout intact (amounts never truncate, widths are checked with the fallback in mind).
+**Delivery:** the frontend self-hosts the `latin` and `latin-ext` Manrope WOFF2 subsets in `frontend/public/fonts/`; `latin-ext` contains ₱ (U+20B1). `@font-face` uses `font-display: swap`; there is no CDN request or font runtime dependency. The design preview retains its own copies for historical design review.
 
 | Role | Mobile | ≥768px | Weight | Line height | Notes |
 |---|---|---|---|---|---|
@@ -275,21 +275,21 @@ Budgets, goals, recurring bills, due dates or billing cycles, investments, bank 
 
 | # | Decision | Why | Status |
 |---|---|---|---|
-| D1 | Light theme only | Prompt baseline; fewer states to verify | Proposed |
-| D2 | Pastel-consumer style, one cobalt primary | Warm for beginners, phone-first, tints only on small marks | Proposed |
-| D3 | Expenses in ink, not red | Spending is normal; red is for errors. Keeps screens calm and avoids "everything is an alarm" | Proposed |
-| D4 | Separate `debt` hue | Liabilities must never read like money you have | Proposed |
-| D5 | Bottom bar on mobile, rail/sidebar above | Thumb reach, 3 destinations, no router | Proposed |
-| D6 | Quick Add = one Dialog (bottom sheet on phones) with a 3-way type switch | Fewest steps; one component for add and edit | Proposed |
-| D7 | Native selects/date; no custom Select | ADR-015; best mobile behaviour | Proposed |
+| D1 | Light theme only | Prompt baseline; fewer states to verify | Approved by owner |
+| D2 | Pastel-consumer style, one cobalt primary | Warm for beginners, phone-first, tints only on small marks | Approved by owner |
+| D3 | Expenses in ink, not red | Spending is normal; red is for errors. Keeps screens calm and avoids "everything is an alarm" | Approved by owner |
+| D4 | Separate `debt` hue | Liabilities must never read like money you have | Approved by owner |
+| D5 | Bottom bar on mobile, rail/sidebar above | Thumb reach, 3 destinations, no router | Approved and implemented |
+| D6 | Quick Add uses the shared dialog (bottom sheet on phones) and type switch; Pay card has a distinct entry point | Fewest steps; one component for add and edit | Approved and implemented |
+| D7 | Native selects/date; no custom Select | ADR-015; best mobile behaviour | Approved and implemented |
 | D8 | Rejected UI UX Pro Max's generated "Glassmorphism, dark, Caveat/Quicksand" recommendation | Contradicts the brief (no glass, light baseline, not handwritten) | Recorded |
 | D9 | Manrope, self-hosted | Taste Skill's dealt face; ₱, minus and tabular figures verified in Chromium | **Verified and decided** (owner: self-host if verified) |
-| D10 | Category chosen from a **tap-to-select chip grid**, not a select | Faster on a phone (no picker); still native radios; 6 expense / 3 income categories fit | Proposed (Impeccable review) |
-| D11 | Remember last account and last *Pay from* for the visit; **not** the category | Fewer taps without risking a wrongly pre-selected category | Proposed |
+| D10 | Category chosen from a **tap-to-select chip grid**, not a select | Faster on a phone (no picker); still native radios; 6 expense / 3 income categories fit | Approved by owner and implemented |
+| D11 | Remember last account and last *Pay from* for the visit; **not** the category | Fewer taps without risking a wrongly pre-selected category | Approved by owner and implemented |
 | D12 | "Paying a card bill? Use Pay card" hint under the Expense switch | Prevents the likeliest beginner double-count | Proposed |
 | D13 | Pay card: **Pay full** button, before/after estimate, below-zero warning; confirmation states the card's new owed figure and that payments don't change net position | The most money-sensitive moment should teach the rule before and after saving | Proposed — preview/warning depend on Q4 |
-| D15 | Net position is a flat deep-cobalt hero card with an inline `Money you have − Card debt` equation | Gives the product one focal point; replaces the pale equation strip (the critique found the strip text-only) | Proposed |
-| D16 | Active navigation item = soft-blue pill everywhere (bottom bar, rail, sidebar) | One selected-state language; colour only on a small selected mark | Proposed |
+| D15 | Net position is a flat deep-cobalt hero card with an inline `Money you have − Card debt` equation | Gives the product one focal point; replaces the pale equation strip (the critique found the strip text-only) | Approved by owner and implemented |
+| D16 | Active navigation item = soft-blue pill everywhere (bottom bar, rail, sidebar) | One selected-state language; colour only on a small selected mark | Implemented |
 | D14 | No custom numeric keypad or quick-amount chips | Native decimal keyboard keeps paste, accessibility and less code; revisit after real use | Recorded |
 
 ## Owner decisions recorded (after the independent browser review)
@@ -301,7 +301,7 @@ Budgets, goals, recurring bills, due dates or billing cycles, investments, bank 
 | Category as explicit chips, **never auto-remembered** (last account and last *Pay from* are remembered) | Approved |
 | Amount-first Quick Add; distinct **Pay card** workflow; the current three-page navigation | Preserved |
 | Fonts | Self-host Manrope **if** ₱ and tabular figures work — they do (above) |
-| Numbering | Work stays under Roadmap Milestone 3 |
+| Numbering | Design approval is complete; implementation follows the numbered gates in `docs/architecture/ROADMAP.md` |
 | No extra frameworks or UI features | Confirmed |
 
-Remaining open items are in [`DESIGN_REVIEW.md`](docs/design/DESIGN_REVIEW.md#open-decisions-for-the-owner).
+Remaining device and assistive-technology checks are listed in [`REAL_DEVICE_CHECKLIST.md`](docs/design/REAL_DEVICE_CHECKLIST.md). API decisions are in [`API_CLIENT_PLAN.md`](docs/design/API_CLIENT_PLAN.md).

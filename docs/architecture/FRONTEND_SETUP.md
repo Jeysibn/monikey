@@ -1,6 +1,6 @@
 # MoniKey v1.2 — Frontend Setup (Claude Code implementation checklist)
 
-**Status:** Approved plan, not executed. **Scope:** `frontend/` only. **Stack:** React + TypeScript + Vite + Tailwind CSS v4 + selected shadcn/ui + Lucide React. Refer to `ADR.md` ADR-015 and `DESIGN.md` before choosing theme values.
+**Status:** Scaffold and design-system setup executed and documented in [Milestone 4.1](../design/FRONTEND_SCAFFOLD_4_1.md). The three screens and mock-backed interactions are implemented through Milestone 4.9. This checklist is retained as the setup record; the remaining frontend integration work is tracked in [API_CLIENT_PLAN.md](../design/API_CLIENT_PLAN.md). **Scope:** `frontend/` only. **Stack:** React + TypeScript + Vite + Tailwind CSS v4 + selected shadcn/ui + Lucide React. Refer to `ADR.md` ADR-015 and `DESIGN.md` before changing theme values.
 
 ## Step 0 — Design first
 
@@ -8,7 +8,7 @@ Approve three-page mobile-first wireframes (Overview, Activity, Accounts) plus Q
 
 ## Step 1 — Vite scaffold
 
-Run from the new application repository root (skip scaffold if `frontend/` already contains an approved scaffold):
+Historical bootstrap instructions; already executed for this repository. Do not scaffold over the existing app. For a fresh project only, run from its root:
 
 ```bash
 npm create vite@latest frontend -- --template react-ts
@@ -18,7 +18,7 @@ npm install
 
 Use a Node LTS release supported by the installed Vite version. Review the `package.json` scripts.
 
-## Step 2 — Tailwind CSS v4 + Lucide
+## Step 2 — Tailwind CSS v4 + Lucide (completed)
 
 ```bash
 npm install tailwindcss @tailwindcss/vite
@@ -33,7 +33,7 @@ In `vite.config.ts`, add `tailwindcss()` alongside `react()` in `plugins`, and *
 
 Vite imports `src/index.css` through `src/main.tsx`. **Do not use v3-only** `@tailwind base`, `@tailwind components`, `@tailwind utilities` or `npx tailwindcss init -p`. Design theme configuration can live in the shadcn-generated CSS with semantic variables; avoid another theme source.
 
-## Step 3 — shadcn/ui in the existing Vite project
+## Step 3 — shadcn/ui in the existing Vite project (completed)
 
 Before the CLI, configure the `@/* → ./src/*` import alias in `tsconfig.json`, `tsconfig.app.json`, and `vite.config.ts` per the current shadcn/ui **Existing Project → Vite** documentation. shadcn's guide also shows installing `@types/node` and using `path.resolve` (or a functionally equivalent alias). Example:
 
@@ -48,7 +48,7 @@ Run `git diff` and inspect every dependency/file the CLI added. Commit the selec
 
 **Important:** The shadcn initializer may modify `src/index.css` and install dependencies. Preserve its generated styles; integrate the approved `DESIGN.md` tokens into them instead of replacing the whole stylesheet afterward. Choose a consistent configuration once and avoid duplicate CSS conventions.
 
-## Step 4 — Build one feature
+## Step 4 — Build one feature at a time (completed through mock-backed UI)
 
 Create Overview with typed **mock** balances. Use a shadcn Card and Button only when appropriate, Tailwind classes for spacing/layout and Lucide SVG components imported individually:
 
@@ -67,7 +67,7 @@ export function BalanceHeading() {
 
 Use `aria-label` for icon-only interactive controls. Keep JSX readable; create a reusable component only when that abstraction actually reduces duplication.
 
-## Step 5 — Verify and review
+## Step 5 — Verify and review (reported for the mock-backed UI; real-device checks remain)
 
 ```bash
 npm run build

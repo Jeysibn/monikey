@@ -1,5 +1,7 @@
 # MoniKey Design Mock — Verification Results
 
+> Historical verification record for the original design preview. Findings describe that preview, not the later React frontend. Current implementation evidence and remaining limits are in [Milestones 4.7 and 4.9](A11Y_RESPONSIVE_4_7.md) and [the S3 report](FRONTEND_API_CLIENT_S3.md).
+
 **Result: 274 of 274 automated checks passed, 0 failed.** Run on 2026-10-25 against `docs/design/preview/app.html` (the throwaway design mock — **not** production code).
 
 These are **measured results from a real browser**, produced by `docs/design/preview/verify.cjs` (re-runnable: `node docs/design/preview/verify.cjs`). Each row below is copied from that run's output; nothing is assumed. They show the *design mock* behaves as specified. They do **not** prove the future React app, the backend, a real phone, or assistive-technology behavior — see *Not tested*.
@@ -290,7 +292,7 @@ Labels shortened with an ellipsis (names/notes only, never amounts): 360px activ
 - **Other browsers:** Firefox and WebKit were not run.
 - **Assistive technology:** no screen reader (NVDA, VoiceOver, TalkBack) was run. What *was* checked is structural: focus order and focus trapping, Esc, focus return, error-summary focus, `aria-invalid`, arrow keys on the type switch, accessible names on row buttons. Contrast is computed from tokens (see `DESIGN.md`), not measured from pixels.
 - **Colour-vision simulation** of debt (orange) vs. warning (yellow) has not been done.
-- **First-run state** (no accounts) is specified but **not implemented** in the mock, so it is untested.
+- **First-run state:** this historical preview did not implement it. The later React mock has a `?demo=no-accounts` scenario and first-account flow, covered by frontend milestone checks.
 - **Fonts:** only the Chromium/Linux build was measured; Windows/macOS text rendering of Manrope was not.
 - **Scope of the logic:** the mock recomputes balances in the browser to demonstrate behavior. It is **not** the backend; real totals must come from the server, and the production app needs its own tests (Milestone 5 and the API milestones).
 - **Visual quality** was judged from screenshots by the design owner (Claude Code) and an independent reviewer; automated checks cannot judge taste.

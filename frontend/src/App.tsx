@@ -11,6 +11,7 @@ import { describeWriteError } from '@/lib/apiErrors'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthOf, nextPageSize } from '@/lib/finance'
+import { createHttpSource } from '@/httpSource'
 import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
 import type { MockOptions } from '@/mockSource'
@@ -74,7 +75,9 @@ async function freshSnapshot(source: DataSource): Promise<LedgerSnapshot> {
 
 function App() {
   const [source] = useState<DataSource>(() =>
-    createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(demo), readFailureKinds: failing }),
+    import.meta.env.VITE_DATA_SOURCE === 'http'
+      ? createHttpSource()
+      : createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(demo), readFailureKinds: failing }),
   )
   const [version, setVersion] = useState(0) // bumped after a write so every screen fetches again
   const [view, setView] = useState<View>('overview')
@@ -94,7 +97,7 @@ function App() {
   const lastAccount = useRef<number | null>(null)
   const lastPayFrom = useRef<number | null>(null)
   const opener = useRef<HTMLElement | null>(null) // the control that opened the dialog, so focus can go back to it
-  const demoLoading = demo === 'loading'
+  const demoLoading = import.meta.env.VITE_DATA_SOURCE !== 'http' && demo === 'loading'
 
   // What the screens read. Each is fetched when its screen needs it and again after a write.
   const accounts = useResource('accounts', (signal) => source.loadAccounts(signal), version)

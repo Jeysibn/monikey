@@ -195,7 +195,7 @@ Codex also could not verify rendering, contrast, font glyphs, screen readers or 
 | Q1 | Approve the visual direction (pastel-consumer, restrained; light theme; cobalt primary; expenses in ink; separate debt hue)? | Approve, with the colour-vision check. |
 | Q2 | **Fonts** | **Decided by owner:** self-host Manrope if ₱ and tabular figures work — they do (verified). |
 | Q3 | **Numbering** | **Decided by owner:** keep this work under Roadmap Milestone 3. (The Roadmap's own M3 is "Overview with typed mock data"; the Playbook uses a different numbering — still worth aligning separately.) |
-| Q4 | Display-only browser arithmetic (limit track, before/after estimate, over-pay / below-zero / over-limit notices) | **Approved by owner.** The backend remains the only source of saved figures and totals; the confirmation message after saving is built from server figures. |
+| Q4 | Display-only browser arithmetic (limit track, before/after estimate, over-pay / below-zero / over-limit notices) | **Approved by owner.** The backend remains the only source of saved figures and totals; the confirmation message after saving is built from server figures. | **Extended by the owner (Milestone 4 follow-up): also covers the before/after effect text in the edit and delete confirmations, as display-only estimates.**
 | Q5 | One form for Quick Add and Pay card | **Preserved by owner:** amount-first Quick Add and a distinct Pay card workflow. |
 | Q6 | **Add transaction** disabled until an account exists (vs. prompting inline)? | Disabled with a visible reason. |
 | Q7 | Note length cap and any other server-side limits? | Decide with Codex (B6). |

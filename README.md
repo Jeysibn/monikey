@@ -1,6 +1,6 @@
 # MoniKey
 
-MoniKey is a beginner-friendly, three-tier personal finance tracker. Its responsive React frontend has Overview, Accounts and Activity screens, and Quick Add, Pay card, Edit, Delete and Add account flows. The mock data source and a contract-driven HTTP data source are implemented. The initial PostgreSQL schema, repeatable category seed, and isolated accounting checks are in place; the FastAPI backend and a live database are not, so live persistence and end-to-end integration are not yet available.
+MoniKey is a beginner-friendly, three-tier personal finance tracker. Its responsive React frontend has Overview, Accounts and Activity screens, and Quick Add, Pay card, Edit, Delete and Add account flows. The mock data source and a contract-driven HTTP data source are implemented. The initial PostgreSQL schema, repeatable category seed, FastAPI endpoints, and isolated database/API checks are in place. A persistent local database and end-to-end browser integration are not configured yet.
 
 ## Approved stack
 
@@ -10,13 +10,13 @@ MoniKey is a beginner-friendly, three-tier personal finance tracker. Its respons
 - Delivery: GitHub Actions and GHCR
 - Deployment: existing Kubernetes cluster managed through Argo CD GitOps
 
-The frontend scaffold and design system are in place. Overview, Accounts, Activity, mock-backed create/edit/delete flows, account creation, responsive/accessibility refinements, and loading/error/slow states are implemented. The HTTP source, wire mappers, Vite proxy, and source selection are also implemented and tested with synthetic responses. Select `VITE_DATA_SOURCE=http` to use it; the default remains the mock. The database schema, category seed, and accounting SQL checks are implemented for Milestone 6. No FastAPI backend or live database is present, so end-to-end behavior against the API is unverified. See [frontend status](frontend/README.md), [the frontend/API report](docs/design/FRONTEND_API_CLIENT_S3.md), and [the database guide](database/README.md). Compose, CI, and deployment work remain ahead; Kubernetes is not part of the current implementation.
+The frontend scaffold and design system are in place. Overview, Accounts, Activity, mock-backed create/edit/delete flows, account creation, responsive/accessibility refinements, and loading/error/slow states are implemented. The HTTP source, wire mappers, Vite proxy, and source selection are also implemented. Select `VITE_DATA_SOURCE=http` to use it; the default remains the mock. Milestone 6 added the PostgreSQL schema, seed, and accounting checks; Milestone 7 added FastAPI CRUD, summary, and health endpoints with shared response fixtures. Both database and API tests run against disposable PostgreSQL containers. Live persistent setup and frontend-to-API browser integration remain for Milestone 8. See [backend status](backend/README.md), [frontend status](frontend/README.md), [the API client report](docs/design/FRONTEND_API_CLIENT_S3.md), [the database guide](database/README.md), and [shared API fixtures](docs/api-fixtures/README.md). Compose, CI, and deployment work remain ahead; Kubernetes is not part of the current implementation.
 
 ## Workspace layout
 
 ```text
 frontend/             React + TypeScript + Vite + Tailwind v4 + shadcn/ui app (mock and HTTP data sources)
-backend/              FastAPI workspace (not initialized)
+backend/              FastAPI routes, database connection helper, and API tests
 database/             PostgreSQL schema, seed, and isolated accounting checks
 docs/architecture/    Architecture documentation
 docs/design/           Design documentation
@@ -39,7 +39,7 @@ Create a production mock build with `npm run build`, or an HTTP build with `VITE
 
 ## Project documentation
 
-The approved v1.3 design baseline and current progress are in [`docs/architecture/`](./docs/architecture/): TLD, ADRs, master plan, roadmap, AI Agent Playbook, frontend setup, and Obsidian guide. Current design and frontend status is indexed in [`docs/design/README.md`](./docs/design/README.md). Milestone reports document evidence for their specific stage; they do not claim that a backend, live integration, or cluster deployment is verified.
+The approved v1.3 design baseline and current progress are in [`docs/architecture/`](./docs/architecture/): TLD, ADRs, master plan, roadmap, AI Agent Playbook, frontend setup, and Obsidian guide. Current design and frontend status is indexed in [`docs/design/README.md`](./docs/design/README.md). Milestone reports document evidence for their specific stage; they do not claim that live integration or cluster deployment is verified.
 
 AI setup and ownership are documented in [`docs/AI_AGENT_SETUP.md`](./docs/AI_AGENT_SETUP.md), with pinned skills in [`docs/SKILLS_MANIFEST.md`](./docs/SKILLS_MANIFEST.md) and onboarding evidence in [`docs/AI_AGENT_VERIFICATION.md`](./docs/AI_AGENT_VERIFICATION.md).
 

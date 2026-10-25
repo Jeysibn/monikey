@@ -1,6 +1,6 @@
 # API client plan and contract
 
-**Status:** The API decisions are settled; frontend S1 (data-source seam), S2 (loading/error states), and S3 (HTTP source and wire mappers) are implemented. S3 was tested with synthetic response bodies. No FastAPI backend or shared `docs/api-fixtures/` exists yet, so S4 live integration remains unverified. The TLD (§4, §6) defines the endpoints; this document records the clarified contract. See [S3 implementation and verification](FRONTEND_API_CLIENT_S3.md).
+**Status:** The API decisions are settled; frontend S1 (data-source seam), S2 (loading/error states), and S3 (HTTP source and wire mappers) are implemented. Milestone 7 FastAPI endpoints and shared response fixtures are also implemented and tested against a disposable PostgreSQL database. S4 live frontend/API integration and persistent local setup remain unverified. The TLD (§4, §6) defines the endpoints; this document records the clarified contract. See the [S3 frontend report](FRONTEND_API_CLIENT_S3.md), [backend README](../../backend/README.md), and [shared fixtures](../api-fixtures/README.md).
 
 Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DESIGN_REVIEW.md) §5 (B1–B7, Q4) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) §5–§7, §13
 
@@ -93,11 +93,11 @@ export interface DataSource {
 
 | Step | Work | Needs from Codex |
 |---|---|---|
-| S0 | Settle §5; agree JSON fixtures (§6) | **Contract decisions are recorded below. Shared JSON fixtures remain to be added with backend implementation.** |
+| S0 | Settle §5; agree JSON fixtures (§6) | **Contract decisions are recorded below; shared JSON fixtures are in `docs/api-fixtures/`.** |
 | S1 | Introduce `DataSource` (the plan's `Ledger`) and the view models; screens consume snapshots; mock behind the seam; no visible change. **Done in Milestone 4.8** ([`FRONTEND_SEAM_4_8.md`](FRONTEND_SEAM_4_8.md)) | nothing |
 | S2 | **Done in Milestone 4.9** ([`FRONTEND_STATES_4_9.md`](FRONTEND_STATES_4_9.md)). Loading, error and "Updating…" states, "Last updated 09:14" + **Retry**, the 15-second slow-save notice, mapping of 400/404/409/422 to the spec's messages; test with `?demo=load-error` and `?demo=slow` on the mock | the error shape (N1) only |
 | S3 | `wire.ts` mappers + `httpSource` + Vite proxy; client tests against synthetic responses | **Done** ([S3 report](FRONTEND_API_CLIENT_S3.md)); no backend needed for implementation |
-| S4 | End-to-end run against the real backend; flip the default flag; real-device checklist | backend + owner |
+| S4 | End-to-end run against the real backend; flip the default flag; real-device checklist | Claude frontend + Codex backend + owner |
 
 ## 4. Decisions on the frontend side (owner)
 
@@ -148,7 +148,7 @@ Proposal: every 4xx/5xx is `{ "error": { "code": "duplicate_account_name", "mess
 
 ### Codex contract response
 
-These decisions settle the API behavior for frontend planning. They do not claim that an API or backend implementation exists yet.
+These decisions settle the API behavior for frontend planning. The current FastAPI implementation is tracked in Milestone 7 and tested against these decisions.
 
 | Item | Decision |
 |---|---|
@@ -177,14 +177,14 @@ These decisions settle the API behavior for frontend planning. They do not claim
 
 ## 6. Contract tests
 
-- The backend phase will add sanitized shared fixtures under `docs/api-fixtures/`; backend response tests and frontend mapper tests should use them. They do not exist in the repository yet.
+- Sanitized shared fixtures now live under `docs/api-fixtures/`. Backend response tests read and compare those files. Frontend mapper tests still use synthetic inline bodies; the frontend owner can switch them to the shared files during S4 without changing the frontend API boundary.
 - The frontend currently tests exact decimal mapping, account/category/summary/entry mapping, field mapping, HTTP methods/routes/bodies, filtering, list merging, timestamp ordering, and errors with synthetic response bodies in `frontend/tests/wire.test.ts` and `frontend/tests/httpSource.test.ts`.
 - S4 must repeat journeys U1–U8 against the real backend and prove the accounting facts: a card payment changes neither expenses nor net position; a card purchase increases both debt and expenses.
 
 ## 7. Risks
 
-1. **The backend is the remaining integration dependency.** The HTTP client is implemented, but its response assumptions have not been verified against a server or shared fixtures.
-2. **Decimal strings must never pass through floats.** The client uses exact integer conversion and rejects malformed/out-of-bound values; server aggregate limits still need to be honored.
+1. **Live integration is the remaining dependency.** The API has endpoint tests against disposable PostgreSQL and shared fixtures; the HTTP client has not yet been run against a live FastAPI process.
+2. **Decimal strings must never pass through floats.** The client uses exact integer conversion and rejects malformed/out-of-bound values; the API also refuses to serialize calculated money beyond the agreed centavo bound.
 3. **Concurrent edits are last-write-wins** per the agreed contract; 404 edit/delete paths are mapped in the UI. No cross-tab integration test is possible without the backend.
 4. **Read requests time out after 30 seconds.** Writes are not automatically canceled or retried because a timed-out response could leave commit status unknown. The UI shows its existing slow-save notice while waiting.
-5. **No live network check has been completed.** The local API, request/response fixtures, accounting behavior, persistence, and real-device journey checks remain for S4 and later milestones.
+5. **No frontend live-network check has been completed.** The API, fixtures, and accounting behavior are implemented and tested; persistent database setup and real-device journeys remain for S4 and later milestones.

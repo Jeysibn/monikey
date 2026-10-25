@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "source_account_id": 1,
+  "card_account_id": 2,
+  "amount": "175.00",
+  "payment_date": "2026-10-21",
+  "note": "Updated synthetic payment",
+  "created_at": "2026-10-20T12:00:00Z"
+}

@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "account_id": 1,
+  "category_id": 4,
+  "amount": "120.50",
+  "transaction_date": "2026-10-16",
+  "note": "Updated synthetic expense",
+  "created_at": "2026-10-15T12:00:00Z"
+}

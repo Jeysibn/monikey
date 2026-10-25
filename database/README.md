@@ -10,6 +10,8 @@ four tables: `accounts`, `categories`, `transactions`, and
 - `001_init.sql` creates the four tables, constraints, and lookup indexes. Run
   it once against a new, empty database. Do not rerun it against a database
   with user data; later schema changes need separately reviewed migrations.
+  Account names are trimmed by the API and unique case-insensitively through a
+  normalized unique index.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls

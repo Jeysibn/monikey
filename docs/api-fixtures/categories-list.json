@@ -1,0 +1,11 @@
+[
+  { "id": 7, "name": "Bills", "type": "expense" },
+  { "id": 4, "name": "Food", "type": "expense" },
+  { "id": 6, "name": "Groceries", "type": "expense" },
+  { "id": 9, "name": "Other", "type": "expense" },
+  { "id": 8, "name": "Shopping", "type": "expense" },
+  { "id": 5, "name": "Transportation", "type": "expense" },
+  { "id": 2, "name": "Freelance", "type": "income" },
+  { "id": 3, "name": "Other", "type": "income" },
+  { "id": 1, "name": "Salary", "type": "income" }
+]

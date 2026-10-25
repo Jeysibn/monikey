@@ -2,6 +2,8 @@
 
 **Status:** Implemented and locally verified against synthetic responses. The HTTP client has not been exercised against FastAPI because this repository has no backend yet. S1 (data-source seam) and S2 (loading/error/slow states) are recorded in [Milestones 4.8](FRONTEND_SEAM_4_8.md) and [4.9](FRONTEND_STATES_4_9.md).
 
+**Historical note (2026-10-25):** This report records the frontend S3 state at implementation time. Milestone 7 has since added the FastAPI endpoints and shared fixtures; running the frontend against that API is the remaining Milestone 8 integration work.
+
 ## What changed
 
 - `frontend/src/wire.ts` defines the agreed snake_case API payloads, validates their shapes, and converts decimal strings to integer centavos with `BigInt` arithmetic. It rejects malformed or out-of-bound money rather than rounding it. Server-returned balances, debt, `owed`, `credit`, available credit, and summary values are used as supplied and checked for consistency.
@@ -19,8 +21,8 @@
 - `npm run build` — passed for the default mock build.
 - `VITE_DATA_SOURCE=http npm run build` — passed for the HTTP build. Inspection of the generated JS found no `createMockSource`, `load-error`, `save-error`, `failNextWrite`, `invalidNextWrite`, or `demoBehaviour` hooks.
 
-The repository's browser harnesses were not run for this change because their configured `playwright-core` module is absent. The frontend has not been tested against a running API; backend endpoints and the shared `docs/api-fixtures/` promised by the contract plan do not exist yet. Use the existing [real-device checklist](REAL_DEVICE_CHECKLIST.md) after backend integration and when the target devices are available.
+For the S3 change, the repository's browser harnesses were not run because their configured `playwright-core` module was absent. At that time, the frontend had not been tested against a running API and backend endpoints/shared fixtures did not exist. Use the existing [real-device checklist](REAL_DEVICE_CHECKLIST.md) during or after backend integration when the target devices are available.
 
 ## Next
 
-Implement the four-table database schema and accounting tests, then FastAPI endpoints matching the settled contract in [API_CLIENT_PLAN.md](API_CLIENT_PLAN.md). Add shared sanitized API fixtures with the backend work, run the browser journeys against a live local API, and verify persistence before starting Compose.
+The S3 report's next step was the schema, API, and fixtures; Milestones 6 and 7 have since completed those. The current next step is Milestone 8: run browser journeys against a local API, verify persistence, and complete owner integration review before starting Compose.

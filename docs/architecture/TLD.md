@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype and contract-driven HTTP client are implemented; the Milestone 6 PostgreSQL schema, category seed, and isolated accounting checks are also implemented. The FastAPI backend, live database, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The frontend prototype and contract-driven HTTP client, Milestone 6 PostgreSQL schema/seed/accounting checks, and Milestone 7 FastAPI endpoints/shared fixtures are implemented. Persistent live integration, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -212,7 +212,7 @@ erDiagram
 ```sql
 CREATE TABLE accounts (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name VARCHAR(60) NOT NULL UNIQUE,
+  name VARCHAR(60) NOT NULL,
   type VARCHAR(20) NOT NULL
     CHECK (type IN ('cash', 'bank', 'ewallet', 'credit_card')),
   opening_balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (opening_balance >= 0),
@@ -225,6 +225,9 @@ CREATE TABLE accounts (
     (type <> 'credit_card' AND credit_limit IS NULL AND opening_debt = 0)
   )
 );
+
+CREATE UNIQUE INDEX idx_accounts_name_normalized
+  ON accounts (LOWER(BTRIM(name)));
 
 CREATE TABLE categories (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -260,7 +263,7 @@ CREATE INDEX idx_card_payments_card_date
   ON credit_card_payments(card_account_id, payment_date DESC);
 ```
 
-This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. The database milestone does not include the FastAPI query layer or a persistent/live database.
+This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. FastAPI endpoints use direct parameterized SQL in [`backend/main.py`](../../backend/main.py), with connection setup in [`backend/database.py`](../../backend/database.py), shared synthetic response examples in [`docs/api-fixtures/`](../api-fixtures/), and endpoint tests in `backend/tests/`. The API has been tested against a disposable database; no persistent/live database is configured.
 
 **Seed categories:** Salary, Freelance, Other (income); Food, Transportation, Groceries, Bills, Shopping, Other (expense). Use a separate repeatable seed SQL file with `ON CONFLICT DO NOTHING`.
 
@@ -524,15 +527,17 @@ flowchart LR
 The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md](ROADMAP.md) and [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md). High-level sequence:
 
 1. **Design/spec (Claude Sonnet 5.5):** approve three view layouts, Quick Add, Pay Card, tokens, mobile behavior, `DESIGN.md`.
-2. **React + TypeScript styling bootstrap (Claude Sonnet):** Vite `react-ts` scaffold, Tailwind v4 Vite plugin, shadcn initial setup, selected UI components and Lucide; understand JSX/TSX, props, `useState`, utilities and design tokens.
-3. **Mock-data frontend (Claude Sonnet):** one view/form per commit; reusable selected shadcn primitives and Lucide icons; working interactions without API/DB.
-4. **UI QA and handoff (Claude with Codex review):** Impeccable critique, accessibility/responsive and Playwright checks; sign off design.
-5. **Database and API (Codex GPT-6.1 Sol):** four-table PostgreSQL schema, FastAPI CRUD, credit-card payment rules and tests.
-6. **Frontend–API integration (Claude implementing frontend, Codex implementing/validating API):** typed fetch adapter, safe loading/error states, full transaction flows.
-7. **Production-like Compose (Codex):** Node build → Nginx, FastAPI, PostgreSQL volume, backups; verify same-origin.
-8. **CI and release (Codex):** frontend TypeScript/build/lint, backend tests, SHA-tagged GHCR images.
-9. **Kubernetes GitOps (Codex):** read-only infrastructure discovery first, approved manifests, image promotion via `homelab-gitops`, private ingress, tested persistence/rollback.
-10. **Portfolio proof (both):** sample-data screenshots, diagram, README, architecture decisions and operational demo.
+2. **React + TypeScript styling bootstrap (Claude Sonnet):** Vite `react-ts` scaffold, Tailwind v4 Vite plugin, selected shadcn components and Lucide.
+3. **Overview mock frontend (Claude Sonnet):** typed mock data, loading and empty states.
+4. **Activity, Accounts, Quick Add and Pay Card (Claude Sonnet):** mock CRUD and account flows.
+5. **Frontend visual/accessibility QA (Claude with Codex review):** owner approved the mock UI; browser/device verification evidence is recorded separately.
+6. **Database (Codex GPT-6.1 Sol):** four-table schema, seed, accounting rules and disposable PostgreSQL tests.
+7. **FastAPI API (Codex):** parameterized REST routes, validation, shared fixtures and backend tests.
+8. **Frontend–API integration (Claude implementing frontend, Codex implementing/validating API):** typed fetch adapter, safe loading/error states, full transaction flows.
+9. **Production-like Compose (Codex):** Node build → Nginx, FastAPI, PostgreSQL volume, backups; verify same-origin.
+10. **CI and release (Codex):** frontend TypeScript/build/lint, backend tests, SHA-tagged GHCR images.
+11. **Kubernetes GitOps (Codex):** read-only infrastructure discovery first, approved manifests, image promotion via `homelab-gitops`, private ingress, tested persistence/rollback.
+12. **Portfolio proof (both):** sample-data screenshots, diagram, README, architecture decisions and operational demo.
 
 **Agent rule:** One agent edits the target files at a time; the other reads/tests the diff and reports findings. Human approval gates after prototype, accounting tests and pre-deployment. Completion requires executed tests, not declarations.
 

@@ -1,6 +1,6 @@
 # MoniKey v1.3 — Development Roadmap (Frontend First)
 
-**Status:** Approved design baseline. The frontend prototype and contract-driven HTTP client are implemented through API-plan S3; Milestone 6 PostgreSQL schema, category seed, and accounting checks are also implemented. The FastAPI backend, live database integration, and operations milestones remain unimplemented. This is a repository status snapshot, not evidence of a live deployment. **Owner:** user/project owner. **Code agents:** Claude Code and Codex. **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 + selective shadcn/ui + Lucide React. **Backend:** FastAPI. **Database:** PostgreSQL.
+**Status:** Approved design baseline. The frontend prototype and contract-driven HTTP client are implemented through API-plan S3; Milestone 6 PostgreSQL schema/seed/accounting checks and Milestone 7 FastAPI endpoints/shared fixtures are also implemented. Live frontend integration, persistent database setup, and operations milestones remain unimplemented or unverified. This is a repository status snapshot, not evidence of a live deployment. **Owner:** user/project owner. **Code agents:** Claude Code and Codex. **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 + selective shadcn/ui + Lucide React. **Backend:** FastAPI. **Database:** PostgreSQL.
 
 ## Non-negotiable development principles
 
@@ -66,8 +66,9 @@ Keep the Obsidian vault **separate from the MoniKey app and GitOps repositories*
 - **Milestone 5 owner approval:** approved on 2026-10-25 after the owner personally reviewed the mock frontend in a browser. The owner sign-off is complete.
 - **Verification evidence still limited:** the committed browser harnesses were not run because `playwright-core` is unavailable in this environment; physical-device and screen-reader checks were not performed. The checklist below records these checks as unverified without changing the owner's M5 approval.
 - **Complete in the repository:** Milestone 6 schema, repeatable seed, and accounting SQL checks. The tests use a disposable PostgreSQL container and fictional data, then roll back and remove the container.
-- **Next implementation phase:** FastAPI endpoints (Milestone 7), followed by live frontend/backend integration and owner verification (8), and only then Compose (9), CI (10), and private GitOps deployment (11).
-- **Evidence and limits:** see [Milestone 4.7](../design/A11Y_RESPONSIVE_4_7.md), [Milestone 4.9](../design/FRONTEND_STATES_4_9.md), [API client S3 report](../design/FRONTEND_API_CLIENT_S3.md), and [database guide](../../database/README.md). `bash database/test.sh` passed against the pinned local PostgreSQL 17.6 image. Real phones, Firefox/WebKit, screen readers, and a running FastAPI backend remain unchecked.
+- **Complete in the repository:** Milestone 7 FastAPI endpoints, shared JSON response fixtures, and backend tests. The tests verify CRUD, validation, error envelopes, account calculations, and card-payment accounting against disposable PostgreSQL.
+- **Next implementation phase:** live frontend/backend integration and owner verification (Milestone 8), followed by Compose (9), CI (10), and private GitOps deployment (11).
+- **Evidence and limits:** see [Milestone 4.7](../design/A11Y_RESPONSIVE_4_7.md), [Milestone 4.9](../design/FRONTEND_STATES_4_9.md), [API client S3 report](../design/FRONTEND_API_CLIENT_S3.md), [database guide](../../database/README.md), [backend guide](../../backend/README.md), and [shared API fixtures](../api-fixtures/README.md). `bash database/test.sh` passed; `bash backend/test.sh` passed (**10 tests**) against pinned local PostgreSQL 17.6. Real phones, Firefox/WebKit, screen readers, frontend-to-API browser journeys, and persistent local database setup remain unchecked.
 
 ## Frontend styling acceptance checklist (Milestones 2–5)
 

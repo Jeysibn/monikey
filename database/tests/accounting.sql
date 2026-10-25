@@ -111,6 +111,14 @@ BEGIN
   END;
 
   BEGIN
+    INSERT INTO accounts (name, type)
+    VALUES ('  tESt bANK  ', 'bank');
+    RAISE EXCEPTION 'Expected trimmed case-insensitive account name to be rejected';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+
+  BEGIN
     INSERT INTO categories (name, type) VALUES ('Food', 'expense');
     RAISE EXCEPTION 'Expected duplicate category name/type to be rejected';
   EXCEPTION WHEN unique_violation THEN

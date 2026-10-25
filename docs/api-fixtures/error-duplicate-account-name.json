@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "duplicate_account_name",
+    "message": "An account with this name already exists.",
+    "field": "name"
+  }
+}

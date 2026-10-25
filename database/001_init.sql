@@ -3,7 +3,7 @@
 
 CREATE TABLE accounts (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name VARCHAR(60) NOT NULL UNIQUE,
+  name VARCHAR(60) NOT NULL,
   type VARCHAR(20) NOT NULL
     CHECK (type IN ('cash', 'bank', 'ewallet', 'credit_card')),
   opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0
@@ -26,6 +26,9 @@ CREATE TABLE accounts (
     )
   )
 );
+
+CREATE UNIQUE INDEX idx_accounts_name_normalized
+  ON accounts (LOWER(BTRIM(name)));
 
 CREATE TABLE categories (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

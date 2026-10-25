@@ -4,7 +4,7 @@
 **Purpose:** Assign one AI coding agent per milestone for the approved React + TypeScript + Vite + Tailwind v4 + selective shadcn/ui + Lucide frontend while keeping changes small, comprehensible, testable, and reviewable.  
 **Agents available:** Claude Code and OpenAI Codex.
 
-> **Repository status (2026-10-25):** The owner approved Milestone 5 after personally reviewing the mock frontend in a browser. Automated browser tests and physical-device/screen-reader checks were not performed and remain unverified. Milestone 6's PostgreSQL schema, repeatable category seed, and isolated accounting checks are complete. Continue with FastAPI endpoints in Milestone 7. Roadmap numbering is authoritative for acceptance gates. This playbook's earlier prompt examples describe the workflow, not the current milestone.
+> **Repository status (2026-10-25):** The owner approved Milestone 5 after personally reviewing the mock frontend in a browser. Automated browser tests and physical-device/screen-reader checks were not performed and remain unverified. Milestones 6 and 7 (PostgreSQL schema/seed/accounting checks and FastAPI endpoints/shared fixtures) are complete. Continue with live frontend/API integration in Milestone 8. Roadmap numbering is authoritative for acceptance gates.
 
 > Model versions and subscriptions change. **Check Claude Code `/model` and Codex `/model` on your own account.** All names below are preferred choices *when available*, not a promise that your account exposes them.
 
@@ -36,17 +36,18 @@ Vendor guidance: Claude recommends Sonnet for most coding, Opus for difficult wo
 
 | Milestone | Editing agent / preferred model | Skills / references | Read-only reviewer | Acceptance criterion |
 |---|---|---|---|---|
-| 1. UX brief, wireframes, tokens | **Claude Sonnet 5.5** | UI UX Pro Max + Awesome DESIGN.md | Codex Sol | Owner approves three views, Quick Add/Pay Card and `DESIGN.md` |
-| 2. Vite/React/TS styling scaffold | **Claude Sonnet (latest available)** | Official Vite, Tailwind v4, shadcn Vite and Lucide docs | Codex read-only | Vite + Tailwind plugin, `@/*` alias, minimal shadcn init and named icon imports; npm build/lint succeed |
-| 3. Three-view typed mock prototype | **Claude Sonnet (latest available)** | Taste Skill; Tailwind v4; shadcn Button/Card/Input/Label/Dialog; Lucide | Codex read-only | All screens and actions work using typed mock data, no backend dependency; no UI template dump |
-| 4. UI/interaction review | **Claude Sonnet (latest available)** | Impeccable, optional Emil break-ui, Playwright | Codex read-only | Mobile, dialog focus/escape, native select, Lucide icon labels, contrast, loading/empty/error states tested |
-| 5. Four-table PostgreSQL model | **Codex GPT-6.1 Sol, High** | SQL docs | Claude Opus 5.5 | Database tests prove credit-card payment not an expense |
-| 6. FastAPI endpoints | **Codex Sol, Medium/High** | FastAPI docs | Claude Sonnet 5.5 | Validations, CRUD, summaries, error tests |
-| 7. Frontend/REST integration | **Claude Sonnet 5.5 for `frontend/`; Codex Sol for API fixes only** | Typed fetch adapter + React state | Codex Sol for frontend diff; Claude for API surface | Backend JSON contract matches TS definitions; full browser CRUD and card payment work |
-| 8. Docker Compose/Nginx | **Codex Sol, Medium** | Vite build, Nginx, Compose docs | Claude Sonnet 5.5 | `dist/` static build, `/api` proxy, Postgres persistence and restore tested |
-| 9. CI and GHCR | **Codex Sol, Medium** | GitHub Actions | Claude Sonnet 5.5 | npm ci/typecheck/build + API tests; immutable image tags published |
-| 10. Kubernetes + GitOps | **Codex Sol, High** | K8s/Argo docs | Claude Opus 5.5 | Reviewed manifests, private ingress, PVC, tagged image updates, Argo sync |
-| 11. Portfolio polish | **Claude Sonnet for UI screenshots; Codex Sol for operational README** | Approved DESIGN.md / docs | Other agent | Sample-only screenshots, architecture diagram, setup/rollback explanation |
+| 1. Design and wireframes | **Claude Sonnet 5.5** | UI UX Pro Max + Awesome DESIGN.md | Codex Sol | Owner approves three views, Quick Add/Pay Card and `DESIGN.md` |
+| 2. React/Vite/Tailwind scaffold | **Claude Sonnet (latest available)** | Official Vite, Tailwind v4, shadcn Vite and Lucide docs | Codex read-only | Vite + Tailwind plugin, `@/*` alias, selected shadcn components; npm build/lint succeed |
+| 3. Overview mock prototype | **Claude Sonnet (latest available)** | Taste Skill; Tailwind v4; selected shadcn; Lucide | Codex read-only | Overview works with typed mock data and loading/empty states |
+| 4. Activity, Accounts and Quick Add | **Claude Sonnet (latest available)** | Taste Skill; frontend tests | Codex read-only | CRUD, account creation, Pay Card and responsive mock flows work |
+| 5. Frontend visual/accessibility QA | **Claude Sonnet (latest available)** | Impeccable, Playwright | Codex read-only; owner approval | Owner approved the mock UI; browser/device checks and their evidence are tracked separately |
+| 6. PostgreSQL schema, seed, accounting tests | **Codex GPT-6.1 Sol, High** | PostgreSQL docs | Claude Opus 5.5 | Four tables, constraints, repeatable seed, money rules and disposable DB tests |
+| 7. FastAPI endpoints | **Codex Sol, Medium/High** | FastAPI and Psycopg docs | Claude Sonnet 5.5 | CRUD, summaries, validation, error envelopes, shared fixtures, API tests |
+| 8. Frontend/API integration | **Claude Sonnet for `frontend/`; Codex for API fixes** | Typed fetch adapter + React state | Codex reviews frontend diff | Live local API journeys and persistence verified by owner |
+| 9. Docker Compose/Nginx | **Codex Sol, Medium** | Vite build, Nginx, Compose docs | Claude Sonnet 5.5 | Static build, `/api` proxy, Postgres persistence and restore tested |
+| 10. CI and GHCR | **Codex Sol, Medium** | GitHub Actions | Claude Sonnet 5.5 | npm checks + API tests; immutable image tags published |
+| 11. Kubernetes + GitOps | **Codex Sol, High** | K8s/Argo docs | Claude Opus 5.5 | Reviewed manifests, private ingress, PVC, tagged image updates, Argo sync |
+| 12. Portfolio polish | **Claude Sonnet for UI; Codex Sol for operations docs** | Approved DESIGN.md / docs | Other agent | Sample-only screenshots, architecture diagram, setup/rollback explanation |
 
 **Skill selection:** UI UX Pro Max = design guidance, Taste Skill = implementation visual quality, Awesome DESIGN.md = curated references, Impeccable = critique/audit/polish, Emil Kowalski break-ui = stress test if desired, Playwright = browser verification. Read third-party skill instructions before installing; none are production dependencies. **Tailwind CSS v4, selected shadcn/ui component source, and Lucide React icons ARE approved dependencies** under ADR-015; skills must **not** introduce any additional CSS framework, dashboard template, state/form library or icon pack by default.
 

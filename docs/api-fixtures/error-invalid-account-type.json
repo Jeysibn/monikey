@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "invalid_account_type_combination",
+    "message": "Credit-card accounts can only be used for expenses.",
+    "field": "category_id"
+  }
+}

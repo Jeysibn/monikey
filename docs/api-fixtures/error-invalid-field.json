@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "invalid_field",
+    "message": "The request could not be validated.",
+    "field": "opening_balance"
+  }
+}

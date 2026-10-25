@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status:** the complete mock-backed UI and contract-driven HTTP data source are implemented. `src/dataSource.ts` is the seam; `src/mockSource.ts` supports the demo and tests; `src/httpSource.ts` calls same-origin `/api` routes; `src/wire.ts` validates JSON and converts exact decimal strings to bounded centavos. See [API client implementation and verification](../docs/design/FRONTEND_API_CLIENT_S3.md), [Milestone 4.9](../docs/design/FRONTEND_STATES_4_9.md), [Milestone 4.8](../docs/design/FRONTEND_SEAM_4_8.md), and [Milestone 4.7](../docs/design/A11Y_RESPONSIVE_4_7.md). The backend is absent, so real API integration remains unverified. Historical milestone reports describe their status at the time they were written.
+**Status:** the complete mock-backed UI and contract-driven HTTP data source are implemented. `src/dataSource.ts` is the seam; `src/mockSource.ts` supports the demo and tests; `src/httpSource.ts` calls same-origin `/api` routes; `src/wire.ts` validates JSON and converts exact decimal strings to bounded centavos. The FastAPI routes and shared API fixtures now exist; the frontend has not yet been exercised against a running API. See [API client implementation and verification](../docs/design/FRONTEND_API_CLIENT_S3.md), [Milestone 4.9](../docs/design/FRONTEND_STATES_4_9.md), [Milestone 4.8](../docs/design/FRONTEND_SEAM_4_8.md), and [Milestone 4.7](../docs/design/A11Y_RESPONSIVE_4_7.md). Historical milestone reports describe their status at the time they were written.
 
 ## Commands
 
@@ -16,7 +16,7 @@ npm run preview   # serve dist/ (default port 4173)
 npm test          # unit tests for accounting, UI rules, API mapping and requests (Node's built-in runner)
 ```
 
-The development default is the mock. Use `VITE_DATA_SOURCE=http npm run dev` with a FastAPI server at `http://localhost:8000`; the Vite proxy preserves the `/api` prefix. Build with the same flag (`VITE_DATA_SOURCE=http npm run build`) to select HTTP in production. The HTTP build excludes the mock and `?demo=` hooks. `VITE_*` values are public build-time settings and must not contain secrets. No API server is present in this repository yet.
+The development default is the mock. To run the API, follow [`backend/README.md`](../backend/README.md), then use `VITE_DATA_SOURCE=http npm run dev`; the Vite proxy preserves the `/api` prefix to `http://localhost:8000`. Build with the same flag (`VITE_DATA_SOURCE=http npm run build`) to select HTTP in production. The HTTP build excludes the mock and `?demo=` hooks. `VITE_*` values are public build-time settings and must not contain secrets. Live database persistence is not configured by this frontend.
 
 ## Where things are
 

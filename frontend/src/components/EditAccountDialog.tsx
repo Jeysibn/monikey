@@ -40,9 +40,6 @@ export function EditAccountDialog({
   useEffect(() => {
     if (accountId === null) return
     const controller = new AbortController()
-    setLoadState({ id: accountId, status: 'loading' })
-    setDirty(false)
-    setSaving(false)
     source.loadAccountForEdit(accountId, controller.signal).then(
       (values) => setLoadState({ id: accountId, status: 'ready', values }),
       () => {
@@ -108,7 +105,14 @@ export function EditAccountDialog({
                 Cancel
               </Button>
               {current?.status === 'error' && (
-                <Button type="button" className="grow" onClick={() => setAttempt((value) => value + 1)}>
+                <Button
+                  type="button"
+                  className="grow"
+                  onClick={() => {
+                    setLoadState({ id: current.id, status: 'loading' })
+                    setAttempt((value) => value + 1)
+                  }}
+                >
                   Try again
                 </Button>
               )}

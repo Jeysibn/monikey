@@ -340,6 +340,7 @@ function App() {
           />
 
           <EditAccountDialog
+            key={editAccountId}
             accountId={editAccountId}
             source={source}
             snapshot={snapshot}

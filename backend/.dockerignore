@@ -3,3 +3,9 @@ __pycache__
 .pytest_cache
 tests
 *.py[cod]
+.git
+.env*
+README.md
+requirements-dev.txt
+test.sh
+.gitkeep

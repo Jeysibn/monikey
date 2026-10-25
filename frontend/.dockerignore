@@ -2,3 +2,14 @@ node_modules
 dist
 coverage
 *.log
+playwright-report
+test-results
+blob-report
+.git
+.env*
+.claude
+.agents
+tests
+scripts
+README.md
+*.local

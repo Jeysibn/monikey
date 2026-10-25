@@ -9,24 +9,17 @@ This page is a sanitized product walkthrough and architecture summary. It uses n
 3. **Activity:** Lists dated income, expenses, purchases, and card payments. A card purchase is a categorized expense. A card payment reduces the source account and card debt but is not recorded as another expense.
 4. **Quick entry:** The owner can add income, an expense, or a card payment; entries can be edited or deleted after confirmation.
 
-## System diagram
+## Architecture diagrams
 
-```mermaid
-flowchart LR
-  Source[MoniKey source repository] --> CI[GitHub Actions checks and image builds]
-  CI --> Registry[GHCR SHA-tagged images]
-  GitOps[homelab-gitops desired state] --> Argo[Argo CD]
-  Argo --> Cluster[Private K3s cluster]
-  Registry -. pinned images are pulled by .-> Cluster
+### Application architecture
 
-  Browser[Owner browser on trusted LAN] -->|HTTPS| Traefik[Traefik ingress]
-  Traefik -->|/| Nginx[Nginx static frontend]
-  Traefik -->|/api| API[FastAPI]
-  API -->|internal connection| DB[(PostgreSQL)]
-  DB --> PVC[Longhorn persistent volume]
-```
+![MoniKey application architecture](../architecture/01-monikey-application.png)
+
+[Open scalable SVG](../architecture/01-monikey-application.svg).
 
 The frontend also includes an in-memory mock source for local previews. In the deployed system, the browser uses same-origin `/api` requests through the private ingress. PostgreSQL has no public Service or ingress.
+
+The companion [CI/CD and GitOps diagram](../architecture/02-monikey-gitops.png) shows image publication and reviewed promotion to the separate GitOps repository. The [database schema diagram](../architecture/03-monikey-database-erd.png) shows the four tables and their relationships. Both have scalable SVG versions in the [architecture docs](../architecture/README.md#architecture-diagrams).
 
 ## Current deployment
 

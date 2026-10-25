@@ -1,25 +1,19 @@
-import type { Account, Centavos, MockData } from '../types.ts'
-import { cardStatus, isCard, liquidBalance } from './finance.ts'
+import type { AccountInfo, Centavos, EntryKind, EntryValues, LedgerSnapshot } from '../types.ts'
+import { isCard } from './finance.ts'
 import { formatPeso } from './money.ts'
+import { accountById, cardOf, liquidBalanceOf } from './snapshot.ts'
+
+export type { EntryKind, EntryValues } from '../types.ts'
 
 /*
  * The rules of the Quick Add form (UI_UX_SPEC section 7), kept free of React so they can be tested.
  * Validation messages are the spec's, word for word. Amounts are parsed from text with string
  * arithmetic, never floating point, and end up as whole centavos.
+ * Everything that needs an account's figures reads a LedgerSnapshot (what the data source reports);
+ * nothing here works out a balance or a debt.
  * The preview and the notices are DISPLAY-ONLY estimates (owner decision Q4): they compare whole
  * centavos in the browser and are never saved. The real API will own every saved figure.
  */
-export type EntryKind = 'expense' | 'income' | 'payment'
-
-export interface EntryValues {
-  kind: EntryKind
-  amount: string // exactly what the person typed
-  accountId: number | null // expense: the account · income: deposit to · payment: pay from
-  cardId: number | null // payment only
-  categoryId: number | null // expense and income only
-  date: string // "YYYY-MM-DD"
-  note: string
-}
 
 export type EntryField = 'amount' | 'account' | 'card' | 'category' | 'date' | 'note'
 export type EntryErrors = Partial<Record<EntryField, string>>
@@ -51,11 +45,6 @@ export function parseMoney(text: string, allowZero = false): AmountResult {
 
 export const parseAmount = (text: string): AmountResult => parseMoney(text)
 
-/** Whole centavos as text a person can edit: 1425000 -> "14250.00". Used to fill the amount from "Pay full". */
-export function amountText(centavos: Centavos): string {
-  return `${Math.trunc(centavos / 100)}.${String(centavos % 100).padStart(2, '0')}`
-}
-
 /** A real calendar date written "YYYY-MM-DD" (a native date input gives "" when it is cleared or incomplete). */
 export function isValidDate(date: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
@@ -65,30 +54,27 @@ export function isValidDate(date: string): boolean {
   return y >= 1900 && check.getUTCFullYear() === y && check.getUTCMonth() === mo - 1 && check.getUTCDate() === d
 }
 
-const account = (data: MockData, id: number | null): Account | undefined =>
-  id === null ? undefined : data.accounts.find((a) => a.id === id)
-
 /** Which accounts a field may offer: expenses take any account; income and "pay from" never a card; "pay card" only cards. */
-export function accountsFor(kind: EntryKind, field: 'account' | 'card', data: MockData): Account[] {
-  if (field === 'card') return data.accounts.filter(isCard)
-  return kind === 'expense' ? data.accounts : data.accounts.filter((a) => !isCard(a))
+export function accountsFor(kind: EntryKind, field: 'account' | 'card', snapshot: LedgerSnapshot): AccountInfo[] {
+  if (field === 'card') return snapshot.accounts.filter(isCard)
+  return kind === 'expense' ? snapshot.accounts : snapshot.accounts.filter((a) => !isCard(a))
 }
 
-const accountAllowed = (kind: EntryKind, field: 'account' | 'card', id: number | null, data: MockData) =>
-  id !== null && accountsFor(kind, field, data).some((a) => a.id === id)
+const accountAllowed = (kind: EntryKind, field: 'account' | 'card', id: number | null, snapshot: LedgerSnapshot) =>
+  id !== null && accountsFor(kind, field, snapshot).some((a) => a.id === id)
 
-export function validate(v: EntryValues, data: MockData): EntryErrors {
+export function validate(v: EntryValues, snapshot: LedgerSnapshot): EntryErrors {
   const errors: EntryErrors = {}
   const amount = parseAmount(v.amount)
   if (!amount.ok) errors.amount = amount.error
 
-  if (!accountAllowed(v.kind, 'account', v.accountId, data)) {
+  if (!accountAllowed(v.kind, 'account', v.accountId, snapshot)) {
     errors.account = v.kind === 'payment' ? "Choose the account you're paying from." : 'Choose an account.'
   }
   if (v.kind === 'payment') {
-    if (!accountAllowed(v.kind, 'card', v.cardId, data)) errors.card = "Choose the card you're paying."
+    if (!accountAllowed(v.kind, 'card', v.cardId, snapshot)) errors.card = "Choose the card you're paying."
   } else {
-    const category = data.categories.find((c) => c.id === v.categoryId)
+    const category = snapshot.categories.find((c) => c.id === v.categoryId)
     if (!category || category.type !== v.kind) errors.category = 'Choose a category.'
   }
   if (!isValidDate(v.date)) errors.date = 'Enter a valid date.'
@@ -97,12 +83,12 @@ export function validate(v: EntryValues, data: MockData): EntryErrors {
 }
 
 /** Changing the type keeps amount, date and note, clears the category, and clears an account that no longer fits. */
-export function switchKind(v: EntryValues, kind: EntryKind, data: MockData): EntryValues {
+export function switchKind(v: EntryValues, kind: EntryKind, snapshot: LedgerSnapshot): EntryValues {
   return {
     ...v,
     kind,
     categoryId: null,
-    accountId: accountAllowed(kind, 'account', v.accountId, data) ? v.accountId : null,
+    accountId: accountAllowed(kind, 'account', v.accountId, snapshot) ? v.accountId : null,
   }
 }
 
@@ -115,59 +101,55 @@ const owedText = (signedDebt: Centavos) =>
   signedDebt >= 0 ? formatPeso(signedDebt) : `${formatPeso(0)} (card credit ${formatPeso(-signedDebt)})`
 
 /** "After paying (estimate)" for a card payment, or the card's new debt for a purchase on a card. Nothing for other entries. */
-export function previewFor(v: EntryValues, data: MockData): Preview | null {
+export function previewFor(v: EntryValues, snapshot: LedgerSnapshot): Preview | null {
   const amount = parseAmount(v.amount)
-  const from = account(data, v.accountId)
+  const from = accountById(snapshot, v.accountId)
   if (!amount.ok || !from) return null
 
   if (v.kind === 'payment') {
-    const card = account(data, v.cardId)
-    if (!card || !isCard(card) || isCard(from)) return null
-    const balance = liquidBalance(from, data)
-    const debt = cardStatus(card, data).signedDebt
+    const card = cardOf(snapshot, v.cardId)
+    const balance = liquidBalanceOf(snapshot, v.accountId)
+    if (!card || balance === undefined) return null
+    const debt = card.signedDebt
     return {
       title: 'After paying (estimate)',
       lines: [
         `${from.name}: ${formatPeso(balance)} → ${formatPeso(balance - amount.centavos)}`,
-        `${card.name} owed: ${formatPeso(Math.max(debt, 0))} → ${owedText(debt - amount.centavos)}`,
+        `${card.account.name} owed: ${formatPeso(card.owed)} → ${owedText(debt - amount.centavos)}`,
         'Expenses: no change',
       ],
     }
   }
-  if (v.kind === 'expense' && isCard(from)) {
-    const debt = cardStatus(from, data).signedDebt
+  const onCard = v.kind === 'expense' ? cardOf(snapshot, v.accountId) : undefined
+  if (onCard) {
     return {
       title: 'After saving (estimate)',
-      lines: [`${from.name} owed: ${formatPeso(Math.max(debt, 0))} → ${owedText(debt + amount.centavos)}`],
+      lines: [`${from.name} owed: ${formatPeso(onCard.owed)} → ${owedText(onCard.signedDebt + amount.centavos)}`],
     }
   }
   return null
 }
 
 /** Warnings that never stop a save. */
-export function notices(v: EntryValues, data: MockData): string[] {
+export function notices(v: EntryValues, snapshot: LedgerSnapshot): string[] {
   const amount = parseAmount(v.amount)
-  const from = account(data, v.accountId)
+  const from = accountById(snapshot, v.accountId)
   if (!amount.ok || !from) return []
   const out: string[] = []
 
   if (v.kind === 'payment') {
-    const card = account(data, v.cardId)
-    if (card && isCard(card)) {
-      const owed = cardStatus(card, data).owed
-      if (amount.centavos > owed) {
-        out.push(`That's more than the ${formatPeso(owed)} currently owed. The extra becomes credit on the card.`)
-      }
+    const card = cardOf(snapshot, v.cardId)
+    if (card && amount.centavos > card.owed) {
+      out.push(`That's more than the ${formatPeso(card.owed)} currently owed. The extra becomes credit on the card.`)
     }
-    if (!isCard(from)) {
-      const balance = liquidBalance(from, data)
-      if (balance < amount.centavos) {
-        out.push(`${from.name} has ${formatPeso(balance)}, less than this payment. Its balance will go below zero.`)
-      }
+    const balance = liquidBalanceOf(snapshot, v.accountId)
+    if (balance !== undefined && balance < amount.centavos) {
+      out.push(`${from.name} has ${formatPeso(balance)}, less than this payment. Its balance will go below zero.`)
     }
   }
-  if (v.kind === 'expense' && isCard(from)) {
-    const available = Math.max(cardStatus(from, data).availableCredit, 0)
+  const onCard = v.kind === 'expense' ? cardOf(snapshot, v.accountId) : undefined
+  if (onCard) {
+    const available = Math.max(onCard.availableCredit, 0)
     if (amount.centavos > available) {
       out.push(`That's more than the ${formatPeso(available)} credit available on ${from.name}.`)
     }
@@ -179,11 +161,11 @@ export function notices(v: EntryValues, data: MockData): string[] {
  * The text of the select option: balance for ordinary accounts, available credit for cards.
  * `withFigures` is false when editing: those figures already include the entry being edited and would mislead.
  */
-export function accountOptionLabel(a: Account, data: MockData, withFigures = true): string {
+export function accountOptionLabel(a: AccountInfo, snapshot: LedgerSnapshot, withFigures = true): string {
   if (!withFigures) return a.name
-  if (isCard(a)) {
-    const available = cardStatus(a, data).availableCredit
-    return `${a.name} — ${available > 0 ? `${formatPeso(available)} available` : 'No credit available'}`
+  const card = cardOf(snapshot, a.id)
+  if (card) {
+    return `${a.name} — ${card.availableCredit > 0 ? `${formatPeso(card.availableCredit)} available` : 'No credit available'}`
   }
-  return `${a.name} — ${formatPeso(liquidBalance(a, data))}`
+  return `${a.name} — ${formatPeso(liquidBalanceOf(snapshot, a.id) ?? 0)}`
 }

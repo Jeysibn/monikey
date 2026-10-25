@@ -4,8 +4,8 @@ import { DeleteConfirm } from '@/components/DeleteConfirm'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { TransactionForm } from '@/components/TransactionForm'
 import type { EntryValues } from '@/lib/entryForm'
-import { deleteSummary, type EntryTarget } from '@/lib/ledger'
-import type { MockData } from '@/types'
+import { deleteSummary } from '@/lib/entryText'
+import type { EntryTarget, LedgerSnapshot } from '@/types'
 
 /*
  * Quick Add, Edit and Delete in one dialog (a bottom sheet on phones, see ui/dialog.tsx). The content is
@@ -25,7 +25,7 @@ export interface EntrySession {
 
 function Body({
   session,
-  data,
+  snapshot,
   month,
   amountRef,
   onDirty,
@@ -35,7 +35,7 @@ function Body({
   onClose,
 }: {
   session: EntrySession
-  data: MockData
+  snapshot: LedgerSnapshot
   month: string
   amountRef: React.RefObject<HTMLInputElement | null>
   onDirty: () => void
@@ -47,7 +47,7 @@ function Body({
   const [confirming, setConfirming] = useState(session.confirmFirst === true)
   const wasConfirming = useRef(confirming)
   const { target } = session
-  const summary = target ? deleteSummary(data, target, month) : null
+  const summary = target ? deleteSummary(snapshot, session.values, month) : null
 
   // Back from the confirmation: put focus on the form's Delete button, where the person was.
   useEffect(() => {
@@ -60,7 +60,7 @@ function Body({
       <TransactionForm
         mode={session.mode}
         hidden={confirming}
-        data={data}
+        snapshot={snapshot}
         initial={session.values}
         amountRef={amountRef}
         onDirty={onDirty}
@@ -83,7 +83,7 @@ function Body({
 
 export function QuickAddDialog({
   session,
-  data,
+  snapshot,
   month,
   onSubmit,
   onDelete,
@@ -91,7 +91,7 @@ export function QuickAddDialog({
   onClosed,
 }: {
   session: EntrySession | null // null while the dialog is closed
-  data: MockData
+  snapshot: LedgerSnapshot
   month: string // the month being viewed: the delete text only mentions "this month" for entries in it
   onSubmit: (values: EntryValues, target?: EntryTarget) => Promise<void>
   onDelete: (target: EntryTarget) => Promise<void>
@@ -125,7 +125,7 @@ export function QuickAddDialog({
             // a fresh form (and confirmation) for every opening
             key={`${session.mode}-${session.target?.table}-${session.target?.id}-${session.confirmFirst}-${session.values.kind}-${session.values.cardId}-${session.values.accountId}`}
             session={session}
-            data={data}
+            snapshot={snapshot}
             month={month}
             amountRef={amountRef}
             onDirty={() => (guard.current.dirty = true)}

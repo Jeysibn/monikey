@@ -10,7 +10,7 @@ import { MoneyInput } from '@/components/MoneyInput'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { isCardType, MAX_NAME, validateAccount, type AccountField, type AccountValues } from '@/lib/accountForm'
 import { describedBy } from '@/lib/describedBy'
-import type { AccountType, MockData } from '@/types'
+import type { AccountType, LedgerSnapshot } from '@/types'
 
 /*
  * The Add account form (UI_UX_SPEC section 9). Same habits as the Quick Add form: errors appear when a
@@ -30,7 +30,7 @@ const FIELD_ORDER: AccountField[] = ['name', 'balance', 'limit', 'owed']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 
 export function AccountForm({
-  data,
+  snapshot,
   initial,
   nameRef,
   onDirty,
@@ -38,7 +38,7 @@ export function AccountForm({
   onSubmit,
   onCancel,
 }: {
-  data: MockData
+  snapshot: LedgerSnapshot
   initial: AccountValues
   nameRef: RefObject<HTMLInputElement | null>
   onDirty: () => void
@@ -55,7 +55,7 @@ export function AccountForm({
   const summaryRef = useRef<HTMLDivElement>(null)
   const edited = useRef<Set<AccountField>>(new Set()) // see TransactionForm: leaving an untouched field shows nothing
 
-  const errors = validateAccount(values, data)
+  const errors = validateAccount(values, snapshot)
   const shown = (field: AccountField) => (submitted || touched.has(field) ? errors[field] : undefined)
   const failing = FIELD_ORDER.filter((f) => errors[f])
   const card = isCardType(values.type)

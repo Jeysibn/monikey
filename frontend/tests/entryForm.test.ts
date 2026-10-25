@@ -17,26 +17,27 @@ import {
   validate,
   type EntryValues,
 } from '../src/lib/entryForm.ts'
-import { cardStatus, liquidBalance, summarize } from '../src/lib/finance.ts'
+import { buildSnapshot, cardStatus, liquidBalance, summarize } from '../src/lib/finance.ts'
+import { deleteSummary, saveMessage, targetOf } from '../src/lib/entryText.ts'
 import {
-  deleteSummary,
   entryExists,
   entryValues,
   ledgerReducer,
-  saveMessage,
-  targetOf,
   toAction,
   toDeleteAction,
   toUpdateAction,
   type EntryTarget,
 } from '../src/lib/ledger.ts'
 import { getMockData } from '../src/mockData.ts'
+import { MAX_MONEY_CENTAVOS } from '../src/lib/money.ts'
+import type { MockData } from '../src/types.ts'
 
 const OCT = '2026-10'
 const CASH = 1, MAIN = 2, GCASH = 3, BLUE = 4, EVERYDAY = 5
 const FOOD = 4, SHOPPING = 8, SALARY = 1
 
 const data = getMockData()
+const snap = buildSnapshot(data)
 const base: EntryValues = { kind: 'expense', amount: '385', accountId: GCASH, cardId: null, categoryId: FOOD, date: '2026-10-25', note: '' }
 const pay: EntryValues = { kind: 'payment', amount: '5000', accountId: MAIN, cardId: BLUE, categoryId: null, date: '2026-10-25', note: '' }
 const amountError = (text: string) => {
@@ -89,43 +90,43 @@ describe('isValidDate', () => {
 
 describe('validate', () => {
   it('accepts a complete expense, income and payment', () => {
-    assert.deepEqual(validate(base, data), {})
-    assert.deepEqual(validate({ ...base, kind: 'income', categoryId: SALARY, accountId: MAIN }, data), {})
-    assert.deepEqual(validate(pay, data), {})
+    assert.deepEqual(validate(base, snap), {})
+    assert.deepEqual(validate({ ...base, kind: 'income', categoryId: SALARY, accountId: MAIN }, snap), {})
+    assert.deepEqual(validate(pay, snap), {})
   })
   it('reports each missing field with the spec wording', () => {
     const empty: EntryValues = { ...base, amount: '', accountId: null, categoryId: null, date: '' }
-    assert.deepEqual(validate(empty, data), {
+    assert.deepEqual(validate(empty, snap), {
       amount: 'Enter an amount.',
       account: 'Choose an account.',
       category: 'Choose a category.',
       date: 'Enter a valid date.',
     })
-    assert.deepEqual(validate({ ...pay, accountId: null, cardId: null }, data), {
+    assert.deepEqual(validate({ ...pay, accountId: null, cardId: null }, snap), {
       account: "Choose the account you're paying from.",
       card: "Choose the card you're paying.",
     })
   })
   it('never lets a card pay a card, a card receive income, or a non-card be paid', () => {
-    assert.equal(validate({ ...pay, accountId: BLUE }, data).account, "Choose the account you're paying from.")
-    assert.equal(validate({ ...pay, cardId: MAIN }, data).card, "Choose the card you're paying.")
-    assert.equal(validate({ ...base, kind: 'income', categoryId: SALARY, accountId: BLUE }, data).account, 'Choose an account.')
-    assert.deepEqual(validate({ ...base, accountId: BLUE }, data), {}) // an expense may be charged to a card
+    assert.equal(validate({ ...pay, accountId: BLUE }, snap).account, "Choose the account you're paying from.")
+    assert.equal(validate({ ...pay, cardId: MAIN }, snap).card, "Choose the card you're paying.")
+    assert.equal(validate({ ...base, kind: 'income', categoryId: SALARY, accountId: BLUE }, snap).account, 'Choose an account.')
+    assert.deepEqual(validate({ ...base, accountId: BLUE }, snap), {}) // an expense may be charged to a card
   })
   it('requires a category of the matching type, and none for a payment', () => {
-    assert.equal(validate({ ...base, categoryId: SALARY }, data).category, 'Choose a category.') // income category on an expense
-    assert.equal(validate({ ...base, kind: 'income', categoryId: FOOD }, data).category, 'Choose a category.')
-    assert.equal(validate({ ...pay, categoryId: FOOD }, data).category, undefined) // ignored for payments
+    assert.equal(validate({ ...base, categoryId: SALARY }, snap).category, 'Choose a category.') // income category on an expense
+    assert.equal(validate({ ...base, kind: 'income', categoryId: FOOD }, snap).category, 'Choose a category.')
+    assert.equal(validate({ ...pay, categoryId: FOOD }, snap).category, undefined) // ignored for payments
   })
   it('limits the note to 120 characters', () => {
-    assert.equal(validate({ ...base, note: 'x'.repeat(120) }, data).note, undefined)
-    assert.equal(validate({ ...base, note: 'x'.repeat(121) }, data).note, 'Keep the note under 120 characters.')
+    assert.equal(validate({ ...base, note: 'x'.repeat(120) }, snap).note, undefined)
+    assert.equal(validate({ ...base, note: 'x'.repeat(121) }, snap).note, 'Keep the note under 120 characters.')
   })
 })
 
 describe('switchKind and account lists', () => {
   it('keeps amount, date and note, clears the category', () => {
-    const v = switchKind({ ...base, note: 'Lunch' }, 'income', data)
+    const v = switchKind({ ...base, note: 'Lunch' }, 'income', snap)
     assert.equal(v.amount, '385')
     assert.equal(v.date, '2026-10-25')
     assert.equal(v.note, 'Lunch')
@@ -133,26 +134,26 @@ describe('switchKind and account lists', () => {
     assert.equal(v.accountId, GCASH) // still valid for income
   })
   it('clears an account that no longer fits (a card cannot be a deposit or a payer)', () => {
-    assert.equal(switchKind({ ...base, accountId: BLUE }, 'income', data).accountId, null)
-    assert.equal(switchKind({ ...base, accountId: BLUE }, 'payment', data).accountId, null)
-    assert.equal(switchKind({ ...pay, accountId: MAIN }, 'expense', data).accountId, MAIN)
+    assert.equal(switchKind({ ...base, accountId: BLUE }, 'income', snap).accountId, null)
+    assert.equal(switchKind({ ...base, accountId: BLUE }, 'payment', snap).accountId, null)
+    assert.equal(switchKind({ ...pay, accountId: MAIN }, 'expense', snap).accountId, MAIN)
   })
   it('offers the right accounts per field', () => {
-    assert.deepEqual(accountsFor('expense', 'account', data).map((a) => a.id), [1, 2, 3, 4, 5])
-    assert.deepEqual(accountsFor('income', 'account', data).map((a) => a.id), [1, 2, 3])
-    assert.deepEqual(accountsFor('payment', 'account', data).map((a) => a.id), [1, 2, 3])
-    assert.deepEqual(accountsFor('payment', 'card', data).map((a) => a.id), [4, 5])
+    assert.deepEqual(accountsFor('expense', 'account', snap).map((a) => a.id), [1, 2, 3, 4, 5])
+    assert.deepEqual(accountsFor('income', 'account', snap).map((a) => a.id), [1, 2, 3])
+    assert.deepEqual(accountsFor('payment', 'account', snap).map((a) => a.id), [1, 2, 3])
+    assert.deepEqual(accountsFor('payment', 'card', snap).map((a) => a.id), [4, 5])
   })
   it('option text shows the balance, or the available credit for a card', () => {
-    assert.equal(accountOptionLabel(data.accounts[2], data), 'GCash — ₱3,120.75')
-    assert.equal(accountOptionLabel(data.accounts[3], data), 'Blue Card — ₱35,750.00 available')
-    assert.equal(accountOptionLabel(getMockData('over-limit').accounts[4], getMockData('over-limit')), 'Everyday Card — No credit available')
+    assert.equal(accountOptionLabel(data.accounts[2], snap), 'GCash — ₱3,120.75')
+    assert.equal(accountOptionLabel(data.accounts[3], snap), 'Blue Card — ₱35,750.00 available')
+    assert.equal(accountOptionLabel(buildSnapshot(getMockData('over-limit')).accounts[4], buildSnapshot(getMockData('over-limit'))), 'Everyday Card — No credit available')
   })
 })
 
 describe('preview and notices (display only)', () => {
   it('previews a card payment: both balances move, expenses do not', () => {
-    const p = previewFor(pay, data)!
+    const p = previewFor(pay, snap)!
     assert.equal(p.title, 'After paying (estimate)')
     assert.deepEqual(p.lines, [
       'Main Savings: ₱48,725.50 → ₱43,725.50',
@@ -161,27 +162,27 @@ describe('preview and notices (display only)', () => {
     ])
   })
   it('previews a purchase on a card, and nothing for a purchase on cash or for income', () => {
-    assert.deepEqual(previewFor({ ...base, amount: '2,500', accountId: BLUE }, data)!.lines, ['Blue Card owed: ₱14,250.00 → ₱16,750.00'])
-    assert.equal(previewFor(base, data), null)
-    assert.equal(previewFor({ ...base, kind: 'income', categoryId: SALARY }, data), null)
-    assert.equal(previewFor({ ...pay, amount: '' }, data), null)
+    assert.deepEqual(previewFor({ ...base, amount: '2,500', accountId: BLUE }, snap)!.lines, ['Blue Card owed: ₱14,250.00 → ₱16,750.00'])
+    assert.equal(previewFor(base, snap), null)
+    assert.equal(previewFor({ ...base, kind: 'income', categoryId: SALARY }, snap), null)
+    assert.equal(previewFor({ ...pay, amount: '' }, snap), null)
   })
   it('previews an overpayment as card credit, not negative debt', () => {
-    const p = previewFor({ ...pay, amount: '20,000', cardId: EVERYDAY }, data)!
+    const p = previewFor({ ...pay, amount: '20,000', cardId: EVERYDAY }, snap)!
     assert.equal(p.lines[1], 'Everyday Card owed: ₱6,800.00 → ₱0.00 (card credit ₱13,200.00)')
   })
   it('warns, without blocking, about overpaying, an empty source and a card over its limit', () => {
-    assert.deepEqual(notices(pay, data), [])
-    assert.deepEqual(notices({ ...pay, amount: '20,000' }, data), ["That's more than the ₱14,250.00 currently owed. The extra becomes credit on the card."])
-    assert.deepEqual(notices({ ...pay, amount: '4,000', accountId: GCASH, cardId: BLUE }, data), ['GCash has ₱3,120.75, less than this payment. Its balance will go below zero.'])
-    assert.deepEqual(notices({ ...base, amount: '40,000', accountId: BLUE }, data), ["That's more than the ₱35,750.00 credit available on Blue Card."])
-    assert.deepEqual(notices({ ...base, accountId: BLUE }, data), [])
-    assert.equal(validate({ ...pay, amount: '20,000' }, data).amount, undefined) // a warning never becomes an error
+    assert.deepEqual(notices(pay, snap), [])
+    assert.deepEqual(notices({ ...pay, amount: '20,000' }, snap), ["That's more than the ₱14,250.00 currently owed. The extra becomes credit on the card."])
+    assert.deepEqual(notices({ ...pay, amount: '4,000', accountId: GCASH, cardId: BLUE }, snap), ['GCash has ₱3,120.75, less than this payment. Its balance will go below zero.'])
+    assert.deepEqual(notices({ ...base, amount: '40,000', accountId: BLUE }, snap), ["That's more than the ₱35,750.00 credit available on Blue Card."])
+    assert.deepEqual(notices({ ...base, accountId: BLUE }, snap), [])
+    assert.equal(validate({ ...pay, amount: '20,000' }, snap).amount, undefined) // a warning never becomes an error
   })
 })
 
 describe('ledger: saving an entry', () => {
-  const save = (v: EntryValues, d = data) => ledgerReducer(d, toAction(v, '2026-10-25T12:00:00'))
+  const save = (v: EntryValues, d = data) => ledgerReducer(d, toAction(v, '2026-10-25T12:00:00.000Z'))
 
   it('an expense on cash lowers that account and raises the month\'s expenses by the same amount', () => {
     const after = save({ ...base, accountId: CASH, amount: '120.50' })
@@ -224,7 +225,7 @@ describe('ledger: saving an entry', () => {
 })
 
 describe('ledger: confirmation messages (spec section 7)', () => {
-  const run = (v: EntryValues) => saveMessage(v, ledgerReducer(data, toAction(v, '2026-10-25T12:00:00')))
+  const run = (v: EntryValues) => saveMessage(v, buildSnapshot(ledgerReducer(data, toAction(v, '2026-10-25T12:00:00.000Z'))))
   it('expense on cash', () => assert.equal(run(base), 'Expense saved: −₱385.00 from GCash.'))
   it('expense on a card names what it now owes', () =>
     assert.equal(run({ ...base, amount: '2,500', accountId: BLUE }), 'Expense saved: −₱2,500.00 from Blue Card. Blue Card now owes ₱16,750.00.'))
@@ -238,6 +239,27 @@ describe('ledger: confirmation messages (spec section 7)', () => {
     assert.match(run({ ...pay, amount: '20,000', cardId: EVERYDAY }), /Everyday Card now has ₱13,200\.00 card credit\./))
   it('a payment in full says the card owes nothing', () =>
     assert.match(run({ ...pay, amount: '14,250' }), /Blue Card now owes nothing\./))
+})
+
+/** The delete confirmation for a stored entry, as the screens build it: the entry as opened plus the accounts' figures. */
+const del = (d: MockData, t: EntryTarget, month = OCT) => deleteSummary(buildSnapshot(d), entryValues(d, t)!, month)
+
+describe('estimates at the edge of the bound', () => {
+  it('a delete text whose before/after exceeds the bound still formats (it never throws during render)', () => {
+    // A card holding the largest credit the client accepts; deleting a ₱1,000.00 purchase on it makes the credit larger.
+    const s = buildSnapshot(data)
+    const edge = {
+      ...s,
+      cards: s.cards.map((c) =>
+        c.account.id === BLUE ? { ...c, signedDebt: -MAX_MONEY_CENTAVOS, owed: 0, credit: MAX_MONEY_CENTAVOS } : c,
+      ),
+    }
+    const entry: EntryValues = { kind: 'expense', amount: '1,000', accountId: BLUE, cardId: null, categoryId: SHOPPING, date: '2026-10-20', note: 'Big one' }
+    const text = deleteSummary(edge, entry, OCT)!.effect
+    assert.match(text, /Blue Card goes from ₱45,035,996,273,704\.95 card credit to ₱45,035,996,274,704\.95 card credit \(estimate\)/)
+    const pay = { ...entry, kind: 'payment' as const, accountId: MAIN, cardId: BLUE, categoryId: null }
+    assert.doesNotThrow(() => deleteSummary(edge, pay, OCT))
+  })
 })
 
 describe('ledger: editing and deleting (Milestone 4.5b)', () => {
@@ -272,7 +294,7 @@ describe('ledger: editing and deleting (Milestone 4.5b)', () => {
     assert.equal(summarize(after, OCT).netPosition, summarize(data, OCT).netPosition)
   })
   it('deleting reverses the entry exactly (add then delete returns to the starting figures)', () => {
-    const added = ledgerReducer(data, toAction(pay, '2026-10-25T12:00:00'))
+    const added = ledgerReducer(data, toAction(pay, '2026-10-25T12:00:00.000Z'))
     const id = Math.max(...added.payments.map((p) => p.id))
     const back = ledgerReducer(added, toDeleteAction({ table: 'payment', id }))
     assert.deepEqual(back.payments, data.payments)
@@ -294,16 +316,16 @@ describe('ledger: editing and deleting (Milestone 4.5b)', () => {
     assert.deepEqual(targetOf({ key: 't-5', kind: 'income', id: 5 } as never), tx(5))
   })
   it('the delete confirmation names the entry and its effect, per kind (spec section 10)', () => {
-    assert.deepEqual(deleteSummary(data, tx(17), OCT), {
+    assert.deepEqual(del(data, tx(17), OCT), {
       title: 'Delete this expense?',
       entry: 'Lunch with team · −₱385.00 · Oct 24, 2026 · GCash',
       effect: "GCash goes up by ₱385.00 and this month's expenses drop by ₱385.00. This can't be undone.",
       button: 'Delete expense',
       done: 'Expense deleted.',
     })
-    assert.equal(deleteSummary(data, tx(16), OCT)!.effect, "Blue Card owed goes down by ₱2,846.50 and this month's expenses drop by ₱2,846.50. This can't be undone.")
-    assert.equal(deleteSummary(data, tx(11), OCT)!.effect, "Main Savings goes down by ₱32,000.00 and this month's income drops by ₱32,000.00. This can't be undone.")
-    const p = deleteSummary(data, payment, OCT)!
+    assert.equal(del(data, tx(16), OCT)!.effect, "Blue Card owed goes down by ₱2,846.50 and this month's expenses drop by ₱2,846.50. This can't be undone.")
+    assert.equal(del(data, tx(11), OCT)!.effect, "Main Savings goes down by ₱32,000.00 and this month's income drops by ₱32,000.00. This can't be undone.")
+    const p = del(data, payment, OCT)!
     assert.equal(p.title, 'Delete this card payment?')
     assert.equal(p.effect, "Main Savings goes up by ₱5,000.00 and Blue Card owed goes up by ₱5,000.00. Your expenses don't change. This can't be undone.")
     assert.equal(p.entry, 'Card payment · ₱5,000.00 · Oct 20, 2026 · Main Savings → Blue Card')
@@ -311,18 +333,18 @@ describe('ledger: editing and deleting (Milestone 4.5b)', () => {
   })
   it('a card in credit gets its real before and after, not "owed goes up by the full amount" (overpaid demo)', () => {
     const over = getMockData('overpaid') // a ₱20,000 payment on Everyday Card, which owed ₱6,800: now ₱13,200 credit
-    const del = deleteSummary(over, { table: 'payment', id: 2 }, OCT)!
-    assert.equal(del.effect, "Main Savings goes up by ₱20,000.00 and Everyday Card goes from ₱13,200.00 card credit to ₱6,800.00 owed. Your expenses don't change. This can't be undone.")
+    const delOver = del(over, { table: 'payment', id: 2 })!
+    assert.equal(delOver.effect, "Main Savings goes up by ₱20,000.00 and Everyday Card goes from ₱13,200.00 card credit to ₱6,800.00 owed (estimate). Your expenses don't change. This can't be undone.")
     // a purchase on a card that is in credit: deleting it moves the card back toward credit
-    const credit = ledgerReducer(over, toAction({ ...base, accountId: EVERYDAY, amount: '5,000', categoryId: SHOPPING }, '2026-10-26T09:00:00'))
+    const credit = ledgerReducer(over, toAction({ ...base, accountId: EVERYDAY, amount: '5,000', categoryId: SHOPPING }, '2026-10-26T09:00:00.000Z'))
     const id = Math.max(...credit.transactions.map((t) => t.id))
-    assert.equal(deleteSummary(credit, { table: 'transaction', id }, OCT)!.effect, "Everyday Card goes from ₱8,200.00 card credit to ₱13,200.00 card credit and this month's expenses drop by ₱5,000.00. This can't be undone.")
+    assert.equal(del(credit, { table: 'transaction', id }, OCT)!.effect, "Everyday Card goes from ₱8,200.00 card credit to ₱13,200.00 card credit (estimate) and this month's expenses drop by ₱5,000.00. This can't be undone.")
     // a payment that took the card exactly to zero never crosses it, so the plain wording is exact
     const zero = getMockData('paid-off') // Blue Card paid in full
-    assert.equal(deleteSummary(zero, { table: 'payment', id: 2 }, OCT)!.effect, "Main Savings goes up by ₱14,250.00 and Blue Card owed goes up by ₱14,250.00. Your expenses don't change. This can't be undone.")
+    assert.equal(del(zero, { table: 'payment', id: 2 }, OCT)!.effect, "Main Savings goes up by ₱14,250.00 and Blue Card owed goes up by ₱14,250.00. Your expenses don't change. This can't be undone.")
   })
   it('the monthly clause is left out for an entry outside the month being viewed', () => {
-    assert.equal(deleteSummary(data, tx(17), '2026-09')!.effect, "GCash goes up by ₱385.00. This can't be undone.")
-    assert.equal(deleteSummary(data, tx(11), '2026-09')!.effect, "Main Savings goes down by ₱32,000.00. This can't be undone.")
+    assert.equal(del(data, tx(17), '2026-09')!.effect, "GCash goes up by ₱385.00. This can't be undone.")
+    assert.equal(del(data, tx(11), '2026-09')!.effect, "Main Savings goes down by ₱32,000.00. This can't be undone.")
   })
 })

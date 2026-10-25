@@ -9,9 +9,9 @@ import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { buildActivity, cardStatuses, isCard, liquidBalance, monthLabel, monthOptions, summarize } from '@/lib/finance'
+import { monthLabel, monthOptions } from '@/lib/finance'
 import { formatPeso } from '@/lib/money'
-import type { ActivityItem, MockData } from '@/types'
+import type { ActivityItem, FinancialSummary, LedgerSnapshot } from '@/types'
 
 /*
  * Overview (docs/design/UI_UX_SPEC.md section 4). Question it answers: "After what I owe, how much do I
@@ -26,8 +26,14 @@ function Bar({ className }: { className: string }) {
   return <span aria-hidden="true" className={cn('block rounded-chip', className)} />
 }
 
+/* Shown behind the loading skeleton while the first figures are on their way (never read as numbers). */
+const NO_SUMMARY: FinancialSummary = { liquidBalance: 0, outstandingDebt: 0, cardCredit: 0, netPosition: 0, monthIncome: 0, monthExpenses: 0 }
+
 export function OverviewView({
-  data,
+  today,
+  snapshot,
+  summary: loadedSummary,
+  recent,
   month,
   loading,
   addDisabled,
@@ -37,7 +43,10 @@ export function OverviewView({
   onPayCard,
   onOpenActivity,
 }: {
-  data: MockData
+  today: string
+  snapshot: LedgerSnapshot | undefined
+  summary: FinancialSummary | undefined
+  recent: ActivityItem[] | undefined
   month: string
   loading: boolean
   addDisabled: boolean
@@ -47,12 +56,12 @@ export function OverviewView({
   onPayCard: (cardId: number) => void
   onOpenActivity: (month: string) => void
 }) {
-  const summary = summarize(data, month)
-  const cards = cardStatuses(data)
-  const items = buildActivity(data, month, 6)
+  const summary = loadedSummary ?? NO_SUMMARY
+  const cards = snapshot?.cards ?? []
+  const items = recent ?? []
   const label = monthLabel(month)
-  const hasAccounts = data.accounts.length > 0
-  const hasNegativeAccount = data.accounts.some((a) => !isCard(a) && liquidBalance(a, data) < 0)
+  const hasAccounts = (snapshot?.accounts.length ?? 0) > 0
+  const hasNegativeAccount = snapshot?.liquid.some((l) => l.balance < 0) ?? false
   const longHero = formatPeso(summary.netPosition).length > 12 // very large amounts step down one size
   const openActivity = (item?: ActivityItem) => onOpenActivity(item ? item.date.slice(0, 7) : month)
 
@@ -62,7 +71,7 @@ export function OverviewView({
         {loading ? 'Loading your overview' : ''}
       </p>
       <PageHeader title="Overview" onAdd={onAdd} addDisabled={addDisabled}>
-        <MonthSelect value={month} options={monthOptions(data.today)} onChange={onMonthChange} />
+        <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">

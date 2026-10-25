@@ -142,6 +142,22 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await shot(p, "activity-many-375.png");
   });
 
+  group = "Row cap (?demo=huge: 1,218 entries)";
+  await safe(async () => {
+    const p = await open(375, { query: "?demo=huge" });
+    let clicks = 0;
+    for (; clicks < 40 && await p.locator('button:has-text("Load more")').count() > 0; clicks++) { await p.locator('button:has-text("Load more")').click(); await p.waitForTimeout(60); }
+    const f = await read(p);
+    eq("Load more is offered 19 times (50 → 1000), then stops", clicks, 19);
+    eq("1000 rows are shown", f.rows.length, 1000);
+    eq("count line", f.count, "Latest 1000 entries · October 2026");
+    check("no Load more once the cap is reached", await p.locator('button:has-text("Load more")').count() === 0);
+    check("the narrowing prompt is shown instead", /Showing the latest 1000\. Choose a month or an account to narrow this\./.test(f.main));
+    await p.selectOption("#activity-account", { label: "GCash" }); await p.waitForTimeout(100);
+    const g = await read(p);
+    check("choosing an account starts again at one page (50 rows, Load more back)", g.rows.length === 50 && await p.locator('button:has-text("Load more")').count() === 1, g.rows.length);
+  });
+
   group = "States";
   await safe(async () => {
     const p = await open(375, { query: "?demo=loading" }); const f = await read(p);

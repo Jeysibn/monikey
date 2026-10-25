@@ -59,11 +59,11 @@ const transactions: Transaction[] = rows.map(([id, date, accountId, categoryId, 
   amount,
   date,
   note,
-  createdAt: `${date}T${String(8 + (id % 10)).padStart(2, '0')}:00:00`,
+  createdAt: `${date}T${String(8 + (id % 10)).padStart(2, '0')}:00:00.000Z`,
 }))
 
 const payments: CreditCardPayment[] = [
-  { id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 500_000, date: '2026-10-20', note: null, createdAt: '2026-10-20T10:00:00' },
+  { id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 500_000, date: '2026-10-20', note: null, createdAt: '2026-10-20T10:00:00.000Z' },
 ]
 
 const base: MockData = { today: '2026-10-25', accounts, categories, transactions, payments }
@@ -77,21 +77,37 @@ const base: MockData = { today: '2026-10-25', accounts, categories, transactions
  *  - "over-limit": a ₱30,000.00 purchase on Everyday Card (limit ₱30,000.00), so it is over its limit
  *  - "paid-off": Blue Card paid in full (₱14,250.00 from Main Savings), so it owes nothing
  *  - "many": 40 extra October entries (58 in all) so the Activity list is longer than one page
+ *  - "huge": 1,200 extra October entries (1,218 in all) to reach the Activity list's 1,000-row cap
  */
-export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many'
+export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many' | 'huge'
 
 export function getMockData(scenario?: DemoScenario | null): MockData {
   if (scenario === 'overpaid') {
-    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 5, amount: 2_000_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
+    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 5, amount: 2_000_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00.000Z' }] }
   }
   if (scenario === 'negative') {
-    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 3, cardAccountId: 4, amount: 400_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
+    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 3, cardAccountId: 4, amount: 400_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00.000Z' }] }
   }
   if (scenario === 'over-limit') {
-    return { ...base, transactions: [...transactions, { id: 18, accountId: 5, categoryId: 8, amount: 3_000_000, date: '2026-10-25', note: 'Laptop', createdAt: '2026-10-25T09:00:00' }] }
+    return { ...base, transactions: [...transactions, { id: 18, accountId: 5, categoryId: 8, amount: 3_000_000, date: '2026-10-25', note: 'Laptop', createdAt: '2026-10-25T09:00:00.000Z' }] }
   }
   if (scenario === 'paid-off') {
-    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 4, amount: 1_425_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00' }] }
+    return { ...base, payments: [...payments, { id: 2, sourceAccountId: 2, cardAccountId: 4, amount: 1_425_000, date: '2026-10-25', note: null, createdAt: '2026-10-25T09:00:00.000Z' }] }
+  }
+  if (scenario === 'huge') {
+    const extra: Transaction[] = Array.from({ length: 1200 }, (_, i) => {
+      const day = String(1 + (i % 24)).padStart(2, '0')
+      return {
+        id: 1000 + i,
+        accountId: [1, 2, 3, 4][i % 4],
+        categoryId: 4 + (i % 6),
+        amount: 1_000 + i,
+        date: `2026-10-${day}`,
+        note: `Bulk entry ${i + 1}`,
+        createdAt: `2026-10-${day}T${String(8 + (i % 10)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00.000Z`,
+      }
+    })
+    return { ...base, transactions: [...transactions, ...extra] }
   }
   if (scenario === 'many') {
     const extra: Transaction[] = Array.from({ length: 40 }, (_, i) => {
@@ -103,7 +119,7 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
         amount: 10_000 + i * 1_300,
         date: `2026-10-${day}`,
         note: `Extra entry ${i + 1}`,
-        createdAt: `2026-10-${day}T${String(8 + (i % 10)).padStart(2, '0')}:30:00`,
+        createdAt: `2026-10-${day}T${String(8 + (i % 10)).padStart(2, '0')}:30:00.000Z`,
       }
     })
     return { ...base, transactions: [...transactions, ...extra] }

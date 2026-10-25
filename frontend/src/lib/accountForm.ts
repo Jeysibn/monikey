@@ -1,6 +1,5 @@
-import type { AccountType, Centavos, MockData } from '../types.ts'
+import type { AccountType, Centavos, LedgerSnapshot } from '../types.ts'
 import { parseMoney } from './entryForm.ts'
-import type { LedgerAction } from './ledger.ts'
 
 /*
  * The rules of the Add account form (UI_UX_SPEC section 9), free of React so they can be tested.
@@ -38,12 +37,12 @@ export function parseAccountMoney(text: string, field: MoneyField): { ok: true; 
   return result
 }
 
-export function validateAccount(v: AccountValues, data: MockData): AccountErrors {
+export function validateAccount(v: AccountValues, snapshot: LedgerSnapshot): AccountErrors {
   const errors: AccountErrors = {}
   const name = v.name.trim()
   if (name === '') errors.name = 'Give the account a name.'
   else if (name.length > MAX_NAME) errors.name = 'Keep the name under 60 characters.'
-  else if (data.accounts.some((a) => a.name.trim().toLowerCase() === name.toLowerCase())) {
+  else if (snapshot.accounts.some((a) => a.name.trim().toLowerCase() === name.toLowerCase())) {
     errors.name = 'You already have an account with that name.'
   }
 
@@ -57,20 +56,6 @@ export function validateAccount(v: AccountValues, data: MockData): AccountErrors
     if (!balance.ok) errors.balance = balance.error
   }
   return errors
-}
-
-/** Turns validated values into a ledger action. Call only when `validateAccount()` found no errors. */
-export function toAccountAction(v: AccountValues): LedgerAction {
-  const name = v.name.trim()
-  if (isCardType(v.type)) {
-    const limit = parseAccountMoney(v.limit, 'limit')
-    const owed = parseAccountMoney(v.owed, 'owed')
-    if (!limit.ok || !owed.ok) throw new Error('toAccountAction needs valid values')
-    return { type: 'add-account', name, accountType: v.type, openingBalance: 0, openingDebt: owed.centavos, creditLimit: limit.centavos }
-  }
-  const balance = parseAccountMoney(v.balance, 'balance')
-  if (!balance.ok) throw new Error('toAccountAction needs valid values')
-  return { type: 'add-account', name, accountType: v.type, openingBalance: balance.centavos, openingDebt: 0, creditLimit: null }
 }
 
 export const accountSavedMessage = (v: AccountValues): string => `Account added: ${v.name.trim()}.`

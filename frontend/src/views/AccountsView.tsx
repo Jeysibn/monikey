@@ -8,8 +8,7 @@ import { MoneyText } from '@/components/MoneyText'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
-import { cardStatuses, liquidAccounts, summarize } from '@/lib/finance'
-import type { MockData } from '@/types'
+import type { FinancialSummary, LedgerSnapshot } from '@/types'
 
 /*
  * Accounts (docs/design/UI_UX_SPEC.md section 6). Question: "What do I have, and what do I owe, account
@@ -25,23 +24,28 @@ function Bar({ className }: { className: string }) {
   return <span aria-hidden="true" className={cn('block rounded-chip bg-secondary', className)} />
 }
 
+/* Shown behind the loading skeleton while the first figures are on their way (never read as numbers). */
+const NO_SUMMARY: FinancialSummary = { liquidBalance: 0, outstandingDebt: 0, cardCredit: 0, netPosition: 0, monthIncome: 0, monthExpenses: 0 }
+
 export function AccountsView({
-  data,
+  snapshot,
+  summary: loadedSummary,
   loading,
   onAdd,
   onAddAccount,
   onPayCard,
 }: {
-  data: MockData
+  snapshot: LedgerSnapshot | undefined
+  summary: FinancialSummary | undefined
   loading: boolean
   onAdd: () => void
   onAddAccount: (kind: 'account' | 'credit card') => void
   onPayCard: (cardId: number) => void
 }) {
-  const hasAccounts = data.accounts.length > 0
-  const summary = summarize(data, data.today.slice(0, 7))
-  const rows = liquidAccounts(data)
-  const cards = cardStatuses(data)
+  const hasAccounts = (snapshot?.accounts.length ?? 0) > 0
+  const summary = loadedSummary ?? NO_SUMMARY
+  const rows = snapshot?.liquid ?? []
+  const cards = snapshot?.cards ?? []
   // With no accounts yet, Add account is the single primary action and Add transaction is disabled.
   const addAccountVariant = hasAccounts ? 'secondary' : 'default'
 

@@ -1,14 +1,18 @@
 import type {
   Account,
   AccountBalance,
+  AccountInfo,
   ActivityItem,
   CardStatus,
   Centavos,
   Category,
   CategoryType,
   FinancialSummary,
+  LedgerSnapshot,
   MockData,
 } from '../types.ts'
+import { amountText } from './money.ts'
+import { compareTimestamps } from './timestamp.ts'
 
 /*
  * Accounting rules for the frontend MOCK (Milestone 4.2). FastAPI will be authoritative later; these
@@ -26,7 +30,7 @@ import type {
  * Everything is whole centavos, so the arithmetic is exact.
  */
 
-export const isCard = (account: Account): boolean => account.type === 'credit_card'
+export const isCard = (account: Pick<AccountInfo, 'type'>): boolean => account.type === 'credit_card'
 
 /** "2026-10-24" -> "2026-10" */
 export const monthOf = (date: string): string => date.slice(0, 7)
@@ -95,7 +99,7 @@ export function cardStatus(card: Account, data: MockData): CardStatus {
   const signedDebt = signedCardDebt(card, data)
   const creditLimit = card.creditLimit ?? 0
   return {
-    account: card,
+    account: { id: card.id, name: card.name, type: card.type }, // no opening values: the API will not send them
     signedDebt,
     owed: Math.max(signedDebt, 0),
     credit: Math.max(-signedDebt, 0),
@@ -109,9 +113,12 @@ const TYPE_ORDER: Record<Account['type'], number> = { cash: 0, bank: 1, ewallet:
 /** Cash, bank and e-wallet accounts with their balances, in the order the Accounts screen shows them (Cash, Bank, E-wallet). */
 export function liquidAccounts(data: MockData): AccountBalance[] {
   return data.accounts
-    .filter((a): a is AccountBalance['account'] => !isCard(a))
+    .filter((a) => !isCard(a))
     .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.id - b.id)
-    .map((account) => ({ account, balance: liquidBalance(account, data) }))
+    .map((a) => ({
+      account: { id: a.id, name: a.name, type: a.type as AccountBalance['account']['type'] },
+      balance: liquidBalance(a, data),
+    }))
 }
 
 export function cardStatuses(data: MockData): CardStatus[] {
@@ -164,6 +171,15 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       accountType: acct.type,
       cardName: null,
       createdAt: t.createdAt,
+      entry: {
+        kind: category.type,
+        amount: amountText(t.amount),
+        accountId: t.accountId,
+        cardId: null,
+        categoryId: t.categoryId,
+        date: t.date,
+        note: t.note ?? '',
+      },
     })
   }
   for (const p of data.payments) {
@@ -184,6 +200,15 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       accountType: source.type,
       cardName: card.name,
       createdAt: p.createdAt,
+      entry: {
+        kind: 'payment',
+        amount: amountText(p.amount),
+        accountId: p.sourceAccountId,
+        cardId: p.cardAccountId,
+        categoryId: null,
+        date: p.date,
+        note: p.note ?? '',
+      },
     })
   }
 
@@ -191,7 +216,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
   items.sort(
     (a, b) =>
       b.date.localeCompare(a.date) ||
-      b.createdAt.localeCompare(a.createdAt) ||
+      compareTimestamps(b.createdAt, a.createdAt) || // full precision: microseconds and any offset, no rounding to milliseconds
       rank(b) - rank(a) ||
       b.id - a.id,
   )
@@ -239,3 +264,25 @@ export function groupByDate(items: ActivityItem[]): { date: string; items: Activ
   }
   return groups
 }
+
+/**
+ * Everything the screens and forms read about accounts, in the shape the API will answer:
+ * balances, signed debt, owed, credit and available credit are already worked out. This is the mock's side
+ * of the seam (the real client gets the same shape from GET /api/accounts and /api/categories).
+ */
+export function buildSnapshot(data: MockData): LedgerSnapshot {
+  return {
+    accounts: data.accounts.map(({ id, name, type }) => ({ id, name, type })),
+    liquid: liquidAccounts(data),
+    cards: cardStatuses(data),
+    categories: data.categories,
+  }
+}
+
+/** Rows per Activity page; "Load more" asks for this many more. */
+export const ACTIVITY_PAGE_SIZE = 50
+/** The most rows Activity ever shows (the API accepts a limit of 1001 so the client can ask for one spare row). */
+export const ACTIVITY_MAX_ROWS = 1000
+
+/** The page size after "Load more": never beyond the cap. */
+export const nextPageSize = (size: number): number => Math.min(size + ACTIVITY_PAGE_SIZE, ACTIVITY_MAX_ROWS)

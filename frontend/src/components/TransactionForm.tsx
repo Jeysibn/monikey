@@ -12,7 +12,6 @@ import { SegmentedControl } from '@/components/SegmentedControl'
 import {
   accountOptionLabel,
   accountsFor,
-  amountText,
   notices,
   parseAmount,
   previewFor,
@@ -23,9 +22,10 @@ import {
   type EntryValues,
 } from '@/lib/entryForm'
 import { describedBy } from '@/lib/describedBy'
-import { cardStatus, isCard } from '@/lib/finance'
-import { formatPeso } from '@/lib/money'
-import type { Account, MockData } from '@/types'
+import { isCard } from '@/lib/finance'
+import { accountById, cardOf } from '@/lib/snapshot'
+import { amountText, formatPeso } from '@/lib/money'
+import type { AccountInfo, LedgerSnapshot } from '@/types'
 
 /*
  * The Quick Add form (UI_UX_SPEC section 7): expense, income and card payment in one component.
@@ -52,13 +52,13 @@ const FIELD_ID: Record<EntryField, string> = {
 const FIELD_ORDER: EntryField[] = ['amount', 'account', 'card', 'category', 'date', 'note']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 
-function AccountOptions({ accounts, data, withFigures }: { accounts: Account[]; data: MockData; withFigures: boolean }) {
-  const group = (label: string, list: Account[]) =>
+function AccountOptions({ accounts, snapshot, withFigures }: { accounts: AccountInfo[]; snapshot: LedgerSnapshot; withFigures: boolean }) {
+  const group = (label: string, list: AccountInfo[]) =>
     list.length > 0 && (
       <optgroup label={label}>
         {list.map((a) => (
           <option key={a.id} value={a.id}>
-            {accountOptionLabel(a, data, withFigures)}
+            {accountOptionLabel(a, snapshot, withFigures)}
           </option>
         ))}
       </optgroup>
@@ -75,7 +75,7 @@ function AccountOptions({ accounts, data, withFigures }: { accounts: Account[]; 
 export function TransactionForm({
   mode,
   hidden = false,
-  data,
+  snapshot,
   initial,
   amountRef,
   onDirty,
@@ -86,7 +86,7 @@ export function TransactionForm({
 }: {
   mode: 'add' | 'edit'
   hidden?: boolean // the delete confirmation is showing: keep what was typed, show nothing
-  data: MockData
+  snapshot: LedgerSnapshot
   initial: EntryValues
   amountRef: RefObject<HTMLInputElement | null>
   onDirty: () => void // something was typed: the dialog then ignores clicks outside
@@ -107,7 +107,7 @@ export function TransactionForm({
   // grow the bottom sheet and push the control the person is tapping out from under their finger.
   const edited = useRef<Set<EntryField>>(new Set())
 
-  const errors = validate(values, data)
+  const errors = validate(values, snapshot)
   const shown = (field: EntryField) => (submitted || touched.has(field) ? errors[field] : undefined)
   const failing = FIELD_ORDER.filter((f) => errors[f])
   const set = (patch: Partial<EntryValues>, field: EntryField) => {
@@ -127,7 +127,7 @@ export function TransactionForm({
 
   const changeKind = (kind: EntryKind) => {
     onDirty()
-    setValues((v) => switchKind(v, kind, data))
+    setValues((v) => switchKind(v, kind, snapshot))
     setTouched((t) => {
       const next = new Set(t)
       next.delete('category')
@@ -156,13 +156,13 @@ export function TransactionForm({
     }
   }
 
-  const card = data.accounts.find((a) => a.id === values.cardId && isCard(a))
-  const owed = card ? cardStatus(card, data).owed : 0
-  const from = data.accounts.find((a) => a.id === values.accountId)
-  const categories = data.categories.filter((c) => c.type === values.kind)
+  const card = cardOf(snapshot, values.cardId)
+  const owed = card?.owed ?? 0
+  const from = accountById(snapshot, values.accountId)
+  const categories = snapshot.categories.filter((c) => c.type === values.kind)
   // Previews and warnings compare against figures that already include the entry being edited, so edit mode has none.
-  const preview = editing ? null : previewFor(values, data)
-  const warnings = editing ? [] : notices(values, data)
+  const preview = editing ? null : previewFor(values, snapshot)
+  const warnings = editing ? [] : notices(values, snapshot)
   const amountValid = parseAmount(values.amount).ok
   const kindWord = values.kind === 'payment' ? 'card payment' : values.kind
   const title = editing ? `Edit ${kindWord}` : values.kind === 'payment' ? 'Pay credit card' : 'Add transaction'
@@ -258,7 +258,7 @@ export function TransactionForm({
               className={select}
             >
               <option value="">{values.kind === 'payment' ? 'Choose where to pay from' : 'Choose an account'}</option>
-              <AccountOptions accounts={accountsFor(values.kind, 'account', data)} data={data} withFigures={!editing} />
+              <AccountOptions accounts={accountsFor(values.kind, 'account', snapshot)} snapshot={snapshot} withFigures={!editing} />
             </select>
           </FormField>
 
@@ -274,9 +274,9 @@ export function TransactionForm({
                 className={select}
               >
                 <option value="">Choose a card</option>
-                {accountsFor('payment', 'card', data).map((a) => (
+                {accountsFor('payment', 'card', snapshot).map((a) => (
                   <option key={a.id} value={a.id}>
-                    {editing ? a.name : `${a.name} — owed ${formatPeso(cardStatus(a, data).owed)}`}
+                    {editing ? a.name : `${a.name} — owed ${formatPeso(cardOf(snapshot, a.id)?.owed ?? 0)}`}
                   </option>
                 ))}
               </select>

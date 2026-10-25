@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import { AccountForm } from '@/components/AccountForm'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import type { AccountValues } from '@/lib/accountForm'
-import type { MockData } from '@/types'
+import type { LedgerSnapshot } from '@/types'
 
 /*
  * Add account as a dialog (a bottom sheet on phones). Same closing rules as Quick Add: Escape and outside
@@ -12,13 +12,13 @@ import type { MockData } from '@/types'
  */
 export function AddAccountDialog({
   initial,
-  data,
+  snapshot,
   onSubmit,
   onOpenChange,
   onClosed,
 }: {
   initial: AccountValues | null // what the form starts with; null while the dialog is closed
-  data: MockData
+  snapshot: LedgerSnapshot
   onSubmit: (values: AccountValues) => Promise<void>
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
@@ -47,7 +47,7 @@ export function AddAccountDialog({
         >
           <AccountForm
             key={initial.type}
-            data={data}
+            snapshot={snapshot}
             initial={initial}
             nameRef={nameRef}
             onDirty={() => (guard.current.dirty = true)}

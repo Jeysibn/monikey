@@ -6,15 +6,17 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { accountSavedMessage, parseAccountMoney, toAccountAction, validateAccount, type AccountValues } from '../src/lib/accountForm.ts'
+import { accountSavedMessage, parseAccountMoney, validateAccount, type AccountValues } from '../src/lib/accountForm.ts'
 import { validate, type EntryValues } from '../src/lib/entryForm.ts'
-import { cardStatus, liquidBalance, summarize } from '../src/lib/finance.ts'
-import { ledgerReducer } from '../src/lib/ledger.ts'
+import { buildSnapshot, cardStatus, liquidBalance, summarize } from '../src/lib/finance.ts'
+import { ledgerReducer, toAccountAction } from '../src/lib/ledger.ts'
 import { getMockData } from '../src/mockData.ts'
 
 const OCT = '2026-10'
 const data = getMockData()
 const empty = getMockData('no-accounts')
+const snap = buildSnapshot(data)
+const emptySnap = buildSnapshot(empty)
 const cash: AccountValues = { type: 'cash', name: 'Wallet', balance: '4,811.75', limit: '', owed: '' }
 const card: AccountValues = { type: 'credit_card', name: 'Green Card', balance: '', limit: '50,000', owed: '11,972.75' }
 const err = (text: string, field: 'balance' | 'limit' | 'owed') => {
@@ -45,22 +47,22 @@ describe('account money fields', () => {
 
 describe('validateAccount', () => {
   it('accepts a complete cash account and a complete card', () => {
-    assert.deepEqual(validateAccount(cash, data), {})
-    assert.deepEqual(validateAccount(card, data), {})
-    assert.deepEqual(validateAccount({ ...cash, balance: '0' }, data), {})
+    assert.deepEqual(validateAccount(cash, snap), {})
+    assert.deepEqual(validateAccount(card, snap), {})
+    assert.deepEqual(validateAccount({ ...cash, balance: '0' }, snap), {})
   })
   it('checks only the fields of the chosen type', () => {
-    assert.deepEqual(validateAccount({ ...cash, limit: 'junk', owed: 'junk' }, data), {})
-    assert.deepEqual(validateAccount({ ...card, balance: 'junk' }, data), {})
-    assert.deepEqual(Object.keys(validateAccount({ ...card, limit: '', owed: '' }, data)).sort(), ['limit', 'owed'])
+    assert.deepEqual(validateAccount({ ...cash, limit: 'junk', owed: 'junk' }, snap), {})
+    assert.deepEqual(validateAccount({ ...card, balance: 'junk' }, snap), {})
+    assert.deepEqual(Object.keys(validateAccount({ ...card, limit: '', owed: '' }, snap)).sort(), ['limit', 'owed'])
   })
   it('names: required, at most 60 characters, unique ignoring case and spaces', () => {
-    assert.equal(validateAccount({ ...cash, name: '   ' }, data).name, 'Give the account a name.')
-    assert.equal(validateAccount({ ...cash, name: 'x'.repeat(60) }, data).name, undefined)
-    assert.equal(validateAccount({ ...cash, name: 'x'.repeat(61) }, data).name, 'Keep the name under 60 characters.')
-    assert.equal(validateAccount({ ...cash, name: 'gcash' }, data).name, 'You already have an account with that name.')
-    assert.equal(validateAccount({ ...cash, name: '  Blue Card ' }, data).name, 'You already have an account with that name.')
-    assert.equal(validateAccount(cash, empty).name, undefined)
+    assert.equal(validateAccount({ ...cash, name: '   ' }, snap).name, 'Give the account a name.')
+    assert.equal(validateAccount({ ...cash, name: 'x'.repeat(60) }, snap).name, undefined)
+    assert.equal(validateAccount({ ...cash, name: 'x'.repeat(61) }, snap).name, 'Keep the name under 60 characters.')
+    assert.equal(validateAccount({ ...cash, name: 'gcash' }, snap).name, 'You already have an account with that name.')
+    assert.equal(validateAccount({ ...cash, name: '  Blue Card ' }, snap).name, 'You already have an account with that name.')
+    assert.equal(validateAccount(cash, emptySnap).name, undefined)
   })
 })
 
@@ -97,8 +99,8 @@ describe('ledger: adding an account', () => {
     const first = ledgerReducer(empty, toAccountAction({ ...cash, name: 'Cash on hand' }))
     assert.equal(first.accounts.length, 1)
     const entry: EntryValues = { kind: 'expense', amount: '120', accountId: 1, cardId: null, categoryId: 4, date: '2026-10-25', note: '' }
-    assert.deepEqual(validate(entry, first), {})
-    assert.equal(validate(entry, empty).account, 'Choose an account.')
+    assert.deepEqual(validate(entry, buildSnapshot(first)), {})
+    assert.equal(validate(entry, emptySnap).account, 'Choose an account.')
   })
   it('the confirmation names the account', () => assert.equal(accountSavedMessage({ ...cash, name: ' GCash 2 ' }), 'Account added: GCash 2.'))
 })

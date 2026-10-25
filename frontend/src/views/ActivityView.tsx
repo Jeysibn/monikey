@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 
@@ -7,8 +7,8 @@ import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
 import { Button } from '@/components/ui/button'
-import { activityPage, dayHeading, groupByDate, isCard, liquidAccounts, monthLabel, monthOptions } from '@/lib/finance'
-import type { ActivityItem, MockData } from '@/types'
+import { ACTIVITY_MAX_ROWS, dayHeading, groupByDate, monthLabel, monthOptions } from '@/lib/finance'
+import type { ActivityItem, ActivityPage, LedgerSnapshot } from '@/types'
 
 /*
  * Activity: every income, expense and card payment for one month, newest first, grouped by day.
@@ -17,64 +17,64 @@ import type { ActivityItem, MockData } from '@/types'
  * The account filter is applied before the page limit, like the API will: see activityPage().
  * Edit and Delete open the shared dialog in App (QuickAddDialog); this view only reports which row was chosen.
  */
-const PAGE_SIZE = 50
+
+const NO_ITEMS: ActivityItem[] = []
 
 function Bar({ className }: { className: string }) {
   return <span aria-hidden="true" className={cn('block rounded-chip bg-secondary', className)} />
 }
 
 export function ActivityView({
-  data,
+  today,
+  snapshot,
+  page,
   month,
   accountId,
   loading,
   addDisabled,
   onMonthChange,
   onAccountChange,
+  onLoadMore,
   onAdd,
   onEdit,
   onDelete,
 }: {
-  data: MockData
+  today: string
+  snapshot: LedgerSnapshot | undefined
+  page: ActivityPage | undefined // the newest page that arrived
   month: string
   accountId: number | null // lives in App so a save can say "hidden by your filters" and clear them
   loading: boolean
   addDisabled: boolean
   onMonthChange: (month: string) => void
   onAccountChange: (accountId: number | null) => void
+  onLoadMore: () => void
   onAdd: () => void
   onEdit: (item: ActivityItem, opener: HTMLElement) => void
   onDelete: (item: ActivityItem, opener: HTMLElement) => void
 }) {
-  // The page size belongs to one combination of filters; a different month or account starts again at one page.
-  const filterKey = `${month}|${accountId}`
-  const [paged, setPaged] = useState({ key: filterKey, size: PAGE_SIZE })
-  const size = paged.key === filterKey ? paged.size : PAGE_SIZE
-  // Forget the old page size as soon as the filters change, so coming back to a month starts at one page again.
-  if (paged.key !== filterKey) setPaged({ key: filterKey, size: PAGE_SIZE })
-
-  const { items, hasMore } = activityPage(data, month, accountId, size)
+  const items = page?.items ?? NO_ITEMS
+  const hasMore = page?.hasMore ?? false
   const groups = groupByDate(items)
   const label = monthLabel(month)
   const filtered = accountId !== null
 
-  const accounts = [...liquidAccounts(data).map((a) => a.account), ...data.accounts.filter(isCard)]
+  const accounts = snapshot ? [...snapshot.liquid.map((l) => l.account), ...snapshot.cards.map((c) => c.account)] : []
 
-  // "Load more" appends below the button, so move focus to the first new row; otherwise it would be lost
-  // when the button disappears on the last page.
-  const focusAfterMore = useRef<string | null>(null)
+  // "Load more" appends below the button, so move focus to the first new row once it arrives; otherwise focus
+  // would be lost when the button disappears on the last page.
+  const focusFrom = useRef<number | null>(null)
   useEffect(() => {
-    const key = focusAfterMore.current
-    if (!key) return
-    focusAfterMore.current = null
-    const targets = Array.from(document.querySelectorAll<HTMLElement>(`[data-row="${key}"]`))
+    const from = focusFrom.current
+    if (from === null || items.length <= from) return
+    focusFrom.current = null
+    const targets = Array.from(document.querySelectorAll<HTMLElement>(`[data-row="${items[from].key}"]`))
     targets.find((el) => el.offsetParent !== null)?.focus() // the phone row or the desktop Edit button, whichever is shown
-  }, [items.length])
+  }, [items])
 
   const loadMore = () => {
-    // size is the page just shown, so the first new entry is the one after it
-    focusAfterMore.current = activityPage(data, month, accountId, size + PAGE_SIZE).items[size]?.key ?? null
-    setPaged({ key: filterKey, size: size + PAGE_SIZE })
+    focusFrom.current = items.length // the first new entry is the one after those already shown
+    onLoadMore()
   }
 
   const count = hasMore
@@ -89,7 +89,7 @@ export function ActivityView({
       </p>
 
       <div className="mb-3.5 grid grid-cols-1 gap-2.5 min-[360px]:grid-cols-2 md:flex">
-        <MonthSelect value={month} options={monthOptions(data.today)} onChange={onMonthChange} className="min-w-0 md:w-auto" />
+        <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} className="min-w-0 md:w-auto" />
         <label htmlFor="activity-account" className="sr-only">
           Account
         </label>
@@ -160,13 +160,19 @@ export function ActivityView({
               </ul>
             </section>
           ))}
-          {hasMore && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
-              <span>Showing the latest {items.length}.</span>
-              <Button variant="link" onClick={loadMore}>
-                Load more
-              </Button>
-            </div>
+          {hasMore && items.length >= ACTIVITY_MAX_ROWS ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Showing the latest {ACTIVITY_MAX_ROWS}. Choose a month or an account to narrow this.
+            </p>
+          ) : (
+            hasMore && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
+                <span>Showing the latest {items.length}.</span>
+                <Button variant="link" onClick={loadMore}>
+                  Load more
+                </Button>
+              </div>
+            )
           )}
         </>
       )}

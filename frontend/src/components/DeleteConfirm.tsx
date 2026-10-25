@@ -4,7 +4,7 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InlineNotice } from '@/components/InlineNotice'
-import type { DeleteSummary } from '@/lib/ledger'
+import type { DeleteSummary } from '@/lib/entryText'
 
 /*
  * "Are you sure?" for deleting one entry (UI_UX_SPEC section 10). It names the entry and says what

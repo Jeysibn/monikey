@@ -11,10 +11,15 @@ export type Centavos = number
 export type AccountType = 'cash' | 'bank' | 'ewallet' | 'credit_card'
 export type CategoryType = 'income' | 'expense'
 
-export interface Account {
+/** What every screen and form needs to know about an account. The API will not send opening values. */
+export interface AccountInfo {
   id: number
   name: string
   type: AccountType
+}
+
+/** The mock's stored account: AccountInfo plus the opening values it calculates from. Only the mock source sees these. */
+export interface Account extends AccountInfo {
   openingBalance: Centavos // cash, bank, e-wallet only (0 for cards)
   openingDebt: Centavos // credit cards only (0 otherwise)
   creditLimit: Centavos | null // credit cards only
@@ -61,13 +66,13 @@ export interface FinancialSummary {
 export type LiquidAccountType = Exclude<AccountType, 'credit_card'>
 
 export interface AccountBalance {
-  account: Account & { type: LiquidAccountType }
+  account: AccountInfo & { type: LiquidAccountType }
   balance: Centavos
 }
 
 /** Current state of one credit card. */
 export interface CardStatus {
-  account: Account
+  account: AccountInfo
   signedDebt: Centavos // negative when the card has been overpaid
   owed: Centavos // max(signedDebt, 0)
   credit: Centavos // max(-signedDebt, 0)
@@ -89,6 +94,45 @@ export interface ActivityItem {
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid
+  entry: EntryValues // the stored entry in form shape, so Edit and Delete need no lookup
+}
+
+/** The kinds of entry the Quick Add form handles. */
+export type EntryKind = 'expense' | 'income' | 'payment'
+
+/** What a person types into the Quick Add form (amount is the text as typed). */
+export interface EntryValues {
+  kind: EntryKind
+  amount: string
+  accountId: number | null // expense: the account · income: deposit to · payment: pay from
+  cardId: number | null // payment only
+  categoryId: number | null // expense and income only
+  date: string // "YYYY-MM-DD"
+  note: string
+}
+
+/** One stored entry: a row of the transactions table or of the credit-card payments table. */
+export interface EntryTarget {
+  table: 'transaction' | 'payment'
+  id: number
+}
+
+/** The figures the API computes for accounts: balances, signed debt, owed, credit, available credit. */
+export interface AccountsSnapshot {
+  accounts: AccountInfo[] // every account, in id order
+  liquid: AccountBalance[] // cash, bank, e-wallet in display order
+  cards: CardStatus[]
+}
+
+/** Everything a form or a message needs: the accounts' figures and the categories. */
+export interface LedgerSnapshot extends AccountsSnapshot {
+  categories: Category[]
+}
+
+/** One page of Activity: `hasMore` says whether a "Load more" is needed. */
+export interface ActivityPage {
+  items: ActivityItem[]
+  hasMore: boolean
 }
 
 export interface MockData {

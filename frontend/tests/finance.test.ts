@@ -6,6 +6,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  ACTIVITY_MAX_ROWS,
+  ACTIVITY_PAGE_SIZE,
   activityPage,
   availableCredit,
   buildActivity,
@@ -18,6 +20,7 @@ import {
   monthLabel,
   monthOf,
   monthOptions,
+  nextPageSize,
   signedCardDebt,
   summarize,
 } from '../src/lib/finance.ts'
@@ -35,11 +38,11 @@ const CASH = 1
 const account = (data: MockData, id: number): Account => data.accounts.find((a) => a.id === id)!
 const addTx = (data: MockData, t: Partial<Transaction> & Pick<Transaction, 'accountId' | 'categoryId' | 'amount'>): MockData => ({
   ...data,
-  transactions: [...data.transactions, { id: 900 + data.transactions.length, date: '2026-10-25', note: null, createdAt: '2026-10-25T12:00:00', ...t }],
+  transactions: [...data.transactions, { id: 900 + data.transactions.length, date: '2026-10-25', note: null, createdAt: '2026-10-25T12:00:00.000Z', ...t }],
 })
 const addPayment = (data: MockData, source: number, card: number, amount: number, date = '2026-10-25'): MockData => ({
   ...data,
-  payments: [...data.payments, { id: 900 + data.payments.length, sourceAccountId: source, cardAccountId: card, amount, date, note: null, createdAt: `${date}T12:00:00` } satisfies CreditCardPayment],
+  payments: [...data.payments, { id: 900 + data.payments.length, sourceAccountId: source, cardAccountId: card, amount, date, note: null, createdAt: `${date}T12:00:00.000Z` } satisfies CreditCardPayment],
 })
 const EXPENSE_SHOPPING = 8
 const EXPENSE_FOOD = 4
@@ -79,8 +82,7 @@ describe('formatPeso / formatSigned', () => {
     assert.throws(() => formatPeso(10.5), RangeError)
     assert.throws(() => formatPeso(Number.NaN), RangeError)
     assert.throws(() => formatPeso(Number.POSITIVE_INFINITY), RangeError)
-    assert.throws(() => formatPeso(MAX_MONEY_CENTAVOS + 1), RangeError)
-    assert.throws(() => formatPeso(-MAX_MONEY_CENTAVOS - 1), RangeError)
+    assert.throws(() => formatPeso(Number.MAX_SAFE_INTEGER + 1), RangeError)
   })
 })
 
@@ -318,6 +320,14 @@ describe('money bound (aggregate totals)', () => {
     assert.equal(isMoney(10.5), false)
     assert.equal(isMoney(Number.NaN), false)
   })
+  it('formats an intermediate result beyond the bound exactly: only values that ENTER the client are bounded', () => {
+    assert.equal(isMoney(MAX_MONEY_CENTAVOS + 100_000), false) // a server value this large is a contract error
+    assert.equal(formatPeso(MAX_MONEY_CENTAVOS + 100_000), '₱45,035,996,274,704.95') // but a computed estimate of it prints
+    assert.equal(formatPeso(-MAX_MONEY_CENTAVOS - 100_000), '−₱45,035,996,274,704.95')
+    assert.equal(formatPeso(2 * MAX_MONEY_CENTAVOS), '₱90,071,992,547,409.90') // the largest sum of two accepted values
+    assert.equal(formatPeso(Number.MAX_SAFE_INTEGER), '₱90,071,992,547,409.91')
+    assert.throws(() => formatPeso(2 ** 53), RangeError) // no longer exact: refused
+  })
   it('any sum or difference of two accepted amounts is still an exact integer', () => {
     const edge = [MAX_MONEY_CENTAVOS, -MAX_MONEY_CENTAVOS, MAX_MONEY_CENTAVOS - 1, 1, 0] // sums reach at most 2^53 - 2
     for (const a of edge) for (const b of edge) {
@@ -330,6 +340,24 @@ describe('money bound (aggregate totals)', () => {
     assert.equal(Math.floor(MAX_MONEY_CENTAVOS / entry), 4503)
     assert.equal(isMoney(entry * 4503), true)
     assert.equal(isMoney(entry * 4504), false)
+  })
+})
+
+describe('activity paging cap', () => {
+  it('"Load more" grows by a page and never beyond 1000 rows', () => {
+    assert.equal(ACTIVITY_PAGE_SIZE, 50)
+    assert.equal(ACTIVITY_MAX_ROWS, 1000)
+    assert.equal(nextPageSize(50), 100)
+    assert.equal(nextPageSize(950), 1000)
+    assert.equal(nextPageSize(1000), 1000)
+    assert.equal(nextPageSize(980), 1000)
+  })
+  it('a ledger beyond the cap still pages exactly: 1,000 rows shown, more reported', () => {
+    const huge = getMockData('huge')
+    const page = activityPage(huge, OCT, null, ACTIVITY_MAX_ROWS)
+    assert.equal(page.items.length, 1000)
+    assert.equal(page.hasMore, true)
+    assert.equal(activityPage(huge, OCT, null, 2000).items.length, 1218)
   })
 })
 
@@ -363,9 +391,9 @@ describe('activity list', () => {
   })
   it('orders same-day entries by creation time, with a stable tie-break', () => {
     let d = getMockData()
-    d = addTx(d, { id: 501, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'early', createdAt: '2026-10-26T08:00:00' })
-    d = addTx(d, { id: 502, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'late', createdAt: '2026-10-26T18:00:00' })
-    d = addTx(d, { id: 503, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'late-tie', createdAt: '2026-10-26T18:00:00' })
+    d = addTx(d, { id: 501, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'early', createdAt: '2026-10-26T08:00:00.000Z' })
+    d = addTx(d, { id: 502, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'late', createdAt: '2026-10-26T18:00:00.000Z' })
+    d = addTx(d, { id: 503, accountId: CASH, categoryId: EXPENSE_FOOD, amount: 100, date: '2026-10-26', note: 'late-tie', createdAt: '2026-10-26T18:00:00.000Z' })
     assert.deepEqual(buildActivity(d, OCT, 3).map((i) => i.title), ['late-tie', 'late', 'early'])
     assert.deepEqual(buildActivity(d, OCT, 3), buildActivity(d, OCT, 3))
   })

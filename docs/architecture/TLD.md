@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype is implemented through mock-backed Milestone 4.9; backend, database, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The frontend prototype and contract-driven HTTP client are implemented; the Milestone 6 PostgreSQL schema, category seed, and isolated accounting checks are also implemented. The FastAPI backend, live database, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -259,6 +259,8 @@ CREATE INDEX idx_transactions_account_date
 CREATE INDEX idx_card_payments_card_date
   ON credit_card_payments(card_account_id, payment_date DESC);
 ```
+
+This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. The database milestone does not include the FastAPI query layer or a persistent/live database.
 
 **Seed categories:** Salary, Freelance, Other (income); Food, Transportation, Groceries, Bills, Shopping, Other (expense). Use a separate repeatable seed SQL file with `ON CONFLICT DO NOTHING`.
 

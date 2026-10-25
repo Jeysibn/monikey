@@ -4,7 +4,7 @@
 **Purpose:** Assign one AI coding agent per milestone for the approved React + TypeScript + Vite + Tailwind v4 + selective shadcn/ui + Lucide frontend while keeping changes small, comprehensible, testable, and reviewable.  
 **Agents available:** Claude Code and OpenAI Codex.
 
-> **Repository status (2026-10-25):** The frontend screens, mock-backed flows, and contract-driven HTTP data source are implemented through API-plan S3. The next implementation phase is the database schema and accounting tests; backend/database milestones remain ahead. Roadmap numbering is authoritative for acceptance gates. This playbook's earlier prompt examples describe the workflow, not the current milestone.
+> **Repository status (2026-10-25):** The owner approved Milestone 5 after personally reviewing the mock frontend in a browser. Automated browser tests and physical-device/screen-reader checks were not performed and remain unverified. Milestone 6's PostgreSQL schema, repeatable category seed, and isolated accounting checks are complete. Continue with FastAPI endpoints in Milestone 7. Roadmap numbering is authoritative for acceptance gates. This playbook's earlier prompt examples describe the workflow, not the current milestone.
 
 > Model versions and subscriptions change. **Check Claude Code `/model` and Codex `/model` on your own account.** All names below are preferred choices *when available*, not a promise that your account exposes them.
 

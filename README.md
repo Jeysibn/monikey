@@ -1,6 +1,6 @@
 # MoniKey
 
-MoniKey is a beginner-friendly, three-tier personal finance tracker. Its responsive React frontend has Overview, Accounts and Activity screens, and Quick Add, Pay card, Edit, Delete and Add account flows. The mock data source and a contract-driven HTTP data source are implemented. The FastAPI backend and PostgreSQL schema are not initialized, so live persistence and end-to-end integration are not yet available.
+MoniKey is a beginner-friendly, three-tier personal finance tracker. Its responsive React frontend has Overview, Accounts and Activity screens, and Quick Add, Pay card, Edit, Delete and Add account flows. The mock data source and a contract-driven HTTP data source are implemented. The initial PostgreSQL schema, repeatable category seed, and isolated accounting checks are in place; the FastAPI backend and a live database are not, so live persistence and end-to-end integration are not yet available.
 
 ## Approved stack
 
@@ -10,14 +10,14 @@ MoniKey is a beginner-friendly, three-tier personal finance tracker. Its respons
 - Delivery: GitHub Actions and GHCR
 - Deployment: existing Kubernetes cluster managed through Argo CD GitOps
 
-The frontend scaffold and design system are in place. Overview, Accounts, Activity, mock-backed create/edit/delete flows, account creation, responsive/accessibility refinements, and loading/error/slow states are implemented. The HTTP source, wire mappers, Vite proxy, and source selection are also implemented and tested with synthetic responses. Select `VITE_DATA_SOURCE=http` to use it; the default remains the mock. No real backend is present, so end-to-end behavior against FastAPI is unverified. See [frontend status](frontend/README.md) and [the frontend/API report](docs/design/FRONTEND_API_CLIENT_S3.md). Backend, database, Compose, CI, and deployment work remain ahead; Kubernetes is not part of the current implementation.
+The frontend scaffold and design system are in place. Overview, Accounts, Activity, mock-backed create/edit/delete flows, account creation, responsive/accessibility refinements, and loading/error/slow states are implemented. The HTTP source, wire mappers, Vite proxy, and source selection are also implemented and tested with synthetic responses. Select `VITE_DATA_SOURCE=http` to use it; the default remains the mock. The database schema, category seed, and accounting SQL checks are implemented for Milestone 6. No FastAPI backend or live database is present, so end-to-end behavior against the API is unverified. See [frontend status](frontend/README.md), [the frontend/API report](docs/design/FRONTEND_API_CLIENT_S3.md), and [the database guide](database/README.md). Compose, CI, and deployment work remain ahead; Kubernetes is not part of the current implementation.
 
 ## Workspace layout
 
 ```text
 frontend/             React + TypeScript + Vite + Tailwind v4 + shadcn/ui app (mock and HTTP data sources)
-backend/              Backend workspace (not initialized)
-database/             Database workspace (not initialized)
+backend/              FastAPI workspace (not initialized)
+database/             PostgreSQL schema, seed, and isolated accounting checks
 docs/architecture/    Architecture documentation
 docs/design/           Design documentation
 AGENTS.md              Shared development guidance

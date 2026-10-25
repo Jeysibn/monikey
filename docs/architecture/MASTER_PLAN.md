@@ -1,6 +1,6 @@
 # MoniKey v1 — Master Plan (architecture baseline 1.3)
 
-**Status:** Approved plan. The repository contains a working mock-backed frontend prototype through Milestone 4.9, but no backend/database or live deployment. See [current progress](ROADMAP.md#current-progress-and-next-gate); planned architecture is not proof of production readiness.
+**Status:** Approved plan. The repository contains a working mock-backed frontend, HTTP client, and Milestone 6 database schema/seed/accounting checks. The FastAPI backend, live database, and deployment remain unimplemented. See [current progress](ROADMAP.md#current-progress-and-next-gate); planned architecture is not proof of production readiness.
 **Approach:** Frontend-first, small increments, one AI editor at a time, owner verifies and learns.
 **Second brain:** Personal Obsidian vault (ADR-016), **separate** from the code repository and GitOps desired-state repository.
 
@@ -53,4 +53,4 @@ All milestones and detailed gates: [ROADMAP](ROADMAP.md).
 
 No new feature, table, service, web framework or infrastructure component without a reviewed reason and new ADR. AI skills are development aids, **not** runtime dependencies. Obsidian is a second brain, **not** a hosted database, CI/CD system, documentation auto-sync dependency, or Kubernetes workload. Avoid storing real financial data, secrets, tokens, kubeconfig, database dumps and other sensitive content in notes.
 
-**Current action:** complete the remaining Milestone 5 frontend acceptance review and owner sign-off. The implementation through the HTTP client is complete; the committed browser harness dependency and real-device checks are unavailable in this environment. Then begin Milestone 6 (schema, seed, and accounting tests), Milestone 7 (FastAPI), and Milestone 8 (live integration). Keep Compose, CI, and GitOps after local API integration and persistence have been verified.
+**Current action:** Milestone 5 owner approval was recorded on 2026-10-25 after personal browser review of the mock frontend. Automated browser and physical-device/screen-reader checks remain unverified. Milestone 6 schema, seed, and accounting checks are complete. Continue with Milestone 7 (FastAPI endpoints), then Milestone 8 (live integration and owner verification). Keep Compose, CI, and GitOps after local API integration and persistence have been verified.

@@ -1,6 +1,6 @@
 # MoniKey v1.3 — Development Roadmap (Frontend First)
 
-**Status:** Approved design baseline. The frontend prototype and contract-driven HTTP client are implemented through API-plan S3; the FastAPI backend, database, live integration, and operations milestones remain unimplemented. This is a repository status snapshot, not evidence of a live deployment. **Owner:** user/project owner. **Code agents:** Claude Code and Codex. **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 + selective shadcn/ui + Lucide React. **Backend:** FastAPI. **Database:** PostgreSQL.
+**Status:** Approved design baseline. The frontend prototype and contract-driven HTTP client are implemented through API-plan S3; Milestone 6 PostgreSQL schema, category seed, and accounting checks are also implemented. The FastAPI backend, live database integration, and operations milestones remain unimplemented. This is a repository status snapshot, not evidence of a live deployment. **Owner:** user/project owner. **Code agents:** Claude Code and Codex. **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 + selective shadcn/ui + Lucide React. **Backend:** FastAPI. **Database:** PostgreSQL.
 
 ## Non-negotiable development principles
 
@@ -63,9 +63,11 @@ Keep the Obsidian vault **separate from the MoniKey app and GitOps repositories*
 ## Current progress and next gate
 
 - **Complete in the repository:** design approval and frontend scaffold; Overview, Accounts, Activity, mock-backed add/edit/delete flows, account creation, responsive/accessibility pass, data-source seam, loading/error/slow states, and the contract-driven HTTP source with strict wire mappers, Vite proxy, and source selection (through API-plan S3).
-- **Open frontend acceptance gate:** finish the Milestone 5 device/browser/accessibility review and owner sign-off. The current environment lacks the `playwright-core` module used by the committed browser harnesses, and real-device/screen-reader checks remain. The code-level frontend implementation through S3 is complete.
-- **Next implementation phase after that gate:** PostgreSQL schema/seed and accounting tests (Milestone 6), then FastAPI endpoints (7), live frontend/backend integration and owner verification (8), and only then Compose (9), CI (10), and private GitOps deployment (11).
-- **Evidence and limits:** see [Milestone 4.7](../design/A11Y_RESPONSIVE_4_7.md), [Milestone 4.9](../design/FRONTEND_STATES_4_9.md), and [API client S3 report](../design/FRONTEND_API_CLIENT_S3.md). Unit/build/lint checks passed for S3. The browser harnesses were unavailable in this change because the configured `playwright-core` dependency is absent. Real phones, Firefox/WebKit, screen readers, and a running backend remain unchecked.
+- **Milestone 5 owner approval:** approved on 2026-10-25 after the owner personally reviewed the mock frontend in a browser. The owner sign-off is complete.
+- **Verification evidence still limited:** the committed browser harnesses were not run because `playwright-core` is unavailable in this environment; physical-device and screen-reader checks were not performed. The checklist below records these checks as unverified without changing the owner's M5 approval.
+- **Complete in the repository:** Milestone 6 schema, repeatable seed, and accounting SQL checks. The tests use a disposable PostgreSQL container and fictional data, then roll back and remove the container.
+- **Next implementation phase:** FastAPI endpoints (Milestone 7), followed by live frontend/backend integration and owner verification (8), and only then Compose (9), CI (10), and private GitOps deployment (11).
+- **Evidence and limits:** see [Milestone 4.7](../design/A11Y_RESPONSIVE_4_7.md), [Milestone 4.9](../design/FRONTEND_STATES_4_9.md), [API client S3 report](../design/FRONTEND_API_CLIENT_S3.md), and [database guide](../../database/README.md). `bash database/test.sh` passed against the pinned local PostgreSQL 17.6 image. Real phones, Firefox/WebKit, screen readers, and a running FastAPI backend remain unchecked.
 
 ## Frontend styling acceptance checklist (Milestones 2–5)
 

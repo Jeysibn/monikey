@@ -14,7 +14,7 @@ Read the relevant project documents before work:
 - [Frontend setup](architecture/FRONTEND_SETUP.md) and [Obsidian guide](architecture/OBSIDIAN_GUIDE.md) as relevant
 - Root [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md), and approved [DESIGN.md](../DESIGN.md)
 
-The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The design remains the approved baseline. Current repository state: the frontend prototype and contract-driven HTTP client are implemented through API-plan S3; backend/database, CI/CD, and cluster state are not implemented or verified. Live API integration and Milestone 5 final review remain. See [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
+The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The design remains the approved baseline. Current repository state: the frontend prototype and contract-driven HTTP client are implemented through API-plan S3; the owner approved Milestone 5 after personally reviewing the mock frontend in a browser; the Milestone 6 PostgreSQL schema, category seed, and accounting checks are implemented. Automated browser tests and physical-device/screen-reader checks were not performed. The FastAPI backend, live API integration, CI/CD, and cluster state are not implemented or verified. See [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
 
 ## Agent roles
 

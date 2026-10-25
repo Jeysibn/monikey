@@ -29,7 +29,7 @@ docker run --detach \
 
 ready=false
 for attempt in {1..30}; do
-  if docker exec "$test_container" pg_isready --username=postgres --dbname=monikey_test >/dev/null 2>&1; then
+  if docker exec "$test_container" psql --username=postgres --dbname=monikey_test --tuples-only --no-align --command='SELECT 1' >/dev/null 2>&1; then
     ready=true
     break
   fi

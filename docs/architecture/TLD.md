@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, M9 local Compose/Nginx stack, and M10 workflow configuration are implemented in the worktree. Same-origin API paths, service health, persistence after DB restart, backup restore, and account-edit debt recalculation were checked with synthetic data. The owner approved account editing. GitHub Actions execution and GHCR publication await pushing/merging the workflow to `main`. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, M9 local Compose/Nginx stack, and M10 CI/GHCR workflow are implemented. Same-origin API paths, service health, persistence after DB restart, backup restore, and account-edit debt recalculation were checked with synthetic data. GitHub Actions checks passed and both SHA-tagged images were published to GHCR in [run 40161329474](https://github.com/Jeysibn/monikey/actions/runs/40161329474). This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria

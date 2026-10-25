@@ -4,7 +4,7 @@
 **Purpose:** Assign one AI coding agent per milestone for the approved React + TypeScript + Vite + Tailwind v4 + selective shadcn/ui + Lucide frontend while keeping changes small, comprehensible, testable, and reviewable.  
 **Agents available:** Claude Code and OpenAI Codex.
 
-> **Repository status (2026-10-25):** The owner approved Milestone 5 after personally reviewing the mock frontend in a browser and approved account editing. Automated browser tests and physical-device/screen-reader checks remain unverified. M6–9 are complete. The M10 GitHub Actions workflow is in the worktree; GitHub execution and GHCR publication await pushing/merging it to `main`. Roadmap numbering is authoritative for acceptance gates.
+> **Repository status (2026-10-25):** The owner approved Milestone 5 after personally reviewing the mock frontend in a browser and approved account editing. Automated browser tests and physical-device/screen-reader checks remain unverified. M6–9 are complete. M10 checks and SHA-tagged GHCR publication succeeded in [run 40161329474](https://github.com/Jeysibn/monikey/actions/runs/40161329474). Roadmap numbering is authoritative for acceptance gates.
 
 > Model versions and subscriptions change. **Check Claude Code `/model` and Codex `/model` on your own account.** All names below are preferred choices *when available*, not a promise that your account exposes them.
 

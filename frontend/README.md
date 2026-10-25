@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status:** the complete mock-backed UI and contract-driven HTTP data source are implemented. `src/dataSource.ts` is the seam; `src/mockSource.ts` supports the demo and tests; `src/httpSource.ts` calls same-origin `/api` routes; `src/wire.ts` validates JSON and converts exact decimal strings to bounded centavos. The FastAPI routes and shared API fixtures now exist; the frontend has not yet been exercised against a running API. See [API client implementation and verification](../docs/design/FRONTEND_API_CLIENT_S3.md), [Milestone 4.9](../docs/design/FRONTEND_STATES_4_9.md), [Milestone 4.8](../docs/design/FRONTEND_SEAM_4_8.md), and [Milestone 4.7](../docs/design/A11Y_RESPONSIVE_4_7.md). Historical milestone reports describe their status at the time they were written.
+**Status:** the mock-backed UI and contract-driven HTTP data source are implemented. `src/dataSource.ts` is the seam; `src/mockSource.ts` supports the demo and tests; `src/httpSource.ts` calls same-origin `/api` routes; `src/wire.ts` validates JSON and converts exact decimal strings to bounded centavos. The API path was exercised against FastAPI through both the Vite proxy and the production-like Nginx proxy. The frontend production image builds successfully. The interactive React/API browser journey still needs owner review because local browser access was declined by the origin gate. Compose usage and evidence are in [Milestone 8–9 integration](../docs/design/MILESTONE_8_9_INTEGRATION.md). See also [API client implementation](../docs/design/FRONTEND_API_CLIENT_S3.md) and the historical [Milestone 4.9](../docs/design/FRONTEND_STATES_4_9.md), [4.8](../docs/design/FRONTEND_SEAM_4_8.md), and [4.7](../docs/design/A11Y_RESPONSIVE_4_7.md) reports.
 
 ## Commands
 
@@ -17,6 +17,8 @@ npm test          # unit tests for accounting, UI rules, API mapping and request
 ```
 
 The development default is the mock. To run the API, follow [`backend/README.md`](../backend/README.md), then use `VITE_DATA_SOURCE=http npm run dev`; the Vite proxy preserves the `/api` prefix to `http://localhost:8000`. Build with the same flag (`VITE_DATA_SOURCE=http npm run build`) to select HTTP in production. The HTTP build excludes the mock and `?demo=` hooks. `VITE_*` values are public build-time settings and must not contain secrets. Live database persistence is not configured by this frontend.
+
+For the production-like local stack, copy `.env.example` to `.env`, replace the placeholder password, then run `docker compose up --build`. Open `http://127.0.0.1:8080`. Only the frontend port is published, on loopback; API and PostgreSQL ports stay inside Compose. `docker compose down` retains PostgreSQL data. See the [integration and Compose report](../docs/design/MILESTONE_8_9_INTEGRATION.md) for backup/restore evidence.
 
 ## Where things are
 

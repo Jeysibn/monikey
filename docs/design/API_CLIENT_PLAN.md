@@ -183,8 +183,8 @@ These decisions settle the API behavior for frontend planning. The current FastA
 
 ## 7. Risks
 
-1. **Live integration is the remaining dependency.** The API has endpoint tests against disposable PostgreSQL and shared fixtures; the HTTP client has not yet been run against a live FastAPI process.
+1. **Browser acceptance is the remaining dependency.** The HTTP source and API have been exercised through the Vite and Nginx same-origin proxies with synthetic data. The React browser journey and owner review remain pending. See [Milestone 8–9 integration evidence](MILESTONE_8_9_INTEGRATION.md).
 2. **Decimal strings must never pass through floats.** The client uses exact integer conversion and rejects malformed/out-of-bound values; the API also refuses to serialize calculated money beyond the agreed centavo bound.
 3. **Concurrent edits are last-write-wins** per the agreed contract; 404 edit/delete paths are mapped in the UI. No cross-tab integration test is possible without the backend.
 4. **Read requests time out after 30 seconds.** Writes are not automatically canceled or retried because a timed-out response could leave commit status unknown. The UI shows its existing slow-save notice while waiting.
-5. **No frontend live-network check has been completed.** The API, fixtures, and accounting behavior are implemented and tested; persistent database setup and real-device journeys remain for S4 and later milestones.
+5. **Interactive frontend checks remain incomplete.** The API routing, accounting response, Compose persistence, and restore have been checked, but no browser rendered the React app against the API in this session. Automated browser, device, and screen-reader checks remain unverified.

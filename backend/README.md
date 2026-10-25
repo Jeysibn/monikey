@@ -4,6 +4,10 @@ This is the Milestone 7 API for the MoniKey v1 contract. It uses FastAPI,
 Pydantic validation, Psycopg 3, direct parameterized SQL, and the four tables
 defined in [`../database/001_init.sql`](../database/001_init.sql).
 
+The API also has a local production-like image in `backend/Dockerfile`. The
+root Compose stack starts it on the private network and waits for PostgreSQL
+readiness. See the [Milestone 8–9 integration report](../docs/design/MILESTONE_8_9_INTEGRATION.md).
+
 ## Local setup
 
 From the repository root:

@@ -5,6 +5,12 @@ category seed, and isolated accounting checks. The application uses exactly
 four tables: `accounts`, `categories`, `transactions`, and
 `credit_card_payments`.
 
+The local Compose stack mounts the schema and seed into PostgreSQL's
+first-volume initialization directory and stores data in a named volume. Those
+scripts run only when that volume is empty. The Compose workflow and verified
+restart/backup-restore evidence are documented in the
+[Milestone 8–9 integration report](../docs/design/MILESTONE_8_9_INTEGRATION.md).
+
 ## Files
 
 - `001_init.sql` creates the four tables, constraints, and lookup indexes. Run

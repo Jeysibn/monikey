@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype and contract-driven HTTP client, Milestone 6 PostgreSQL schema/seed/accounting checks, and Milestone 7 FastAPI endpoints/shared fixtures are implemented. Persistent live integration, production delivery, and cluster state remain unimplemented or unverified. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, and M9 local Compose/Nginx stack are implemented. Same-origin API paths, service health, persistence after DB restart, and backup restore were checked with synthetic data. The M8 interactive browser journey and owner review, CI/release delivery, and cluster state remain unverified or unimplemented. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria

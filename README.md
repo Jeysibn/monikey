@@ -1,48 +1,75 @@
 # MoniKey
 
-MoniKey is a beginner-friendly, three-tier personal finance tracker. Its responsive React frontend has Overview, Accounts and Activity screens, and Quick Add, Pay card, Edit, Delete and Add account flows. The mock data source and a contract-driven HTTP data source are implemented. The PostgreSQL schema, repeatable category seed, FastAPI endpoints, and isolated database/API checks are in place. Local Compose builds and runs the Nginx frontend, API, and persistent PostgreSQL service.
+MoniKey is a simple personal finance tracker for recording accounts, income, expenses, credit-card purchases, and card payments. It is built as a beginner-friendly three-tier application and runs in a private homelab.
 
-## Approved stack
+> **Privacy:** The deployed v1 has no authentication and accepts writes. It is restricted to a trusted private network and is not a public demo. Screenshots below use fictional mock data only.
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS v4, selective shadcn/ui, and Lucide React
-- Backend: Python, FastAPI, and PostgreSQL
-- Local development: Docker Compose
-- Delivery: GitHub Actions and GHCR
-- Deployment: existing Kubernetes cluster managed through Argo CD GitOps
+## Screenshots
 
-The frontend scaffold and design system are in place. Overview, Accounts, Activity, mock-backed entry flows, account creation and editing, responsive/accessibility refinements, and loading/error/slow states are implemented. Account editing keeps the account type fixed and lets the owner update name, opening amounts, and card limit; the owner approved the flow on 2026-10-25. The production frontend build passes; a local Compose API smoke check confirmed that changing opening debt changes calculated debt and restoring the original value restores the original result. Milestones 6–7 added the PostgreSQL schema/API; M8 API routing and M9 Compose, persistence, and restore were verified with synthetic data. The full M8 interactive browser journey remains pending. M10 CI passed on `main`: frontend checks, PostgreSQL-backed database/API checks, and both Docker builds succeeded, then both SHA-tagged images published to GHCR in [run 40161913794](https://github.com/Jeysibn/monikey/actions/runs/40161913794). M11 deployed the app to the private homelab; HTTPS, API readiness, PVC persistence, logical restore, and image rollback were checked. See the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md). The local app is at `http://127.0.0.1:8080`. See [integration and Compose evidence](docs/design/MILESTONE_8_9_INTEGRATION.md), [account editing behavior](docs/design/UI_UX_SPEC.md#9-add-account), [backend status](backend/README.md), [frontend status](frontend/README.md), [database guide](database/README.md), and [shared API fixtures](docs/api-fixtures/README.md).
+These existing design-review screenshots show the mock ledger, not the live homelab database. They were reused for this portfolio draft rather than recaptured from a running service.
 
-## Workspace layout
+### Overview
 
-```text
-frontend/             React + TypeScript + Vite + Tailwind v4 + shadcn/ui app (mock and HTTP data sources)
-backend/              FastAPI routes, database connection helper, and API tests
-database/             PostgreSQL schema, seed, and isolated accounting checks
-docs/architecture/    Architecture documentation
-docs/design/           Design documentation
-AGENTS.md              Shared development guidance
-CLAUDE.md              Claude Code guidance
-DESIGN.md              UI/UX decision notes
-```
+![MoniKey Overview with fictional sample data](docs/design/screenshots/m4-2/overview-1280.png)
 
-## Frontend development
+### Accounts
+
+![MoniKey Accounts with fictional sample data](docs/design/screenshots/m4-3/accounts-1280.png)
+
+### Activity
+
+![MoniKey Activity with fictional sample data](docs/design/screenshots/m4-4/activity-1280.png)
+
+## What it does
+
+- Tracks cash, bank, e-wallet, and credit-card accounts.
+- Records income and expenses with categories and notes.
+- Tracks card purchases as expenses and card payments separately, so a payment does not count as a second expense.
+- Calculates balances, card debt, available credit, and monthly totals from the ledger.
+- Lets the owner edit an account name, opening amounts, and card limit while keeping its account type fixed.
+
+For a short feature walkthrough and the system diagram, see [Portfolio overview](docs/portfolio/README.md).
+
+## Architecture
+
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, selected shadcn/ui components, and Lucide React.
+- **API:** Python, FastAPI, REST endpoints, and parameterized SQL.
+- **Database:** PostgreSQL with four core tables: `accounts`, `categories`, `transactions`, and `credit_card_payments`.
+- **Local development:** Docker Compose.
+- **Delivery and deployment:** GitHub Actions builds and checks SHA-tagged images, GHCR stores them, and Argo CD deploys reviewed image updates from the separate `homelab-gitops` repository.
+
+The detailed design and current milestone evidence are in [architecture docs](docs/architecture/README.md). Kubernetes manifests and the operational runbook live in the [homelab-gitops repository](https://github.com/Jeysibn/homelab-gitops).
+
+## Run a mock preview
+
+The frontend defaults to fictional in-memory data. This preview does not need the API or database:
 
 ```sh
 cd frontend
 npm ci
-npm run dev
+VITE_DATA_SOURCE=mock npm run dev
 ```
 
-The development server uses the mock by default. Set `VITE_DATA_SOURCE=http` to use the HTTP client with a FastAPI server on `localhost:8000`; production builds use the same setting. The frontend proxy keeps `/api` intact. See [frontend README](frontend/README.md) for details.
+Open the local Vite URL shown in the terminal. To run the full local stack, use the root `docker-compose.yml` and follow the [backend README](backend/README.md) and [database guide](database/README.md). Do not point a portfolio preview at the private homelab database.
 
-Create a production mock build with `npm run build`, or an HTTP build with `VITE_DATA_SOURCE=http npm run build` from `frontend/`.
+## Known limitations
 
-## Project documentation
+- There is no login or authentication. Keep the writable deployment on a trusted private network; do not expose it publicly.
+- The homelab deployment uses one Kubernetes node and one PostgreSQL replica. It is not highly available.
+- Backups are manual logical dumps. Scheduled off-cluster retention and recovery after node or storage failure have not been verified.
+- TLS uses the homelab self-signed issuer, which may show a browser trust warning.
+- API routes were exercised with synthetic data, but the full interactive React/API browser journey remains unverified. Automated browser, physical-device, and screen-reader checks are also outstanding.
+- Banking integrations, recurring bills, investments, and regular transfers are out of scope for v1.
 
-The approved v1.3 design baseline and current progress are in [`docs/architecture/`](./docs/architecture/): TLD, ADRs, master plan, roadmap, AI Agent Playbook, frontend setup, and Obsidian guide. Current design and frontend status is indexed in [`docs/design/README.md`](./docs/design/README.md). The roadmap records current live deployment evidence and remaining validation limits; historical milestone reports describe only the checks made at their stage.
+## Project status
 
-AI setup and ownership are documented in [`docs/AI_AGENT_SETUP.md`](./docs/AI_AGENT_SETUP.md), with pinned skills in [`docs/SKILLS_MANIFEST.md`](./docs/SKILLS_MANIFEST.md) and onboarding evidence in [`docs/AI_AGENT_VERIFICATION.md`](./docs/AI_AGENT_VERIFICATION.md).
+Milestones 11–12 are complete: the private homelab deployment is healthy, and this README plus the portfolio page document the app using fictional sample data. The deployment, storage, HTTPS ingress, database restore, and image rollback checks are in the [roadmap](docs/architecture/ROADMAP.md) and [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md). No public writable demo is provided.
 
-## Development coordination
+## Documentation
 
-See [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md) for agent roles and repository practices. Obsidian learning notes and the development journal live in `~/main-brain/Projects/MoniKey`; agents ask before writing to the vault.
+- [Architecture and roadmap](docs/architecture/README.md)
+- [Feature walkthrough and architecture diagram](docs/portfolio/README.md)
+- [Design and frontend status](docs/design/README.md)
+- [Backend setup](backend/README.md)
+- [Database schema and checks](database/README.md)
+- [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md)

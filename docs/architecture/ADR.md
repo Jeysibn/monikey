@@ -2,7 +2,7 @@
 
 **Version:** 1.3  
 **Date:** 2026-10-24  
-**Status:** Adopted as the design baseline. The frontend, M6 PostgreSQL schema/seed/accounting checks, M7 FastAPI endpoints, M9 local Compose/Nginx stack, and M10 CI/GHCR workflow are implemented. Local API routes, persistence, restore, and account-edit debt recalculation were checked with synthetic data. GitHub Actions checks passed and both SHA-tagged images were published to GHCR in [run 40161329474](https://github.com/Jeysibn/monikey/actions/runs/40161329474). See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for repository status.
+**Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–11 are implemented, including the private Kubernetes deployment. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.

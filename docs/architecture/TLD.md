@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, M9 local Compose/Nginx stack, and M10 CI/GHCR workflow are implemented. Same-origin API paths, service health, persistence after DB restart, backup restore, and account-edit debt recalculation were checked with synthetic data. GitHub Actions checks passed and both SHA-tagged images were published to GHCR in [run 40161329474](https://github.com/Jeysibn/monikey/actions/runs/40161329474). This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The M5 mock UI was approved; M6–7 and M9–11 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M9 local Compose behavior and M11 health, persistence, ingress, logical restore, and image rollback were checked; see [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for current evidence and limits. This design does not claim off-cluster backup recovery or public deployment readiness.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -544,13 +544,17 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 
 **Agent rule:** One agent edits the target files at a time; the other reads/tests the diff and reports findings. Human approval gates after prototype, accounting tests and pre-deployment. Completion requires executed tests, not declarations.
 
-## 16. Open validation tasks before Kubernetes deployment
+## 16. Milestone 11 deployment verification
 
-- Confirm current k3s version, Traefik routing, and Argo CD sync target/path.
-- Confirm StorageClass, Longhorn health if used, capacity, node storage/backup policy.
-- Confirm chosen hostname and whether access is Tailscale/private LAN only.
-- Confirm GHCR image visibility and image-pull authentication if packages are private.
-- Confirm persistence, backup/restore, and whether pod restarts preserve PostgreSQL records.
+- [x] Confirm the live K3s node, Traefik ingress class, Argo CD root path, and application health.
+- [x] Confirm the default Longhorn StorageClass and bind a 5 GiB PostgreSQL PVC. This is a single-node deployment, not high availability.
+- [x] Confirm the GHCR images are publicly pullable and pin both app images to full commit SHA tags.
+- [x] Resolve `monikey.homelab.local` through Pi-hole and serve the app through Traefik's HTTPS entrypoint. HTTP returns no app content; the certificate is self-signed and may show a browser trust warning.
+- [x] Create the runtime database Secret outside Git. The GitOps runbook documents its handling; do not put the value in manifests, notes, or logs.
+- [x] Initialize the four-table schema and default category seed on a new empty volume. A custom-format database dump restored into a temporary database with four tables and nine categories.
+- [x] Restart the PostgreSQL pod and confirm the same Longhorn PVC returns with the four tables and nine categories intact.
+- [x] Roll back to a previous published image SHA, verify health, then restore the current SHA and verify again.
+- [ ] Off-cluster backup retention and restore after a node/storage failure remain unverified. Real personal financial records were not used for deployment verification.
 
 ## 17. Personal knowledge management — Obsidian second brain (non-runtime)
 

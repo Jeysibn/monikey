@@ -21,7 +21,7 @@ import {
   signedCardDebt,
   summarize,
 } from '../src/lib/finance.ts'
-import { formatPeso, formatSigned } from '../src/lib/money.ts'
+import { formatPeso, formatSigned, isMoney, MAX_MONEY_CENTAVOS } from '../src/lib/money.ts'
 import { getMockData } from '../src/mockData.ts'
 import type { Account, CreditCardPayment, MockData, Transaction } from '../src/types.ts'
 
@@ -79,6 +79,8 @@ describe('formatPeso / formatSigned', () => {
     assert.throws(() => formatPeso(10.5), RangeError)
     assert.throws(() => formatPeso(Number.NaN), RangeError)
     assert.throws(() => formatPeso(Number.POSITIVE_INFINITY), RangeError)
+    assert.throws(() => formatPeso(MAX_MONEY_CENTAVOS + 1), RangeError)
+    assert.throws(() => formatPeso(-MAX_MONEY_CENTAVOS - 1), RangeError)
   })
 })
 
@@ -303,6 +305,31 @@ describe('zero history and first run', () => {
     const status = cardStatus(fresh.accounts[0], fresh)
     assert.equal(status.owed, 0)
     assert.equal(status.availableCredit, 1_000_000)
+  })
+})
+
+describe('money bound (aggregate totals)', () => {
+  it('accepts amounts up to ±(2^52 − 1) centavos (₱45,035,996,273,704.95) and nothing beyond', () => {
+    assert.equal(MAX_MONEY_CENTAVOS, 4_503_599_627_370_495)
+    assert.equal(formatPeso(MAX_MONEY_CENTAVOS), '₱45,035,996,273,704.95')
+    assert.equal(formatPeso(-MAX_MONEY_CENTAVOS), '−₱45,035,996,273,704.95')
+    assert.equal(isMoney(MAX_MONEY_CENTAVOS), true)
+    assert.equal(isMoney(MAX_MONEY_CENTAVOS + 1), false)
+    assert.equal(isMoney(10.5), false)
+    assert.equal(isMoney(Number.NaN), false)
+  })
+  it('any sum or difference of two accepted amounts is still an exact integer', () => {
+    const edge = [MAX_MONEY_CENTAVOS, -MAX_MONEY_CENTAVOS, MAX_MONEY_CENTAVOS - 1, 1, 0] // sums reach at most 2^53 - 2
+    for (const a of edge) for (const b of edge) {
+      assert.equal(Number.isSafeInteger(a + b), true, `${a} + ${b}`)
+      assert.equal(Number.isSafeInteger(a - b), true, `${a} - ${b}`)
+    }
+  })
+  it('one maximum entry (₱9,999,999,999.99) is far inside the bound; about 4,503 of them reach it', () => {
+    const entry = 999_999_999_999
+    assert.equal(Math.floor(MAX_MONEY_CENTAVOS / entry), 4503)
+    assert.equal(isMoney(entry * 4503), true)
+    assert.equal(isMoney(entry * 4504), false)
   })
 })
 

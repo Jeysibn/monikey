@@ -165,6 +165,14 @@ These decisions settle the API behavior for frontend planning. They do not claim
 
 **Exact aggregate money remains a frontend contract risk.** PostgreSQL `NUMERIC(12,2)` bounds each entry, not a `SUM`; the current frontend uses integer-centavo `number` values, which cease to represent every cent exactly above `Number.MAX_SAFE_INTEGER`. Before S1/S3, the frontend owner must either establish a safe aggregate bound and validate it, or move internal money values and formatting to an exact representation such as `bigint`. The API will return decimal strings and will not silently round totals to fit JavaScript numbers.
 
+**Frontend decision on aggregate money (settled; the owner may overrule).** Keep integer centavos as `number` and enforce a **bound**, instead of moving every calculation, test and formatter to `bigint`.
+- **Bound:** `MAX_MONEY_CENTAVOS = 2^52 − 1` = **₱45,035,996,273,704.95**. Every amount that enters the client (a server decimal string in S3, anything the mock produces) must satisfy `Number.isSafeInteger` and `|x| ≤ 2^52 − 1` (`isMoney` in `lib/money.ts`).
+- **Why this bound is enough:** with both operands at most 2^52 − 1, any sum or difference of two accepted values is at most 2^53 − 2, which is still a safe integer (a bound of 2^52 itself would allow 2^53, which is not), so every browser calculation that exists (a preview: balance ± one entry; a delete or edit estimate; `max(…, 0)`) is exact. A single entry is at most ₱9,999,999,999.99 (about 10^12 centavos), so reaching the bound takes about **4,503 entries all at the maximum**; no real personal ledger gets near it.
+- **If a server value is ever out of bound or malformed:** the wire mapper (S3) raises a contract error and the screen shows the load-error state with Retry. **Never a wrong or rounded number.** The browser still never sums money as an authoritative total; this only protects the display-only arithmetic.
+- **Not covered by the bound:** the limit-track percentage (`owed × 100 / limit`) is a display ratio, not money, and may be approximate at absurd sizes.
+- **`bigint` stays the fallback** (needs an ADR) if a requirement ever allows ledgers beyond the bound. The wire layer is the only place the representation would change.
+
+
 ## 6. Contract tests
 
 - A shared fixture folder (proposal: `docs/api-fixtures/*.json`, owned jointly). Codex's API tests assert the real responses match; the frontend's mapper tests parse the same files.

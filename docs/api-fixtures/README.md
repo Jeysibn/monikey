@@ -10,6 +10,8 @@ personal data are used.
 | `GET /api/health/ready` | `health-ready.json` |
 | `GET /api/accounts` | `accounts-list.json`, `accounts-empty.json` |
 | `POST /api/accounts` | `account-created.json` |
+| `GET /api/accounts/{id}` | `account-edit-liquid.json`, `account-edit-card.json` |
+| `PUT /api/accounts/{id}` | `account-updated.json` |
 | `GET /api/categories` | `categories-list.json` |
 | `GET /api/transactions` | `transactions-list.json`, `transactions-empty-month.json` |
 | `POST /api/transactions`, `PUT /api/transactions/{id}` | `transaction-created.json`, `transaction-updated.json` |

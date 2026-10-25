@@ -15,11 +15,13 @@ import type { CardStatus } from '@/types'
 export function CreditCardSummary({
   status,
   onPay,
+  onEdit,
   className,
   fullWidthPay = false,
 }: {
   status: CardStatus
   onPay: (cardId: number) => void
+  onEdit?: (cardId: number, from: HTMLElement) => void
   className?: string
   /** Pay card fills the row below `lg` (Accounts view); Overview keeps the auto-width button. */
   fullWidthPay?: boolean
@@ -82,17 +84,32 @@ export function CreditCardSummary({
             )}
           </div>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          className={fullWidthPay ? 'w-full lg:w-auto' : undefined}
-          disabled={reason !== null}
-          aria-describedby={reason ? reasonId : undefined}
-          onClick={() => onPay(account.id)}
-          aria-label={`Pay card, ${account.name}`}
-        >
-          Pay card
-        </Button>
+        <div className="flex gap-2">
+          {onEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={fullWidthPay ? 'flex-1 lg:flex-none' : undefined}
+              onClick={(event) => onEdit(account.id, event.currentTarget)}
+              aria-label={`Edit account, ${account.name}`}
+            >
+              Edit
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className={fullWidthPay ? 'flex-1 lg:w-auto' : undefined}
+            disabled={reason !== null}
+            aria-describedby={reason ? reasonId : undefined}
+            onClick={() => onPay(account.id)}
+            aria-label={`Pay card, ${account.name}`}
+          >
+            Pay card
+          </Button>
+        </div>
       </div>
     </div>
   )

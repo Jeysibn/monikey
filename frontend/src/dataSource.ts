@@ -4,8 +4,8 @@ import type { AccountValues } from './lib/accountForm.ts'
 /*
  * The seam between the screens and wherever the numbers come from (Milestone 4.8, "S1" in docs/design/API_CLIENT_PLAN.md).
  * Screens ask a DataSource for figures and send writes to it; they never read or calculate from stored rows.
- * Today the only implementation is the mock (src/mockSource.ts). The real one will call the API with the same
- * methods and answer the same shapes, so no screen changes when it arrives.
+ * The mock (src/mockSource.ts) and HTTP implementation (src/httpSource.ts) use the same methods and shapes,
+ * so screens do not need to know which source is active.
  * Reads take an AbortSignal; a write resolves on success and rejects with an ApiError on failure.
  */
 export interface ActivityQuery {
@@ -21,10 +21,12 @@ export interface DataSource {
   loadCategories(signal: AbortSignal): Promise<Category[]>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
   loadActivity(query: ActivityQuery, signal: AbortSignal): Promise<ActivityPage>
+  loadAccountForEdit(id: number, signal: AbortSignal): Promise<AccountValues>
   /** Create (no target) or replace (target) an expense, income or card payment. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>
   deleteEntry(target: EntryTarget): Promise<void>
   addAccount(values: AccountValues): Promise<void>
+  updateAccount(id: number, values: AccountValues): Promise<void>
 }
 
 /**

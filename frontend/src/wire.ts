@@ -96,6 +96,15 @@ export interface WireAccountInput {
   credit_limit: WireMoney | null
 }
 
+export interface WireEditableAccount {
+  id: number
+  name: string
+  type: WireAccountType
+  opening_balance: WireMoney
+  opening_debt: WireMoney
+  credit_limit: WireMoney | null
+}
+
 export interface WireError {
   error: { code: string; message: string; field?: string }
 }
@@ -197,6 +206,32 @@ export function fromWireAccounts(value: unknown): AccountsSnapshot {
   const cards = rows.flatMap((item) => item.card ? [item.card] : []).sort((a, b) => a.account.id - b.account.id)
   if (new Set(accounts.map((account) => account.id)).size !== accounts.length) throw contractError('accounts')
   return { accounts, liquid, cards }
+}
+
+/** Read the original account values for the edit form; current balances stay server-calculated. */
+export function fromWireEditableAccount(value: unknown, expectedId: number): AccountValues {
+  const row = record(value, 'editable account')
+  if (id(row.id, 'editable account') !== expectedId) throw contractError('editable account')
+  const name = string(row.name, 'editable account name')
+  if (!name.trim()) throw contractError('editable account name')
+  const type = row.type
+  if (type !== 'cash' && type !== 'bank' && type !== 'ewallet' && type !== 'credit_card') throw contractError('editable account type')
+  const openingBalance = toCentavos(row.opening_balance, 'opening balance')
+  const openingDebt = toCentavos(row.opening_debt, 'opening debt')
+  const creditLimit = row.credit_limit === null ? null : toCentavos(row.credit_limit, 'credit limit')
+  if (openingBalance < 0 || openingDebt < 0) throw contractError('editable account opening amounts')
+  if (type === 'credit_card') {
+    if (openingBalance !== 0 || creditLimit === null || creditLimit <= 0) throw contractError('editable credit card')
+  } else if (openingDebt !== 0 || creditLimit !== null) {
+    throw contractError('editable liquid account')
+  }
+  return {
+    type,
+    name,
+    balance: amountText(openingBalance),
+    limit: creditLimit === null ? '' : amountText(creditLimit),
+    owed: amountText(openingDebt),
+  }
 }
 
 export function fromWireCategories(value: unknown): Category[] {

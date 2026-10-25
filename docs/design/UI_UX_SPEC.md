@@ -1,6 +1,6 @@
 # MoniKey UI/UX Specification
 
-**Status: APPROVED by the owner.** This document specifies *what the screens do and contain*. Visual rules (colour, type, spacing) are in [`DESIGN.md`](../../DESIGN.md). The three screens and mock-backed v1 flows are implemented through Milestone 4.9; see [frontend status](FRONTEND_STATES_4_9.md) and [API client plan](API_CLIENT_PLAN.md) for remaining work and evidence. The API and database are not implemented.
+**Status: APPROVED by the owner.** This document specifies *what the screens do and contain*. Visual rules (colour, type, spacing) are in [`DESIGN.md`](../../DESIGN.md). The mock-backed v1 flows, FastAPI, and PostgreSQL are implemented; account editing was added as an owner-requested follow-up on 2026-10-25. See [frontend status](FRONTEND_STATES_4_9.md), [API client plan](API_CLIENT_PLAN.md), and [frontend README](../../frontend/README.md) for current verification evidence.
 
 All people, accounts and amounts are **fictional**. The wireframes are low-fidelity ASCII layouts, not pixel designs; no hi-fi preview tool was available or installed.
 
@@ -649,7 +649,11 @@ Helper text explains the money fields in plain words: balance — "What's in it 
 
 Validation messages: Name — "Give the account a name." / "Keep the name under 60 characters." / (409) "You already have an account with that name." Balance/limit/owed reuse the Amount messages; limit also "Credit limit must be more than ₱0.00."; balance/owed also "Use 0.00 or more." The UI fields map to the API's `opening_balance` / `opening_debt` / `credit_limit`; the plain labels are for people.
 
-Success: "Account added: GCash." and Accounts re-fetches. No edit or delete in v1.
+Success: "Account added: GCash." and Accounts re-fetches.
+
+**Edit account (owner-requested v1 follow-up, 2026-10-25).** From Accounts, each liquid-account row and credit-card card has an **Edit account** action. The dialog uses the same responsive sheet pattern and account validation as Add account. The account type is displayed and stays fixed. The person can edit its name, opening balance (liquid accounts), or opening debt and credit limit (cards). An unchanged name is allowed; names remain unique ignoring case and surrounding spaces.
+
+Opening amounts are the starting baseline before tracked activity. In Edit account, label the fields **Opening balance (₱)** and **Opening debt (₱)** and explain: changing one recalculates today's balance/debt while keeping saved transactions and card payments unchanged. Card credit-limit changes may leave a card over its limit; that remains a valid state and is shown by the existing warning. Save success re-fetches accounts and totals; failure keeps the typed values. Account type cannot be changed, and account deletion remains out of scope.
 
 ---
 
@@ -728,5 +732,6 @@ No emoji. No exclamation marks. No greetings ("Welcome back"). No jargon without
 | Accounts | `GET /api/accounts` |
 | Quick Add | accounts and categories already loaded; `POST /api/transactions` or `POST /api/credit-card-payments`; edits `PUT`; deletes `DELETE` |
 | Add account | `POST /api/accounts` |
+| Edit account | `GET /api/accounts/{id}` for stored opening values, then `PUT /api/accounts/{id}` |
 
-Until integration, all of this is typed mock data (money as decimal strings). The UI never sums money as authoritative values; only server numbers are totals.
+The UI supports both typed mock data and the same-origin API. In the live API path, money arrives as decimal strings and server-calculated totals remain authoritative.

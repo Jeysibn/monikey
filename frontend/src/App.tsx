@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
+import { EditAccountDialog } from '@/components/EditAccountDialog'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
 import type { DataSource } from '@/dataSource'
-import { accountSavedMessage, type AccountValues } from '@/lib/accountForm'
+import { accountSavedMessage, accountUpdatedMessage, type AccountValues } from '@/lib/accountForm'
 import { describeWriteError } from '@/lib/apiErrors'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
@@ -91,6 +92,7 @@ function App() {
   if (paged.key !== filterKey) setPaged({ key: filterKey, size: ACTIVITY_PAGE_SIZE })
 
   const [accountForm, setAccountForm] = useState<AccountValues | null>(null)
+  const [editAccountId, setEditAccountId] = useState<number | null>(null)
   const [session, setSession] = useState<EntrySession | null>(null)
   const [status, setStatus] = useState<StatusNote | null>(null)
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
@@ -234,6 +236,20 @@ function App() {
     setStatus({ text: accountSavedMessage(values) })
     setAccountForm(null)
   }
+  const editAccount = (id: number, from: HTMLElement) => {
+    rememberOpener(from)
+    setEditAccountId(id)
+  }
+  const updateAccount = async (id: number, values: AccountValues) => {
+    try {
+      await source.updateAccount(id, values)
+    } catch (err) {
+      throw describeWriteError(err, 'edit-account')
+    }
+    setVersion((v) => v + 1)
+    setStatus({ text: accountUpdatedMessage(values) })
+    setEditAccountId(null)
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -297,6 +313,7 @@ function App() {
             addState={addState}
             onAdd={openAdd}
             onAddAccount={openAddAccount}
+            onEditAccount={editAccount}
             onPayCard={openPay}
           />
         )}
@@ -319,6 +336,15 @@ function App() {
             snapshot={snapshot}
             onSubmit={saveAccount}
             onOpenChange={(open) => !open && setAccountForm(null)}
+            onClosed={restoreFocus}
+          />
+
+          <EditAccountDialog
+            accountId={editAccountId}
+            source={source}
+            snapshot={snapshot}
+            onSubmit={updateAccount}
+            onOpenChange={(open) => !open && setEditAccountId(null)}
             onClosed={restoreFocus}
           />
         </>

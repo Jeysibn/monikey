@@ -1,6 +1,7 @@
-import { Banknote, Landmark, Smartphone, TriangleAlert, type LucideIcon } from 'lucide-react'
+import { Banknote, Landmark, Pencil, Smartphone, TriangleAlert, type LucideIcon } from 'lucide-react'
 
 import { MoneyText } from '@/components/MoneyText'
+import { Button } from '@/components/ui/button'
 import type { AccountBalance, LiquidAccountType } from '@/types'
 
 /*
@@ -14,7 +15,7 @@ const types: Record<LiquidAccountType, { Icon: LucideIcon; label: string }> = {
   ewallet: { Icon: Smartphone, label: 'E-wallet' },
 }
 
-export function AccountRow({ item }: { item: AccountBalance }) {
+export function AccountRow({ item, onEdit }: { item: AccountBalance; onEdit: (id: number, from: HTMLElement) => void }) {
   const { account, balance } = item
   const { Icon, label } = types[account.type]
 
@@ -34,6 +35,16 @@ export function AccountRow({ item }: { item: AccountBalance }) {
         </div>
       </div>
       <MoneyText wrap centavos={balance} className="ml-auto shrink-0 text-lg font-semibold tracking-[-0.01em]" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-11 md:size-9"
+        aria-label={`Edit account, ${account.name}`}
+        onClick={(event) => onEdit(account.id, event.currentTarget)}
+      >
+        <Pencil aria-hidden="true" />
+      </Button>
     </li>
   )
 }

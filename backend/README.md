@@ -1,12 +1,20 @@
 # FastAPI backend
 
-This is the Milestone 7 API for the MoniKey v1 contract. It uses FastAPI,
+This is the FastAPI API for the MoniKey v1 contract. It uses FastAPI,
 Pydantic validation, Psycopg 3, direct parameterized SQL, and the four tables
 defined in [`../database/001_init.sql`](../database/001_init.sql).
 
 The API also has a local production-like image in `backend/Dockerfile`. The
 root Compose stack starts it on the private network and waits for PostgreSQL
 readiness. See the [Milestone 8–9 integration report](../docs/design/MILESTONE_8_9_INTEGRATION.md).
+
+Account editing adds `GET /api/accounts/{id}` for stored opening values and
+`PUT /api/accounts/{id}` for updates. Account type remains immutable; name,
+opening balance/debt, and a card's credit limit are editable. This endpoint
+change is implemented. A local Compose API smoke check verified that changing
+a card's opening debt changes computed debt by the same amount and restoring
+the stored opening value restores computed debt. The backend test suite has
+not been run for this follow-up.
 
 ## Local setup
 

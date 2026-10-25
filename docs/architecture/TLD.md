@@ -2,7 +2,7 @@
 
 **Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
 **Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, and M9 local Compose/Nginx stack are implemented. Same-origin API paths, service health, persistence after DB restart, and backup restore were checked with synthetic data. The M8 interactive browser journey and owner review, CI/release delivery, and cluster state remain unverified or unimplemented. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
+**Status:** Requirements and technical direction agreed. The frontend prototype, contract-driven HTTP client, M6 schema/seed/accounting checks, M7 FastAPI API, M9 local Compose/Nginx stack, and M10 workflow configuration are implemented in the worktree. Same-origin API paths, service health, persistence after DB restart, backup restore, and account-edit debt recalculation were checked with synthetic data. The owner approved account editing. GitHub Actions execution and GHCR publication await pushing/merging the workflow to `main`. This is the target technical design, not evidence of a deployed system. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current progress.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -10,8 +10,8 @@
 MoniKey is a **beginner-friendly, portfolio-worthy three-tier personal finance tracker**, built frontend-first and deployed to the existing single-node/home Kubernetes GitOps environment after local testing.
 
 A successful v1 allows one user to:
-- Create Cash, Bank, and E-wallet accounts with opening balances.
-- Create credit-card accounts with a credit limit and opening debt.
+- Create and edit Cash, Bank, and E-wallet accounts with opening balances.
+- Create and edit credit-card accounts with a credit limit and opening debt. Account type cannot be changed after creation.
 - Record, view, edit, and delete categorized income and expense transactions.
 - Record, view, edit, and delete credit-card payments from non-credit-card accounts.
 - See current liquid balances, credit-card debt, available credit, net tracked position, and monthly income/expense summaries.
@@ -75,7 +75,7 @@ flowchart TD
 |---|---|---|---|
 | Overview | `GET /api/summary?month=YYYY-MM`; recent transactions and card payments | Liquid cash balance, card debt, net position, monthly income/expense, recent activity | Open Quick Add, select month |
 | Activity | `GET /api/transactions?month=...`; `GET /api/credit-card-payments?month=...`; accounts/categories | Chronological history of purchases, income and card payments | Edit/delete, month/account filter |
-| Accounts | `GET /api/accounts` | Non-card balances; card debt/limit/available credit | Create account, Pay Card |
+| Accounts | `GET /api/accounts`, `GET /api/accounts/{id}` | Computed positions and, on demand, stored opening values for editing | Create/edit account, Pay Card |
 | Quick Add | Accounts/categories shared from loaded screen or fetched once when needed | Date, account, category, amount, note, and action type | Submit income, expense or credit-card payment |
 
 **Read path (production):**
@@ -263,7 +263,7 @@ CREATE INDEX idx_card_payments_card_date
   ON credit_card_payments(card_account_id, payment_date DESC);
 ```
 
-This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. FastAPI endpoints use direct parameterized SQL in [`backend/main.py`](../../backend/main.py), with connection setup in [`backend/database.py`](../../backend/database.py), shared synthetic response examples in [`docs/api-fixtures/`](../api-fixtures/), and endpoint tests in `backend/tests/`. The API has been tested against a disposable database; no persistent/live database is configured.
+This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. FastAPI endpoints use direct parameterized SQL in [`backend/main.py`](../../backend/main.py), with connection setup in [`backend/database.py`](../../backend/database.py), shared synthetic response examples in [`docs/api-fixtures/`](../api-fixtures/), and endpoint checks in `backend/tests/`. Account detail and update routes are implemented; a local Compose smoke check verified opening-debt recalculation and restoration. Local Compose persistence and restore evidence is recorded in [M8–M9 integration](../design/MILESTONE_8_9_INTEGRATION.md).
 
 **Seed categories:** Salary, Freelance, Other (income); Food, Transportation, Groceries, Bills, Shopping, Other (expense). Use a separate repeatable seed SQL file with `ON CONFLICT DO NOTHING`.
 
@@ -271,7 +271,8 @@ This initial schema is implemented in [`database/001_init.sql`](../../database/0
 - A category used with a credit-card account must be `expense`; direct income on a card is out of scope.
 - A payment source must be Cash, Bank, or E-wallet; payment destination must be Credit Card.
 - Require known account/category IDs, valid `YYYY-MM-DD` calendar dates, positive amounts with max two fractional digits, and a reasonable maximum note length.
-- Prevent deleting an account/category if it is still referenced; v1 exposes account creation and listing only, not deletion.
+- Keep the account type fixed when updating; opening values and card limits may change, including to a state that produces negative liquid balance, card credit, or over-limit debt.
+- Prevent deleting an account/category if it is still referenced; v1 has no account or category delete endpoint.
 - All writes must use parameterized SQL; use DB transactions for multi-statement mutations.
 
 ### Financial calculation definitions
@@ -302,6 +303,8 @@ Let positive income and expense entries be determined by the referenced category
 | GET | `/api/health/ready` | Database connectivity check |
 | GET | `/api/accounts` | Accounts with **computed** balances/debt/available credit |
 | POST | `/api/accounts` | Create cash/bank/ewallet/card; validates opening fields |
+| GET | `/api/accounts/{id}` | Read stored opening values for the account edit form |
+| PUT | `/api/accounts/{id}` | Replace name/opening values/credit limit; account type is immutable |
 | GET | `/api/categories?type=expense` | Seeded categories; optional type filter |
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
 | POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note |

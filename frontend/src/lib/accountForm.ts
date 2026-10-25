@@ -37,12 +37,12 @@ export function parseAccountMoney(text: string, field: MoneyField): { ok: true; 
   return result
 }
 
-export function validateAccount(v: AccountValues, snapshot: LedgerSnapshot): AccountErrors {
+export function validateAccount(v: AccountValues, snapshot: LedgerSnapshot, excludeAccountId?: number): AccountErrors {
   const errors: AccountErrors = {}
   const name = v.name.trim()
   if (name === '') errors.name = 'Give the account a name.'
   else if (name.length > MAX_NAME) errors.name = 'Keep the name under 60 characters.'
-  else if (snapshot.accounts.some((a) => a.name.trim().toLowerCase() === name.toLowerCase())) {
+  else if (snapshot.accounts.some((a) => a.id !== excludeAccountId && a.name.trim().toLowerCase() === name.toLowerCase())) {
     errors.name = 'You already have an account with that name.'
   }
 
@@ -59,3 +59,4 @@ export function validateAccount(v: AccountValues, snapshot: LedgerSnapshot): Acc
 }
 
 export const accountSavedMessage = (v: AccountValues): string => `Account added: ${v.name.trim()}.`
+export const accountUpdatedMessage = (v: AccountValues): string => `Account updated: ${v.name.trim()}. Starting amounts saved; past activity is unchanged.`

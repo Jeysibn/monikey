@@ -46,6 +46,7 @@ export function AddAccountDialog({
           onCloseAutoFocus={onClosed}
         >
           <AccountForm
+            mode="add"
             key={initial.type}
             snapshot={snapshot}
             initial={initial}

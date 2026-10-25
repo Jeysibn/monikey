@@ -15,7 +15,7 @@ import { useDelayedFlag } from '@/useDelayedFlag'
 import type { AccountType, LedgerSnapshot } from '@/types'
 
 /*
- * The Add account form (UI_UX_SPEC section 9). Same habits as the Quick Add form: errors appear when a
+ * The Add/Edit account form (UI_UX_SPEC section 9). Same habits as the Quick Add form: errors appear when a
  * field the person has edited is left, and for every field on submit; a failed submit shows a summary and
  * moves focus to it; while saving every field is disabled; a failed save keeps everything typed.
  * The labels are plain words; the API's names (opening_balance, opening_debt, credit_limit) stay in lib/accountForm.ts.
@@ -29,9 +29,12 @@ const TYPES: { value: AccountType; label: string }[] = [
 const NAME_EXAMPLE: Record<AccountType, string> = { cash: 'Cash on hand', bank: 'Main Savings', ewallet: 'GCash', credit_card: 'Blue Card' }
 const FIELD_ID: Record<AccountField, string> = { name: 'aa-name', balance: 'aa-balance', limit: 'aa-limit', owed: 'aa-owed' }
 const FIELD_ORDER: AccountField[] = ['name', 'balance', 'limit', 'owed']
-const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
+const FAILED_ADD = "Couldn't save. Check your connection and try again. Your account details are still here."
+const FAILED_EDIT = "Couldn't save. Check your connection and try again. Your changes are still here."
 
 export function AccountForm({
+  mode,
+  excludeAccountId,
   snapshot,
   initial,
   nameRef,
@@ -40,6 +43,8 @@ export function AccountForm({
   onSubmit,
   onCancel,
 }: {
+  mode: 'add' | 'edit'
+  excludeAccountId?: number
   snapshot: LedgerSnapshot
   initial: AccountValues
   nameRef: RefObject<HTMLInputElement | null>
@@ -60,7 +65,7 @@ export function AccountForm({
   const summaryRef = useRef<HTMLDivElement>(null)
   const edited = useRef<Set<AccountField>>(new Set()) // see TransactionForm: leaving an untouched field shows nothing
 
-  const errors = validateAccount(values, snapshot)
+  const errors = validateAccount(values, snapshot, excludeAccountId)
   const shown = (field: AccountField) =>
     (submitted || touched.has(field) ? errors[field] : undefined) ?? (serverField?.field === field ? serverField.message : undefined)
   const failing = FIELD_ORDER.filter((f) => errors[f])
@@ -98,7 +103,7 @@ export function AccountForm({
     try {
       await onSubmit(values)
     } catch (err) {
-      const failure = err instanceof WriteError ? err : new WriteError(FAILED_SAVE)
+      const failure = err instanceof WriteError ? err : new WriteError(mode === 'edit' ? FAILED_EDIT : FAILED_ADD)
       const field = FIELD_ORDER.find((f) => f === failure.field)
       setServerError(field && failure.inline ? null : failure.message) // a message under its field is not repeated at the top
       if (field) setServerField({ field, message: failure.inline ? failure.message : 'Check this field.' })
@@ -111,15 +116,21 @@ export function AccountForm({
   const balanceError = shown('balance')
   const limitError = shown('limit')
   const owedError = shown('owed')
-  const balanceHelp = "What's in it right now."
+  const balanceHelp = mode === 'edit'
+    ? 'Changing this resets the starting amount. Past activity stays unchanged.'
+    : "What's in it right now."
   const limitHelp = 'The most the bank lets you charge.'
-  const owedHelp = 'What you still owe on this card today. Use 0.00 if nothing.'
+  const owedHelp = mode === 'edit'
+    ? 'Changing this resets the starting debt. Past purchases and payments stay unchanged.'
+    : 'What you still owe on this card today. Use 0.00 if nothing.'
 
   return (
     <form noValidate onSubmit={submit} aria-busy={saving} className="flex min-h-0 flex-1 flex-col">
       <DialogHeader>
-        <DialogTitle>Add account</DialogTitle>
-        <DialogDescription className="sr-only">Add a cash, bank, e-wallet or credit card account.</DialogDescription>
+        <DialogTitle>{mode === 'edit' ? 'Edit account' : 'Add account'}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {mode === 'edit' ? 'Edit this account name and opening amounts. Its type cannot be changed.' : 'Add a cash, bank, e-wallet or credit card account.'}
+        </DialogDescription>
       </DialogHeader>
 
       <DialogBody>
@@ -128,6 +139,12 @@ export function AccountForm({
           {slow && (
             <InlineNotice tone="warning">
               <span role="status">{SLOW_SAVE_TEXT}</span>
+            </InlineNotice>
+          )}
+
+          {mode === 'edit' && (
+            <InlineNotice tone="warning">
+              Changing an opening amount recalculates today&rsquo;s balance or debt. Existing transactions and payments stay unchanged.
             </InlineNotice>
           )}
 
@@ -146,7 +163,14 @@ export function AccountForm({
             </div>
           )}
 
-          <SegmentedControl legend="Type" name="aa-type" value={values.type} options={TYPES} onChange={(type) => set({ type })} />
+          {mode === 'add' ? (
+            <SegmentedControl legend="Type" name="aa-type" value={values.type} options={TYPES} onChange={(type) => set({ type })} />
+          ) : (
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium">Account type</span>
+              <span className="text-base text-muted-foreground">{TYPES.find((option) => option.value === values.type)?.label}</span>
+            </div>
+          )}
 
           <FormField id="aa-name" label="Name" error={nameError} helper={`Up to ${MAX_NAME} characters.`}>
             <Input
@@ -174,7 +198,7 @@ export function AccountForm({
                   describedBy={describedBy('aa-limit', limitError, limitHelp)}
                 />
               </FormField>
-              <FormField id="aa-owed" label="Amount you owe today (₱)" error={owedError} helper={owedHelp}>
+              <FormField id="aa-owed" label={mode === 'edit' ? 'Opening debt (₱)' : 'Amount you owe today (₱)'} error={owedError} helper={owedHelp}>
                 <MoneyInput
                   id="aa-owed"
                   value={values.owed}
@@ -186,7 +210,7 @@ export function AccountForm({
               </FormField>
             </>
           ) : (
-            <FormField id="aa-balance" label="Current balance (₱)" error={balanceError} helper={balanceHelp}>
+            <FormField id="aa-balance" label={mode === 'edit' ? 'Opening balance (₱)' : 'Current balance (₱)'} error={balanceError} helper={balanceHelp}>
               <MoneyInput
                 id="aa-balance"
                 value={values.balance}
@@ -211,7 +235,7 @@ export function AccountForm({
               Saving…
             </>
           ) : (
-            'Add account'
+            mode === 'edit' ? 'Save changes' : 'Add account'
           )}
         </Button>
       </DialogFooter>

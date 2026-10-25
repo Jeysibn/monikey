@@ -1,6 +1,7 @@
 import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery, type DataSource } from './dataSource.ts'
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
-import { validateAccount, type AccountValues } from './lib/accountForm.ts'
+import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
+import { amountText } from './lib/money.ts'
 import { activityPage, buildSnapshot, summarize } from './lib/finance.ts'
 import { getMockData, type DemoScenario } from './mockData.ts'
 import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, MockData } from './types.ts'
@@ -9,7 +10,7 @@ import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues
  * The mock behind the DataSource seam. It keeps the fictional ledger in memory, applies writes with the same
  * reducer as before, and answers every read with the shapes the API will use (balances, owed, credit and
  * available credit already worked out). A reload restores the starting data.
- * `failNextWrite` makes the first save, delete or new account fail once, to show the error paths
+ * `failNextWrite` makes the first save, delete or account write fail once, to show the error paths
  * (the `?demo=save-error` hook).
  */
 /** The moment a new entry is stored: a full ISO 8601 timestamp in UTC with its offset ("…Z"), as the API sends (B3). */
@@ -96,6 +97,19 @@ export function createMockSource({
     loadActivity: ({ month, accountId, limit }: ActivityQuery, signal): Promise<ActivityPage> =>
       read('activity', `activity:${month}:${accountId}:${limit}`, signal, () => activityPage(data, month, accountId, limit)),
 
+    loadAccountForEdit: async (id: number, signal: AbortSignal): Promise<AccountValues> =>
+      read('account-edit', `account-edit:${id}`, signal, () => {
+        const account = data.accounts.find((item) => item.id === id)
+        if (!account) throw new ApiError(404, 'not_found', 'Account not found.')
+        return {
+          type: account.type,
+          name: account.name,
+          balance: amountText(account.openingBalance),
+          limit: account.creditLimit === null ? '' : amountText(account.creditLimit),
+          owed: amountText(account.openingDebt),
+        }
+      }),
+
     saveEntry: async (values: EntryValues, target?: EntryTarget): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'amount')
       if (target && !entryExists(data, target)) throw new ApiError(404, 'not_found', GONE_ON_EDIT)
@@ -114,6 +128,29 @@ export function createMockSource({
       const taken = validateAccount(values, buildSnapshot(data)).name
       if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
       data = ledgerReducer(data, toAccountAction(values))
+    },
+
+    updateAccount: async (id: number, values: AccountValues): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'name')
+      const existing = data.accounts.find((account) => account.id === id)
+      if (!existing) throw new ApiError(404, 'not_found', 'Account not found.')
+      if (existing.type !== values.type) throw new ApiError(400, 'invalid_account_type_combination', 'Account type cannot be changed after creation.', 'type')
+      const taken = validateAccount(values, buildSnapshot(data), id).name
+      if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
+      const balance = values.type === 'credit_card' ? null : parseAccountMoney(values.balance, 'balance')
+      const owed = values.type === 'credit_card' ? parseAccountMoney(values.owed, 'owed') : null
+      const limit = values.type === 'credit_card' ? parseAccountMoney(values.limit, 'limit') : null
+      if (balance && !balance.ok) throw new ApiError(422, 'invalid_field', balance.error, 'balance')
+      if (owed && !owed.ok) throw new ApiError(422, 'invalid_field', owed.error, 'owed')
+      if (limit && !limit.ok) throw new ApiError(422, 'invalid_field', limit.error, 'limit')
+      const updated = {
+        ...existing,
+        name: values.name.trim(),
+        openingBalance: balance?.ok ? balance.centavos : 0,
+        openingDebt: owed?.ok ? owed.centavos : 0,
+        creditLimit: limit?.ok ? limit.centavos : null,
+      }
+      data = { ...data, accounts: data.accounts.map((account) => account.id === id ? updated : account) }
     },
   }
 }

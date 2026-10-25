@@ -20,7 +20,7 @@ import type { AccountsSnapshot, AddState, FinancialSummary } from '@/types'
  *                     and available credit, which is NOT cash and is never part of "money you have".
  * Below 1024px the sections stack; from 1024px they sit in two equal columns, each top-aligned (they are
  * not stretched to the same height). Balances are "as of today", so there is no month select here.
- * Read-only: accounts can't be edited or deleted in v1, and Add account opens the shared dialog in App.
+ * Account names and starting values can be edited from their rows; account types stay fixed. Add account opens the shared dialog in App.
  */
 function Bar({ className }: { className: string }) {
   return <span aria-hidden="true" className={cn('block rounded-chip bg-secondary', className)} />
@@ -36,6 +36,7 @@ export function AccountsView({
   addState,
   onAdd,
   onAddAccount,
+  onEditAccount,
   onPayCard,
 }: {
   accounts: Resource<AccountsSnapshot> // the rows and cards
@@ -44,6 +45,7 @@ export function AccountsView({
   addState: AddState
   onAdd: () => void
   onAddAccount: (kind: 'account' | 'credit card') => void
+  onEditAccount: (accountId: number, from: HTMLElement) => void
   onPayCard: (cardId: number) => void
 }) {
   const snapshot = accountsRes.data
@@ -120,8 +122,8 @@ export function AccountsView({
             />
           ) : (
             <ul>
-              {rows.map((item) => (
-                <AccountRow key={item.account.id} item={item} />
+                {rows.map((item) => (
+                <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
               ))}
             </ul>
           )}
@@ -185,7 +187,7 @@ export function AccountsView({
               )}
               {cards.map((status) => (
                 <Card key={status.account.id}>
-                  <CreditCardSummary status={status} onPay={onPayCard} fullWidthPay className="py-0 first:pt-0" />
+                  <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
                 </Card>
               ))}
               {cards.length > 0 && (

@@ -7,7 +7,7 @@ import { formatClock } from './time.ts'
  * if any, the problem belongs to. Whatever the status, a 5xx or a request that never got an answer says the
  * same thing: nothing about the server's insides reaches the screen.
  */
-export type WriteContext = 'add-entry' | 'edit-entry' | 'delete-entry' | 'add-account'
+export type WriteContext = 'add-entry' | 'edit-entry' | 'delete-entry' | 'add-account' | 'edit-account'
 
 export const NO_LONGER_EXISTS = 'That account or category no longer exists. Reload and try again.'
 export const ALREADY_DELETED = 'It was already deleted.'
@@ -27,7 +27,12 @@ export class WriteError extends Error {
   }
 }
 
-const generic = (context: WriteContext): string => (context === 'delete-entry' ? FAILED_DELETE : FAILED_SAVE)
+const generic = (context: WriteContext): string => {
+  if (context === 'delete-entry') return FAILED_DELETE
+  if (context === 'add-account') return "Couldn't save. Check your connection and try again. Your account details are still here."
+  if (context === 'edit-account') return "Couldn't save. Check your connection and try again. Your changes are still here."
+  return FAILED_SAVE
+}
 
 export function describeWriteError(err: unknown, context: WriteContext): WriteError {
   if (!(err instanceof ApiError)) return new WriteError(generic(context)) // no answer at all (network)
@@ -36,6 +41,7 @@ export function describeWriteError(err: unknown, context: WriteContext): WriteEr
       return new WriteError(err.message) // the server's own words
     case 404:
       if (context === 'delete-entry') return new WriteError(ALREADY_DELETED, { gone: true })
+      if (context === 'edit-account') return new WriteError('This account no longer exists. Reload and try again.')
       return new WriteError(context === 'edit-entry' ? GONE_ON_EDIT : NO_LONGER_EXISTS)
     case 409:
       return new WriteError(err.message, { field: err.field, inline: err.field !== undefined })

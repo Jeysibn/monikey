@@ -1,6 +1,6 @@
 # MoniKey v1.2 — Frontend Setup (Claude Code implementation checklist)
 
-**Status:** Scaffold and design-system setup executed and documented in [Milestone 4.1](../design/FRONTEND_SCAFFOLD_4_1.md). The three screens and mock-backed interactions are implemented through Milestone 4.9. This checklist is retained as the setup record; the remaining frontend integration work is tracked in [API_CLIENT_PLAN.md](../design/API_CLIENT_PLAN.md). **Scope:** `frontend/` only. **Stack:** React + TypeScript + Vite + Tailwind CSS v4 + selected shadcn/ui + Lucide React. Refer to `ADR.md` ADR-015 and `DESIGN.md` before changing theme values.
+**Status:** Scaffold and design-system setup executed and documented in [Milestone 4.1](../design/FRONTEND_SCAFFOLD_4_1.md). The three screens and mock-backed interactions are implemented through Milestone 4.9. The HTTP client and account editing are implemented; the production frontend build and local account API smoke check pass. The interactive account-edit browser flow remains pending owner review. This checklist is retained as the setup record. **Scope:** `frontend/` only. **Stack:** React + TypeScript + Vite + Tailwind CSS v4 + selected shadcn/ui + Lucide React. Refer to `ADR.md` ADR-015 and `DESIGN.md` before changing theme values.
 
 ## Step 0 — Design first
 

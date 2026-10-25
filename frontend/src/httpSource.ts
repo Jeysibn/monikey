@@ -5,6 +5,7 @@ import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './type
 import { compareTimestamps } from './lib/timestamp.ts'
 import {
   fromWireAccounts,
+  fromWireEditableAccount,
   fromWireCategories,
   fromWireField,
   fromWirePayment,
@@ -136,6 +137,10 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       return readAccounts(signal)
     },
 
+    async loadAccountForEdit(id, signal) {
+      return fromWireEditableAccount(await getJson(`/api/accounts/${id}`, signal, fetcher), id)
+    },
+
     async loadCategories(signal) {
       return readCategories(signal)
     },
@@ -178,6 +183,10 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
 
     async addAccount(values: AccountValues) {
       await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values))
+    },
+
+    async updateAccount(id, values: AccountValues) {
+      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountInput(values))
     },
   }
 }

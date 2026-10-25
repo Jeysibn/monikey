@@ -1,6 +1,6 @@
 # API client plan and contract
 
-**Status:** The API decisions are settled; frontend S1 (data-source seam), S2 (loading/error states), and S3 (HTTP source and wire mappers) are implemented. Milestone 7 FastAPI endpoints and shared response fixtures are also implemented and tested against a disposable PostgreSQL database. S4 live frontend/API integration and persistent local setup remain unverified. The TLD (§4, §6) defines the endpoints; this document records the clarified contract. See the [S3 frontend report](FRONTEND_API_CLIENT_S3.md), [backend README](../../backend/README.md), and [shared fixtures](../api-fixtures/README.md).
+**Status:** The API decisions are settled; frontend S1 (data-source seam), S2 (loading/error states), and S3 (HTTP source and wire mappers) are implemented. Milestone 7 FastAPI endpoints and shared response fixtures are implemented and were tested against a disposable PostgreSQL database. S4 and the local Compose stack were verified in Milestones 8–9. Account editing is implemented and its API update path was smoke-checked against local synthetic Compose data; interactive browser review remains pending. The TLD (§4, §6) defines the endpoints; this document records the clarified contract. See the [S3 frontend report](FRONTEND_API_CLIENT_S3.md), [backend README](../../backend/README.md), and [shared fixtures](../api-fixtures/README.md).
 
 Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DESIGN_REVIEW.md) §5 (B1–B7, Q4) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) §5–§7, §13
 
@@ -16,6 +16,8 @@ Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DE
 | Add / change / remove an expense or income | `POST`, `PUT /{id}`, `DELETE /{id}` on `/api/transactions` | Quick Add, Edit, Delete | accounts + summary + list |
 | Add / change / remove a card payment | `POST`, `PUT /{id}`, `DELETE /{id}` on `/api/credit-card-payments` | Pay card, Edit, Delete | accounts + summary + list |
 | Add an account | `POST /api/accounts` | Add account | accounts (+ summary) |
+| Read an account's editable opening values | `GET /api/accounts/{id}` | Edit account form | no |
+| Update account name/opening values/limit | `PUT /api/accounts/{id}` | Edit account | accounts + summary |
 | Health | `GET /api/health/live`, `/ready` | not used by the UI (probes only) | n/a |
 
 Two lists are merged in the browser (Codex's earlier recommendation): ask each for `limit + 1`, sort by date, then `created_at`, then source and id, show `limit`, and use the spare row for "Load more". This is exact: the top N of a merge is always inside the top N of each list.
@@ -74,12 +76,14 @@ New view-model types the screens will consume instead of raw rows (see §3): `Ac
 // src/dataSource.ts
 export interface DataSource {
   loadAccounts(signal: AbortSignal): Promise<AccountsSnapshot>
+  loadAccountForEdit(id: number, signal: AbortSignal): Promise<AccountValues>
   loadCategories(signal: AbortSignal): Promise<Category[]>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
   loadActivity(q: { month: string; accountId: number | null; limit: number }, signal: AbortSignal): Promise<ActivityPage>
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void> // POST or PUT
   deleteEntry(target: EntryTarget): Promise<void>
   addAccount(values: AccountValues): Promise<void>
+  updateAccount(id: number, values: AccountValues): Promise<void>
 }
 ```
 
@@ -155,7 +159,7 @@ These decisions settle the API behavior for frontend planning. The current FastA
 | **B1** | Add optional `account_id` to `GET /api/credit-card-payments`. Match `source_account_id = account_id OR card_account_id = account_id` on the server, before ordering and applying `limit`. |
 | **B2** | Both activity endpoints use `limit=50` when omitted and accept `1..1001`. The client may show at most 1000 merged rows and requests one extra from each endpoint. `month=YYYY-MM` is required on both endpoints; a valid month with no matches returns `200 []`. |
 | **B3** | Both lists include `created_at` as an ISO 8601/RFC 3339 timestamp with UTC offset (`Z` is the canonical UTC form). Transactions sort by `transaction_date DESC, created_at DESC, id DESC`; payments sort by `payment_date DESC, created_at DESC, id DESC`. The cross-list merge sorts by date, then `created_at`, then transactions before payments, then `id DESC`. |
-| **B4** | Liquid accounts return signed `balance`; it may be negative. Cards return `credit_limit`, signed `outstanding_signed_debt`, `available_credit`, and server-computed non-negative `owed` and `credit`. `available_credit = credit_limit - outstanding_signed_debt`, so it may be negative when over limit and may exceed the limit when the card is overpaid. `owed = max(signed debt, 0)` and `credit = max(-signed debt, 0)` are computed by the API, not the browser. Do not return `opening_balance` or `opening_debt`; they are creation inputs, not current account figures. |
+| **B4** | Liquid accounts return signed `balance`; it may be negative. Cards return `credit_limit`, signed `outstanding_signed_debt`, `available_credit`, and server-computed non-negative `owed` and `credit`. `available_credit = credit_limit - outstanding_signed_debt`, so it may be negative when over limit and may exceed the limit when the card is overpaid. `owed = max(signed debt, 0)` and `credit = max(-signed debt, 0)` are computed by the API, not the browser. The account list omits `opening_balance` and `opening_debt`; the owner-requested edit flow reads them only from `GET /api/accounts/{id}`. |
 | **N1** | Use `{ "error": { "code": "…", "message": "…", "field": "…" } }`; omit `field` when it does not apply. Normalize FastAPI validation errors to `422 invalid_field` with a safe, human-readable message and the first relevant field. Use `400 invalid_account_type_combination`, `404 not_found`, `409 duplicate_account_name`, and `500 internal_error` (generic message, no stack details). Reserve `409 account_in_use` for a future operation that can actually encounter it; v1 has no account/category delete endpoint. |
 | **N2** | Summary includes `month`, `liquid_balance`, `outstanding_debt`, `card_credit`, `net_position`, `month_income`, and `month_expenses`, all money as decimal strings. `month` is required and validated as `YYYY-MM`; Accounts passes the currently selected month. The month-specific fields use it, while the account-derived figures remain current totals. |
 | **N3** | Transaction and payment `PUT` requests are full replacements of their editable fields; require the same complete body fields as `POST`, including nullable `note`. Transactions may change account, category (only to a category of the same income/expense type), amount, date, and note. Card-account transactions must remain expenses; income cannot be posted to a card. Payments may change source account and destination card, subject to the normal account-type rules. `POST` returns the stored row with `201`; `PUT` returns it with `200`; both include `created_at`. `DELETE` returns `204` with no body. Account creation returns the created account representation with `201`. |

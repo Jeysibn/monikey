@@ -208,6 +208,8 @@ def account_positions_sql() -> str:
           a.id,
           a.name,
           a.type,
+          a.opening_balance,
+          a.opening_debt,
           a.credit_limit,
           CASE
             WHEN a.type = 'credit_card' THEN
@@ -264,6 +266,18 @@ def account_response(row: dict[str, object]) -> dict[str, object]:
     else:
         response["balance"] = format_money(position)
     return response
+
+
+def account_edit_response(row: dict[str, object]) -> dict[str, object]:
+    """Return the stored opening values needed to edit an account baseline."""
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "type": row["type"],
+        "opening_balance": format_money(Decimal(row["opening_balance"])),
+        "opening_debt": format_money(Decimal(row["opening_debt"])),
+        "credit_limit": None if row["credit_limit"] is None else format_money(Decimal(row["credit_limit"])),
+    }
 
 
 def validate_account_input(values: AccountInput) -> None:
@@ -416,6 +430,57 @@ def create_account(values: AccountInput) -> dict[str, object]:
                 (row["id"],),
             ).fetchone()
         return account_response(account)
+    except psycopg.errors.UniqueViolation:
+        raise ApiProblem(409, "duplicate_account_name", "An account with this name already exists.", "name") from None
+
+
+@app.get("/api/accounts/{account_id}")
+def get_account_for_edit(account_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
+    with open_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, name, type, opening_balance, opening_debt, credit_limit
+            FROM accounts
+            WHERE id = %s
+            """,
+            (account_id,),
+        ).fetchone()
+    if row is None:
+        raise ApiProblem(404, "not_found", "Account not found.")
+    return account_edit_response(row)
+
+
+@app.put("/api/accounts/{account_id}")
+def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountInput) -> dict[str, object]:
+    validate_account_input(values)
+    try:
+        with open_connection() as connection:
+            existing = connection.execute(
+                "SELECT type FROM accounts WHERE id = %s FOR UPDATE",
+                (account_id,),
+            ).fetchone()
+            if existing is None:
+                raise ApiProblem(404, "not_found", "Account not found.")
+            if existing["type"] != values.type:
+                raise ApiProblem(
+                    400,
+                    "invalid_account_type_combination",
+                    "Account type cannot be changed after creation.",
+                    "type",
+                )
+            connection.execute(
+                """
+                UPDATE accounts
+                SET name = %s, opening_balance = %s, opening_debt = %s, credit_limit = %s
+                WHERE id = %s
+                """,
+                (values.name, values.opening_balance, values.opening_debt, values.credit_limit, account_id),
+            )
+            row = connection.execute(
+                f"{account_positions_sql()} WHERE a.id = %s",
+                (account_id,),
+            ).fetchone()
+        return account_response(row)
     except psycopg.errors.UniqueViolation:
         raise ApiProblem(409, "duplicate_account_name", "An account with this name already exists.", "name") from None
 

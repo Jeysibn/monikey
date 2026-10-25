@@ -1,0 +1,8 @@
+{
+  "id": 1,
+  "name": "Main Savings",
+  "type": "bank",
+  "opening_balance": "45000.00",
+  "opening_debt": "0.00",
+  "credit_limit": null
+}

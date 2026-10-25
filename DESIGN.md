@@ -1,6 +1,6 @@
 # MoniKey Design System
 
-**Status: APPROVED by the owner.** Canonical for visual rules (`AGENTS.md` / `CLAUDE.md`); behavior and screens live in [`docs/design/UI_UX_SPEC.md`](docs/design/UI_UX_SPEC.md); frontend implementation evidence is in [`docs/design/FRONTEND_STATES_4_9.md`](docs/design/FRONTEND_STATES_4_9.md) and the linked milestone records. The design tokens, frontend shell, Overview, Accounts, Activity, and all mock-backed entry flows are implemented. The remaining frontend work is the HTTP data source and integration against a backend; see [`docs/design/API_CLIENT_PLAN.md`](docs/design/API_CLIENT_PLAN.md).
+**Status: APPROVED by the owner.** Canonical for visual rules (`AGENTS.md` / `CLAUDE.md`); behavior and screens live in [`docs/design/UI_UX_SPEC.md`](docs/design/UI_UX_SPEC.md); frontend implementation evidence is in [`docs/design/FRONTEND_STATES_4_9.md`](docs/design/FRONTEND_STATES_4_9.md) and the linked milestone records. The design tokens, frontend shell, Overview, Accounts, Activity, mock-backed entry flows, and HTTP client are implemented. On 2026-10-25 the owner requested account editing as a follow-up feature; it is implemented with fixed account type and editable name, opening amounts, and card limit. See [`docs/design/UI_UX_SPEC.md`](docs/design/UI_UX_SPEC.md) and [`docs/design/API_CLIENT_PLAN.md`](docs/design/API_CLIENT_PLAN.md).
 
 Related: [UI/UX spec](docs/design/UI_UX_SPEC.md) · [Component inventory](docs/design/COMPONENT_INVENTORY.md) · [Responsive guidelines](docs/design/RESPONSIVE_GUIDELINES.md) · [Design review](docs/design/DESIGN_REVIEW.md) · [ADR-015](docs/architecture/ADR.md) (Tailwind v4, shadcn/ui, Lucide)
 
@@ -267,7 +267,7 @@ Studied for **patterns only** — no branding, screenshots, copy or assets were 
 
 ## Out of scope for v1 design
 
-Budgets, goals, recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account editing/deletion, category management, export.
+Budgets, goals, recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account deletion, category management, export.
 
 ---
 

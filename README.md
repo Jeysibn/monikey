@@ -1,6 +1,6 @@
 # MoniKey
 
-MoniKey is a simple personal finance tracker for recording accounts, income, expenses, credit-card purchases, and card payments. It is built as a beginner-friendly three-tier application and runs in a private homelab.
+MoniKey is a simple personal finance tracker for recording accounts, income, expenses, credit-card purchases and payments, and transfers between cash, bank, and e-wallet accounts. It is built as a beginner-friendly three-tier application and runs in a private homelab.
 
 > **Privacy:** The deployed v1 has no authentication and accepts writes. It is restricted to a trusted private network and is not a public demo. Screenshots below use fictional mock data only.
 
@@ -25,6 +25,7 @@ These existing design-review screenshots show the mock ledger, not the live home
 - Tracks cash, bank, e-wallet, and credit-card accounts.
 - Records income and expenses with categories and notes.
 - Tracks card purchases as expenses and card payments separately, so a payment does not count as a second expense.
+- Transfers money between liquid accounts without changing income or expense totals.
 - Calculates balances, card debt, available credit, and monthly totals from the ledger.
 - Lets the owner edit an account name, opening amounts, and card limit while keeping its account type fixed.
 
@@ -34,7 +35,7 @@ For a short feature walkthrough and the system diagram, see [Portfolio overview]
 
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, selected shadcn/ui components, and Lucide React.
 - **API:** Python, FastAPI, REST endpoints, and parameterized SQL.
-- **Database:** PostgreSQL with four core tables: `accounts`, `categories`, `transactions`, and `credit_card_payments`.
+- **Database:** PostgreSQL with five core tables: `accounts`, `categories`, `transactions`, `credit_card_payments`, and `account_transfers`.
 - **Local development:** Docker Compose.
 - **Delivery and deployment:** GitHub Actions builds and checks SHA-tagged images, GHCR stores them, and Argo CD deploys reviewed image updates from the separate `homelab-gitops` repository.
 
@@ -59,7 +60,7 @@ Open the local Vite URL shown in the terminal. To run the full local stack, use 
 - Backups are manual logical dumps. Scheduled off-cluster retention and recovery after node or storage failure have not been verified.
 - TLS uses the homelab self-signed issuer, which may show a browser trust warning.
 - API routes were exercised with synthetic data, but the full interactive React/API browser journey remains unverified. Automated browser, physical-device, and screen-reader checks are also outstanding.
-- Banking integrations, recurring bills, investments, and regular transfers are out of scope for v1.
+- Banking integrations, recurring bills, and investments are out of scope for v1. Credit cards are not transfer destinations; use Pay card for those payments.
 
 ## Project status
 

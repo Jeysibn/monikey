@@ -17,7 +17,7 @@ const MINUS = '−'
 export const MAX_MONEY_CENTAVOS = 2 ** 52 - 1
 export const isMoney = (centavos: number): boolean => Number.isSafeInteger(centavos) && Math.abs(centavos) <= MAX_MONEY_CENTAVOS
 
-export type AmountKind = 'income' | 'expense' | 'payment' | 'debt' | 'plain'
+export type AmountKind = 'income' | 'expense' | 'payment' | 'transfer' | 'debt' | 'plain'
 
 function groupThousands(whole: number): string {
   return String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',')

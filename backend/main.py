@@ -91,6 +91,14 @@ class PaymentInput(InputModel):
     note: Note = None
 
 
+class TransferInput(InputModel):
+    source_account_id: Annotated[int, Field(gt=0)]
+    destination_account_id: Annotated[int, Field(gt=0)]
+    amount: PositiveMoney
+    transfer_date: CalendarDate
+    note: Note = None
+
+
 class ApiProblem(Exception):
     def __init__(self, status: int, code: str, message: str, field: str | None = None):
         self.status = status
@@ -238,6 +246,16 @@ def account_positions_sql() -> str:
                   FROM credit_card_payments AS p
                   WHERE p.source_account_id = a.id
                 ), 0)
+                - COALESCE((
+                  SELECT SUM(x.amount)
+                  FROM account_transfers AS x
+                  WHERE x.source_account_id = a.id
+                ), 0)
+                + COALESCE((
+                  SELECT SUM(x.amount)
+                  FROM account_transfers AS x
+                  WHERE x.destination_account_id = a.id
+                ), 0)
           END AS position
         FROM accounts AS a
     """
@@ -336,6 +354,24 @@ def validate_payment_references(connection: psycopg.Connection, values: PaymentI
         raise ApiProblem(400, "invalid_account_type_combination", "A card payment must be sent to a credit-card account.", "card_account_id")
 
 
+def validate_transfer_references(connection: psycopg.Connection, values: TransferInput) -> None:
+    if values.source_account_id == values.destination_account_id:
+        raise ApiProblem(400, "invalid_transfer_accounts", "Choose two different accounts.", "destination_account_id")
+    rows = connection.execute(
+        "SELECT id, type FROM accounts WHERE id = ANY(%s)",
+        ([values.source_account_id, values.destination_account_id],),
+    ).fetchall()
+    by_id = {row["id"]: row["type"] for row in rows}
+    if values.source_account_id not in by_id:
+        raise ApiProblem(400, "invalid_field", "Choose an existing source account.", "source_account_id")
+    if values.destination_account_id not in by_id:
+        raise ApiProblem(400, "invalid_field", "Choose an existing destination account.", "destination_account_id")
+    if by_id[values.source_account_id] == "credit_card":
+        raise ApiProblem(400, "invalid_account_type_combination", "Transfers must come from a cash, bank, or e-wallet account.", "source_account_id")
+    if by_id[values.destination_account_id] == "credit_card":
+        raise ApiProblem(400, "invalid_account_type_combination", "Transfers must go to a cash, bank, or e-wallet account.", "destination_account_id")
+
+
 def transaction_response(row: dict[str, object]) -> dict[str, object]:
     return {
         "id": row["id"],
@@ -355,6 +391,18 @@ def payment_response(row: dict[str, object]) -> dict[str, object]:
         "card_account_id": row["card_account_id"],
         "amount": format_money(row["amount"]),
         "payment_date": row["payment_date"].isoformat(),
+        "note": row["note"],
+        "created_at": format_timestamp(row["created_at"]),
+    }
+
+
+def transfer_response(row: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "source_account_id": row["source_account_id"],
+        "destination_account_id": row["destination_account_id"],
+        "amount": format_money(row["amount"]),
+        "transfer_date": row["transfer_date"].isoformat(),
         "note": row["note"],
         "created_at": format_timestamp(row["created_at"]),
     }
@@ -643,6 +691,75 @@ def delete_payment(record_id: Annotated[int, Path(gt=0)]) -> Response:
         result = connection.execute("DELETE FROM credit_card_payments WHERE id = %s", (record_id,))
         if result.rowcount == 0:
             raise ApiProblem(404, "not_found", "Card payment not found.")
+    return Response(status_code=204)
+
+
+@app.get("/api/account-transfers")
+def list_transfers(
+    month: str,
+    account_id: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=1001)] = 50,
+) -> list[dict[str, object]]:
+    start_date, end_date = month_bounds(month)
+    query = """
+        SELECT id, source_account_id, destination_account_id, amount, transfer_date, note, created_at
+        FROM account_transfers
+        WHERE transfer_date >= %s AND transfer_date < %s
+    """
+    parameters: list[object] = [start_date, end_date]
+    if account_id is not None:
+        query += " AND (source_account_id = %s OR destination_account_id = %s)"
+        parameters.extend((account_id, account_id))
+    query += " ORDER BY transfer_date DESC, created_at DESC, id DESC LIMIT %s"
+    parameters.append(limit)
+    with open_connection() as connection:
+        rows = connection.execute(query, parameters).fetchall()
+    return [transfer_response(row) for row in rows]
+
+
+@app.post("/api/account-transfers", status_code=201)
+def create_transfer(values: TransferInput) -> dict[str, object]:
+    with open_connection() as connection:
+        validate_transfer_references(connection, values)
+        row = connection.execute(
+            """
+            INSERT INTO account_transfers
+              (source_account_id, destination_account_id, amount, transfer_date, note)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, source_account_id, destination_account_id, amount, transfer_date, note, created_at
+            """,
+            (values.source_account_id, values.destination_account_id, values.amount, values.transfer_date, values.note),
+        ).fetchone()
+    return transfer_response(row)
+
+
+@app.put("/api/account-transfers/{record_id}")
+def replace_transfer(
+    values: TransferInput,
+    record_id: Annotated[int, Path(gt=0)],
+) -> dict[str, object]:
+    with open_connection() as connection:
+        validate_transfer_references(connection, values)
+        row = connection.execute(
+            """
+            UPDATE account_transfers
+            SET source_account_id = %s, destination_account_id = %s, amount = %s, transfer_date = %s, note = %s
+            WHERE id = %s
+            RETURNING id, source_account_id, destination_account_id, amount, transfer_date, note, created_at
+            """,
+            (values.source_account_id, values.destination_account_id, values.amount, values.transfer_date, values.note, record_id),
+        ).fetchone()
+        if row is None:
+            raise ApiProblem(404, "not_found", "Transfer not found.")
+    return transfer_response(row)
+
+
+@app.delete("/api/account-transfers/{record_id}", status_code=204)
+def delete_transfer(record_id: Annotated[int, Path(gt=0)]) -> Response:
+    with open_connection() as connection:
+        result = connection.execute("DELETE FROM account_transfers WHERE id = %s", (record_id,))
+        if result.rowcount == 0:
+            raise ApiProblem(404, "not_found", "Transfer not found.")
     return Response(status_code=204)
 
 

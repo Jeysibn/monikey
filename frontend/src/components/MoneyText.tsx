@@ -13,6 +13,7 @@ const colour: Record<AmountKind, string> = {
   debt: 'text-debt',
   expense: '',
   payment: '',
+  transfer: '',
   plain: '',
 }
 

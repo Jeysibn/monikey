@@ -98,7 +98,7 @@ describe('ledger: adding an account', () => {
   it('first run: adding the first account unlocks entries (journey U7)', () => {
     const first = ledgerReducer(empty, toAccountAction({ ...cash, name: 'Cash on hand' }))
     assert.equal(first.accounts.length, 1)
-    const entry: EntryValues = { kind: 'expense', amount: '120', accountId: 1, cardId: null, categoryId: 4, date: '2026-10-25', note: '' }
+    const entry: EntryValues = { kind: 'expense', amount: '120', accountId: 1, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-25', note: '' }
     assert.deepEqual(validate(entry, buildSnapshot(first)), {})
     assert.equal(validate(entry, emptySnap).account, 'Choose an account.')
   })

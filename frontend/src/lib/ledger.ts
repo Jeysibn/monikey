@@ -36,6 +36,15 @@ export type LedgerAction =
       note: string | null
       createdAt: string
     }
+  | {
+      type: 'add-transfer'
+      sourceAccountId: number
+      destinationAccountId: number
+      amount: Centavos
+      date: string
+      note: string | null
+      createdAt: string
+    }
 
 export type { EntryTarget } from '../types.ts'
 
@@ -58,8 +67,18 @@ export type LedgerEdit =
       date: string
       note: string | null
     }
+  | {
+      type: 'update-transfer'
+      id: number
+      sourceAccountId: number
+      destinationAccountId: number
+      amount: Centavos
+      date: string
+      note: string | null
+    }
   | { type: 'delete-transaction'; id: number }
   | { type: 'delete-payment'; id: number }
+  | { type: 'delete-transfer'; id: number }
 
 const nextId = (rows: { id: number }[]) => rows.reduce((max, r) => Math.max(max, r.id), 0) + 1
 
@@ -112,6 +131,15 @@ export function ledgerReducer(data: MockData, action: LedgerAction | LedgerEdit)
           },
         ],
       }
+    case 'add-transfer':
+      return {
+        ...data,
+        transfers: [...data.transfers, {
+          id: nextId(data.transfers), sourceAccountId: action.sourceAccountId,
+          destinationAccountId: action.destinationAccountId, amount: action.amount,
+          date: action.date, note: action.note, createdAt: action.createdAt,
+        }],
+      }
     case 'update-transaction': {
       if (!data.transactions.some((t) => t.id === action.id)) return data
       const { type: _type, ...fields } = action
@@ -122,12 +150,20 @@ export function ledgerReducer(data: MockData, action: LedgerAction | LedgerEdit)
       const { type: _type, ...fields } = action
       return { ...data, payments: data.payments.map((p) => (p.id === action.id ? { ...p, ...fields } : p)) }
     }
+    case 'update-transfer': {
+      if (!data.transfers.some((t) => t.id === action.id)) return data
+      const { type: _type, ...fields } = action
+      return { ...data, transfers: data.transfers.map((t) => (t.id === action.id ? { ...t, ...fields } : t)) }
+    }
     case 'delete-transaction':
       if (!data.transactions.some((t) => t.id === action.id)) return data
       return { ...data, transactions: data.transactions.filter((t) => t.id !== action.id) }
     case 'delete-payment':
       if (!data.payments.some((p) => p.id === action.id)) return data
       return { ...data, payments: data.payments.filter((p) => p.id !== action.id) }
+    case 'delete-transfer':
+      if (!data.transfers.some((t) => t.id === action.id)) return data
+      return { ...data, transfers: data.transfers.filter((t) => t.id !== action.id) }
   }
 }
 
@@ -139,6 +175,10 @@ export function toAction(v: EntryValues, createdAt: string): LedgerAction {
   if (v.kind === 'payment') {
     if (v.cardId === null) throw new Error('toAction needs a card for a payment')
     return { type: 'add-payment', sourceAccountId: v.accountId, cardAccountId: v.cardId, amount: amount.centavos, date: v.date, note, createdAt }
+  }
+  if (v.kind === 'transfer') {
+    if (v.destinationAccountId === null) throw new Error('toAction needs a destination account for a transfer')
+    return { type: 'add-transfer', sourceAccountId: v.accountId, destinationAccountId: v.destinationAccountId, amount: amount.centavos, date: v.date, note, createdAt }
   }
   if (v.categoryId === null) throw new Error('toAction needs a category')
   return { type: 'add-transaction', accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note, createdAt }
@@ -153,28 +193,37 @@ export function toUpdateAction(v: EntryValues, target: EntryTarget): LedgerEdit 
     if (v.cardId === null) throw new Error('toUpdateAction needs a card for a payment')
     return { type: 'update-payment', id: target.id, sourceAccountId: v.accountId, cardAccountId: v.cardId, amount: amount.centavos, date: v.date, note }
   }
+  if (target.table === 'transfer') {
+    if (v.destinationAccountId === null) throw new Error('toUpdateAction needs a destination account for a transfer')
+    return { type: 'update-transfer', id: target.id, sourceAccountId: v.accountId, destinationAccountId: v.destinationAccountId, amount: amount.centavos, date: v.date, note }
+  }
   if (v.categoryId === null) throw new Error('toUpdateAction needs a category')
   return { type: 'update-transaction', id: target.id, accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note }
 }
 
 export const toDeleteAction = (target: EntryTarget): LedgerEdit =>
-  target.table === 'payment' ? { type: 'delete-payment', id: target.id } : { type: 'delete-transaction', id: target.id }
+  target.table === 'payment' ? { type: 'delete-payment', id: target.id } : target.table === 'transfer' ? { type: 'delete-transfer', id: target.id } : { type: 'delete-transaction', id: target.id }
 
 /** False when the entry is gone (for example deleted in another tab). */
 export const entryExists = (data: MockData, t: EntryTarget): boolean =>
-  (t.table === 'payment' ? data.payments : data.transactions).some((row) => row.id === t.id)
+  (t.table === 'payment' ? data.payments : t.table === 'transfer' ? data.transfers : data.transactions).some((row) => row.id === t.id)
 
 /** The form values for editing an entry, or null if it no longer exists. The kind comes from the category. */
 export function entryValues(data: MockData, t: EntryTarget): EntryValues | null {
   if (t.table === 'payment') {
     const p = data.payments.find((row) => row.id === t.id)
     if (!p) return null
-    return { kind: 'payment', amount: amountText(p.amount), accountId: p.sourceAccountId, cardId: p.cardAccountId, categoryId: null, date: p.date, note: p.note ?? '' }
+    return { kind: 'payment', amount: amountText(p.amount), accountId: p.sourceAccountId, cardId: p.cardAccountId, destinationAccountId: null, categoryId: null, date: p.date, note: p.note ?? '' }
+  }
+  if (t.table === 'transfer') {
+    const transfer = data.transfers.find((row) => row.id === t.id)
+    if (!transfer) return null
+    return { kind: 'transfer', amount: amountText(transfer.amount), accountId: transfer.sourceAccountId, cardId: null, destinationAccountId: transfer.destinationAccountId, categoryId: null, date: transfer.date, note: transfer.note ?? '' }
   }
   const row = data.transactions.find((x) => x.id === t.id)
   const category = row && data.categories.find((c) => c.id === row.categoryId)
   if (!row || !category) return null
-  return { kind: category.type as EntryKind, amount: amountText(row.amount), accountId: row.accountId, cardId: null, categoryId: row.categoryId, date: row.date, note: row.note ?? '' }
+  return { kind: category.type as EntryKind, amount: amountText(row.amount), accountId: row.accountId, cardId: null, destinationAccountId: null, categoryId: row.categoryId, date: row.date, note: row.note ?? '' }
 }
 
 /** Turns validated Add account values into a ledger action (the mock's write; the API gets the same fields). */

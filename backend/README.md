@@ -1,7 +1,7 @@
 # FastAPI backend
 
 This is the FastAPI API for the MoniKey v1 contract. It uses FastAPI,
-Pydantic validation, Psycopg 3, direct parameterized SQL, and the four tables
+Pydantic validation, Psycopg 3, direct parameterized SQL, and the five tables
 defined in [`../database/001_init.sql`](../database/001_init.sql).
 
 The API also has a local production-like image in `backend/Dockerfile`. The
@@ -47,5 +47,10 @@ and category seed, runs the API tests, and removes the container. It publishes
 PostgreSQL only to a temporary loopback port and uses fictional test data.
 Set `MONIKEY_TEST_POSTGRES_IMAGE` to override the default
 `postgres:17.6-alpine` test image.
+
+Liquid-account transfers use `/api/account-transfers` and their own database
+table. Transfers affect both account balances but not income, expenses, or card
+debt. Apply `database/002_account_transfers.sql` to an existing database after
+a verified backup before deploying this API version.
 
 The routes and response shapes are described in the [TLD API contract](../docs/architecture/TLD.md#6-api-contract-version-1-api-prefix).

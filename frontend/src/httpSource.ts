@@ -9,6 +9,7 @@ import {
   fromWireCategories,
   fromWireField,
   fromWirePayment,
+  fromWireTransfer,
   fromWireSummary,
   fromWireTransaction,
   toWireAccountInput,
@@ -16,6 +17,7 @@ import {
   type WireCategory,
   type WirePayment,
   type WireTransaction,
+  type WireTransfer,
 } from './wire.ts'
 
 type Fetcher = typeof fetch
@@ -88,6 +90,7 @@ function urlWithQuery(path: string, query: URLSearchParams): string {
 function mergeActivity(
   transactions: WireTransaction[],
   payments: WirePayment[],
+  transfers: WireTransfer[],
   accounts: AccountInfo[],
   categories: WireCategory[],
   limit: number,
@@ -95,8 +98,9 @@ function mergeActivity(
   const items: ActivityItem[] = [
     ...transactions.map((row) => fromWireTransaction(row, accounts, categories)),
     ...payments.map((row) => fromWirePayment(row, accounts)),
+    ...transfers.map((row) => fromWireTransfer(row, accounts)),
   ]
-  const rank = (item: ActivityItem) => item.kind === 'payment' ? 0 : 1
+  const rank = (item: ActivityItem) => item.kind === 'payment' || item.kind === 'transfer' ? 0 : 1
   items.sort((a, b) =>
     b.date.localeCompare(a.date) ||
     compareTimestamps(b.createdAt, a.createdAt) ||
@@ -154,30 +158,33 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       const requestLimit = Math.min(Math.max(1, limit) + 1, ACTIVITY_MAX_ROWS + 1)
       const transactionQuery = new URLSearchParams({ month, limit: String(requestLimit) })
       const paymentQuery = new URLSearchParams({ month, limit: String(requestLimit) })
+      const transferQuery = new URLSearchParams({ month, limit: String(requestLimit) })
       if (accountId !== null) {
         transactionQuery.set('account_id', String(accountId))
         paymentQuery.set('account_id', String(accountId))
+        transferQuery.set('account_id', String(accountId))
       }
-      const [transactionRows, paymentRows, accountsSnapshot, categories] = await Promise.all([
+      const [transactionRows, paymentRows, transferRows, accountsSnapshot, categories] = await Promise.all([
         getJson(urlWithQuery('/api/transactions', transactionQuery), signal, fetcher),
         getJson(urlWithQuery('/api/credit-card-payments', paymentQuery), signal, fetcher),
+        getJson(urlWithQuery('/api/account-transfers', transferQuery), signal, fetcher),
         accountsRead ?? readAccounts(signal),
         categoriesRead ?? readCategories(signal),
       ])
-      if (!Array.isArray(transactionRows) || !Array.isArray(paymentRows)) throw failure(500)
-      return mergeActivity(transactionRows as WireTransaction[], paymentRows as WirePayment[], accountsSnapshot.accounts, categories, limit)
+      if (!Array.isArray(transactionRows) || !Array.isArray(paymentRows) || !Array.isArray(transferRows)) throw failure(500)
+      return mergeActivity(transactionRows as WireTransaction[], paymentRows as WirePayment[], transferRows as WireTransfer[], accountsSnapshot.accounts, categories, limit)
     },
 
     async saveEntry(values: EntryValues, target?: EntryTarget) {
-      const payment = values.kind === 'payment'
-      if (target && ((target.table === 'payment') !== payment)) throw new Error('The entry type does not match the record being edited.')
-      const collection = payment ? '/api/credit-card-payments' : '/api/transactions'
+      const table = values.kind === 'payment' ? 'payment' : values.kind === 'transfer' ? 'transfer' : 'transaction'
+      if (target && target.table !== table) throw new Error('The entry type does not match the record being edited.')
+      const collection = table === 'payment' ? '/api/credit-card-payments' : table === 'transfer' ? '/api/account-transfers' : '/api/transactions'
       const path = target ? `${collection}/${target.id}` : collection
       await write(path, target ? 'PUT' : 'POST', fetcher, toWireEntryInput(values))
     },
 
     async deleteEntry(target) {
-      const collection = target.table === 'payment' ? '/api/credit-card-payments' : '/api/transactions'
+      const collection = target.table === 'payment' ? '/api/credit-card-payments' : target.table === 'transfer' ? '/api/account-transfers' : '/api/transactions'
       await write(`${collection}/${target.id}`, 'DELETE', fetcher)
     },
 

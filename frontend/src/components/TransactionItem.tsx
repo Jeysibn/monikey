@@ -18,6 +18,7 @@ const kinds = {
   income: { Icon: ArrowDownLeft, word: 'Income' },
   expense: { Icon: ArrowUpRight, word: 'Expense' },
   payment: { Icon: ArrowRightLeft, word: 'Card payment' },
+  transfer: { Icon: ArrowRightLeft, word: 'Transfer' },
 } as const
 
 export function TransactionItem({
@@ -52,6 +53,8 @@ export function TransactionItem({
           <span className="truncate">
             {item.kind === 'payment' ? (
               `${item.accountName} → ${item.cardName}`
+            ) : item.kind === 'transfer' ? (
+              `${item.accountName} → ${item.destinationAccountName}`
             ) : (
               <>
                 {item.categoryName} ·{' '}
@@ -63,6 +66,11 @@ export function TransactionItem({
           {item.kind === 'payment' && (
             <span className="hidden shrink-0 rounded-full bg-secondary px-2 text-xs font-semibold text-secondary-foreground md:inline">
               Payment
+            </span>
+          )}
+          {item.kind === 'transfer' && (
+            <span className="hidden shrink-0 rounded-full bg-secondary px-2 text-xs font-semibold text-secondary-foreground md:inline">
+              Transfer
             </span>
           )}
         </span>

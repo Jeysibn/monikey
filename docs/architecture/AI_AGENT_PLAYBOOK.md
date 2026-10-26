@@ -101,8 +101,9 @@ Use a smaller model only for well-defined low-risk changes, never simply because
 - Tailwind v4 via @tailwindcss/vite and @import "tailwindcss"; one small design-token source. Add only approved shadcn components, initially button/card/input/label/dialog; import Lucide icons by name.
 - Do not add React Router, Redux, React Query, Axios, Next.js, full component libraries, giant UI templates or global state libraries without new ADR.
 - UI has 3 sections (Overview, Activity, Accounts) and shared Quick Add.
-- Four tables only: accounts, categories, transactions, credit_card_payments.
+- Five tables: accounts, categories, transactions, credit_card_payments, account_transfers (ADR-017).
 - Credit card purchases are expenses; payments reduce liquid cash and debt but are not expenses.
+- Liquid-account transfers reduce the source balance and increase the destination balance without affecting income/expense totals; no transfer may include a credit card.
 - Do not add more frameworks, message queues, new pages, services, auth, or bank sync without a new ADR.
 - Make one small cohesive change per request; explain all newly added files.
 - Never run destructive commands, delete databases, or modify the user's existing cluster without approval.

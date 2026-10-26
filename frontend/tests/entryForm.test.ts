@@ -38,8 +38,8 @@ const FOOD = 4, SHOPPING = 8, SALARY = 1
 
 const data = getMockData()
 const snap = buildSnapshot(data)
-const base: EntryValues = { kind: 'expense', amount: '385', accountId: GCASH, cardId: null, categoryId: FOOD, date: '2026-10-25', note: '' }
-const pay: EntryValues = { kind: 'payment', amount: '5000', accountId: MAIN, cardId: BLUE, categoryId: null, date: '2026-10-25', note: '' }
+const base: EntryValues = { kind: 'expense', amount: '385', accountId: GCASH, cardId: null, destinationAccountId: null, categoryId: FOOD, date: '2026-10-25', note: '' }
+const pay: EntryValues = { kind: 'payment', amount: '5000', accountId: MAIN, cardId: BLUE, destinationAccountId: null, categoryId: null, date: '2026-10-25', note: '' }
 const amountError = (text: string) => {
   const r = parseAmount(text)
   return r.ok ? null : r.error
@@ -254,7 +254,7 @@ describe('estimates at the edge of the bound', () => {
         c.account.id === BLUE ? { ...c, signedDebt: -MAX_MONEY_CENTAVOS, owed: 0, credit: MAX_MONEY_CENTAVOS } : c,
       ),
     }
-    const entry: EntryValues = { kind: 'expense', amount: '1,000', accountId: BLUE, cardId: null, categoryId: SHOPPING, date: '2026-10-20', note: 'Big one' }
+    const entry: EntryValues = { kind: 'expense', amount: '1,000', accountId: BLUE, cardId: null, destinationAccountId: null, categoryId: SHOPPING, date: '2026-10-20', note: 'Big one' }
     const text = deleteSummary(edge, entry, OCT)!.effect
     assert.match(text, /Blue Card goes from ₱45,035,996,273,704\.95 card credit to ₱45,035,996,274,704\.95 card credit \(estimate\)/)
     const pay = { ...entry, kind: 'payment' as const, accountId: MAIN, cardId: BLUE, categoryId: null }
@@ -268,9 +268,9 @@ describe('ledger: editing and deleting (Milestone 4.5b)', () => {
   const edit = (d: typeof data, v: EntryValues, t: EntryTarget) => ledgerReducer(d, toUpdateAction(v, t))
 
   it('loads an entry into form values (kind from the category, amount as editable text)', () => {
-    assert.deepEqual(entryValues(data, tx(17)), { kind: 'expense', amount: '385.00', accountId: GCASH, cardId: null, categoryId: FOOD, date: '2026-10-24', note: 'Lunch with team' })
+    assert.deepEqual(entryValues(data, tx(17)), { kind: 'expense', amount: '385.00', accountId: GCASH, cardId: null, destinationAccountId: null, categoryId: FOOD, date: '2026-10-24', note: 'Lunch with team' })
     assert.equal(entryValues(data, tx(11))!.kind, 'income')
-    assert.deepEqual(entryValues(data, payment), { kind: 'payment', amount: '5000.00', accountId: MAIN, cardId: BLUE, categoryId: null, date: '2026-10-20', note: '' })
+    assert.deepEqual(entryValues(data, payment), { kind: 'payment', amount: '5000.00', accountId: MAIN, cardId: BLUE, destinationAccountId: null, categoryId: null, date: '2026-10-20', note: '' })
     assert.equal(entryValues(data, tx(999)), null)
   })
   it('editing the amount re-derives every balance and total (journey U4)', () => {

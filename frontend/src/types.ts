@@ -53,6 +53,17 @@ export interface CreditCardPayment {
   createdAt: string
 }
 
+/** Money moved between two cash, bank or e-wallet accounts. It is neither income nor expense. */
+export interface AccountTransfer {
+  id: number
+  sourceAccountId: number
+  destinationAccountId: number
+  amount: Centavos
+  date: string
+  note: string | null
+  createdAt: string
+}
+
 export interface FinancialSummary {
   liquidBalance: Centavos // cash + bank + e-wallet
   outstandingDebt: Centavos // sum of what cards owe (cards in credit count as 0 here)
@@ -80,7 +91,7 @@ export interface CardStatus {
   availableCredit: Centavos // limit - signedDebt. Not cash. Negative when over the limit.
 }
 
-export type ActivityKind = 'income' | 'expense' | 'payment'
+export type ActivityKind = 'income' | 'expense' | 'payment' | 'transfer'
 
 /** One row of recent activity or the Activity list, with names already looked up for display. */
 export interface ActivityItem {
@@ -94,12 +105,13 @@ export interface ActivityItem {
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid
+  destinationAccountName: string | null // transfers only
   createdAt: string // ISO timestamp; retained for a precise merge of transaction and payment rows
   entry: EntryValues // the stored entry in form shape, so Edit and Delete need no lookup
 }
 
 /** The kinds of entry the Quick Add form handles. */
-export type EntryKind = 'expense' | 'income' | 'payment'
+export type EntryKind = 'expense' | 'income' | 'payment' | 'transfer'
 
 /** What a person types into the Quick Add form (amount is the text as typed). */
 export interface EntryValues {
@@ -107,6 +119,7 @@ export interface EntryValues {
   amount: string
   accountId: number | null // expense: the account · income: deposit to · payment: pay from
   cardId: number | null // payment only
+  destinationAccountId: number | null // transfer only
   categoryId: number | null // expense and income only
   date: string // "YYYY-MM-DD"
   note: string
@@ -114,7 +127,7 @@ export interface EntryValues {
 
 /** One stored entry: a row of the transactions table or of the credit-card payments table. */
 export interface EntryTarget {
-  table: 'transaction' | 'payment'
+  table: 'transaction' | 'payment' | 'transfer'
   id: number
 }
 
@@ -142,6 +155,7 @@ export interface MockData {
   categories: Category[]
   transactions: Transaction[]
   payments: CreditCardPayment[]
+  transfers: AccountTransfer[]
 }
 
 /** Whether Add transaction can be used: not until the accounts have loaded, and not before the first account exists. */

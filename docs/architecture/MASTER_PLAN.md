@@ -1,6 +1,6 @@
 # MoniKey v1 — Master Plan (architecture baseline 1.3)
 
-**Status:** Approved plan. M6–7 and M9–11 are implemented; the owner approved the M5 mock UI. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M10 published SHA-tagged images; M11 deployed them through the private homelab GitOps setup. The app is Synced/Healthy, its Longhorn PVC is Bound and survived a pod restart, HTTPS ingress and API readiness pass, and a temporary-database restore plus image rollback were verified. This single-node deployment has no high availability, off-cluster backup recovery is unverified, and authentication remains out of scope. See [current progress](ROADMAP.md#current-progress-and-next-gate) and the [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md).
+**Status:** Approved plan with owner-approved ADR-017 account transfers (2026-10-26). M6–7 and M9–11 were implemented; M12 portfolio materials are complete. Transfer implementation is in progress and requires migration 002 on existing databases before deploying the updated API. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. The app is deployed privately; off-cluster backup recovery is unverified and authentication remains out of scope. See [current progress](ROADMAP.md#current-progress-and-next-gate) and the [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md).
 **Approach:** Frontend-first, small increments, one AI editor at a time, owner verifies and learns.
 **Second brain:** Personal Obsidian vault (ADR-016), **separate** from the code repository and GitOps desired-state repository.
 
@@ -12,7 +12,7 @@ Build a simple, accessible personal finance tracker that the project owner can *
 
 - Frontend: **React + TypeScript + Vite**, **Tailwind CSS v4**, five selective **shadcn/ui** primitives to start, **Lucide React** icons; three views (Overview, Activity, Accounts) and Quick Add / Pay Card dialogs. Typed mock data first.
 - Backend: **FastAPI + parameterized SQL / PostgreSQL driver**, simple REST routes under `/api`.
-- Database: **PostgreSQL**, four tables (`accounts`, `categories`, `transactions`, `credit_card_payments`); monetary values in `NUMERIC(12,2)`; private persistent storage and tested backup/restore.
+- Database: **PostgreSQL**, five tables (`accounts`, `categories`, `transactions`, `credit_card_payments`, `account_transfers`); monetary values in `NUMERIC(12,2)`; private persistent storage and tested backup/restore.
 - Local: **Docker Compose**. Production frontend: Vite `dist/` served by **Nginx**; same-origin `/api` routing.
 - Delivery: **GitHub Actions → GHCR SHA-tagged images → reviewed update in `homelab-gitops` → Argo CD → Kubernetes**, on the existing private homelab. No unauthenticated public deployment with live finance data.
 
@@ -53,4 +53,4 @@ All milestones and detailed gates: [ROADMAP](ROADMAP.md).
 
 No new feature, table, service, web framework or infrastructure component without a reviewed reason and new ADR. AI skills are development aids, **not** runtime dependencies. Obsidian is a second brain, **not** a hosted database, CI/CD system, documentation auto-sync dependency, or Kubernetes workload. Avoid storing real financial data, secrets, tokens, kubeconfig, database dumps and other sensitive content in notes.
 
-**Current action:** Milestone 12 portfolio materials are complete and owner-approved. No later milestone is approved in this plan. Keep screenshots sanitized and use sample data; do not publicly expose this unauthenticated writable deployment. Before relying on the homelab instance for long-term records, configure and verify off-cluster backups. The M8 interactive browser journey and physical-device/screen-reader checks remain unverified.
+**Current action:** Implement the owner-approved liquid-account transfer feature under ADR-017, then record its verification and acceptance. Apply the database migration only after a verified backup; do not deploy or alter cluster resources without explicit approval. Keep screenshots sanitized and use sample data; do not publicly expose this unauthenticated writable deployment. Before relying on the homelab instance for long-term records, configure and verify off-cluster backups. The M8 interactive browser journey and physical-device/screen-reader checks remain unverified.

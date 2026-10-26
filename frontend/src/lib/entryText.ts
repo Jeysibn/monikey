@@ -10,7 +10,7 @@ import { accountById, cardOf } from './snapshot.ts'
  * re-fetched ones). The only arithmetic is the display-only before/after of a card in a delete text
  * (owner decision Q4, extended to these texts) and it is labelled as an estimate.
  */
-export const targetOf = (item: ActivityItem): EntryTarget => ({ table: item.kind === 'payment' ? 'payment' : 'transaction', id: item.id })
+export const targetOf = (item: ActivityItem): EntryTarget => ({ table: item.kind === 'payment' ? 'payment' : item.kind === 'transfer' ? 'transfer' : 'transaction', id: item.id })
 
 /** What the card owes now, in words, from the figures AFTER the save. */
 function cardClause(name: string, cardId: number, after: LedgerSnapshot): string {
@@ -32,6 +32,12 @@ export function saveMessage(v: EntryValues, after: LedgerSnapshot): string {
     const card = accountById(after, v.cardId)
     if (!card) return 'Card payment saved.'
     return `Card payment saved: ${money} from ${from.name} to ${card.name}.${cardClause(card.name, card.id, after)} Card payments don't count as expenses and don't change your net position.`
+  }
+  if (v.kind === 'transfer') {
+    const to = accountById(after, v.destinationAccountId)
+    return to
+      ? `Transfer saved: ${money} from ${from.name} to ${to.name}. Income and expenses don't change.`
+      : 'Transfer saved.'
   }
   if (v.kind === 'income') return `Income saved: +${money} to ${from.name}.`
   return `Expense saved: −${money} from ${from.name}.${cardOf(after, from.id) ? cardClause(from.name, from.id, after) : ''}`
@@ -83,6 +89,17 @@ export function deleteSummary(snapshot: LedgerSnapshot, entry: EntryValues, view
       effect: `${from.name} goes up by ${money} and ${effect}. Your expenses don't change.${cant}`,
       button: 'Delete payment',
       done: 'Card payment deleted.',
+    }
+  }
+  if (entry.kind === 'transfer') {
+    const to = accountById(snapshot, entry.destinationAccountId)
+    if (!to) return null
+    return {
+      title: 'Delete this transfer?',
+      entry: `${entry.note || 'Account transfer'} · ${money} · ${date} · ${from.name} → ${to.name}`,
+      effect: `${from.name} goes up by ${money} and ${to.name} goes down by ${money}. Income and expenses don't change.${cant}`,
+      button: 'Delete transfer',
+      done: 'Transfer deleted.',
     }
   }
   const category = snapshot.categories.find((c) => c.id === entry.categoryId)

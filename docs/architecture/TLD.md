@@ -10,7 +10,7 @@
 MoniKey is a **beginner-friendly, portfolio-worthy three-tier personal finance tracker**, built frontend-first and deployed to the existing single-node/home Kubernetes GitOps environment after local testing.
 
 A successful v1 allows one user to:
-- Create and edit Cash, Bank, and E-wallet accounts with opening balances.
+- Create and edit Cash, Bank, and E-wallet accounts with opening balances; transfer money between distinct liquid accounts.
 - Create and edit credit-card accounts with a credit limit and opening debt. Account type cannot be changed after creation.
 - Record, view, edit, and delete categorized income and expense transactions.
 - Record, view, edit, and delete credit-card payments from non-credit-card accounts.
@@ -18,13 +18,13 @@ A successful v1 allows one user to:
 - Retain records after API/DB/container/pod restarts, and recover from a tested backup.
 - Explain frontend-to-API-to-database requests and code-to-cluster GitOps delivery in an interview.
 
-**Explicitly out of scope:** authentication, multi-user accounts, bank sync, regular account transfers, budgets, recurring bills, statement cycles, card interest, installment tracking, rewards, investments, notifications, production-grade high availability, and complex analytics.
+**Explicitly out of scope:** authentication, multi-user accounts, bank sync, transfers to or from credit cards (use the separate card-payment flow), budgets, recurring bills, statement cycles, card interest, installment tracking, rewards, investments, notifications, production-grade high availability, and complex analytics.
 
 ## 2. Assumptions and boundaries
 
 - **Frontend:** React functional components + TypeScript + Vite + **Tailwind CSS v4**, selected **shadcn/ui** component source files and **Lucide React** icons, initially backed by typed mock data. Production static assets from Vite `dist/` are served by Nginx; no Node or Vite server runs in production.
 - **Backend:** Python + FastAPI + Pydantic + a PostgreSQL driver (e.g. psycopg); direct readable SQL rather than an ORM.
-- **Database:** one PostgreSQL instance; four core tables; money represented by PostgreSQL `NUMERIC(12,2)` and JSON decimal strings.
+- **Database:** one PostgreSQL instance; five core tables; money represented by PostgreSQL `NUMERIC(12,2)` and JSON decimal strings.
 - **Local:** Docker Compose for frontend, API, and DB.
 - **Cluster:** existing k3s/Kubernetes, Traefik ingress, Argo CD, and an operational StorageClass (Longhorn *if verified*). No new cluster is needed.
 - **Source layout:** new MoniKey v1 application repository; separate existing `homelab-gitops` repository for Kubernetes manifests.
@@ -168,7 +168,7 @@ export default defineConfig({
 
 **References:** https://tailwindcss.com/docs/installation/using-vite · https://ui.shadcn.com/docs/installation/vite · https://lucide.dev/guide/react/
 
-## 5. Data model (exactly four tables)
+## 5. Data model (five tables)
 
 ```mermaid
 erDiagram
@@ -176,6 +176,8 @@ erDiagram
     CATEGORIES ||--o{ TRANSACTIONS : classifies
     ACCOUNTS ||--o{ CREDIT_CARD_PAYMENTS : source_account
     ACCOUNTS ||--o{ CREDIT_CARD_PAYMENTS : target_card
+    ACCOUNTS ||--o{ ACCOUNT_TRANSFERS : source_account
+    ACCOUNTS ||--o{ ACCOUNT_TRANSFERS : destination_account
     ACCOUNTS {
       int id PK
       varchar name UK
@@ -203,6 +205,14 @@ erDiagram
       int card_account_id FK
       numeric amount
       date payment_date
+      text note
+    }
+    ACCOUNT_TRANSFERS {
+      int id PK
+      int source_account_id FK
+      int destination_account_id FK
+      numeric amount
+      date transfer_date
       text note
     }
 ```
@@ -257,10 +267,27 @@ CREATE TABLE credit_card_payments (
   CHECK (source_account_id <> card_account_id)
 );
 
+CREATE TABLE account_transfers (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  source_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  destination_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+  transfer_date DATE NOT NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (source_account_id <> destination_account_id)
+);
+
 CREATE INDEX idx_transactions_account_date
   ON transactions(account_id, transaction_date DESC);
 CREATE INDEX idx_card_payments_card_date
   ON credit_card_payments(card_account_id, payment_date DESC);
+
+CREATE INDEX idx_account_transfers_source_date
+  ON account_transfers(source_account_id, transfer_date DESC);
+
+CREATE INDEX idx_account_transfers_destination_date
+  ON account_transfers(destination_account_id, transfer_date DESC);
 ```
 
 This initial schema is implemented in [`database/001_init.sql`](../../database/001_init.sql); the repeatable category seed is [`database/seed.sql`](../../database/seed.sql). Disposable PostgreSQL accounting checks live in [`database/tests/accounting.sql`](../../database/tests/accounting.sql) and run with `bash database/test.sh`. FastAPI endpoints use direct parameterized SQL in [`backend/main.py`](../../backend/main.py), with connection setup in [`backend/database.py`](../../backend/database.py), shared synthetic response examples in [`docs/api-fixtures/`](../api-fixtures/), and endpoint checks in `backend/tests/`. Account detail and update routes are implemented; a local Compose smoke check verified opening-debt recalculation and restoration. Local Compose persistence and restore evidence is recorded in [M8–M9 integration](../design/MILESTONE_8_9_INTEGRATION.md).
@@ -270,6 +297,7 @@ This initial schema is implemented in [`database/001_init.sql`](../../database/0
 **Important cross-table validations implemented in FastAPI (not enforced by these SQL CHECKs):**
 - A category used with a credit-card account must be `expense`; direct income on a card is out of scope.
 - A payment source must be Cash, Bank, or E-wallet; payment destination must be Credit Card.
+- Transfer source and destination must both be Cash, Bank, or E-wallet, and must differ. Transfers do not affect income/expense totals.
 - Require known account/category IDs, valid `YYYY-MM-DD` calendar dates, positive amounts with max two fractional digits, and a reasonable maximum note length.
 - Keep the account type fixed when updating; opening values and card limits may change, including to a state that produces negative liquid balance, card credit, or over-limit debt.
 - Prevent deleting an account/category if it is still referenced; v1 has no account or category delete endpoint.
@@ -279,7 +307,7 @@ This initial schema is implemented in [`database/001_init.sql`](../../database/0
 
 Let positive income and expense entries be determined by the referenced category.
 
-**Non-credit account balance** = `opening_balance + SUM(income transactions) - SUM(expense transactions) - SUM(card payments sourced from account)`.
+**Non-credit account balance** = `opening_balance + SUM(income transactions) - SUM(expense transactions) - SUM(card payments sourced from account) - SUM(transfers from account) + SUM(transfers to account)`.
 
 **Credit-card signed debt** = `opening_debt + SUM(expense transactions charged to card) - SUM(card payments to card)`.
 
@@ -288,6 +316,8 @@ Let positive income and expense entries be determined by the referenced category
 **Liquid balance** = sum of Cash, Bank and E-wallet balances.  
 **Outstanding debt** = sum of `GREATEST(signed_debt, 0)` per card.  
 **Net tracked position** = liquid balance − sum of **signed** card debts (so a card credit adds to net position).  
+
+Transfers move equal amounts between liquid accounts, so they change each account's balance but leave total liquid balance, net position, income, and expenses unchanged.
 **Monthly income / expenses** = transaction sums of income / expense categories with `transaction_date` in the selected calendar month. A credit-card payment is **never** counted as monthly income or expense.  
 **Monthly net spending movement** = income − expense (not necessarily equal to the change in liquid balance because card purchases and repayments have different cash timing).
 
@@ -314,6 +344,10 @@ Let positive income and expense entries be determined by the referenced category
 | POST | `/api/credit-card-payments` | Create payment from liquid account to card |
 | PUT | `/api/credit-card-payments/{id}` | Edit payment |
 | DELETE | `/api/credit-card-payments/{id}` | Delete payment; 204 on success |
+| GET | `/api/account-transfers?month=2026-10&account_id=1&limit=50` | Transfer history; account filter matches either side |
+| POST | `/api/account-transfers` | Transfer between two liquid accounts |
+| PUT | `/api/account-transfers/{id}` | Edit a transfer |
+| DELETE | `/api/account-transfers/{id}` | Delete a transfer; 204 on success |
 | GET | `/api/summary?month=2026-10` | Liquid balance, card debt, net position, month income/expense |
 
 Example input:
@@ -343,7 +377,7 @@ Example computed account response excerpt:
 
 **Errors:** `400` malformed business input / invalid account-type combination, `404` missing record, `409` conflict (duplicate account or invalid delete), `422` FastAPI schema-validation error, `500` unexpected failure (no sensitive stack traces or credentials in public responses). Keep one consistent human-readable error shape, documenting FastAPI's built-in validation detail separately if not normalized.
 
-**Write semantics:** API waits for database commit before success; errors do not cause a partial card payment; frontend refreshes derived summaries after successful writes.
+**Write semantics:** API waits for database commit before success; transfer source/destination changes are stored as one row; frontend refreshes derived summaries after successful writes.
 
 ## 7. Proposed repository layouts
 
@@ -444,7 +478,7 @@ The personal Obsidian vault is **outside** `monikey-v2/` and `homelab-gitops/` b
 
 1. Generate Vite's React + TypeScript template, create `DESIGN.md`, configure Tailwind CSS v4, selectively initialize shadcn/ui and Lucide; Claude Code implements three views and Quick Add with **typed mock data only**. Preview with `cd frontend && npm run dev` (normally localhost:5173). No backend or database is required at this stage.
 2. Codex reviews TypeScript readability, consistent Tailwind design tokens, shadcn component usage, Lucide accessibility, mobile behavior and basic accessibility; Claude fixes issues. Verify `npm run build`, template lint, and Playwright smoke flows before UI signoff.
-3. Codex creates the PostgreSQL four-table schema, seed data and FastAPI endpoints. Test backend independently on `localhost:8000` using `/api/docs` and API tests. Compose runs the DB with a named persistent volume.
+3. Codex maintains the PostgreSQL schema, seed data and FastAPI endpoints. Test backend independently on `localhost:8000` using `/api/docs` and API tests. Compose runs the DB with a named persistent volume. Existing installations apply numbered forward migrations after a verified backup.
 4. Replace the mock data adapter in `src/api.ts` with typed `fetch('/api/...')` calls. Vite's dev `/api` proxy forwards to FastAPI; verify backend always receives `/api/...` (no rewrite). Re-fetch after mutations.
 5. Create a **multi-stage frontend Dockerfile**: build in a pinned supported Node environment with `npm ci && npm run build`; copy only `dist/` into an Nginx static image. Nginx serves `/` and proxies `/api` to the Compose backend for local production parity. No Node runtime in the deployed frontend pod.
 6. `docker compose up --build` runs `frontend`, `backend`, `db`; verify same-origin requests, edits and card payments, reload persistence, backup/restore and failures. `docker compose down` (without `-v`) must not delete data.
@@ -534,7 +568,7 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 3. **Overview mock frontend (Claude Sonnet):** typed mock data, loading and empty states.
 4. **Activity, Accounts, Quick Add and Pay Card (Claude Sonnet):** mock CRUD and account flows.
 5. **Frontend visual/accessibility QA (Claude with Codex review):** owner approved the mock UI; browser/device verification evidence is recorded separately.
-6. **Database (Codex GPT-6.1 Sol):** four-table schema, seed, accounting rules and disposable PostgreSQL tests.
+6. **Database (Codex GPT-6.1 Sol):** five-table schema, seed, accounting rules and disposable PostgreSQL tests.
 7. **FastAPI API (Codex):** parameterized REST routes, validation, shared fixtures and backend tests.
 8. **Frontend–API integration (Claude implementing frontend, Codex implementing/validating API):** typed fetch adapter, safe loading/error states, full transaction flows.
 9. **Production-like Compose (Codex):** Node build → Nginx, FastAPI, PostgreSQL volume, backups; verify same-origin.
@@ -551,7 +585,7 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 - [x] Confirm the GHCR images are publicly pullable and pin both app images to full commit SHA tags.
 - [x] Resolve `monikey.homelab.local` through Pi-hole and serve the app through Traefik's HTTPS entrypoint. HTTP returns no app content; the certificate is self-signed and may show a browser trust warning.
 - [x] Create the runtime database Secret outside Git. The GitOps runbook documents its handling; do not put the value in manifests, notes, or logs.
-- [x] Initialize the four-table schema and default category seed on a new empty volume. A custom-format database dump restored into a temporary database with four tables and nine categories.
+- [x] Initialize the original four-table schema and default category seed on a new empty volume. A custom-format database dump restored into a temporary database with four tables and nine categories. ADR-017 later adds the fifth table for transfers.
 - [x] Restart the PostgreSQL pod and confirm the same Longhorn PVC returns with the four tables and nine categories intact.
 - [x] Roll back to a previous published image SHA, verify health, then restore the current SHA and verify again.
 - [ ] Off-cluster backup retention and restore after a node/storage failure remain unverified. Real personal financial records were not used for deployment verification.
@@ -600,3 +634,4 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 - **v1.2 (2026-10-24):** Replaced plain CSS styling decision with Tailwind CSS v4 + selective shadcn/ui + Lucide React icons. No new runtime service or backend/data/deployment scope.
 
 - **v1.3 (2026-10-24):** Added Obsidian as a personal, separate second-brain workflow. No change to frontend stack, business scope, database, runtime tiers or GitOps topology.
+- **v1.4 (2026-10-26):** Added owner-approved liquid-account transfers in ADR-017, including the fifth table and activity/API contract.

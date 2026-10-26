@@ -18,6 +18,6 @@ See [SKILLS_MANIFEST.md](docs/SKILLS_MANIFEST.md) for pinned revisions, prerequi
 
 Codex owns backend, database, infrastructure, CI/CD, and GitOps work and reviews frontend changes read-only by default. Either agent may review the other's work, but only one agent edits a feature or working tree at a time. Do not make parallel or competing implementations.
 
-Stay within the approved three-tier, four-table v1 scope. In particular, card purchases are expenses; card payments reduce existing debt and the paying account balance without creating another expense. Do not add authentication, banking integrations, recurring bills, investments, extra services, or dependencies without an approved ADR.
+Stay within the approved three-tier, five-table v1 scope. ADR-017 adds transfers between cash, bank, and e-wallet accounts; these affect account balances but not income or expenses. Card purchases are expenses; card payments reduce existing debt and the paying account balance without creating another expense. Do not add authentication, banking integrations, recurring bills, investments, extra services, or dependencies without an approved ADR.
 
 Before reporting completion, run relevant checks and state their exact results. Do not write to the Obsidian vault, modify the GitOps repository, change Kubernetes resources, deploy, push, or commit without explicit approval. Never expose secrets or personal financial records.

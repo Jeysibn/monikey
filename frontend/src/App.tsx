@@ -65,7 +65,7 @@ const demoBehaviour = (d: string | null): MockOptions => {
 const STATUS_SECONDS = 8
 const RECENT_COUNT = 6 // rows on Overview
 
-const involvesAccount = (v: EntryValues, id: number) => v.accountId === id || v.cardId === id
+const involvesAccount = (v: EntryValues, id: number) => v.accountId === id || v.cardId === id || v.destinationAccountId === id
 
 /** The accounts' figures and the categories as they are now (used right after a write for its message). */
 async function freshSnapshot(source: DataSource): Promise<LedgerSnapshot> {
@@ -150,7 +150,7 @@ function App() {
   const startEntry = (snap: LedgerSnapshot, kind: EntryKind, cardId: number | null): EntryValues => {
     const last = kind === 'payment' ? lastPayFrom.current : lastAccount.current
     const usable = last !== null && accountsFor(kind, 'account', snap).some((a) => a.id === last)
-    return { kind, amount: '', accountId: usable ? last : null, cardId, categoryId: null, date: source.today, note: '' }
+    return { kind, amount: '', accountId: usable ? last : null, cardId, destinationAccountId: null, categoryId: null, date: source.today, note: '' }
   }
   const openAdd = () => {
     if (!snapshot) return
@@ -161,6 +161,11 @@ function App() {
     if (!snapshot) return
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'payment', cardId) })
+  }
+  const openTransfer = () => {
+    if (!snapshot) return
+    rememberOpener()
+    setSession({ mode: 'add', values: startEntry(snapshot, 'transfer', null) })
   }
   // Edit and Delete open on the entry exactly as stored (the list row carries it), so no lookup is needed.
   const openEdit = (item: ActivityItem, from: HTMLElement, confirmFirst = false) => {
@@ -315,6 +320,7 @@ function App() {
             onAddAccount={openAddAccount}
             onEditAccount={editAccount}
             onPayCard={openPay}
+            onTransfer={openTransfer}
           />
         )}
       </AppShell>

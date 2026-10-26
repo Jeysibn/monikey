@@ -22,6 +22,7 @@ test('loadActivity requests both filtered lists with one spare row and merges ex
     requests.push({ url, init })
     if (url.startsWith('/api/transactions?')) return json([tx(1, '2026-10-25T09:00:00.000900Z'), tx(2, '2026-10-25T09:00:00.000500Z')])
     if (url.startsWith('/api/credit-card-payments?')) return json([payment(1, '2026-10-25T09:00:00.000500Z')])
+    if (url.startsWith('/api/account-transfers?')) return json([])
     if (url === '/api/accounts') return json(accounts)
     if (url === '/api/categories') return json(categories)
     throw new Error(`Unexpected request ${url}`)
@@ -31,7 +32,7 @@ test('loadActivity requests both filtered lists with one spare row and merges ex
   assert.deepEqual(result.items.map((item) => item.key), ['t-1', 't-2'])
   assert.equal(result.hasMore, true)
   assert.equal(result.items[0].createdAt, '2026-10-25T09:00:00.000900Z')
-  assert.equal(requests.length, 4)
+  assert.equal(requests.length, 5)
   const transactionUrl = new URL(requests.find((item) => item.url.startsWith('/api/transactions?'))!.url, 'http://localhost')
   const paymentUrl = new URL(requests.find((item) => item.url.startsWith('/api/credit-card-payments?'))!.url, 'http://localhost')
   assert.equal(transactionUrl.searchParams.get('month'), '2026-10')
@@ -47,6 +48,7 @@ test('loadActivity leaves empty months empty and caps the wire limit at 1001', a
     const url = String(input)
     urls.push(url)
     if (url.startsWith('/api/transactions?') || url.startsWith('/api/credit-card-payments?')) return json([])
+    if (url.startsWith('/api/account-transfers?')) return json([])
     if (url === '/api/accounts') return json([])
     if (url === '/api/categories') return json([])
     throw new Error(`Unexpected request ${url}`)
@@ -54,9 +56,9 @@ test('loadActivity leaves empty months empty and caps the wire limit at 1001', a
   const empty = await source.loadActivity({ month: '2026-10', accountId: null, limit: 50 }, signal())
   assert.deepEqual(empty, { items: [], hasMore: false })
   await source.loadActivity({ month: '2026-10', accountId: null, limit: 2000 }, signal())
-  const lists = urls.filter((url) => url.startsWith('/api/transactions?') || url.startsWith('/api/credit-card-payments?'))
-  assert.equal(new URL(lists[2], 'http://localhost').searchParams.get('limit'), '1001')
-  assert.equal(new URL(lists[3], 'http://localhost').searchParams.get('limit'), '1001')
+  const lists = urls.filter((url) => url.startsWith('/api/transactions?') || url.startsWith('/api/credit-card-payments?') || url.startsWith('/api/account-transfers?'))
+  assert.equal(lists.length, 6)
+  assert.ok(lists.slice(3).every((url) => new URL(url, 'http://localhost').searchParams.get('limit') === '1001'))
 })
 
 test('summary and account reads use same-origin paths and decimal-string mapping', async () => {
@@ -78,7 +80,7 @@ test('writes send the agreed request bodies, routes, and HTTP verbs', async () =
     requests.push({ url: String(input), init })
     return new Response(null, { status: 204 })
   })
-  const expense: EntryValues = { kind: 'expense', amount: '350.00', accountId: 1, cardId: null, categoryId: 4, date: '2026-10-24', note: '' }
+  const expense: EntryValues = { kind: 'expense', amount: '350.00', accountId: 1, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-24', note: '' }
   await source.saveEntry(expense)
   await source.saveEntry({ ...expense, note: 'Lunch' }, { table: 'transaction', id: 12 })
   await source.saveEntry({ ...expense, kind: 'payment', cardId: 2, categoryId: null }, { table: 'payment', id: 8 })

@@ -40,18 +40,20 @@ const KINDS: { value: EntryKind; label: string }[] = [
   { value: 'expense', label: 'Expense' },
   { value: 'income', label: 'Income' },
   { value: 'payment', label: 'Pay card' },
+  { value: 'transfer', label: 'Transfer' },
 ]
-const SAVE_LABEL: Record<EntryKind, string> = { expense: 'Save expense', income: 'Save income', payment: 'Pay credit card' }
-const ACCOUNT_LABEL: Record<EntryKind, string> = { expense: 'Account', income: 'Deposit to', payment: 'Pay from' }
+const SAVE_LABEL: Record<EntryKind, string> = { expense: 'Save expense', income: 'Save income', payment: 'Pay credit card', transfer: 'Save transfer' }
+const ACCOUNT_LABEL: Record<EntryKind, string> = { expense: 'Account', income: 'Deposit to', payment: 'Pay from', transfer: 'Transfer from' }
 const FIELD_ID: Record<EntryField, string> = {
   amount: 'qa-amount',
   account: 'qa-account',
   card: 'qa-card',
+  destination: 'qa-destination',
   category: 'qa-category-0',
   date: 'qa-date',
   note: 'qa-note',
 }
-const FIELD_ORDER: EntryField[] = ['amount', 'account', 'card', 'category', 'date', 'note']
+const FIELD_ORDER: EntryField[] = ['amount', 'account', 'destination', 'card', 'category', 'date', 'note']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 
 function AccountOptions({ accounts, snapshot, withFigures }: { accounts: AccountInfo[]; snapshot: LedgerSnapshot; withFigures: boolean }) {
@@ -142,6 +144,8 @@ export function TransactionForm({
       const next = new Set(t)
       next.delete('category')
       next.delete('account')
+      next.delete('card')
+      next.delete('destination')
       return next
     })
   }
@@ -173,18 +177,25 @@ export function TransactionForm({
   const card = cardOf(snapshot, values.cardId)
   const owed = card?.owed ?? 0
   const from = accountById(snapshot, values.accountId)
-  const categories = snapshot.categories.filter((c) => c.type === values.kind)
+  const transferAccounts = accountsFor('transfer', 'account', snapshot)
+  const transferHelp = transferAccounts.length < 2
+    ? 'Add another cash, bank, or e-wallet account first.'
+    : 'Transfers between your accounts do not count as income or expenses.'
+  const categories = values.kind === 'income' || values.kind === 'expense'
+    ? snapshot.categories.filter((c) => c.type === values.kind)
+    : []
   // Previews and warnings compare against figures that already include the entry being edited, so edit mode has none.
   const preview = editing ? null : previewFor(values, snapshot)
   const warnings = editing ? [] : notices(values, snapshot)
   const amountValid = parseAmount(values.amount).ok
   const kindWord = values.kind === 'payment' ? 'card payment' : values.kind
-  const title = editing ? `Edit ${kindWord}` : values.kind === 'payment' ? 'Pay credit card' : 'Add transaction'
+  const title = editing ? `Edit ${kindWord}` : values.kind === 'payment' ? 'Pay credit card' : values.kind === 'transfer' ? 'Transfer money' : 'Add transaction'
   const saveLabel = editing ? 'Save changes' : SAVE_LABEL[values.kind]
 
   const accountError = shown('account')
   const amountError = shown('amount')
   const cardError = shown('card')
+  const destinationError = shown('destination')
   const categoryError = shown('category')
   const dateError = shown('date')
   const noteError = shown('note')
@@ -276,7 +287,7 @@ export function TransactionForm({
               aria-describedby={describedBy('qa-account', accountError, accountHelp)}
               className={select}
             >
-              <option value="">{values.kind === 'payment' ? 'Choose where to pay from' : 'Choose an account'}</option>
+            <option value="">{values.kind === 'payment' ? 'Choose where to pay from' : values.kind === 'transfer' ? 'Choose a source account' : 'Choose an account'}</option>
               <AccountOptions accounts={accountsFor(values.kind, 'account', snapshot)} snapshot={snapshot} withFigures={!editing} />
             </select>
           </FormField>
@@ -302,7 +313,31 @@ export function TransactionForm({
             </FormField>
           )}
 
-          {values.kind !== 'payment' && (
+          {values.kind === 'transfer' && (
+            <FormField
+              id="qa-destination"
+              label="Transfer to"
+              error={destinationError}
+              helper={transferHelp}
+            >
+              <select
+                id="qa-destination"
+                value={values.destinationAccountId ?? ''}
+                onChange={(e) => set({ destinationAccountId: e.target.value === '' ? null : Number(e.target.value) }, 'destination')}
+                onBlur={() => blur('destination')}
+                aria-invalid={!!destinationError}
+                aria-describedby={describedBy('qa-destination', destinationError, transferHelp)}
+                className={select}
+              >
+                <option value="">Choose a destination account</option>
+                {transferAccounts.filter((a) => a.id !== values.accountId).map((a) => (
+                  <option key={a.id} value={a.id}>{accountOptionLabel(a, snapshot, !editing)}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
+
+          {values.kind !== 'payment' && values.kind !== 'transfer' && (
             <fieldset
               className="m-0 grid min-w-0 gap-1.5 border-0 p-0"
               aria-describedby={describedBy('qa-category', categoryError)}

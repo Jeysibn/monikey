@@ -1,9 +1,9 @@
 # Database milestone 6
 
 This directory contains the initial PostgreSQL schema, repeatable sample
-category seed, and isolated accounting checks. The application uses exactly
-four tables: `accounts`, `categories`, `transactions`, and
-`credit_card_payments`.
+category seed, and isolated accounting checks. The current schema has five
+tables: `accounts`, `categories`, `transactions`, `credit_card_payments`, and
+`account_transfers`.
 
 The local Compose stack mounts the schema and seed into PostgreSQL's
 first-volume initialization directory and stores data in a named volume. Those
@@ -13,11 +13,14 @@ restart/backup-restore evidence are documented in the
 
 ## Files
 
-- `001_init.sql` creates the four tables, constraints, and lookup indexes. Run
+- `001_init.sql` creates the five tables, constraints, and lookup indexes. Run
   it once against a new, empty database. Do not rerun it against a database
   with user data; later schema changes need separately reviewed migrations.
   Account names are trimmed by the API and unique case-insensitively through a
   normalized unique index.
+- `002_account_transfers.sql` adds liquid-account transfers to an existing
+  database. Take and verify a backup before applying it. The API does not run
+  migrations automatically.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
@@ -42,5 +45,5 @@ records.
 
 The schema enforces local row constraints and foreign keys. Rules that depend
 on more than one row—such as requiring a card payment to come from a liquid
-account and target a credit card—remain API validation responsibilities, as
-specified in the TLD.
+account and target a credit card, or requiring both transfer accounts to be
+liquid—remain API validation responsibilities, as specified in the TLD.

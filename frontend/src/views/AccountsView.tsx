@@ -38,6 +38,7 @@ export function AccountsView({
   onAddAccount,
   onEditAccount,
   onPayCard,
+  onTransfer,
 }: {
   accounts: Resource<AccountsSnapshot> // the rows and cards
   summary: Resource<FinancialSummary> // the two totals
@@ -47,6 +48,7 @@ export function AccountsView({
   onAddAccount: (kind: 'account' | 'credit card') => void
   onEditAccount: (accountId: number, from: HTMLElement) => void
   onPayCard: (cardId: number) => void
+  onTransfer: () => void
 }) {
   const snapshot = accountsRes.data
   // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
@@ -70,12 +72,18 @@ export function AccountsView({
         {loading ? 'Loading your accounts' : ''}
       </p>
       <PageHeader title="Accounts" onAdd={onAdd} addState={addState}>
+        <Button variant="secondary" className="hidden md:inline-flex" onClick={onTransfer}>
+          Transfer
+        </Button>
         <Button variant={addAccountVariant} className="hidden md:inline-flex" onClick={() => onAddAccount('account')}>
           Add account
         </Button>
       </PageHeader>
       {/* Phones: Add account sits on its own row under the title (the header is too tight for two buttons). */}
-      <div className="-mt-1.5 mb-4 flex justify-end md:hidden">
+      <div className="-mt-1.5 mb-4 flex justify-end gap-2 md:hidden">
+        <Button variant="secondary" onClick={onTransfer}>
+          Transfer
+        </Button>
         <Button variant={addAccountVariant} onClick={() => onAddAccount('account')}>
           Add account
         </Button>

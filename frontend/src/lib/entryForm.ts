@@ -15,7 +15,7 @@ export type { EntryKind, EntryValues } from '../types.ts'
  * centavos in the browser and are never saved. The real API will own every saved figure.
  */
 
-export type EntryField = 'amount' | 'account' | 'card' | 'category' | 'date' | 'note'
+export type EntryField = 'amount' | 'account' | 'card' | 'destination' | 'category' | 'date' | 'note'
 export type EntryErrors = Partial<Record<EntryField, string>>
 
 export const MAX_NOTE = 120
@@ -73,6 +73,9 @@ export function validate(v: EntryValues, snapshot: LedgerSnapshot): EntryErrors 
   }
   if (v.kind === 'payment') {
     if (!accountAllowed(v.kind, 'card', v.cardId, snapshot)) errors.card = "Choose the card you're paying."
+  } else if (v.kind === 'transfer') {
+    if (!accountAllowed(v.kind, 'account', v.destinationAccountId, snapshot)) errors.destination = 'Choose a destination account.'
+    else if (v.accountId === v.destinationAccountId) errors.destination = 'Choose a different account.'
   } else {
     const category = snapshot.categories.find((c) => c.id === v.categoryId)
     if (!category || category.type !== v.kind) errors.category = 'Choose a category.'
@@ -88,6 +91,8 @@ export function switchKind(v: EntryValues, kind: EntryKind, snapshot: LedgerSnap
     ...v,
     kind,
     categoryId: null,
+    cardId: kind === 'payment' ? v.cardId : null,
+    destinationAccountId: kind === 'transfer' ? v.destinationAccountId : null,
     accountId: accountAllowed(kind, 'account', v.accountId, snapshot) ? v.accountId : null,
   }
 }
@@ -120,6 +125,20 @@ export function previewFor(v: EntryValues, snapshot: LedgerSnapshot): Preview | 
       ],
     }
   }
+  if (v.kind === 'transfer') {
+    const destination = accountById(snapshot, v.destinationAccountId)
+    const balance = liquidBalanceOf(snapshot, v.accountId)
+    const destinationBalance = liquidBalanceOf(snapshot, v.destinationAccountId)
+    if (!destination || balance === undefined || destinationBalance === undefined) return null
+    return {
+      title: 'After transfer (estimate)',
+      lines: [
+        `${from.name}: ${formatPeso(balance)} → ${formatPeso(balance - amount.centavos)}`,
+        `${destination.name}: ${formatPeso(destinationBalance)} → ${formatPeso(destinationBalance + amount.centavos)}`,
+        'Income and expenses: no change',
+      ],
+    }
+  }
   const onCard = v.kind === 'expense' ? cardOf(snapshot, v.accountId) : undefined
   if (onCard) {
     return {
@@ -145,6 +164,12 @@ export function notices(v: EntryValues, snapshot: LedgerSnapshot): string[] {
     const balance = liquidBalanceOf(snapshot, v.accountId)
     if (balance !== undefined && balance < amount.centavos) {
       out.push(`${from.name} has ${formatPeso(balance)}, less than this payment. Its balance will go below zero.`)
+    }
+  }
+  if (v.kind === 'transfer') {
+    const balance = liquidBalanceOf(snapshot, v.accountId)
+    if (balance !== undefined && balance < amount.centavos) {
+      out.push(`${from.name} has ${formatPeso(balance)}, less than this transfer. Its balance will go below zero.`)
     }
   }
   const onCard = v.kind === 'expense' ? cardOf(snapshot, v.accountId) : undefined

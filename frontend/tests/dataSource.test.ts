@@ -17,8 +17,8 @@ import type { EntryValues } from '../src/types.ts'
 
 const signal = new AbortController().signal
 const OCT = '2026-10'
-const expense: EntryValues = { kind: 'expense', amount: '385', accountId: 3, cardId: null, categoryId: 4, date: '2026-10-25', note: '' }
-const pay: EntryValues = { kind: 'payment', amount: '5,000', accountId: 2, cardId: 4, categoryId: null, date: '2026-10-25', note: '' }
+const expense: EntryValues = { kind: 'expense', amount: '385', accountId: 3, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-25', note: '' }
+const pay: EntryValues = { kind: 'payment', amount: '5,000', accountId: 2, cardId: 4, destinationAccountId: null, categoryId: null, date: '2026-10-25', note: '' }
 const wallet: AccountValues = { type: 'cash', name: 'Wallet', balance: '100', limit: '', owed: '' }
 
 const rejection = async (p: Promise<unknown>): Promise<ApiError> => {

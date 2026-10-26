@@ -22,7 +22,7 @@ export interface DataSource {
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
   loadActivity(query: ActivityQuery, signal: AbortSignal): Promise<ActivityPage>
   loadAccountForEdit(id: number, signal: AbortSignal): Promise<AccountValues>
-  /** Create (no target) or replace (target) an expense, income or card payment. */
+  /** Create (no target) or replace (target) an expense, income, card payment or account transfer. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>
   deleteEntry(target: EntryTarget): Promise<void>
   addAccount(values: AccountValues): Promise<void>

@@ -1,8 +1,8 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.3  
-**Date:** 2026-10-24  
-**Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–11 are implemented, including the private Kubernetes deployment. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
+**Version:** 1.4
+**Date:** 2026-10-26
+**Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–11 are implemented, including the private Kubernetes deployment. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. ADR-017 adds liquid-account transfers by owner request. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.
@@ -26,12 +26,22 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ## ADR-003 — Simple PostgreSQL financial data model
 
-- **Status:** Accepted.
+- **Status:** Accepted; original table count superseded by ADR-017.
 - **Context:** Credit cards are frequently used. Paying a card must not double-count expenses.
-- **Decision:** Exactly four tables: `accounts`, `categories`, `transactions`, and `credit_card_payments`. Category determines income vs expense; card payments are separate records, not expenses. Credit cards have limit and opening debt; other accounts have opening balance.
+- **Decision:** At the time, four tables: `accounts`, `categories`, `transactions`, and `credit_card_payments`. Category determines income vs expense; card payments are separate records, not expenses. Credit cards have limit and opening debt; other accounts have opening balance. ADR-017 adds a dedicated table for liquid-account transfers.
 - **Alternatives considered:** Ledger/double-entry accounting system; storing mutable calculated balances; treating every card payment as an expense; all transaction kinds in one highly polymorphic table.
 - **Consequences:** Simple arithmetic and auditable history without advanced accounting infrastructure. A later version could introduce an immutable ledger or regular transfers, but not by implication in v1.
 - **Caveat:** Cross-table account-type rules require backend validation and tests; DB CHECK constraints alone cannot inspect referenced-row types.
+
+## ADR-017 — Dedicated records for liquid-account transfers
+
+- **Status:** Accepted by the project owner on 2026-10-26.
+- **Context:** The owner requested moving money between accounts. Categorized transactions represent income or expenses and must not be used to represent internal movement.
+- **Decision:** Add an `account_transfers` table with source account, destination account, positive amount, date, note, and creation timestamp. Transfers may move money only among Cash, Bank, and E-wallet accounts. Source and destination must differ. A transfer decreases the source balance and increases the destination balance; it does not change income, expenses, card debt, or net position. Credit-card payments remain in `credit_card_payments`.
+- **API and UI:** Provide transfer list/create/update/delete routes under `/api/account-transfers`; show transfers in Activity and allow correction/deletion. Use the existing account Activity filter for either side. Offer transfer entry from Quick Add.
+- **Migration:** Add a forward-only migration and include the table in the empty-database schema. Apply the migration to an existing database only after a verified backup. Deploying the app does not automatically run schema migrations.
+- **Consequences:** The schema now has five core tables. Balance queries and activity merging include transfers, while monthly income and expenses remain based only on categorized transactions.
+- **Alternatives considered:** Treat transfer legs as paired income/expense transactions (would distort income/expense totals); model transfers as credit-card payments (wrong account semantics); use a general ledger (unnecessary scope).
 
 ## ADR-004 — Exact money in the DB and server-side calculations
 
@@ -101,7 +111,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 - **Status:** Accepted.
 - **Context:** The project's value comes from usability, correctness, and a defensible end-to-end deployment, not from feature count.
-- **Decision:** Freeze v1 features. Defer investments, budgets, recurring payments, regular account transfers, automatic feeds, advanced graphs, recurring workflow schedulers, and extra pages.
+- **Decision:** Freeze v1 features. Defer investments, budgets, recurring payments, automatic feeds, advanced graphs, recurring workflow schedulers, and extra pages. ADR-017 explicitly authorizes liquid-account transfers.
 - **Alternatives considered:** Expand functionality during each new design iteration.
 - **Consequences:** Clear finish line and smaller maintenance burden. Bugs and accessibility improvements within the accepted scope are still allowed.
 
@@ -180,3 +190,4 @@ Use this for future changes:
 - **v1.2 (2026-10-24):** ADR-015 accepts Tailwind CSS v4, selective shadcn/ui and Lucide React, overriding only ADR-002’s former plain CSS limitation; all four-table accounting, FastAPI and GitOps decisions stay intact.
 
 - **v1.3 (2026-10-24):** ADR-016 accepts a separate Obsidian second-brain learning workflow; repository and GitOps remain authoritative.
+- **v1.4 (2026-10-26):** ADR-017 accepts transfers between liquid accounts, adding a dedicated table and API/UI flow.

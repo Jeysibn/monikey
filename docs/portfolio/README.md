@@ -19,7 +19,7 @@ This page is a sanitized product walkthrough and architecture summary. It uses n
 
 The frontend also includes an in-memory mock source for local previews. In the deployed system, the browser uses same-origin `/api` requests through the private ingress. PostgreSQL has no public Service or ingress.
 
-The companion [CI/CD and GitOps diagram](../architecture/02-monikey-gitops.png) shows image publication and reviewed promotion to the separate GitOps repository. The [database schema diagram](../architecture/03-monikey-database-erd.png) shows the four tables and their relationships. Both have scalable SVG versions in the [architecture docs](../architecture/README.md#architecture-diagrams).
+The companion [CI/CD and GitOps diagram](../architecture/02-monikey-gitops.png) shows image publication and reviewed promotion to the separate GitOps repository. The [database schema diagram](../architecture/03-monikey-database-erd.png) records the original four-table deployment; ADR-017 adds `account_transfers` in Milestone 13. Both diagrams have scalable SVG versions in the [architecture docs](../architecture/README.md#architecture-diagrams).
 
 ## Current deployment
 
@@ -36,7 +36,7 @@ See the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/bl
 - The one-node cluster and one PostgreSQL replica do not provide high availability.
 - Logical backups are manual. Off-cluster backup retention and disaster recovery have not been verified.
 - The full interactive React/API browser journey, automated browser coverage, real-device checks, and screen-reader checks remain unverified.
-- v1 does not include banking integrations, recurring bills, investments, or regular transfers.
+- v1 does not include banking integrations, recurring bills, or investments. Transfers are supported between cash, bank, and e-wallet accounts; credit-card payments remain separate.
 
 ## Privacy note
 

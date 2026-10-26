@@ -1,4 +1,4 @@
-import type { Account, Category, CreditCardPayment, MockData, Transaction } from './types.ts'
+import type { Account, AccountTransfer, Category, CreditCardPayment, MockData, Transaction } from './types.ts'
 
 /*
  * Fictional Philippine-peso data for Milestone 4.2. No real accounts, people or amounts.
@@ -66,7 +66,9 @@ const payments: CreditCardPayment[] = [
   { id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 500_000, date: '2026-10-20', note: null, createdAt: '2026-10-20T10:00:00.000Z' },
 ]
 
-const base: MockData = { today: '2026-10-25', accounts, categories, transactions, payments }
+const transfers: AccountTransfer[] = []
+
+const base: MockData = { today: '2026-10-25', accounts, categories, transactions, payments, transfers }
 
 /**
  * Which fictional ledger to show. The default is the ledger above. The others exist so that rare
@@ -125,7 +127,7 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
     return { ...base, transactions: [...transactions, ...extra] }
   }
   if (scenario === 'no-accounts') {
-    return { today: base.today, accounts: [], categories, transactions: [], payments: [] }
+    return { today: base.today, accounts: [], categories, transactions: [], payments: [], transfers: [] }
   }
   return base
 }

@@ -19,7 +19,7 @@ import { compareTimestamps } from './timestamp.ts'
  * helpers exist so the screens can be built and tested with believable numbers first.
  *
  * Rules (TLD "Financial calculation definitions"):
- *  - Cash/bank/e-wallet balance = opening balance + income - expenses - card payments sent from it.
+ *  - Cash/bank/e-wallet balance = opening balance + income - expenses - card payments sent - transfers out + transfers in.
  *  - Card signed debt = opening debt + expenses charged to the card - card payments received.
  *    A purchase on a card is an EXPENSE and raises debt. A payment is NOT an expense.
  *  - Available credit = limit - signed debt. It is not cash and is never added to any total.
@@ -78,7 +78,9 @@ export function liquidBalance(account: Account, data: MockData): Centavos {
     .filter((t) => t.accountId === account.id && typeOfCategory(data.categories, t.categoryId) === 'expense')
     .map((t) => t.amount)
   const sent = data.payments.filter((p) => p.sourceAccountId === account.id).map((p) => p.amount)
-  return account.openingBalance + sum(income) - sum(expenses) - sum(sent)
+  const transferredOut = data.transfers.filter((t) => t.sourceAccountId === account.id).map((t) => t.amount)
+  const transferredIn = data.transfers.filter((t) => t.destinationAccountId === account.id).map((t) => t.amount)
+  return account.openingBalance + sum(income) - sum(expenses) - sum(sent) - sum(transferredOut) + sum(transferredIn)
 }
 
 /** Debt on a credit card. Negative means the card was overpaid and holds credit. */
@@ -143,7 +145,7 @@ export function summarize(data: MockData, month: string): FinancialSummary {
 }
 
 /**
- * Income, expenses and card payments for one month as a single list, newest first.
+ * Income, expenses, card payments and account transfers for one month as a single list, newest first.
  * Order: date, then creation time, then expenses/income before payments, then id (all descending),
  * so entries on the same day never swap places between renders.
  * `accountId` keeps entries that use that account (for a card payment, either side) and is applied
@@ -170,12 +172,14 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       accountName: acct.name,
       accountType: acct.type,
       cardName: null,
+      destinationAccountName: null,
       createdAt: t.createdAt,
       entry: {
         kind: category.type,
         amount: amountText(t.amount),
         accountId: t.accountId,
         cardId: null,
+        destinationAccountId: null,
         categoryId: t.categoryId,
         date: t.date,
         note: t.note ?? '',
@@ -199,12 +203,14 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       accountName: source.name,
       accountType: source.type,
       cardName: card.name,
+      destinationAccountName: null,
       createdAt: p.createdAt,
       entry: {
         kind: 'payment',
         amount: amountText(p.amount),
         accountId: p.sourceAccountId,
         cardId: p.cardAccountId,
+        destinationAccountId: null,
         categoryId: null,
         date: p.date,
         note: p.note ?? '',
@@ -212,7 +218,34 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
     })
   }
 
-  const rank = (i: ActivityItem) => (i.kind === 'payment' ? 0 : 1) // payments sort after entries on a tie
+  for (const transfer of data.transfers) {
+    if (monthOf(transfer.date) !== month) continue
+    if (accountId != null && transfer.sourceAccountId !== accountId && transfer.destinationAccountId !== accountId) continue
+    const source = account(transfer.sourceAccountId)
+    const destination = account(transfer.destinationAccountId)
+    if (!source || !destination) continue
+    items.push({
+      key: `x-${transfer.id}`,
+      kind: 'transfer',
+      id: transfer.id,
+      date: transfer.date,
+      amount: transfer.amount,
+      title: transfer.note ?? 'Account transfer',
+      categoryName: null,
+      accountName: source.name,
+      accountType: source.type,
+      cardName: null,
+      destinationAccountName: destination.name,
+      createdAt: transfer.createdAt,
+      entry: {
+        kind: 'transfer', amount: amountText(transfer.amount), accountId: transfer.sourceAccountId,
+        cardId: null, destinationAccountId: transfer.destinationAccountId, categoryId: null,
+        date: transfer.date, note: transfer.note ?? '',
+      },
+    })
+  }
+
+  const rank = (i: ActivityItem) => (i.kind === 'payment' || i.kind === 'transfer' ? 0 : 1) // non-expense movements sort after entries on a tie
   items.sort(
     (a, b) =>
       b.date.localeCompare(a.date) ||

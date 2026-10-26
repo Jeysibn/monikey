@@ -52,7 +52,7 @@ test('transaction and payment rows map to editable activity entries', () => {
   const transaction = fromWireTransaction({ id: 7, account_id: 2, category_id: 4, amount: '350.00', transaction_date: '2026-10-24', note: 'Lunch', created_at: '2026-10-24T10:00:00.123456Z' }, accounts, categories)
   assert.equal(transaction.kind, 'expense')
   assert.equal(transaction.title, 'Lunch')
-  assert.deepEqual(transaction.entry, { kind: 'expense', amount: '350.00', accountId: 2, cardId: null, categoryId: 4, date: '2026-10-24', note: 'Lunch' })
+  assert.deepEqual(transaction.entry, { kind: 'expense', amount: '350.00', accountId: 2, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-24', note: 'Lunch' })
   assert.equal(transaction.createdAt, '2026-10-24T10:00:00.123456Z')
 
   const payment = fromWirePayment({ id: 8, source_account_id: 1, card_account_id: 2, amount: '100.00', payment_date: '2026-10-24', note: null, created_at: '2026-10-24T10:01:00Z' }, accounts)
@@ -65,7 +65,7 @@ test('transaction and payment rows map to editable activity entries', () => {
 })
 
 test('form values become decimal-string API inputs without browser floating-point conversion', () => {
-  const expense: EntryValues = { kind: 'expense', amount: '1,250.50', accountId: 2, cardId: null, categoryId: 4, date: '2026-10-24', note: '  lunch  ' }
+  const expense: EntryValues = { kind: 'expense', amount: '1,250.50', accountId: 2, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-24', note: '  lunch  ' }
   assert.deepEqual(toWireEntryInput(expense), { account_id: 2, category_id: 4, amount: '1250.50', transaction_date: '2026-10-24', note: 'lunch' })
   assert.deepEqual(toWireEntryInput({ ...expense, kind: 'payment', accountId: 1, cardId: 2, categoryId: null }), { source_account_id: 1, card_account_id: 2, amount: '1250.50', payment_date: '2026-10-24', note: 'lunch' })
   assert.deepEqual(toWireAccountInput({ type: 'credit_card', name: '  Blue  ', balance: '', limit: '10.00', owed: '.5' }), { name: 'Blue', type: 'credit_card', opening_balance: '0.00', opening_debt: '0.50', credit_limit: '10.00' })

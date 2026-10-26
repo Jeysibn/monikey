@@ -20,10 +20,10 @@ These v1.3 documents are an approved design baseline, not evidence that applicat
 - MoniKey is a beginner-friendly, three-tier personal finance tracker.
 - Frontend: React, TypeScript, Vite, Tailwind CSS v4, selectively added shadcn/ui source components, and Lucide React.
 - Backend: Python, FastAPI, REST endpoints, and readable parameterized SQL.
-- Database: PostgreSQL, with exactly four core tables: `accounts`, `categories`, `transactions`, and `credit_card_payments`.
+- Database: PostgreSQL, with five core tables: `accounts`, `categories`, `transactions`, `credit_card_payments`, and `account_transfers` (ADR-017).
 - Local development: Docker Compose. CI builds/tests and publishes immutable SHA-tagged images to GHCR. The separate existing `homelab-gitops` repository holds Kubernetes desired state; Argo CD reconciles it on the existing cluster.
 - Vite builds static frontend assets. Production serves them from Nginx; the frontend uses same-origin relative `/api` requests to FastAPI.
-- Keep v1 simple. No authentication, banking integrations, recurring bills, investments, regular transfers, microservices, extra tables, state libraries, or new infrastructure without an approved ADR.
+- Keep v1 simple. No authentication, banking integrations, recurring bills, investments, transfers involving credit cards, microservices, extra tables, state libraries, or new infrastructure without an approved ADR. Liquid-account transfers are approved by ADR-017.
 - Because v1 has no authentication, a writable deployment must stay on a trusted private network. Never publicly expose personal writable financial data.
 
 ## Financial correctness

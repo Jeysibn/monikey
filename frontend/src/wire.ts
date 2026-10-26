@@ -62,6 +62,16 @@ export interface WirePayment {
   created_at: string
 }
 
+export interface WireTransfer {
+  id: number
+  source_account_id: number
+  destination_account_id: number
+  amount: WireMoney
+  transfer_date: string
+  note: string | null
+  created_at: string
+}
+
 export interface WireSummary {
   month: string
   liquid_balance: WireMoney
@@ -85,6 +95,14 @@ export interface WirePaymentInput {
   card_account_id: number
   amount: WireMoney
   payment_date: string
+  note: string | null
+}
+
+export interface WireTransferInput {
+  source_account_id: number
+  destination_account_id: number
+  amount: WireMoney
+  transfer_date: string
   note: string | null
 }
 
@@ -279,7 +297,8 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
     accountName: account.name,
     accountType: account.type,
     cardName: null,
-    entry: { kind: category.type, amount: amountText(amount), accountId, cardId: null, categoryId, date, note: note ?? '' },
+    destinationAccountName: null,
+    entry: { kind: category.type, amount: amountText(amount), accountId, cardId: null, destinationAccountId: null, categoryId, date, note: note ?? '' },
     createdAt: timestamp,
   }
 }
@@ -309,13 +328,45 @@ export function fromWirePayment(value: unknown, accounts: AccountInfo[]): Activi
     accountName: source.name,
     accountType: source.type,
     cardName: card.name,
-    entry: { kind: 'payment', amount: amountText(amount), accountId: sourceId, cardId, categoryId: null, date, note: note ?? '' },
+    destinationAccountName: null,
+    entry: { kind: 'payment', amount: amountText(amount), accountId: sourceId, cardId, destinationAccountId: null, categoryId: null, date, note: note ?? '' },
+    createdAt: timestamp,
+  }
+}
+
+export function fromWireTransfer(value: unknown, accounts: AccountInfo[]): ActivityItem {
+  const row = record(value, 'account transfer')
+  const sourceId = id(row.source_account_id, 'account transfer')
+  const destinationId = id(row.destination_account_id, 'account transfer')
+  const source = accounts.find((item) => item.id === sourceId)
+  const destination = accounts.find((item) => item.id === destinationId)
+  if (!source || !destination || source.type === 'credit_card' || destination.type === 'credit_card' || sourceId === destinationId) throw contractError('account transfer references')
+  const amount = toCentavos(row.amount, 'transfer amount')
+  if (amount <= 0) throw contractError('transfer amount')
+  const date = calendarDate(row.transfer_date, 'transfer date')
+  const note = nullableString(row.note, 'transfer note')
+  if (note !== null && note.length > 120) throw contractError('transfer note')
+  const timestamp = createdAt(row.created_at)
+  const transferId = id(row.id, 'account transfer')
+  return {
+    key: `x-${transferId}`,
+    kind: 'transfer',
+    id: transferId,
+    date,
+    amount,
+    title: note ?? 'Account transfer',
+    categoryName: null,
+    accountName: source.name,
+    accountType: source.type,
+    cardName: null,
+    destinationAccountName: destination.name,
+    entry: { kind: 'transfer', amount: amountText(amount), accountId: sourceId, cardId: null, destinationAccountId: destinationId, categoryId: null, date, note: note ?? '' },
     createdAt: timestamp,
   }
 }
 
 /** Convert validated form input to the transaction or payment request shape. */
-export function toWireEntryInput(values: EntryValues): WireEntryInput | WirePaymentInput {
+export function toWireEntryInput(values: EntryValues): WireEntryInput | WirePaymentInput | WireTransferInput {
   const parsedAmount = parseAmount(values.amount)
   if (!parsedAmount.ok) throw new Error('The entry amount must be validated before it is sent.')
   const amount = amountText(parsedAmount.centavos)
@@ -324,6 +375,10 @@ export function toWireEntryInput(values: EntryValues): WireEntryInput | WirePaym
   if (values.kind === 'payment') {
     if (values.cardId === null) throw new Error('The payment must be validated before it is sent.')
     return { source_account_id: values.accountId, card_account_id: values.cardId, amount, payment_date: values.date, note }
+  }
+  if (values.kind === 'transfer') {
+    if (values.destinationAccountId === null || values.destinationAccountId === values.accountId) throw new Error('The transfer must be validated before it is sent.')
+    return { source_account_id: values.accountId, destination_account_id: values.destinationAccountId, amount, transfer_date: values.date, note }
   }
   if (values.categoryId === null) throw new Error('The entry must be validated before it is sent.')
   return { account_id: values.accountId, category_id: values.categoryId, amount, transaction_date: values.date, note }
@@ -350,12 +405,14 @@ export function fromWireField(field: unknown): string | undefined {
     account_id: 'account',
     source_account_id: 'account',
     card_account_id: 'card',
+    destination_account_id: 'destination',
     category_id: 'category',
     transaction_date: 'date',
     payment_date: 'date',
+    transfer_date: 'date',
     credit_limit: 'limit',
     opening_balance: 'balance',
     opening_debt: 'owed',
   }
-  return fields[field] ?? (['amount', 'name', 'balance', 'limit', 'owed', 'account', 'card', 'category', 'date', 'note'].includes(field) ? field : undefined)
+  return fields[field] ?? (['amount', 'name', 'balance', 'limit', 'owed', 'account', 'card', 'destination', 'category', 'date', 'note'].includes(field) ? field : undefined)
 }

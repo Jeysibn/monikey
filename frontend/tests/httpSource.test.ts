@@ -111,3 +111,20 @@ test('write errors keep the API code/status and map wire fields to form fields',
 test('HTTP source dates default to the required Manila calendar date', () => {
   assert.match(createHttpSource(async () => json(null)).today, /^\d{4}-\d{2}-\d{2}$/)
 })
+
+
+test('account edit reads and writes current amounts using the account endpoint', async () => {
+  const requests: { url: string; init?: RequestInit }[] = []
+  const source = createHttpSource(async (input, init) => {
+    requests.push({ url: String(input), init })
+    return init?.method === 'GET'
+      ? json({ id: 1, name: 'Bank', type: 'bank', current_balance: '800.00', current_debt: '0.00', credit_limit: null })
+      : new Response(null, { status: 204 })
+  })
+  const values = await source.loadAccountForEdit(1, signal())
+  assert.equal(values.balance, '800.00')
+  await source.updateAccount(1, { ...values, balance: '1000.00' })
+  assert.equal(requests[1].url, '/api/accounts/1')
+  assert.equal(requests[1].init?.method, 'PUT')
+  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Bank', type: 'bank', current_balance: '1000.00', current_debt: '0.00', credit_limit: null })
+})

@@ -114,13 +114,16 @@ export interface WireAccountInput {
   credit_limit: WireMoney | null
 }
 
-export interface WireEditableAccount {
-  id: number
+export interface WireAccountUpdateInput {
   name: string
   type: WireAccountType
-  opening_balance: WireMoney
-  opening_debt: WireMoney
+  current_balance: WireMoney
+  current_debt: WireMoney
   credit_limit: WireMoney | null
+}
+
+export interface WireEditableAccount extends WireAccountUpdateInput {
+  id: number
 }
 
 export interface WireError {
@@ -226,7 +229,7 @@ export function fromWireAccounts(value: unknown): AccountsSnapshot {
   return { accounts, liquid, cards }
 }
 
-/** Read the original account values for the edit form; current balances stay server-calculated. */
+/** Read server-calculated current amounts for the edit form. */
 export function fromWireEditableAccount(value: unknown, expectedId: number): AccountValues {
   const row = record(value, 'editable account')
   if (id(row.id, 'editable account') !== expectedId) throw contractError('editable account')
@@ -234,21 +237,20 @@ export function fromWireEditableAccount(value: unknown, expectedId: number): Acc
   if (!name.trim()) throw contractError('editable account name')
   const type = row.type
   if (type !== 'cash' && type !== 'bank' && type !== 'ewallet' && type !== 'credit_card') throw contractError('editable account type')
-  const openingBalance = toCentavos(row.opening_balance, 'opening balance')
-  const openingDebt = toCentavos(row.opening_debt, 'opening debt')
+  const currentBalance = toCentavos(row.current_balance, 'current balance')
+  const currentDebt = toCentavos(row.current_debt, 'current debt')
   const creditLimit = row.credit_limit === null ? null : toCentavos(row.credit_limit, 'credit limit')
-  if (openingBalance < 0 || openingDebt < 0) throw contractError('editable account opening amounts')
   if (type === 'credit_card') {
-    if (openingBalance !== 0 || creditLimit === null || creditLimit <= 0) throw contractError('editable credit card')
-  } else if (openingDebt !== 0 || creditLimit !== null) {
+    if (currentBalance !== 0 || creditLimit === null || creditLimit <= 0) throw contractError('editable credit card')
+  } else if (currentDebt !== 0 || creditLimit !== null) {
     throw contractError('editable liquid account')
   }
   return {
     type,
     name,
-    balance: amountText(openingBalance),
+    balance: amountText(currentBalance),
     limit: creditLimit === null ? '' : amountText(creditLimit),
-    owed: amountText(openingDebt),
+    owed: amountText(currentDebt),
   }
 }
 
@@ -392,8 +394,17 @@ export function toWireAccountInput(values: AccountValues): WireAccountInput {
   return { ...base, opening_balance: accountMoney(values.balance, 'balance') }
 }
 
-function accountMoney(value: string, field: 'balance' | 'limit' | 'owed'): WireMoney {
-  const parsed = parseAccountMoney(value, field)
+export function toWireAccountUpdate(values: AccountValues): WireAccountUpdateInput {
+  return {
+    name: values.name.trim(), type: values.type,
+    current_balance: values.type === 'credit_card' ? '0.00' : accountMoney(values.balance, 'balance', true),
+    current_debt: values.type === 'credit_card' ? accountMoney(values.owed, 'owed', true) : '0.00',
+    credit_limit: values.type === 'credit_card' ? accountMoney(values.limit, 'limit') : null,
+  }
+}
+
+function accountMoney(value: string, field: 'balance' | 'limit' | 'owed', current = false): WireMoney {
+  const parsed = parseAccountMoney(value, field, current)
   if (!parsed.ok) throw new Error('The account amount must be validated before it is sent.')
   return amountText(parsed.centavos)
 }
@@ -411,6 +422,8 @@ export function fromWireField(field: unknown): string | undefined {
     payment_date: 'date',
     transfer_date: 'date',
     credit_limit: 'limit',
+    current_balance: 'balance',
+    current_debt: 'owed',
     opening_balance: 'balance',
     opening_debt: 'owed',
   }

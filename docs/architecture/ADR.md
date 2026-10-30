@@ -153,6 +153,14 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Privacy:** Vault is private by default. Never store account numbers, real transactions, passwords, tokens, kubeconfigs, `.env` contents or database dumps. Vault backups are separate from database backups.
 - **Change control:** If an Obsidian note proposes a new stack, feature or deployment decision, raise a change to repo `ADR.md`/`TLD.md` and obtain approval before coding or deploying.
 
+## ADR-018 — Edit current account amounts
+
+- **Status:** Accepted by explicit owner request on 2026-10-30 to edit the current amount instead of the opening balance.
+- **Decision:** Edit account loads and accepts the current liquid balance or signed card debt. The server computes `new baseline = old baseline + requested current amount - computed current amount`. Existing transactions, card payments, and transfers remain unchanged; no income or expense is created. Account creation retains its existing opening-value contract, and account type stays immutable.
+- **Signed amounts:** Negative current liquid balances and negative card debt (card credit) are supported. Baselines may need to be negative even for a nonnegative requested total; migration 003 removes only the two nonnegative baseline constraints. Account-type constraints, NUMERIC(12,2), and positive credit limits remain. Reject corrections if the resulting baseline is outside NUMERIC(12,2).
+- **API:** GET/PUT `/api/accounts/{id}` use `current_balance` and `current_debt`, both decimal strings, in place of edit-only opening fields. PUT also accepts name, immutable type, and credit_limit. Frontend/API must be released together after a verified backup and reviewed migration application. No migration or deployment is automatic.
+- **Consequences:** The current amount becomes the user's correction target. Future activity changes it normally. Historical records and monthly income/expenses are preserved, but baseline-dependent balances and net position change. This supersedes only the previous opening-value editing behavior; no new table, dependency, or transaction kind is introduced.
+
 ## Change-control template
 
 Use this for future changes:

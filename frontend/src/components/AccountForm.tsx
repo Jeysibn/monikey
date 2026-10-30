@@ -18,7 +18,7 @@ import type { AccountType, LedgerSnapshot } from '@/types'
  * The Add/Edit account form (UI_UX_SPEC section 9). Same habits as the Quick Add form: errors appear when a
  * field the person has edited is left, and for every field on submit; a failed submit shows a summary and
  * moves focus to it; while saving every field is disabled; a failed save keeps everything typed.
- * The labels are plain words; the API's names (opening_balance, opening_debt, credit_limit) stay in lib/accountForm.ts.
+ * The labels are plain words; wire.ts maps form values to the API's create/update fields.
  */
 const TYPES: { value: AccountType; label: string }[] = [
   { value: 'cash', label: 'Cash' },
@@ -117,11 +117,11 @@ export function AccountForm({
   const limitError = shown('limit')
   const owedError = shown('owed')
   const balanceHelp = mode === 'edit'
-    ? 'Changing this resets the starting amount. Past activity stays unchanged.'
+    ? 'Set the balance this account should have now. Use a minus sign for a negative balance.'
     : "What's in it right now."
   const limitHelp = 'The most the bank lets you charge.'
   const owedHelp = mode === 'edit'
-    ? 'Changing this resets the starting debt. Past purchases and payments stay unchanged.'
+    ? 'Set what you owe now. Use a negative amount for card credit.'
     : 'What you still owe on this card today. Use 0.00 if nothing.'
 
   return (
@@ -129,7 +129,7 @@ export function AccountForm({
       <DialogHeader>
         <DialogTitle>{mode === 'edit' ? 'Edit account' : 'Add account'}</DialogTitle>
         <DialogDescription className="sr-only">
-          {mode === 'edit' ? 'Edit this account name and opening amounts. Its type cannot be changed.' : 'Add a cash, bank, e-wallet or credit card account.'}
+          {mode === 'edit' ? 'Edit this account name and current amount. Its type cannot be changed.' : 'Add a cash, bank, e-wallet or credit card account.'}
         </DialogDescription>
       </DialogHeader>
 
@@ -144,7 +144,7 @@ export function AccountForm({
 
           {mode === 'edit' && (
             <InlineNotice tone="warning">
-              Changing an opening amount recalculates today&rsquo;s balance or debt. Existing transactions and payments stay unchanged.
+              The amount you enter becomes the current balance or debt. Past activity and monthly income and expenses stay unchanged.
             </InlineNotice>
           )}
 
@@ -198,9 +198,10 @@ export function AccountForm({
                   describedBy={describedBy('aa-limit', limitError, limitHelp)}
                 />
               </FormField>
-              <FormField id="aa-owed" label={mode === 'edit' ? 'Opening debt (₱)' : 'Amount you owe today (₱)'} error={owedError} helper={owedHelp}>
+              <FormField id="aa-owed" label={mode === 'edit' ? 'Current debt / credit (₱)' : 'Amount you owe today (₱)'} error={owedError} helper={owedHelp}>
                 <MoneyInput
                   id="aa-owed"
+                  allowNegative={mode === 'edit'}
                   value={values.owed}
                   onChange={(owed) => set({ owed }, 'owed')}
                   onBlur={() => blur('owed')}
@@ -210,9 +211,10 @@ export function AccountForm({
               </FormField>
             </>
           ) : (
-            <FormField id="aa-balance" label={mode === 'edit' ? 'Opening balance (₱)' : 'Current balance (₱)'} error={balanceError} helper={balanceHelp}>
+            <FormField id="aa-balance" label={'Current balance (₱)'} error={balanceError} helper={balanceHelp}>
               <MoneyInput
                 id="aa-balance"
+                allowNegative={mode === 'edit'}
                 value={values.balance}
                 onChange={(balance) => set({ balance }, 'balance')}
                 onBlur={() => blur('balance')}

@@ -85,6 +85,13 @@ DECLARE
   month_income NUMERIC(12, 2);
   month_expenses NUMERIC(12, 2);
 BEGIN
+  -- Corrections can require signed baselines; the account type rules still apply.
+  INSERT INTO accounts (name, type, opening_balance)
+  VALUES ('Correction baseline bank', 'bank', -10.00);
+  INSERT INTO accounts (name, type, opening_debt, credit_limit)
+  VALUES ('Correction baseline card', 'credit_card', -10.00, 100.00);
+  DELETE FROM accounts WHERE name IN ('Correction baseline bank', 'Correction baseline card');
+
   IF (
     SELECT COUNT(*)
     FROM information_schema.tables

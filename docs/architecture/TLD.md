@@ -10,8 +10,8 @@
 MoniKey is a **beginner-friendly, portfolio-worthy three-tier personal finance tracker**, built frontend-first and deployed to the existing single-node/home Kubernetes GitOps environment after local testing.
 
 A successful v1 allows one user to:
-- Create and edit Cash, Bank, and E-wallet accounts with opening balances; transfer money between distinct liquid accounts.
-- Create and edit credit-card accounts with a credit limit and opening debt. Account type cannot be changed after creation.
+- Create Cash, Bank, and E-wallet accounts with opening balances and edit their current balances (ADR-018); transfer money between distinct liquid accounts.
+- Create credit-card accounts with a credit limit and opening debt; edit their current signed debt and credit limit (ADR-018). Account type cannot be changed after creation.
 - Record, view, edit, and delete categorized income and expense transactions.
 - Record, view, edit, and delete credit-card payments from non-credit-card accounts.
 - See current liquid balances, credit-card debt, available credit, net tracked position, and monthly income/expense summaries.
@@ -75,7 +75,7 @@ flowchart TD
 |---|---|---|---|
 | Overview | `GET /api/summary?month=YYYY-MM`; recent transactions and card payments | Liquid cash balance, card debt, net position, monthly income/expense, recent activity | Open Quick Add, select month |
 | Activity | `GET /api/transactions?month=...`; `GET /api/credit-card-payments?month=...`; accounts/categories | Chronological history of purchases, income and card payments | Edit/delete, month/account filter |
-| Accounts | `GET /api/accounts`, `GET /api/accounts/{id}` | Computed positions and, on demand, stored opening values for editing | Create/edit account, Pay Card |
+| Accounts | `GET /api/accounts`, `GET /api/accounts/{id}` | Computed positions and, on demand, current amounts for editing | Create/edit account, Pay Card |
 | Quick Add | Accounts/categories shared from loaded screen or fetched once when needed | Date, account, category, amount, note, and action type | Submit income, expense or credit-card payment |
 
 **Read path (production):**
@@ -225,8 +225,8 @@ CREATE TABLE accounts (
   name VARCHAR(60) NOT NULL,
   type VARCHAR(20) NOT NULL
     CHECK (type IN ('cash', 'bank', 'ewallet', 'credit_card')),
-  opening_balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (opening_balance >= 0),
-  opening_debt NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (opening_debt >= 0),
+  opening_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  opening_debt NUMERIC(12,2) NOT NULL DEFAULT 0,
   credit_limit NUMERIC(12,2),
   CHECK (
     (type = 'credit_card' AND credit_limit IS NOT NULL AND credit_limit > 0
@@ -299,7 +299,7 @@ This initial schema is implemented in [`database/001_init.sql`](../../database/0
 - A payment source must be Cash, Bank, or E-wallet; payment destination must be Credit Card.
 - Transfer source and destination must both be Cash, Bank, or E-wallet, and must differ. Transfers do not affect income/expense totals.
 - Require known account/category IDs, valid `YYYY-MM-DD` calendar dates, positive amounts with max two fractional digits, and a reasonable maximum note length.
-- Keep the account type fixed when updating; opening values and card limits may change, including to a state that produces negative liquid balance, card credit, or over-limit debt.
+- Keep the account type fixed when updating. Set a requested current liquid balance or signed card debt by adjusting the baseline, preserving ledger rows and monthly income/expenses (ADR-018). Signed baselines are allowed after migration 003; creation still validates nonnegative opening values. Reject corrections whose resulting baseline exceeds NUMERIC(12,2). Negative balance, card credit, and over-limit debt remain supported.
 - Prevent deleting an account/category if it is still referenced; v1 has no account or category delete endpoint.
 - All writes must use parameterized SQL; use DB transactions for multi-statement mutations.
 
@@ -333,8 +333,8 @@ Transfers move equal amounts between liquid accounts, so they change each accoun
 | GET | `/api/health/ready` | Database connectivity check |
 | GET | `/api/accounts` | Accounts with **computed** balances/debt/available credit |
 | POST | `/api/accounts` | Create cash/bank/ewallet/card; validates opening fields |
-| GET | `/api/accounts/{id}` | Read stored opening values for the account edit form |
-| PUT | `/api/accounts/{id}` | Replace name/opening values/credit limit; account type is immutable |
+| GET | `/api/accounts/{id}` | Read current_balance/current_debt and credit_limit for the account edit form (ADR-018) |
+| PUT | `/api/accounts/{id}` | Set name/current_balance/current_debt/credit_limit; account type is immutable (ADR-018) |
 | GET | `/api/categories?type=expense` | Seeded categories; optional type filter |
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
 | POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note |

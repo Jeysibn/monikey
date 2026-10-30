@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { ApiError } from '../src/dataSource.ts'
-import { fromWireAccount, fromWireAccounts, fromWireCategories, fromWireField, fromWirePayment, fromWireSummary, fromWireTransaction, toCentavos, toWireAccountInput, toWireEntryInput } from '../src/wire.ts'
+import { fromWireEditableAccount, toWireAccountUpdate, fromWireAccount, fromWireAccounts, fromWireCategories, fromWireField, fromWirePayment, fromWireSummary, fromWireTransaction, toCentavos, toWireAccountInput, toWireEntryInput } from '../src/wire.ts'
 import type { AccountInfo, Category, EntryValues } from '../src/types.ts'
 
 const accounts: AccountInfo[] = [
@@ -78,4 +78,17 @@ test('wire field names map to the existing form field names', () => {
   assert.equal(fromWireField('source_account_id'), 'account')
   assert.equal(fromWireField('credit_limit'), 'limit')
   assert.equal(fromWireField('unknown_column'), undefined)
+})
+
+
+test('account editing maps current signed amounts independently of opening values', () => {
+  const liquid = { id: 1, name: 'Main Bank', type: 'bank', current_balance: '-0.05', current_debt: '0.00', credit_limit: null }
+  const values = fromWireEditableAccount(liquid, 1)
+  assert.equal(values.balance, '-0.05')
+  assert.deepEqual(toWireAccountUpdate(values), { name: 'Main Bank', type: 'bank', current_balance: '-0.05', current_debt: '0.00', credit_limit: null })
+  const card = fromWireEditableAccount({ id: 2, name: 'Blue Card', type: 'credit_card', current_balance: '0.00', current_debt: '-12.34', credit_limit: '1000.00' }, 2)
+  assert.equal(card.owed, '-12.34')
+  assert.equal(toWireAccountUpdate(card).current_debt, '-12.34')
+  assert.equal(fromWireField('current_balance'), 'balance')
+  assert.equal(fromWireField('current_debt'), 'owed')
 })

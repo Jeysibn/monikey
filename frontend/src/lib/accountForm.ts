@@ -3,8 +3,8 @@ import { parseMoney } from './entryForm.ts'
 
 /*
  * The rules of the Add account form (UI_UX_SPEC section 9), free of React so they can be tested.
- * The plain labels people see map onto the API's fields: "Current balance" is opening_balance,
- * "Amount you owe today" is opening_debt, "Credit limit" is credit_limit. Messages are the spec's.
+ * The plain labels people see map onto the API's fields: "Current balance" is the current amount when editing (opening_balance on creation),
+ * "Amount you owe today" is current debt when editing (opening_debt on creation), "Credit limit" is credit_limit. Messages are the spec's.
  * A duplicate name is the API's 409 in real life; the mock checks it here, and the real client will
  * show the same message when the API answers 409.
  */
@@ -25,8 +25,12 @@ export const isCardType = (type: AccountType) => type === 'credit_card'
 type MoneyField = 'balance' | 'limit' | 'owed'
 const NEGATIVE = /^\s*[-−]/
 
-/** Parses one money field. Balance and owed may be zero; the limit may not; none may be negative. */
-export function parseAccountMoney(text: string, field: MoneyField): { ok: true; centavos: Centavos } | { ok: false; error: string } {
+/** Parses one money field. Balance and owed may be zero; the limit may not; only current balances/debt may be negative. */
+export function parseAccountMoney(text: string, field: MoneyField, current = false): { ok: true; centavos: Centavos } | { ok: false; error: string } {
+  if (current && field !== 'limit' && NEGATIVE.test(text)) {
+    const parsed = parseMoney(text.trim().slice(1), true)
+    return parsed.ok ? { ok: true, centavos: -parsed.centavos } : parsed
+  }
   if (NEGATIVE.test(text)) {
     return { ok: false, error: field === 'limit' ? 'Credit limit must be more than ₱0.00.' : 'Use 0.00 or more.' }
   }
@@ -49,14 +53,14 @@ export function validateAccount(v: AccountValues, snapshot: LedgerSnapshot, excl
   if (isCardType(v.type)) {
     const limit = parseAccountMoney(v.limit, 'limit')
     if (!limit.ok) errors.limit = limit.error
-    const owed = parseAccountMoney(v.owed, 'owed')
+    const owed = parseAccountMoney(v.owed, 'owed', excludeAccountId !== undefined)
     if (!owed.ok) errors.owed = owed.error
   } else {
-    const balance = parseAccountMoney(v.balance, 'balance')
+    const balance = parseAccountMoney(v.balance, 'balance', excludeAccountId !== undefined)
     if (!balance.ok) errors.balance = balance.error
   }
   return errors
 }
 
 export const accountSavedMessage = (v: AccountValues): string => `Account added: ${v.name.trim()}.`
-export const accountUpdatedMessage = (v: AccountValues): string => `Account updated: ${v.name.trim()}. Starting amounts saved; past activity is unchanged.`
+export const accountUpdatedMessage = (v: AccountValues): string => `Account updated: ${v.name.trim()}. Current amount saved; past activity is unchanged.`

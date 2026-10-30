@@ -21,6 +21,7 @@ export interface DataSource {
   loadCategories(signal: AbortSignal): Promise<Category[]>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
   loadActivity(query: ActivityQuery, signal: AbortSignal): Promise<ActivityPage>
+  /** Current balance or signed card debt, never the original opening amount. */
   loadAccountForEdit(id: number, signal: AbortSignal): Promise<AccountValues>
   /** Create (no target) or replace (target) an expense, income, card payment or account transfer. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>

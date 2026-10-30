@@ -236,3 +236,38 @@ describe('demo behaviours for failing and slow data (Milestone 4.9)', () => {
     assert.ok(Date.now() - t >= 35, 'write was held back')
   })
 })
+
+
+describe('current account amount corrections', () => {
+  it('loads current figures and saves the exact target without changing activity or monthly totals', async () => {
+    const source = createMockSource()
+    const before = await source.loadAccounts(signal)
+    const activity = await source.loadActivity({ month: OCT, accountId: null, limit: 1000 }, signal)
+    const totals = await source.loadSummary(OCT, signal)
+    const bank = before.liquid[0]
+    const values = await source.loadAccountForEdit(bank.account.id, signal)
+    const { amountText } = await import('../src/lib/money.ts')
+    assert.equal(values.balance, amountText(bank.balance))
+    await source.updateAccount(bank.account.id, { ...values, balance: '-0.05' })
+    assert.equal((await source.loadAccounts(signal)).liquid.find((a) => a.account.id === bank.account.id)?.balance, -5)
+    assert.deepEqual(await source.loadActivity({ month: OCT, accountId: null, limit: 1000 }, signal), activity)
+    const edited = await source.loadAccountForEdit(bank.account.id, signal)
+    await source.updateAccount(bank.account.id, { ...edited, name: 'Renamed bank' })
+    assert.equal((await source.loadAccounts(signal)).liquid.find((a) => a.account.id === bank.account.id)?.balance, -5)
+    const after = await source.loadSummary(OCT, signal)
+    assert.equal(after.monthIncome, totals.monthIncome)
+    assert.equal(after.monthExpenses, totals.monthExpenses)
+  })
+  it('sets card debt or credit exactly after purchases and payments', async () => {
+    const source = createMockSource()
+    const before = await source.loadAccounts(signal)
+    const card = before.cards[0]
+    const values = await source.loadAccountForEdit(card.account.id, signal)
+    const { amountText } = await import('../src/lib/money.ts')
+    assert.equal(values.owed, amountText(card.signedDebt))
+    for (const target of ['0.00', '-0.05', '123.45']) {
+      await source.updateAccount(card.account.id, { ...values, owed: target })
+      assert.equal((await source.loadAccountForEdit(card.account.id, signal)).owed, target)
+    }
+  })
+})

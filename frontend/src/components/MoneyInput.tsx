@@ -13,6 +13,7 @@ export function MoneyInput({
   describedBy,
   inputRef,
   large = false,
+  allowNegative = false,
 }: {
   id: string
   value: string
@@ -22,6 +23,7 @@ export function MoneyInput({
   describedBy?: string
   inputRef?: Ref<HTMLInputElement>
   large?: boolean // the big Amount field of Quick Add
+  allowNegative?: boolean // text keyboards expose a minus sign for balance corrections
 }) {
   return (
     <div className="relative">
@@ -37,7 +39,7 @@ export function MoneyInput({
       <Input
         id={id}
         ref={inputRef}
-        inputMode="decimal"
+        inputMode={allowNegative ? 'text' : 'decimal'}
         autoComplete="off"
         placeholder="0.00"
         value={value}

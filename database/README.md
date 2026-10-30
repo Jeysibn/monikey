@@ -20,7 +20,9 @@ restart/backup-restore evidence are documented in the
   normalized unique index.
 - `002_account_transfers.sql` adds liquid-account transfers to an existing
   database. Take and verify a backup before applying it. The API does not run
-  migrations automatically.
+  migrations automatically. This migration is applied in the current private
+  homelab deployment; other existing databases still need the migration before
+  running the updated API.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls

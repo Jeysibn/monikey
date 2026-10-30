@@ -50,7 +50,9 @@ Set `MONIKEY_TEST_POSTGRES_IMAGE` to override the default
 
 Liquid-account transfers use `/api/account-transfers` and their own database
 table. Transfers affect both account balances but not income, expenses, or card
-debt. Apply `database/002_account_transfers.sql` to an existing database after
-a verified backup before deploying this API version.
+debt. Migration `database/002_account_transfers.sql` is included in the current
+private homelab deployment. For another existing database, take and verify a
+backup, apply the migration, then deploy this API version; the API does not run
+migrations automatically.
 
 The routes and response shapes are described in the [TLD API contract](../docs/architecture/TLD.md#6-api-contract-version-1-api-prefix).

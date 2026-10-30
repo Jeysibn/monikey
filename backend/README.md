@@ -8,13 +8,21 @@ The API also has a local production-like image in `backend/Dockerfile`. The
 root Compose stack starts it on the private network and waits for PostgreSQL
 readiness. See the [Milestone 8–9 integration report](../docs/design/MILESTONE_8_9_INTEGRATION.md).
 
-Account editing adds `GET /api/accounts/{id}` for stored opening values and
-`PUT /api/accounts/{id}` for updates. Account type remains immutable; name,
-opening balance/debt, and a card's credit limit are editable. This endpoint
-change is implemented. A local Compose API smoke check verified that changing
-a card's opening debt changes computed debt by the same amount and restoring
-the stored opening value restores computed debt. The backend test suite has
-not been run for this follow-up.
+Account editing uses `GET /api/accounts/{id}` for current amounts and
+`PUT /api/accounts/{id}` to set the desired current amount. Send `name`, `type`,
+`current_balance`, `current_debt`, and `credit_limit`; money fields are decimal
+strings. Liquid accounts use current_balance with current_debt zero and no
+credit limit. Cards use current_debt (negative means card credit), with
+current_balance zero and a positive credit limit. Account type is immutable.
+The server adjusts the stored baseline by target minus current position without
+changing ledger rows or monthly income/expenses. Corrections whose resulting
+baseline exceeds NUMERIC(12,2) are rejected with 422.
+
+Existing databases require `database/003_current_account_amounts.sql` after a
+verified backup (and migration 002 if not already applied). Deploy frontend and
+API together: the edit contract replaces the old opening-value fields. The API
+does not apply migrations. Regression tests were added; database-backed execution
+is pending in this Windows environment because Docker is unavailable.
 
 ## Local setup
 

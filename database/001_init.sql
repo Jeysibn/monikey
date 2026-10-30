@@ -6,10 +6,8 @@ CREATE TABLE accounts (
   name VARCHAR(60) NOT NULL,
   type VARCHAR(20) NOT NULL
     CHECK (type IN ('cash', 'bank', 'ewallet', 'credit_card')),
-  opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0
-    CHECK (opening_balance >= 0),
-  opening_debt NUMERIC(12, 2) NOT NULL DEFAULT 0
-    CHECK (opening_debt >= 0),
+  opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  opening_debt NUMERIC(12, 2) NOT NULL DEFAULT 0,
   credit_limit NUMERIC(12, 2),
   CHECK (
     (

@@ -47,5 +47,6 @@ export function formatSigned(centavos: Centavos, kind: AmountKind): string {
 
 /** Whole centavos as text a person can edit: 1425000 -> "14250.00". Used to fill the amount from "Pay full". */
 export function amountText(centavos: Centavos): string {
-  return `${Math.trunc(centavos / 100)}.${String(centavos % 100).padStart(2, '0')}`
+  const absolute = Math.abs(centavos)
+  return `${centavos < 0 ? '-' : ''}${Math.trunc(absolute / 100)}.${String(absolute % 100).padStart(2, '0')}`
 }

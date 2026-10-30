@@ -23,13 +23,19 @@ restart/backup-restore evidence are documented in the
   migrations automatically. This migration is applied in the current private
   homelab deployment; other existing databases still need the migration before
   running the updated API.
+- `003_current_account_amounts.sql` allows signed account baselines for current
+  balance/debt corrections (ADR-018). Take and verify a backup before applying
+  it to an existing database; apply 002 first if needed. No financial records
+  are rewritten by the migration. Creation still requires nonnegative opening
+  amounts through API validation.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
   them back after checking account balances, card debt, overpayment, monthly
   totals, month boundaries, edits, and deletes.
 - `test.sh` starts a temporary PostgreSQL container without publishing a port
-  or mounting persistent storage, applies the schema and seed twice, runs the
+  or mounting persistent storage, applies the schema, simulates the old baseline
+  constraints, applies migration 003 twice, seeds categories twice, runs the
   accounting checks, and removes the container on exit.
 
 ## Run the checks

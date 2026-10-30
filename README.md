@@ -27,7 +27,7 @@ These existing design-review screenshots show the mock ledger, not the live home
 - Tracks card purchases as expenses and card payments separately, so a payment does not count as a second expense.
 - Transfers money between liquid accounts without changing income or expense totals.
 - Calculates balances, card debt, available credit, and monthly totals from the ledger.
-- Lets the owner edit an account name, opening amounts, and card limit while keeping its account type fixed.
+- Lets the owner edit an account name, current balance/debt, and card limit while keeping its account type fixed.
 
 For a short feature walkthrough and the system diagram, see [Portfolio overview](docs/portfolio/README.md).
 

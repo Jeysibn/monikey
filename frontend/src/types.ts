@@ -11,7 +11,7 @@ export type Centavos = number
 export type AccountType = 'cash' | 'bank' | 'ewallet' | 'credit_card'
 export type CategoryType = 'income' | 'expense'
 
-/** What screens need from the accounts list. Opening values are read separately only for the edit form. */
+/** What screens need from the accounts list. Current amounts are read separately for the edit form. */
 export interface AccountInfo {
   id: number
   name: string

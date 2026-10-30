@@ -88,7 +88,7 @@ export function EditAccountDialog({
           <>
             <DialogHeader>
               <DialogTitle ref={titleRef} tabIndex={-1}>Edit account</DialogTitle>
-              <DialogDescription className="sr-only">Load or edit this account&rsquo;s saved starting values.</DialogDescription>
+              <DialogDescription className="sr-only">Load or edit this account&rsquo;s current amount.</DialogDescription>
             </DialogHeader>
             <DialogBody>
               {current?.status === 'error' ? (

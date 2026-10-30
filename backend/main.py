@@ -57,6 +57,15 @@ def normalize_note(value: object) -> str | None:
 
 
 Money = Annotated[Decimal, BeforeValidator(parse_money), Field(max_digits=12, decimal_places=2)]
+
+
+def parse_signed_money(value: object) -> Decimal:
+    if isinstance(value, str) and value.startswith("-"):
+        return -parse_money(value[1:])
+    return parse_money(value)
+
+
+SignedMoney = Annotated[Decimal, BeforeValidator(parse_signed_money), Field(max_digits=12, decimal_places=2)]
 PositiveMoney = Annotated[Money, Field(gt=0)]
 CalendarDate = Annotated[date, BeforeValidator(parse_calendar_date)]
 AccountName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
@@ -81,6 +90,14 @@ class TransactionInput(InputModel):
     amount: PositiveMoney
     transaction_date: CalendarDate
     note: Note = None
+
+
+class AccountUpdateInput(InputModel):
+    name: AccountName
+    type: AccountType
+    current_balance: SignedMoney
+    current_debt: SignedMoney
+    credit_limit: Money | None = None
 
 
 class PaymentInput(InputModel):
@@ -287,13 +304,13 @@ def account_response(row: dict[str, object]) -> dict[str, object]:
 
 
 def account_edit_response(row: dict[str, object]) -> dict[str, object]:
-    """Return the stored opening values needed to edit an account baseline."""
+    """Return current amounts; signed debt below zero represents card credit."""
     return {
         "id": row["id"],
         "name": row["name"],
         "type": row["type"],
-        "opening_balance": format_money(Decimal(row["opening_balance"])),
-        "opening_debt": format_money(Decimal(row["opening_debt"])),
+        "current_balance": format_money(row["position"] if row["type"] != "credit_card" else 0),
+        "current_debt": format_money(row["position"] if row["type"] == "credit_card" else 0),
         "credit_limit": None if row["credit_limit"] is None else format_money(Decimal(row["credit_limit"])),
     }
 
@@ -486,11 +503,7 @@ def create_account(values: AccountInput) -> dict[str, object]:
 def get_account_for_edit(account_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
     with open_connection() as connection:
         row = connection.execute(
-            """
-            SELECT id, name, type, opening_balance, opening_debt, credit_limit
-            FROM accounts
-            WHERE id = %s
-            """,
+            f"{account_positions_sql()} WHERE a.id = %s",
             (account_id,),
         ).fetchone()
     if row is None:
@@ -499,8 +512,16 @@ def get_account_for_edit(account_id: Annotated[int, Path(gt=0)]) -> dict[str, ob
 
 
 @app.put("/api/accounts/{account_id}")
-def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountInput) -> dict[str, object]:
-    validate_account_input(values)
+def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdateInput) -> dict[str, object]:
+    if values.type == "credit_card":
+        if values.current_balance != 0:
+            raise ApiProblem(400, "invalid_account_type_combination", "Cards cannot have a cash balance.", "current_balance")
+        if values.credit_limit is None or values.credit_limit <= 0:
+            raise ApiProblem(400, "invalid_account_type_combination", "Cards need a positive credit limit.", "credit_limit")
+    elif values.credit_limit is not None:
+        raise ApiProblem(400, "invalid_account_type_combination", "Only cards can have a credit limit.", "credit_limit")
+    elif values.current_debt != 0:
+        raise ApiProblem(400, "invalid_account_type_combination", "Only cards can have debt.", "current_debt")
     try:
         with open_connection() as connection:
             existing = connection.execute(
@@ -516,13 +537,26 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountInput)
                     "Account type cannot be changed after creation.",
                     "type",
                 )
+            current = connection.execute(
+                f"{account_positions_sql()} WHERE a.id = %s", (account_id,),
+            ).fetchone()
+            # Correct the baseline by the difference, preserving every ledger row.
+            opening_balance = Decimal("0.00")
+            opening_debt = Decimal("0.00")
+            field = "current_debt" if values.type == "credit_card" else "current_balance"
+            if values.type == "credit_card":
+                opening_debt = current["opening_debt"] + values.current_debt - current["position"]
+            else:
+                opening_balance = current["opening_balance"] + values.current_balance - current["position"]
+            if max(abs(opening_balance), abs(opening_debt)) > Decimal("9999999999.99"):
+                raise ApiProblem(422, "invalid_field", "This correction exceeds the supported account range.", field)
             connection.execute(
                 """
                 UPDATE accounts
                 SET name = %s, opening_balance = %s, opening_debt = %s, credit_limit = %s
                 WHERE id = %s
                 """,
-                (values.name, values.opening_balance, values.opening_debt, values.credit_limit, account_id),
+                (values.name, opening_balance, opening_debt, values.credit_limit, account_id),
             )
             row = connection.execute(
                 f"{account_positions_sql()} WHERE a.id = %s",

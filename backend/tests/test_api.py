@@ -423,3 +423,71 @@ def test_schema_validation_and_missing_records_have_contract_errors(client: Test
     unsupported_method = client.patch("/api/transactions/1")
     assert unsupported_method.status_code == 405
     assert unsupported_method.json()["error"]["code"] == "method_not_allowed"
+
+
+def test_current_account_amount_corrections_preserve_history_and_month_totals(client: TestClient) -> None:
+    bank = create_account(client, "Correction Bank", "bank", opening_balance="100.00")
+    card = create_account(client, "Correction Card", "credit_card", credit_limit="1000.00")
+    income = category_id(client, "Salary", "income")
+    expense = category_id(client, "Food", "expense")
+    create_transaction(client, bank["id"], income, "200.00")
+    create_transaction(client, card["id"], expense, "150.00")
+    create_payment(client, bank["id"], card["id"], "50.00")
+    transfer_account = create_account(client, "Transfer Bank", "bank")
+    transfer = client.post("/api/account-transfers", json={
+        "source_account_id": bank["id"], "destination_account_id": transfer_account["id"],
+        "amount": "25.00", "transfer_date": "2026-10-20", "note": None,
+    })
+    assert transfer.status_code == 201
+    params = {"month": "2026-10"}
+    routes = ["transactions", "credit-card-payments", "account-transfers"]
+    history = {route: client.get(f"/api/{route}", params=params).json() for route in routes}
+    summary = client.get("/api/summary", params=params).json()
+    detail = client.get(f"/api/accounts/{bank['id']}").json()
+    assert detail["current_balance"] == "225.00"
+    assert "opening_balance" not in detail
+    payload = {"name": bank["name"], "type": "bank", "current_balance": "0.00", "current_debt": "0.00", "credit_limit": None}
+    for target in ["0.00", "-0.05", "1000.00"]:
+        payload["current_balance"] = target
+        response = client.put(f"/api/accounts/{bank['id']}", json=payload)
+        assert response.status_code == 200, response.text
+        assert response.json()["balance"] == target
+        assert client.get(f"/api/accounts/{bank['id']}").json()["current_balance"] == target
+    # Saving a loaded amount again (for example, a rename) must not add the activity twice.
+    payload["name"] = "Renamed Bank"
+    assert client.put(f"/api/accounts/{bank['id']}", json=payload).json()["balance"] == "1000.00"
+    card_payload = {"name": card["name"], "type": "credit_card", "current_balance": "0.00", "current_debt": "0.00", "credit_limit": "1200.00"}
+    assert client.get(f"/api/accounts/{card['id']}").json()["current_debt"] == "100.00"
+    for target in ["0.00", "-0.05", "123.45"]:
+        card_payload["current_debt"] = target
+        response = client.put(f"/api/accounts/{card['id']}", json=card_payload)
+        assert response.status_code == 200, response.text
+        assert response.json()["outstanding_signed_debt"] == target
+        assert response.json()["credit_limit"] == "1200.00"
+        assert client.get(f"/api/accounts/{card['id']}").json()["current_debt"] == target
+    for route in routes:
+        assert client.get(f"/api/{route}", params=params).json() == history[route]
+    after = client.get("/api/summary", params=params).json()
+    assert after["month_income"] == summary["month_income"]
+    assert after["month_expenses"] == summary["month_expenses"]
+
+
+def test_current_account_correction_validation_and_rollback(client: TestClient) -> None:
+    bank = create_account(client, "Original Bank", "bank")
+    create_account(client, "Taken Name", "cash")
+    create_transaction(client, bank["id"], category_id(client, "Salary", "income"), "9999999999.99")
+    payload = {"name": bank["name"], "type": "bank", "current_balance": "0.00", "current_debt": "0.00", "credit_limit": None}
+    path = f"/api/accounts/{bank['id']}"
+    for invalid in [1.25, "0.001", "NaN", "10000000000.00", "--1.00"]:
+        assert client.put(path, json={**payload, "current_balance": invalid}).status_code == 422
+    assert client.put(path, json={**payload, "type": "cash"}).status_code == 400
+    assert client.put(path, json={**payload, "current_debt": "1.00"}).status_code == 400
+    assert client.put(path, json={**payload, "name": "Taken Name"}).status_code == 409
+    # The target fits NUMERIC, but subtracting existing income would overflow the baseline.
+    response = client.put(path, json={**payload, "name": "Must Roll Back", "current_balance": "-0.01"})
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == "current_balance"
+    unchanged = client.get(path).json()
+    assert unchanged["name"] == "Original Bank"
+    assert unchanged["current_balance"] == "9999999999.99"
+    assert client.put("/api/accounts/999999", json=payload).status_code == 404

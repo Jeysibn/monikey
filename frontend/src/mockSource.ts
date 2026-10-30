@@ -2,7 +2,7 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery,
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
 import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
 import { amountText } from './lib/money.ts'
-import { activityPage, buildSnapshot, summarize } from './lib/finance.ts'
+import { activityPage, buildSnapshot, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
 import { getMockData, type DemoScenario } from './mockData.ts'
 import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, MockData } from './types.ts'
 
@@ -104,9 +104,9 @@ export function createMockSource({
         return {
           type: account.type,
           name: account.name,
-          balance: amountText(account.openingBalance),
+          balance: amountText(account.type === 'credit_card' ? 0 : liquidBalance(account, data)),
           limit: account.creditLimit === null ? '' : amountText(account.creditLimit),
-          owed: amountText(account.openingDebt),
+          owed: amountText(account.type === 'credit_card' ? cardStatus(account, data).signedDebt : 0),
         }
       }),
 
@@ -137,8 +137,8 @@ export function createMockSource({
       if (existing.type !== values.type) throw new ApiError(400, 'invalid_account_type_combination', 'Account type cannot be changed after creation.', 'type')
       const taken = validateAccount(values, buildSnapshot(data), id).name
       if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
-      const balance = values.type === 'credit_card' ? null : parseAccountMoney(values.balance, 'balance')
-      const owed = values.type === 'credit_card' ? parseAccountMoney(values.owed, 'owed') : null
+      const balance = values.type === 'credit_card' ? null : parseAccountMoney(values.balance, 'balance', true)
+      const owed = values.type === 'credit_card' ? parseAccountMoney(values.owed, 'owed', true) : null
       const limit = values.type === 'credit_card' ? parseAccountMoney(values.limit, 'limit') : null
       if (balance && !balance.ok) throw new ApiError(422, 'invalid_field', balance.error, 'balance')
       if (owed && !owed.ok) throw new ApiError(422, 'invalid_field', owed.error, 'owed')
@@ -146,9 +146,12 @@ export function createMockSource({
       const updated = {
         ...existing,
         name: values.name.trim(),
-        openingBalance: balance?.ok ? balance.centavos : 0,
-        openingDebt: owed?.ok ? owed.centavos : 0,
+        openingBalance: balance?.ok ? existing.openingBalance + balance.centavos - liquidBalance(existing, data) : 0,
+        openingDebt: owed?.ok ? existing.openingDebt + owed.centavos - cardStatus(existing, data).signedDebt : 0,
         creditLimit: limit?.ok ? limit.centavos : null,
+      }
+      if (Math.max(Math.abs(updated.openingBalance), Math.abs(updated.openingDebt)) > 999_999_999_999) {
+        throw new ApiError(422, 'invalid_field', 'This correction exceeds the supported account range.', values.type === 'credit_card' ? 'owed' : 'balance')
       }
       data = { ...data, accounts: data.accounts.map((account) => account.id === id ? updated : account) }
     },

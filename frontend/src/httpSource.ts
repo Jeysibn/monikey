@@ -13,6 +13,7 @@ import {
   fromWireSummary,
   fromWireTransaction,
   toWireAccountInput,
+  toWireAccountUpdate,
   toWireEntryInput,
   type WireCategory,
   type WirePayment,
@@ -193,7 +194,7 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     },
 
     async updateAccount(id, values: AccountValues) {
-      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountInput(values))
+      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values))
     },
   }
 }

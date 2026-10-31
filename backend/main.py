@@ -124,7 +124,7 @@ class ApiProblem(Exception):
         self.field = field
 
 
-app = FastAPI(title="MoniKey API", version="1.0.0")
+app = FastAPI(title="MoniKey API", version="1.2.0")
 
 
 @app.exception_handler(ApiProblem)

@@ -71,6 +71,7 @@ Milestones 11–12 are complete: the private homelab deployment is healthy, and 
 - [Architecture and roadmap](docs/architecture/README.md)
 - [Feature walkthrough and architecture diagram](docs/portfolio/README.md)
 - [Design and frontend status](docs/design/README.md)
+- [Changelog and versions](CHANGELOG.md)
 - [Backend setup](backend/README.md)
 - [Database schema and checks](database/README.md)
 - [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md)

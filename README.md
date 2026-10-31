@@ -57,9 +57,9 @@ Open the local Vite URL shown in the terminal. To run the full local stack, use 
 
 - There is no login or authentication. Keep the writable deployment on a trusted private network; do not expose it publicly.
 - The homelab deployment uses one Kubernetes node and one PostgreSQL replica. It is not highly available.
-- Backups are manual logical dumps. Scheduled off-cluster retention and recovery after node or storage failure have not been verified.
+- The owner reports an automated database backup is configured in `homelab-gitops`. Off-cluster retention and recovery after node or storage failure have not been verified.
 - TLS uses the homelab self-signed issuer, which may show a browser trust warning.
-- API routes were exercised with synthetic data, but the full interactive React/API browser journey remains unverified. Automated browser, physical-device, and screen-reader checks are also outstanding.
+- API routes were exercised with synthetic data, but the owner has manually tested the deployed app on desktop and phone. Automated browser and screen-reader checks are still outstanding.
 - Banking integrations, recurring bills, and investments are out of scope for v1. Credit cards are not transfer destinations; use Pay card for those payments.
 
 ## Project status

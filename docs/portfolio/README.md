@@ -34,8 +34,8 @@ See the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/bl
 
 - MoniKey v1 has no authentication. Only use the writable instance on a trusted private network; it is not a public demo.
 - The one-node cluster and one PostgreSQL replica do not provide high availability.
-- Logical backups are manual. Off-cluster backup retention and disaster recovery have not been verified.
-- The full interactive React/API browser journey, automated browser coverage, real-device checks, and screen-reader checks remain unverified.
+- The owner reports an automated database backup is configured in the GitOps repository. Off-cluster retention and disaster recovery have not been verified.
+- The owner manually tested desktop and phone. Automated browser coverage and screen-reader checks remain unverified.
 - v1 does not include banking integrations, recurring bills, or investments. Transfers are supported between cash, bank, and e-wallet accounts; credit-card payments remain separate.
 
 ## Privacy note

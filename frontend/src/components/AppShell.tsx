@@ -92,7 +92,7 @@ export function AppShell({
       </aside>
 
       <main className="px-4 pt-3.5 pb-[calc(96px+env(safe-area-inset-bottom))] md:ml-20 md:px-6 md:pt-7 md:pb-8 lg:ml-56 lg:pt-9 lg:pb-12">
-        <div className="mx-auto max-w-[1032px]">
+        <div className="mx-auto max-w-[1440px]">
           {/* The sidebar names the product from 768px up; phones get it here. */}
           <div className="mb-3.5 flex items-center gap-2 text-lg font-bold tracking-[-0.015em] md:hidden">
             <BrandMark className="size-[30px] text-primary" />

@@ -59,7 +59,6 @@ export function AccountsView({
   walletPreferences: WalletPreferencesV1
 }) {
   const [displayMode, setDisplayMode] = useState<WalletViewMode>('cards')
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const snapshot = accountsRes.data
   // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
   const hasAccounts = snapshot ? snapshot.accounts.length > 0 : true
@@ -68,9 +67,6 @@ export function AccountsView({
   const cards = snapshot?.cards ?? []
   const wallet = snapshot ? buildWalletGalleryModel(snapshot, walletPreferences) : { liquid: [], cards: [] }
   const allWalletCards = [...wallet.liquid, ...wallet.cards]
-  const selectedId = allWalletCards.some((item) => item.accountId === selectedAccountId)
-    ? selectedAccountId
-    : allWalletCards[0]?.accountId ?? null
   // Two requests feed this screen, and each failure is shown for what it affects and with its own time: the accounts
   // (the rows and cards) fail both sections; the summary (the two totals) fails only the totals, next to rows that loaded.
   const accountsFailed = accountsRes.error !== null
@@ -169,7 +165,7 @@ export function AccountsView({
                 <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#net-position-title" />
               </Card>
             ) : rowsLoading ? (
-              <ul aria-hidden="true" className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <ul aria-hidden="true" className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,19rem),1fr))] gap-4">
                 {[0, 1, 2, 3].map((i) => (
                   <li key={i}><Bar className="aspect-[1.586/1] w-full rounded-[18px]" /></li>
                 ))}
@@ -183,8 +179,6 @@ export function AccountsView({
             ) : (
               <WalletGrid
                 items={allWalletCards}
-                selectedAccountId={selectedId}
-                onSelect={setSelectedAccountId}
                 onEdit={onEditAccount}
                 onPayCard={onPayCard}
               />

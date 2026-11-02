@@ -345,7 +345,7 @@ const exampleCandidate: WalletArtwork = {
 
 ### PR 4 — Overview wallet stack — implemented (`020fe33`)
 
-- [x] Reuse `WalletCard` for a scroll-snap rail/selected-card stack; no second financial renderer.
+- [x] Reuse `WalletCard` for the Overview deck (front card plus peeking cards; rebuilt 2026-11-02 to the owner's reference design); no second financial renderer.
 - [x] Add selection controls and an Accounts link; preserve the other Overview sections.
 - [x] Implement empty, loading, single/multiple-account, reduced-motion and keyboard states.
 - [x] Stack previews use decorative images only; no PAN or private card photos are used.

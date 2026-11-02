@@ -304,7 +304,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
       check("peso amounts stay on one line and inside their card", m.bad.length === 0, m.bad.join("; ") || "ok");
       check("touch targets ≥44px high below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
       check("net-position banner sits above the full-width card grid", m.banner.y < m.grid.y && Math.abs(m.banner.w - m.mainW) <= 1 && Math.abs(m.grid.w - m.mainW) <= 1, JSON.stringify({ banner: m.banner, grid: m.grid, mainW: m.mainW }));
-      check("card size suits the column count (4 at 1280, 2 at 768, 1 on phones)", m.artW >= (W >= 1280 ? 200 : W >= 768 ? 250 : 280), `artwork width ${m.artW}px at ${W}px viewport`);
+      check("cards are at least the grid minimum (3 per row at 1280, 2 at 768, 1 on phones)", m.artW >= (W >= 768 ? 300 : 280), `artwork width ${m.artW}px at ${W}px viewport`);
       if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `accounts-${W}.png`), fullPage: true });
       await p.context().close();
     });

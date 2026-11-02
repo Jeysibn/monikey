@@ -60,6 +60,7 @@ export function OverviewView({
   onPayCard,
   onEditAccount,
   onTransfer,
+  onAddExpense,
   onOpenAccounts,
   walletPreferences,
   onOpenActivity,
@@ -76,7 +77,8 @@ export function OverviewView({
   onAddAccount: () => void
   onPayCard: (cardId: number) => void
   onEditAccount: (accountId: number, from: HTMLElement) => void
-  onTransfer: () => void
+  onTransfer: (fromAccountId: number) => void // the wallet's Transfer, from the selected account
+  onAddExpense: (accountId: number) => void
   onOpenAccounts: () => void
   walletPreferences: WalletPreferencesV1
   onOpenActivity: (month: string) => void
@@ -206,6 +208,7 @@ export function OverviewView({
         onEditAccount={onEditAccount}
         onPayCard={onPayCard}
         onTransfer={onTransfer}
+        onAddExpense={onAddExpense}
         onOpenAccounts={onOpenAccounts}
       />
     </div>

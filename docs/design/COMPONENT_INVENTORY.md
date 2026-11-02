@@ -76,7 +76,7 @@ Not separate components (kept inline to avoid wrapper layers): the limit track (
 | `WalletGrid` | Lay out wallet cards in the Accounts Cards view. | Account card models and selection/actions |
 | `WalletViewToggle` | Switch the Accounts page between Cards and List. | `cards \| list`, `onChange` |
 | `CardProductPicker` | In Add and Edit account, pick the bank or provider, then the exact card with its design. | Account type, chosen issuer/product, change callbacks |
-| `WalletStack` | Present account selection on Overview; phone scroll-snap rail and larger-screen selected card with Previous/Next controls. | Accounts resource, preferences, account actions, Accounts navigation callback |
+| `WalletStack` | Overview "Wallets" card deck: the front card with figure and menu, two peeking cards on each side (click, swipe or arrow keys), and Open / Expense / Transfer or Pay card for the selected account. | Accounts resource, preferences, edit/pay/transfer/expense callbacks, Accounts navigation callback |
 | `wallet/artworkCatalog.ts` | Define artwork metadata, allowlisted local paths and safe account-type-aware selection; resolve to fallback when unavailable/unapproved. | Static catalog and resolver functions |
 | `wallet/walletModel.ts` | Project existing snapshot values and saved appearance into wallet card view models; does not calculate money. | `AccountsSnapshot`, local preferences |
 | `wallet/walletPreferences.ts` | Parse, validate and persist versioned browser-local artwork selections. | Local storage adapter; safe defaults on invalid or denied storage |

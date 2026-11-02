@@ -13,7 +13,7 @@ Related: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [
 | base (phone) | 0 | bottom bar | 1 column |
 | `md` (tablet) | 768 | 80px rail | 1 column (blocks full width) |
 | `lg` (desktop) | 1024 | 224px sidebar | 12 columns |
-| `xl` | 1280 | same | content width grows to its 1032 cap |
+| `xl` | 1280 | same | content width grows to its 1440 cap |
 
 No other breakpoints. Write styles for the phone first and add `md:` / `lg:` overrides.
 
@@ -27,7 +27,8 @@ No other breakpoints. Write styles for the phone first and add `md:` / `lg:` ove
 | 768 | rail 80 | 688 | 24 | **640** |
 | 1024 | sidebar 224 | 800 | 24 | **752** |
 | 1280 | sidebar 224 | 1056 | 24 | **1008** |
-| 1440 | sidebar 224 | 1216 | centred | **1032** (cap) |
+| 1440 | sidebar 224 | 1216 | 24 | **1168** |
+| 1920 | sidebar 224 | 1696 | centred | **1440** (cap) |
 
 Gaps: 16 on the phone, 24 from 768 up. Card padding: 20 on the phone, 24 from 768 up. **One gap value** per breakpoint, used horizontally and vertically.
 
@@ -37,7 +38,8 @@ Desktop 12-column arithmetic (gap 24):
 |---|---|---|---|---|---|---|
 | 1024 | 40.67 | 170 | 299.3 | 364 | 428.7 | 7 + 5 = 428.7 + 24 + 299.3 = **752** ✓ ; 6 + 6 = 364 + 24 + 364 = **752** ✓ |
 | 1280 | 62 | 234 | 406 | 492 | 578 | 7 + 5 = 578 + 24 + 406 = **1008** ✓ ; 6 + 6 = 492 + 24 + 492 = **1008** ✓ |
-| 1440 | 64 | 240 | 416 | 504 | 592 | 7 + 5 = 592 + 24 + 416 = **1032** ✓ ; 6 + 6 = 504 + 24 + 504 = **1032** ✓ |
+| 1440 | 75.3 | 274 | 472.7 | 572 | 671.3 | 7 + 5 = 671.3 + 24 + 472.7 = **1168** ✓ ; 6 + 6 = 572 + 24 + 572 = **1168** ✓ |
+| 1920 (cap) | 98 | 342 | 586 | 708 | 830 | 7 + 5 = 830 + 24 + 586 = **1440** ✓ ; 6 + 6 = 708 + 24 + 708 = **1440** ✓ |
 
 (Column = (content − 11 × 24) ÷ 12; span *n* = *n* × column + (*n* − 1) × 24. Verified with a script.)
 

@@ -83,28 +83,42 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
   });
 
   /* ---------------------------------------------------------------- wallet stack */
-  group = "Overview wallet stack selection and zero-account state";
+  group = "Overview wallets deck";
   await safe(async () => {
-    const phone = await open(375);
-    const visibleCards = phone.locator(`${R.wallets} li article > button[aria-pressed]:visible`);
-    eq("wallet stack reports all five accounts", await phone.locator(R.wallets).innerText().then(t => /5 accounts/.test(t)), true);
-    eq("phone rail shows all five selectable accounts", await visibleCards.count(), 5);
-    await visibleCards.nth(1).click();
-    eq("selecting a wallet marks that exact account selected", await visibleCards.nth(1).getAttribute("aria-pressed"), "true");
-    check("wallet stack links to Accounts", await phone.locator(R.wallets).getByRole("button", { name: "View all accounts" }).isVisible());
-    await phone.context().close();
+    for (const W of [375, 1280]) {
+      const p = await open(W);
+      const deck = p.locator(R.wallets);
+      const text = async () => (await deck.innerText()).replace(/\s+/g, " ");
+      check(`${W}px: header shows the position and an All link`, /Wallets 1 of 5/.test(await text()) && await deck.getByRole("button", { name: "View all 5 accounts" }).isVisible(), (await text()).slice(0, 80));
+      eq(`${W}px: one front card with its figure`, await deck.locator('button[aria-label^="View details for"]').count(), 1);
+      eq(`${W}px: up to two later cards peek out (none earlier at the start)`, await deck.getByRole("button", { name: /^Show / }).count(), 2);
+      await deck.getByRole("button", { name: "Show Main Savings" }).focus();
+      await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+      check(`${W}px: choosing a peeking card brings it to the front`, /Wallets 2 of 5/.test(await text()) && /02 Selected · Main Savings/.test(await text()), (await text()).slice(0, 120));
+      await p.keyboard.press("ArrowRight"); await p.waitForTimeout(300);
+      check(`${W}px: the right arrow key moves to the next card`, /03 Selected · GCash/.test(await text()), (await text()).slice(0, 120));
+      check(`${W}px: a liquid account offers Open, Expense and Transfer`, await deck.getByRole("button", { name: "Transfer from GCash" }).isVisible() && await deck.getByRole("button", { name: "Add an expense on GCash" }).isVisible() && await deck.getByRole("button", { name: "Open GCash" }).isVisible());
+      check(`${W}px: no horizontal overflow`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await p.context().close();
+    }
 
     const desktop = await open(1280);
-    const desktopCard = desktop.locator(`${R.wallets} li article > button[aria-pressed]:visible`);
-    eq("desktop presents one selected card from the stack", await desktopCard.count(), 1);
-    await desktop.locator(R.wallets).getByRole("button", { name: "Previous" }).click();
-    check("desktop previous control selects the prior account", /5 of 5/.test(await desktop.locator(R.wallets).innerText()));
-    await desktop.locator(R.wallets).getByRole("button", { name: "Next" }).click();
-    check("desktop next control selects the next account", /1 of 5/.test(await desktop.locator(R.wallets).innerText()));
+    const deck = desktop.locator(R.wallets);
+    for (let i = 0; i < 3; i++) { await deck.getByRole("button", { name: /^Show / }).last().focus(); await desktop.keyboard.press("Enter"); await desktop.waitForTimeout(250); }
+    check("a credit card offers Pay card instead of Transfer", await deck.getByRole("button", { name: /^Pay card, / }).isVisible() && await deck.getByRole("button", { name: /^Transfer from/ }).count() === 0, (await deck.innerText()).replace(/\s+/g, " ").slice(0, 120));
+    await deck.getByRole("button", { name: /^Add an expense on / }).click();
+    const selectedAccount = await desktop.locator("#qa-account").evaluate(e => e.options[e.selectedIndex].text);
+    check("Expense opens Quick Add on the selected account", /Everyday Card|Blue Card/.test(selectedAccount), selectedAccount);
+    await desktop.keyboard.press("Escape"); await desktop.waitForTimeout(300);
+    await deck.getByRole("button", { name: /^Open / }).click();
+    check("Open shows the selected account's details", await desktop.getByRole("dialog").isVisible() && /Credit card/.test(await desktop.getByRole("dialog").innerText()));
+    await desktop.keyboard.press("Escape");
+    await deck.getByRole("button", { name: /^View all/ }).click();
+    eq("All opens Accounts", (await desktop.locator("h1").innerText()).trim(), "Accounts");
     await desktop.context().close();
 
     const firstRun = await open(375, { query: "?demo=no-accounts" });
-    eq("zero accounts keep the existing onboarding CTA without an empty wallet stack", await firstRun.locator(R.wallets).count(), 0);
+    eq("zero accounts keep the existing onboarding CTA without an empty wallet deck", await firstRun.locator(R.wallets).count(), 0);
     check("first-run Add account action remains visible", await firstRun.getByRole("button", { name: "Add account" }).isVisible());
     await firstRun.context().close();
   });
@@ -328,7 +342,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       hasMain: !!document.querySelector("main"), lang: document.documentElement.lang, title: document.title,
     }));
     eq("every visible button and select has an accessible name", sem.unnamed, 0);
-    check("each card is a labelled region", sem.regions.join() === "Your accounts,Recent activity,This month,Credit cards", sem.regions.join());
+    check("each card is a labelled region", sem.regions.join() === "Wallets,Recent activity,This month,Credit cards", sem.regions.join());
     check("credit-limit tracks have text equivalents", sem.tracks.join() === "₱14,250.00 of ₱50,000.00 limit used,₱6,800.00 of ₱30,000.00 limit used", sem.tracks.join(" | "));
     check("no gradients or backdrop blur anywhere", sem.bad === 0);
     check("main landmark, lang and title present", sem.hasMain && sem.lang === "en" && sem.title === "MoniKey", `${sem.lang} / ${sem.title}`);

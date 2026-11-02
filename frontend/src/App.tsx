@@ -183,8 +183,9 @@ function App() {
   const rememberOpener = (from?: HTMLElement) => {
     opener.current = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
   }
-  const startEntry = (snap: LedgerSnapshot, kind: EntryKind, cardId: number | null): EntryValues => {
-    const last = kind === 'payment' ? lastPayFrom.current : lastAccount.current
+  /** `accountId` preselects that account (the Overview wallet's Expense and Transfer); otherwise the last one used. */
+  const startEntry = (snap: LedgerSnapshot, kind: EntryKind, cardId: number | null, accountId?: number): EntryValues => {
+    const last = accountId ?? (kind === 'payment' ? lastPayFrom.current : lastAccount.current)
     const usable = last !== null && accountsFor(kind, 'account', snap).some((a) => a.id === last)
     return { kind, amount: '', accountId: usable ? last : null, cardId, destinationAccountId: null, categoryId: null, date: source.today, note: '' }
   }
@@ -192,6 +193,12 @@ function App() {
     if (!snapshot) return
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'expense', null) })
+  }
+  /** Overview wallet "Expense": Quick Add with the selected account already chosen. */
+  const openExpenseOn = (accountId: number) => {
+    if (!snapshot) return
+    rememberOpener()
+    setSession({ mode: 'add', values: startEntry(snapshot, 'expense', null, accountId) })
   }
   const openPay = (cardId: number) => {
     if (!snapshot) return
@@ -202,6 +209,12 @@ function App() {
     if (!snapshot) return
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'transfer', null) })
+  }
+  /** Overview wallet "Transfer": the selected account is the one money moves from. */
+  const openTransferFrom = (fromAccountId: number) => {
+    if (!snapshot) return
+    rememberOpener()
+    setSession({ mode: 'add', values: startEntry(snapshot, 'transfer', null, fromAccountId) })
   }
   // Edit and Delete open on the entry exactly as stored (the list row carries it), so no lookup is needed.
   const openEdit = (item: ActivityItem, from: HTMLElement, confirmFirst = false) => {
@@ -348,7 +361,8 @@ function App() {
             onAddAccount={() => openAddAccount()}
             onPayCard={openPay}
             onEditAccount={editAccount}
-            onTransfer={openTransfer}
+            onTransfer={openTransferFrom}
+            onAddExpense={openExpenseOn}
             onOpenAccounts={() => setView('accounts')}
             walletPreferences={walletPreferences}
             onOpenActivity={(m) => {

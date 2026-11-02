@@ -182,7 +182,7 @@ These ratios were computed during design. Rendered text and field contrast were 
 
 | Property | Mobile (<768) | Tablet (768–1023) | Desktop (≥1024) |
 |---|---|---|---|
-| Page margin | 16 | 24 | 24 (content max 1032) |
+| Page margin | 16 | 24 | 24 (content max 1440) |
 | Grid gap (one value, both directions) | 16 | 24 | 24 |
 | Card padding | 20 | 24 | 24 |
 | Gap between stacked sections | 24 | 32 | 32 |
@@ -201,7 +201,7 @@ These ratios were computed during design. Rendered text and field contrast were 
 2. **Content:** a 12-column grid (24px gap) on desktop; a single column on mobile.
 3. **Edges:** every block shares the page's left and right edge; cards in one row share a bottom edge.
 
-Desktop arithmetic at 1280px: sidebar 224 + canvas 1056 − 2×24 margins = **1008 content**; 12 columns → column 62, gap 24; span-6 = 492, span-3 = 234; `492 + 234 + 234 + 2×24 = 1008` ✓. Content never exceeds 1032 (centred beyond that).
+Desktop arithmetic at 1280px: sidebar 224 + canvas 1056 − 2×24 margins = **1008 content**; 12 columns → column 62, gap 24; span-6 = 492, span-3 = 234; `492 + 234 + 234 + 2×24 = 1008` ✓. Content never exceeds 1440 (centred beyond that). *(Raised from 1032 on 2026-11-02 at the owner's request, so wide desktops use their space and wallet cards are not cramped.)*
 
 ### Navigation (three views, no router)
 

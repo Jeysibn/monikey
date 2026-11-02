@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 504" role="img" aria-labelledby="title description">
+  <title id="title">MoniKey default card artwork</title>
+  <desc id="description">A neutral MoniKey card with an original key and coin mark.</desc>
+  <rect x="1" y="1" width="798" height="502" rx="40" fill="#F3F5F7" stroke="#E4E7EB" stroke-width="2" />
+  <circle cx="116" cy="112" r="36" fill="#FFFFFF" stroke="#1D5FD6" stroke-width="5" />
+  <text x="116" y="123" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="600" fill="#1D5FD6">₱</text>
+  <path d="M153 112h100m-27 0v18m34-18v13" fill="none" stroke="#1D5FD6" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" />
+  <text x="94" y="222" font-family="Arial, sans-serif" font-size="34" font-weight="600" fill="#1B1D1F">MoniKey</text>
+  <text x="94" y="264" font-family="Arial, sans-serif" font-size="20" fill="#5C6064">A simple account card</text>
+</svg>

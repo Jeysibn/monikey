@@ -1,7 +1,7 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.4
-**Date:** 2026-10-26
+**Version:** 1.5
+**Date:** 2026-11-02
 **Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–13 are implemented, including the private Kubernetes deployment. M13 liquid-account transfers and migration 002 are deployed, and the owner confirms the feature is working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
@@ -161,6 +161,13 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **API:** GET/PUT `/api/accounts/{id}` use `current_balance` and `current_debt`, both decimal strings, in place of edit-only opening fields. PUT also accepts name, immutable type, and credit_limit. Frontend/API must be released together after a verified backup and reviewed migration application. No migration or deployment is automatic.
 - **Consequences:** The current amount becomes the user's correction target. Future activity changes it normally. Historical records and monthly income/expenses are preserved, but baseline-dependent balances and net position change. This supersedes only the previous opening-value editing behavior; no new table, dependency, or transaction kind is introduced.
 
+## ADR-019 — Wallet artwork is presentation-only
+
+- **Status:** Accepted by explicit owner instruction on 2026-11-02.
+- **Context:** The proposed wallet-card UI uses a card image, while the approved visual system avoids decorative illustrations and gradients.
+- **Decision:** Allow a static artwork image as a visual-only exception for wallet cards. Use an original neutral MoniKey fallback whenever an exact issuer design is unavailable or its rights are unclear. Bundle issuer artwork only after the exact product/source is verified and permission evidence for redistribution is recorded. Catalog entries must be approved, match the account type, and reference a local allowlisted asset path before they can be selected. Candidate, verified-only, rejected, retired, missing, and mismatched entries resolve to the neutral fallback. Artwork does not alter account type, balances, API payloads, calculations, or ledger records.
+- **Consequences:** Local approved images can be rendered without runtime issuer/CDN requests. The initial catalog contains no approved third-party issuer assets; product-variant verification and licensing/permission evidence remain open for every issuer design.
+
 ## Change-control template
 
 Use this for future changes:
@@ -199,3 +206,4 @@ Use this for future changes:
 
 - **v1.3 (2026-10-24):** ADR-016 accepts a separate Obsidian second-brain learning workflow; repository and GitOps remain authoritative.
 - **v1.4 (2026-10-26):** ADR-017 accepts transfers between liquid accounts, adding a dedicated table and API/UI flow.
+- **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no issuer art is approved by this decision.

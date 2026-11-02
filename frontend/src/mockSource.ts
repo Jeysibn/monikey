@@ -32,6 +32,13 @@ export interface MockOptions {
 
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** The API's ADR-020 checks on a card choice: a catalog-shaped ID, and never on a cash account. */
+function checkCard(type: AccountValues['type'], card: string | null | undefined) {
+  if (card === undefined || card === null) return
+  if (card.length > 64 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(card)) throw new ApiError(422, 'invalid_field', 'Choose a card from the list.', 'card_product_id')
+  if (type === 'cash') throw new ApiError(422, 'invalid_field', "Cash accounts don't have a card.", 'card_product_id')
+}
+
 export function createMockSource({
   scenario = null,
   failNextWrite = false,
@@ -122,16 +129,20 @@ export function createMockSource({
       data = ledgerReducer(data, toDeleteAction(target))
     },
 
-    addAccount: async (values: AccountValues): Promise<number | null> => {
+    addAccount: async (values: AccountValues, card?: string | null): Promise<number | null> => {
       await beginWrite(FAILED_SAVE, 'name')
       // The API answers 409 for a duplicate name; the mock re-checks so a second tab could not slip one through.
       const taken = validateAccount(values, buildSnapshot(data)).name
       if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
+      checkCard(values.type, card)
       data = ledgerReducer(data, toAccountAction(values))
-      return data.accounts.at(-1)?.id ?? null
+      const created = data.accounts.at(-1)!
+      // Like the API (ADR-020): the card choice is stored with the account.
+      data = { ...data, accounts: data.accounts.map((account) => account.id === created.id ? { ...account, cardProductId: card ?? null } : account) }
+      return created.id
     },
 
-    updateAccount: async (id: number, values: AccountValues): Promise<void> => {
+    updateAccount: async (id: number, values: AccountValues, card?: string | null): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'name')
       const existing = data.accounts.find((account) => account.id === id)
       if (!existing) throw new ApiError(404, 'not_found', 'Account not found.')
@@ -150,7 +161,9 @@ export function createMockSource({
         openingBalance: balance?.ok ? existing.openingBalance + balance.centavos - liquidBalance(existing, data) : 0,
         openingDebt: owed?.ok ? existing.openingDebt + owed.centavos - cardStatus(existing, data).signedDebt : 0,
         creditLimit: limit?.ok ? limit.centavos : null,
+        cardProductId: card === undefined ? existing.cardProductId ?? null : card, // omitted keeps the stored card
       }
+      checkCard(values.type, updated.cardProductId)
       if (Math.max(Math.abs(updated.openingBalance), Math.abs(updated.openingDebt)) > 999_999_999_999) {
         throw new ApiError(422, 'invalid_field', 'This correction exceeds the supported account range.', values.type === 'credit_card' ? 'owed' : 'balance')
       }

@@ -101,7 +101,7 @@ export function cardStatus(card: Account, data: MockData): CardStatus {
   const signedDebt = signedCardDebt(card, data)
   const creditLimit = card.creditLimit ?? 0
   return {
-    account: { id: card.id, name: card.name, type: card.type }, // no opening values: the API will not send them
+    account: { id: card.id, name: card.name, type: card.type, cardProductId: card.cardProductId ?? null }, // no opening values: the API will not send them
     signedDebt,
     owed: Math.max(signedDebt, 0),
     credit: Math.max(-signedDebt, 0),
@@ -118,7 +118,7 @@ export function liquidAccounts(data: MockData): AccountBalance[] {
     .filter((a) => !isCard(a))
     .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.id - b.id)
     .map((a) => ({
-      account: { id: a.id, name: a.name, type: a.type as AccountBalance['account']['type'] },
+      account: { id: a.id, name: a.name, type: a.type as AccountBalance['account']['type'], cardProductId: a.cardProductId ?? null },
       balance: liquidBalance(a, data),
     }))
 }
@@ -304,7 +304,7 @@ export function groupByDate(items: ActivityItem[]): { date: string; items: Activ
  */
 export function buildSnapshot(data: MockData): LedgerSnapshot {
   return {
-    accounts: data.accounts.map(({ id, name, type }) => ({ id, name, type })),
+    accounts: data.accounts.map(({ id, name, type, cardProductId }) => ({ id, name, type, cardProductId: cardProductId ?? null })),
     liquid: liquidAccounts(data),
     cards: cardStatuses(data),
     categories: data.categories,

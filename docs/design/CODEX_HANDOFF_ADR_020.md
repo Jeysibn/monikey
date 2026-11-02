@@ -51,7 +51,7 @@ The field never affects balances, debt, limits, the summary, or any ledger calcu
 
 Also add `"card_product_id"` to `docs/api-fixtures/accounts-list.json` and the account-edit fixtures.
 
-## 4. What Claude does after this lands
+## 4. What Claude does after this lands (done 2026-11-02)
 
 - `frontend/src/wire.ts` maps `card_product_id` ↔ `cardProductId` and tolerates the field being absent (older API).
 - Add and Edit send the chosen card; the gallery reads it from the snapshot.

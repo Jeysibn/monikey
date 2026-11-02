@@ -92,3 +92,23 @@ test('account editing maps current signed amounts independently of opening value
   assert.equal(fromWireField('current_balance'), 'balance')
   assert.equal(fromWireField('current_debt'), 'owed')
 })
+
+test('ADR-020: the account card choice is read when present and left out for an older server', () => {
+  const card = { id: 4, name: 'Blue Card', type: 'credit_card', credit_limit: '50000.00', outstanding_signed_debt: '14250.00', available_credit: '35750.00', owed: '14250.00', credit: '0.00' }
+  assert.equal(fromWireAccount({ ...card, card_product_id: 'bdo-visa-classic' }).account.cardProductId, 'bdo-visa-classic')
+  assert.equal(fromWireAccount({ ...card, card_product_id: null }).account.cardProductId, null)
+  assert.equal('cardProductId' in fromWireAccount(card).account, false)
+  assert.equal(fromWireAccount({ id: 1, name: 'Cash', type: 'cash', balance: '0.00', card_product_id: null }).liquid!.account.cardProductId, null)
+  for (const bad of ['BDO Visa', 'bdo--visa', 'x'.repeat(65), 7]) {
+    assert.throws(() => fromWireAccount({ ...card, card_product_id: bad }), ApiError, String(bad))
+  }
+})
+
+test('ADR-020: the card is sent only when given (an older API refuses unknown fields)', () => {
+  const bank = { type: 'bank' as const, name: 'Main', balance: '10.00', limit: '', owed: '' }
+  assert.equal('card_product_id' in toWireAccountInput(bank), false)
+  assert.equal(toWireAccountInput(bank, 'maribank-debit').card_product_id, 'maribank-debit')
+  assert.equal(toWireAccountInput(bank, null).card_product_id, null)
+  assert.equal('card_product_id' in toWireAccountUpdate(bank), false)
+  assert.equal(toWireAccountUpdate(bank, null).card_product_id, null)
+})

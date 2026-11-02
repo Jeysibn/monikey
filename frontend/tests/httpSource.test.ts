@@ -104,6 +104,20 @@ test('adding an account resolves with the ID the server created, or null without
   assert.equal(await empty.addAccount({ type: 'cash', name: 'Wallet', balance: '0.00', limit: '', owed: '' }), null)
 })
 
+test('ADR-020: account writes carry the card only when given', async () => {
+  const bodies: unknown[] = []
+  const source = createHttpSource(async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body)))
+    return json({ id: 9, name: 'Main', type: 'bank', balance: '10.00', card_product_id: 'maribank-debit' }, 201)
+  })
+  const bank = { type: 'bank' as const, name: 'Main', balance: '10.00', limit: '', owed: '' }
+  await source.addAccount(bank, 'maribank-debit')
+  await source.updateAccount(9, bank)
+  await source.updateAccount(9, bank, null)
+  assert.deepEqual(bodies.map((body) => (body as Record<string, unknown>).card_product_id), ['maribank-debit', undefined, null])
+  assert.equal('card_product_id' in (bodies[1] as object), false)
+})
+
 test('write errors keep the API code/status and map wire fields to form fields', async () => {
   const source = createHttpSource(async () => json({ error: { code: 'duplicate_account_name', message: 'You already have an account with that name.', field: 'name' } }, 409))
   await assert.rejects(source.addAccount({ type: 'cash', name: 'Cash', balance: '0.00', limit: '', owed: '' }), (error: unknown) => {

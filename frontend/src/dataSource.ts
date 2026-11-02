@@ -26,9 +26,13 @@ export interface DataSource {
   /** Create (no target) or replace (target) an expense, income, card payment or account transfer. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>
   deleteEntry(target: EntryTarget): Promise<void>
-  /** Resolves with the new account's ID when the server reports one (null otherwise). */
-  addAccount(values: AccountValues): Promise<number | null>
-  updateAccount(id: number, values: AccountValues): Promise<void>
+  /**
+   * Resolves with the new account's ID when the server reports one (null otherwise). `card` (ADR-020) is sent
+   * only when given; pass it only to a server whose accounts carry `cardProductId`.
+   */
+  addAccount(values: AccountValues, card?: string | null): Promise<number | null>
+  /** `card` undefined keeps the stored card; null clears it. */
+  updateAccount(id: number, values: AccountValues, card?: string | null): Promise<void>
 }
 
 /**

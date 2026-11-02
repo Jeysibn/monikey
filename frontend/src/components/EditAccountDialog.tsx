@@ -8,7 +8,8 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import type { DataSource } from '@/dataSource'
 import type { AccountValues } from '@/lib/accountForm'
 import type { LedgerSnapshot } from '@/types'
-import { savedWalletProductId, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
+import { accountCardProduct } from '@/wallet/walletModel'
+import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 type LoadState =
   | { id: number; status: 'loading' }
@@ -82,7 +83,10 @@ export function EditAccountDialog({
             snapshot={snapshot}
             initial={current.values}
             nameRef={nameRef}
-            initialProductId={savedWalletProductId(walletPreferences, current.id)}
+            initialProductId={(() => {
+              const account = snapshot.accounts.find((item) => item.id === current.id)
+              return account ? accountCardProduct(account, walletPreferences)?.id ?? null : null
+            })()}
             onDirty={() => setDirty(true)}
             onSavingChange={setSaving}
             onSubmit={(values, card) => onSubmit(current.id, values, card)}

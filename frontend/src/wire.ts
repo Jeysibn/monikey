@@ -112,6 +112,8 @@ export interface WireAccountInput {
   opening_balance: WireMoney
   opening_debt: WireMoney
   credit_limit: WireMoney | null
+  /** ADR-020. Sent only to a server that returns the field; an older API refuses unknown fields. */
+  card_product_id?: string | null
 }
 
 export interface WireAccountUpdateInput {
@@ -120,6 +122,8 @@ export interface WireAccountUpdateInput {
   current_balance: WireMoney
   current_debt: WireMoney
   credit_limit: WireMoney | null
+  /** ADR-020. Omitted keeps the stored card; null clears it. */
+  card_product_id?: string | null
 }
 
 export interface WireEditableAccount extends WireAccountUpdateInput {
@@ -191,6 +195,17 @@ function parseCategory(value: unknown): Category {
   return { id: id(row.id, 'category'), name, type }
 }
 
+const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+/** ADR-020: undefined when an older server leaves the field out, null for no card, otherwise a card ID. */
+function cardProductId(row: Record<string, unknown>): { cardProductId?: string | null } {
+  if (!('card_product_id' in row)) return {}
+  const value = row.card_product_id
+  if (value === null) return { cardProductId: null }
+  if (typeof value === 'string' && value.length <= 64 && CARD_PRODUCT_ID.test(value)) return { cardProductId: value }
+  throw contractError('card choice')
+}
+
 /** Validate and convert a JSON account row into the view model used by the screens. */
 export function fromWireAccount(value: unknown): { account: AccountInfo; liquid?: AccountsSnapshot['liquid'][number]; card?: CardStatus } {
   const row = record(value, 'account')
@@ -199,7 +214,7 @@ export function fromWireAccount(value: unknown): { account: AccountInfo; liquid?
   if (!name.trim()) throw contractError('account')
   const type = row.type
   if (type === 'cash' || type === 'bank' || type === 'ewallet') {
-    const account: AccountInfo & { type: LiquidAccountType } = { id: accountId, name, type }
+    const account: AccountInfo & { type: LiquidAccountType } = { id: accountId, name, type, ...cardProductId(row) }
     return { account, liquid: { account, balance: toCentavos(row.balance, 'account balance') } }
   }
   if (type !== 'credit_card') throw contractError('account')
@@ -212,7 +227,7 @@ export function fromWireAccount(value: unknown): { account: AccountInfo; liquid?
   if (creditLimit < 0 || owed < 0 || credit < 0 || availableCredit !== creditLimit - signedDebt || owed !== Math.max(signedDebt, 0) || credit !== Math.max(-signedDebt, 0)) {
     throw contractError('credit-card figures')
   }
-  const account: AccountInfo = { id: accountId, name, type }
+  const account: AccountInfo = { id: accountId, name, type, ...cardProductId(row) }
   const card: CardStatus = { account, creditLimit, signedDebt, availableCredit, owed, credit }
   return { account, card }
 }
@@ -386,16 +401,19 @@ export function toWireEntryInput(values: EntryValues): WireEntryInput | WirePaym
   return { account_id: values.accountId, category_id: values.categoryId, amount, transaction_date: values.date, note }
 }
 
-export function toWireAccountInput(values: AccountValues): WireAccountInput {
-  const base = { name: values.name.trim(), type: values.type, opening_balance: '0.00', opening_debt: '0.00', credit_limit: null }
+/** `card` is included only when given: undefined leaves the field out (for a server that predates ADR-020). */
+export function toWireAccountInput(values: AccountValues, card?: string | null): WireAccountInput {
+  const base = { name: values.name.trim(), type: values.type, opening_balance: '0.00', opening_debt: '0.00', credit_limit: null, ...(card === undefined ? {} : { card_product_id: card }) }
   if (values.type === 'credit_card') {
     return { ...base, opening_debt: accountMoney(values.owed, 'owed'), credit_limit: accountMoney(values.limit, 'limit') }
   }
   return { ...base, opening_balance: accountMoney(values.balance, 'balance') }
 }
 
-export function toWireAccountUpdate(values: AccountValues): WireAccountUpdateInput {
+/** `card` undefined leaves the field out, which keeps the stored card. */
+export function toWireAccountUpdate(values: AccountValues, card?: string | null): WireAccountUpdateInput {
   return {
+    ...(card === undefined ? {} : { card_product_id: card }),
     name: values.name.trim(), type: values.type,
     current_balance: values.type === 'credit_card' ? '0.00' : accountMoney(values.balance, 'balance', true),
     current_debt: values.type === 'credit_card' ? accountMoney(values.owed, 'owed', true) : '0.00',

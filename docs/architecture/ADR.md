@@ -170,7 +170,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ## ADR-020 — Store each account's chosen card in the database
 
-- **Status:** Accepted by explicit owner instruction on 2026-11-02. Implementation is split: Codex owns the migration and API ([handoff](../design/CODEX_HANDOFF_ADR_020.md)); Claude wires the frontend after the API lands.
+- **Status:** Accepted by explicit owner instruction on 2026-11-02. Implemented on 2026-11-02: Codex added migration 004 and the API field ([handoff](../design/CODEX_HANDOFF_ADR_020.md)); Claude wired the frontend. Migration 004 is not yet applied to any database.
 - **Context:** ADR-019 kept the wallet card choice in browser storage, so it was lost when site data was cleared and did not follow the owner to other devices. The owner wants the choice saved with the account, settable for existing accounts, and changeable at any time from Edit account.
 - **Decision:** Add one nullable column, `accounts.card_product_id VARCHAR(64)`, holding a card ID from the frontend catalog (`frontend/src/wallet/cardProducts.ts`, for example `bdo-visa-classic`). Cash accounts must keep it `NULL`. The API returns it for every account and accepts it on create and update. The server checks only its shape (lowercase words joined by hyphens) and the cash rule, not whether the ID exists in the catalog; the frontend renders an unknown ID as the neutral MoniKey card. The value is presentation only: it never changes account type, balances, debt, limits, calculations, or ledger records.
 - **Alternatives:** Keep browser storage only (rejected: lost on clear, no sync); a card-catalog table (rejected: a sixth table and duplicated catalog upkeep for a cosmetic choice).

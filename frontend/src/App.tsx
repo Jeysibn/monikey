@@ -19,6 +19,7 @@ import type { MockOptions } from '@/mockSource'
 import { useResource } from '@/useResource'
 import { clearWalletCardProduct, readWalletPreferences, saveWalletCardProduct, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 import type { CardChoice } from '@/components/AccountForm'
+import { pendingCardUploads, serverStoresCards } from '@/wallet/walletModel'
 import type { ActivityItem, AddState, EntryTarget, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
@@ -133,6 +134,38 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [status])
 
+  /*
+   * One-time upgrade (ADR-020): cards chosen before the server stored them live only in this browser. When
+   * the server starts returning `cardProductId`, send each such card once with the account's current values
+   * (read fresh, so nothing else changes), then drop the browser copy. A failure keeps the copy for next time.
+   */
+  const uploadingCards = useRef(false)
+  useEffect(() => {
+    const list = accounts.data?.accounts
+    if (!list || uploadingCards.current || !serverStoresCards(list)) return
+    const pending = pendingCardUploads(list, walletPreferences)
+    const settled = list.filter((account) => typeof account.cardProductId === 'string' && walletPreferences.byAccountId[String(account.id)])
+    if (pending.length === 0 && settled.length === 0) return
+    uploadingCards.current = true
+    void (async () => {
+      let preferences = walletPreferences
+      for (const account of settled) preferences = clearWalletCardProduct(account.id, preferences).preferences
+      let uploaded = 0
+      for (const { accountId, productId } of pending) {
+        try {
+          const values = await source.loadAccountForEdit(accountId, new AbortController().signal)
+          await source.updateAccount(accountId, values, productId)
+          preferences = clearWalletCardProduct(accountId, preferences).preferences
+          uploaded += 1
+        } catch {
+          // Keep the browser copy; the next visit tries again.
+        }
+      }
+      setWalletPreferences(preferences)
+      if (uploaded > 0) setVersion((v) => v + 1)
+    })()
+  }, [accounts.data, walletPreferences, source])
+
   // After the user picks a different view, move focus to its h1 so keyboard and screen-reader users
   // start at the top of the new screen. Skipped on first load.
   const first = useRef(true)
@@ -235,24 +268,32 @@ function App() {
     setAccountForm({ type: kind === 'credit card' ? 'credit_card' : 'cash', name: '', balance: '', limit: '', owed: '' })
   }
   /*
-   * The chosen card is saved in this browser until the API stores it (ADR-020, docs/design/CODEX_HANDOFF_ADR_020.md).
-   * It is written only after the account save succeeds, against the ID the server reports.
+   * Card choices (ADR-020). A server whose accounts carry `cardProductId` stores them with the account; an
+   * older API refuses the field, so against it the choice stays in this browser, written only after the
+   * account save succeeds and against the ID the server reports.
    */
-  const saveCardChoice = (accountId: number, type: AccountValues['type'], card: CardChoice) => {
+  const storesCards = accounts.data ? serverStoresCards(accounts.data.accounts) : false
+  const keepCardInBrowser = (accountId: number, type: AccountValues['type'], card: CardChoice) => {
     if (card === undefined) return
     const result = card.productId === null
       ? clearWalletCardProduct(accountId, walletPreferences)
       : saveWalletCardProduct(accountId, card.productId, type, walletPreferences)
     if (result.ok) setWalletPreferences(result.preferences)
   }
+  /** Once the server holds the choice, drop the browser copy so it can't override the server later. */
+  const forgetBrowserCard = (accountId: number) => {
+    if (!walletPreferences.byAccountId[String(accountId)]) return
+    const result = clearWalletCardProduct(accountId, walletPreferences)
+    if (result.ok) setWalletPreferences(result.preferences)
+  }
   const saveAccount = async (values: AccountValues, card: CardChoice) => {
     let accountId: number | null
     try {
-      accountId = await source.addAccount(values)
+      accountId = storesCards ? await source.addAccount(values, card?.productId ?? null) : await source.addAccount(values)
     } catch (err) {
       throw describeWriteError(err, 'add-account') // a duplicate name is shown under Name
     }
-    if (accountId !== null) saveCardChoice(accountId, values.type, card)
+    if (accountId !== null && !storesCards) keepCardInBrowser(accountId, values.type, card)
     setVersion((v) => v + 1)
     setStatus({ text: accountSavedMessage(values) })
     setAccountForm(null)
@@ -263,11 +304,13 @@ function App() {
   }
   const updateAccount = async (id: number, values: AccountValues, card: CardChoice) => {
     try {
-      await source.updateAccount(id, values)
+      if (storesCards) await source.updateAccount(id, values, card?.productId) // undefined keeps the stored card
+      else await source.updateAccount(id, values)
     } catch (err) {
       throw describeWriteError(err, 'edit-account')
     }
-    saveCardChoice(id, values.type, card)
+    if (!storesCards) keepCardInBrowser(id, values.type, card)
+    else if (card !== undefined) forgetBrowserCard(id)
     setVersion((v) => v + 1)
     setStatus({ text: accountUpdatedMessage(values) })
     setEditAccountId(null)

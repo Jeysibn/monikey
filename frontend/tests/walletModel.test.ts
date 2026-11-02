@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { MONIKEY_DEFAULT_ARTWORK_ID, MONIKEY_DEFAULT_ARTWORK_PATH } from '../src/wallet/artworkCatalog.ts'
-import { buildWalletGalleryModel, faceFigure, usedShare } from '../src/wallet/walletModel.ts'
+import { buildWalletGalleryModel, faceFigure, pendingCardUploads, serverStoresCards, usedShare } from '../src/wallet/walletModel.ts'
 import type { AccountsSnapshot } from '../src/types.ts'
 
 const snapshot: AccountsSnapshot = {
@@ -184,5 +184,35 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(model.liquid.find((item) => item.accountId === 2)!.faceInk, 'dark')
     assert.equal(model.liquid.find((item) => item.accountId === 3)!.faceInk, 'light')
     assert.equal(model.liquid.find((item) => item.accountId === 1)!.faceInk, 'dark')
+  })
+
+  it('prefers the card the server stores over one kept in the browser (ADR-020)', () => {
+    const served: AccountsSnapshot = {
+      ...snapshot,
+      liquid: snapshot.liquid.map((row) => row.account.id === 2 ? { ...row, account: { ...row.account, cardProductId: 'gotyme-visa-debit' } } : row),
+    }
+    const model = buildWalletGalleryModel(served, { version: 1, byAccountId: { '2': { artworkId: null, productId: 'maribank-debit' } } })
+    assert.equal(model.liquid.find((item) => item.accountId === 2)!.productLabel, 'GoTyme Visa Debit')
+  })
+
+  it('lists browser-only cards to send once the server stores card choices', () => {
+    const accounts = [
+      { id: 2, name: 'Main Savings', type: 'bank' as const, cardProductId: null },
+      { id: 3, name: 'GCash', type: 'ewallet' as const, cardProductId: 'gcash-visa' },
+      { id: 4, name: 'Blue Card', type: 'credit_card' as const, cardProductId: null },
+      { id: 5, name: 'Old API card', type: 'credit_card' as const },
+    ]
+    const preferences = { version: 1 as const, byAccountId: {
+      '2': { artworkId: null, productId: 'maribank-debit' },
+      '3': { artworkId: null, productId: 'gcash-mastercard' },
+      '4': { artworkId: 'concept-bdo-visa-generated' },
+      '5': { artworkId: null, productId: 'bdo-visa-gold' },
+    } }
+    assert.deepEqual(pendingCardUploads(accounts, preferences), [
+      { accountId: 2, productId: 'maribank-debit' },
+      { accountId: 4, productId: 'bdo-visa-classic' },
+    ])
+    assert.equal(serverStoresCards(accounts), true)
+    assert.equal(serverStoresCards([{ id: 5, name: 'Old', type: 'bank' }]), false)
   })
 })

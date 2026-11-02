@@ -16,6 +16,11 @@ export interface AccountInfo {
   id: number
   name: string
   type: AccountType
+  /**
+   * The card chosen for the account (ADR-020), such as "bdo-visa-classic"; null for none. Absent when the
+   * server predates ADR-020, in which case the choice lives in browser storage.
+   */
+  cardProductId?: string | null
 }
 
 /** The mock's stored account: AccountInfo plus the opening values it calculates from. Only the mock source sees these. */

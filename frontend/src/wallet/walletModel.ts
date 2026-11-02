@@ -1,7 +1,7 @@
 import { MONIKEY_DEFAULT_ARTWORK_PATH, resolveWalletArtwork } from './artworkCatalog.ts'
 import { cardProductImage, findCardProduct, findLegacyCardProduct } from './cardProducts.ts'
 import { savedWalletArtworkId, savedWalletProductId, type WalletPreferencesV1 } from './walletPreferences.ts'
-import type { AccountType, AccountsSnapshot } from '../types.ts'
+import type { AccountInfo, AccountType, AccountsSnapshot } from '../types.ts'
 import { formatPeso } from '../lib/money.ts'
 
 export type WalletAmountLabel = 'Balance' | 'Owed' | 'Card credit' | 'Nothing owed'
@@ -28,19 +28,41 @@ export interface WalletGalleryModel {
   cards: WalletCardVM[]
 }
 
+/** True when the server stores card choices (ADR-020): its accounts carry `cardProductId`. */
+export function serverStoresCards(accounts: readonly AccountInfo[]): boolean {
+  return accounts.some((account) => account.cardProductId !== undefined)
+}
+
+/**
+ * The card chosen for an account: the server's value when it has one; otherwise a choice still kept in
+ * this browser (from before ADR-020, or saved against an older API), including old concept IDs.
+ */
+export function accountCardProduct(account: AccountInfo, preferences: WalletPreferencesV1) {
+  if (typeof account.cardProductId === 'string') return findCardProduct(account.cardProductId, account.type)
+  return findCardProduct(savedWalletProductId(preferences, account.id), account.type)
+    ?? findLegacyCardProduct(savedWalletArtworkId(preferences, account.id), account.type)
+}
+
+/** Cards kept only in this browser that a server storing card choices doesn't have yet: send them once. */
+export function pendingCardUploads(accounts: readonly AccountInfo[], preferences: WalletPreferencesV1): { accountId: number; productId: string }[] {
+  return accounts.flatMap((account) => {
+    if (account.cardProductId !== null) return [] // the server has a card, or doesn't store them
+    const product = accountCardProduct(account, preferences)
+    return product ? [{ accountId: account.id, productId: product.id }] : []
+  })
+}
+
 function walletCard(
-  account: { id: number; name: string; type: AccountType },
+  account: AccountInfo,
   preferences: WalletPreferencesV1,
   primaryAmountCentavos: number,
   primaryLabel: WalletAmountLabel,
   availableCreditCentavos: number | null = null,
   creditLimitCentavos: number | null = null,
 ): WalletCardVM {
-  const savedArtworkId = savedWalletArtworkId(preferences, account.id)
-  const product = findCardProduct(savedWalletProductId(preferences, account.id), account.type)
-    ?? findLegacyCardProduct(savedArtworkId, account.type)
+  const product = accountCardProduct(account, preferences)
   // Without a card, an approved issuer artwork (ADR-019) or the neutral MoniKey card.
-  const artwork = product ? null : resolveWalletArtwork(savedArtworkId, account.type)
+  const artwork = product ? null : resolveWalletArtwork(savedWalletArtworkId(preferences, account.id), account.type)
 
   return {
     accountId: account.id,

@@ -200,12 +200,12 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       await write(`${collection}/${target.id}`, 'DELETE', fetcher)
     },
 
-    async addAccount(values: AccountValues) {
-      return createdId(await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values)))
+    async addAccount(values: AccountValues, card?: string | null) {
+      return createdId(await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values, card)))
     },
 
-    async updateAccount(id, values: AccountValues) {
-      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values))
+    async updateAccount(id, values: AccountValues, card?: string | null) {
+      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values, card))
     },
   }
 }

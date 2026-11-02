@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { MONIKEY_DEFAULT_ARTWORK_ID } from '../src/wallet/artworkCatalog.ts'
+import { MARIBANK_CONCEPT_ARTWORK_ID } from '../src/wallet/walletArtworkConcepts.ts'
 import {
   parseWalletPreferences,
   readWalletPreferences,
@@ -70,6 +71,27 @@ describe('wallet preferences', () => {
       byAccountId: { '12': { artworkId: MONIKEY_DEFAULT_ARTWORK_ID } },
     })
     assert.deepEqual(readWalletPreferences(storage), result.preferences)
+  })
+
+  it('persists a local concept for a supported bank account only', () => {
+    const storage = memoryStorage()
+    const result = saveWalletArtworkPreference(
+      2,
+      MARIBANK_CONCEPT_ARTWORK_ID,
+      'bank',
+      { version: 1, byAccountId: {} },
+      storage,
+    )
+
+    assert.equal(result.ok, true)
+    assert.equal(result.preferences.byAccountId['2']?.artworkId, MARIBANK_CONCEPT_ARTWORK_ID)
+    assert.equal(saveWalletArtworkPreference(
+      2,
+      MARIBANK_CONCEPT_ARTWORK_ID,
+      'credit_card',
+      { version: 1, byAccountId: {} },
+      storage,
+    ).ok, false)
   })
 
   it('refuses unknown artwork IDs, invalid account IDs, and failed writes', () => {

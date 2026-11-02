@@ -77,12 +77,12 @@ Landscape phones (height <500px): the bottom bar stays (4 items need only 64px),
 ### Accounts
 | | Phone & tablet | ≥1024 |
 |---|---|---|
-| Layout | One column: *Money you have* then *Money you owe* | Two equal columns (6 + 6), each top-aligned and **not** stretched |
-| Presentation | Cards gallery by default; it uses two columns from 640px when the section has room. **List** toggle restores the readable account rows and credit-card summaries. | Cards gallery by default; each half-width section uses one column until the wider `xl` layout can fit two. **List** toggle restores the readable account rows and credit-card summaries. |
-| Selection | Card is keyboard-selectable; selected account actions are available on the card. Transfer and Add account stay in the header action row. | Same actions; selected account is visually indicated and its existing actions remain available. |
-| Credit cards | Stacked; **Pay card** action fits the selected card | Stacked; **Pay card** action auto width |
+| Layout | One full-width section after the other: *Money you have* then *Money you owe* | Same stacked sections, using the full content width for larger account cards |
+| Presentation | Cards gallery by default; one column below 640px, two columns from 640px. **List** toggle restores the readable account rows and credit-card summaries. | Two columns from 1024px; three columns at 1280px and wider. **List** toggle restores the readable account rows and credit-card summaries. |
+| Details and actions | Activate a card face to open its details dialog. Account name/type appear in that dialog; each card has a 44px top-right three-dot menu for Edit and (credit cards) Pay card. | Same behavior; the selected card is visually indicated. |
+| Credit cards | Show owed-versus-available progress below the card face, plus a text over-limit warning when applicable. | Same behavior. |
 
-The Accounts wallet grid uses two columns at `sm` widths, one at `lg` inside the two-column page, and two again at `xl`. This component-specific `sm` behavior is an exception to the general page breakpoints above. The Overview wallet stack uses a horizontal scroll-snap rail below `md`. At `md` and wider it presents a selected card with explicit Previous/Next controls; adjacent card images are decorative previews. No drag-and-drop or persistent ordering is implemented.
+The Accounts wallet grid uses two columns at `sm` widths and three at `xl`; both account sections use the same full content width so all card faces have matching dimensions at a given viewport. Every card face, including fallback artwork, shows only the current balance or amount owed at bottom-left with no filled label background. Account name and type appear in the card details dialog; credit cards also show owed-versus-available progress below the face. The Overview wallet stack uses a horizontal scroll-snap rail below `md`. At `md` and wider it presents a selected card with explicit Previous/Next controls; adjacent card images are decorative previews. No drag-and-drop or persistent ordering is implemented.
 
 ### Dialogs (Quick Add, Add account, Delete)
 | | Phone | 768+ |

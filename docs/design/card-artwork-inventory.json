@@ -1,0 +1,870 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-11-02",
+  "items": [
+    {
+      "id": "atome-card-black",
+      "issuer": "Atome",
+      "product": "Atome Card",
+      "variant": "Black card design",
+      "card_network": "Mastercard",
+      "card_type": "prepaid",
+      "account_types": [],
+      "official_product_url": "https://www.atome.ph/atome-card",
+      "candidate_image_url": "https://atome-paylater-fe.atomecorp.com/pixporter/379d30db197c954599d304001199960df9cac3e5.png",
+      "image_format": "png",
+      "image_width": 558,
+      "image_height": 784,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official Atome page labels this as Card Black. Product is prepaid with BNPL features; MoniKey account-type mapping needs review. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-page-embedded-external",
+      "artwork_verified": true,
+      "research_download_path": ".artwork-research-downloads/atome-card-black.png",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "png",
+        "content_length": 112226,
+        "note": "Downloaded into git-ignored research storage and visually inspected; redistribution permission pending."
+      }
+    },
+    {
+      "id": "atome-card-pink",
+      "issuer": "Atome",
+      "product": "Atome Card",
+      "variant": "Pink card design",
+      "card_network": "Mastercard",
+      "card_type": "prepaid",
+      "account_types": [],
+      "official_product_url": "https://www.atome.ph/atome-card",
+      "candidate_image_url": "https://atome-paylater-fe.atomecorp.com/pixporter/5b83776e094474986c1b2e63f66de36b0be670ef.png",
+      "image_format": "png",
+      "image_width": 588,
+      "image_height": 804,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official Atome page labels this as Card Pink. Product is prepaid with BNPL features; MoniKey account-type mapping needs review. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-page-embedded-external",
+      "artwork_verified": true,
+      "research_download_path": ".artwork-research-downloads/atome-card-pink.png",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "png",
+        "content_length": 96705,
+        "note": "Downloaded into git-ignored research storage and visually inspected; redistribution permission pending."
+      }
+    },
+    {
+      "id": "atome-card-white",
+      "issuer": "Atome",
+      "product": "Atome Card",
+      "variant": "White card design",
+      "card_network": "Mastercard",
+      "card_type": "prepaid",
+      "account_types": [],
+      "official_product_url": "https://www.atome.ph/atome-card",
+      "candidate_image_url": "https://atome-paylater-fe.atomecorp.com/pixporter/8979090cf8253b720efe7edf85ee339a535f2d08.png",
+      "image_format": "png",
+      "image_width": 588,
+      "image_height": 850,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official Atome page labels this as Card White. Product is prepaid with BNPL features; MoniKey account-type mapping needs review. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-page-embedded-external",
+      "artwork_verified": true,
+      "research_download_path": ".artwork-research-downloads/atome-card-white.png",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "png",
+        "content_length": 159894,
+        "note": "Downloaded into git-ignored research storage and visually inspected; redistribution permission pending."
+      }
+    },
+    {
+      "id": "bdo-visa-classic",
+      "issuer": "BDO",
+      "product": "BDO Visa Classic",
+      "variant": "Current artwork variant not confirmed",
+      "card_network": "Visa",
+      "card_type": "credit",
+      "account_types": [
+        "credit_card"
+      ],
+      "official_product_url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa/classic",
+      "candidate_image_url": "https://www.bdo.com.ph/content/dam/bdounibank/en-ph/cbg-marketing/cards/credit-and-debit/visa/visa-classic/NW-Vert-Visa-Classic-22Sep26..png",
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BDO Visa catalog identifies this product; exact artwork image URL remains unconfirmed."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "failed",
+        "http_status": 403,
+        "image_format": null,
+        "content_length": 567,
+        "note": "No image content type reported (text/html); no image bytes were downloaded."
+      }
+    },
+    {
+      "id": "bdo-visa-gold",
+      "issuer": "BDO",
+      "product": "BDO Visa Gold",
+      "variant": "Current artwork variant not confirmed",
+      "card_network": "Visa",
+      "card_type": "credit",
+      "account_types": [
+        "credit_card"
+      ],
+      "official_product_url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa",
+      "candidate_image_url": "https://www.bdo.com.ph/content/dam/bdounibank/en-ph/cbg-marketing/cards/credit-and-debit/visa/visa-gold/Visa_Gold.png",
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BDO Visa catalog lists Gold; exact current artwork variant and image source remain unconfirmed."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "failed",
+        "http_status": 403,
+        "image_format": null,
+        "content_length": 528,
+        "note": "No image content type reported (text/html); no image bytes were downloaded."
+      }
+    },
+    {
+      "id": "bdo-visa-platinum",
+      "issuer": "BDO",
+      "product": "BDO Visa Platinum",
+      "variant": "Current artwork variant not confirmed",
+      "card_network": "Visa",
+      "card_type": "credit",
+      "account_types": [
+        "credit_card"
+      ],
+      "official_product_url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa",
+      "candidate_image_url": "https://www.bdo.com.ph/content/dam/bdounibank/en-ph/cbg-marketing/cards/credit-and-debit/visa/visa-platinum/VIBRANT_VISA%20PLAT%20(updated%201200x1397).jpg",
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BDO Visa catalog lists Platinum; exact current artwork variant and image source remain unconfirmed."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "failed",
+        "http_status": 403,
+        "image_format": null,
+        "content_length": 586,
+        "note": "No image content type reported (text/html); no image bytes were downloaded."
+      }
+    },
+    {
+      "id": "bdo-visa-signature",
+      "issuer": "BDO",
+      "product": "BDO Visa Signature",
+      "variant": "Current artwork variant not confirmed",
+      "card_network": "Visa",
+      "card_type": "credit",
+      "account_types": [
+        "credit_card"
+      ],
+      "official_product_url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa",
+      "candidate_image_url": "https://www.bdo.com.ph/content/dam/bdounibank/en-ph/cbg-marketing/cards/credit-and-debit/visa/visa-signature/Visa-Signature-Card-430x285-March122025.png",
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BDO Visa catalog lists Signature; exact current artwork variant and image source remain unconfirmed."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "failed",
+        "http_status": 403,
+        "image_format": null,
+        "content_length": 575,
+        "note": "No image content type reported (text/html); no image bytes were downloaded."
+      }
+    },
+    {
+      "id": "bpi-debit-emv-cirrus-gold",
+      "issuer": "BPI",
+      "product": "BPI Debit EMV Cirrus Gold",
+      "variant": "Gold Cirrus version; exact card image linked from official catalog",
+      "card_network": "Cirrus",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.bpi.com.ph/personal/cards/debit-cards",
+      "candidate_image_url": "https://www.bpi.com.ph/content/dam/bau/personal-banking/cards/debit-cards/fixes/content_card_CirrusGold.jpg",
+      "image_format": "jpeg",
+      "image_width": 744,
+      "image_height": 368,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BPI catalog labels this image BPI Debit EMV Cirrus Gold. Redistribution permission is not established."
+      ],
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "jpeg",
+        "content_length": 134116,
+        "note": "Local research copy downloaded; visible cardholder name, expiry, and PAN-like sample data require safety confirmation before any integration."
+      },
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "research_download_path": ".artwork-research-downloads/bpi-debit-emv-cirrus-gold.jpg",
+      "artwork_verified": true
+    },
+    {
+      "id": "bpi-debit-emv-cirrus-red",
+      "issuer": "BPI",
+      "product": "BPI Debit EMV Cirrus Red",
+      "variant": "Red Cirrus version; exact card image linked from official catalog",
+      "card_network": "Cirrus",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.bpi.com.ph/personal/cards/debit-cards",
+      "candidate_image_url": "https://www.bpi.com.ph/content/dam/bau/personal-banking/cards/debit-cards/fixes/content_card_EPS.jpg",
+      "image_format": "jpeg",
+      "image_width": 744,
+      "image_height": 368,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BPI catalog labels this image BPI Debit EMV Cirrus Red. Redistribution permission is not established."
+      ],
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "jpeg",
+        "content_length": 93921,
+        "note": "Local research copy downloaded; visible cardholder name, expiry, and PAN-like sample data require safety confirmation before any integration."
+      },
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "research_download_path": ".artwork-research-downloads/bpi-debit-emv-cirrus-red.jpg",
+      "artwork_verified": true
+    },
+    {
+      "id": "bpi-debit-mastercard",
+      "issuer": "BPI",
+      "product": "BPI Debit Mastercard",
+      "variant": "Product image linked from official debit-card catalog; print variant not confirmed",
+      "card_network": "Mastercard",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.bpi.com.ph/personal/cards/debit-cards",
+      "candidate_image_url": "https://www.bpi.com.ph/content/dam/bau/personal-banking/cards/debit-cards/project-groot/card-bpi-debit-card-mastercard.jpg",
+      "image_format": "jpeg",
+      "image_width": 744,
+      "image_height": 368,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BPI catalog labels this image BPI Debit Mastercard. Redistribution permission is not established."
+      ],
+      "image_source_classification": "official-issuer-cdn",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "jpeg",
+        "content_length": 11931,
+        "note": "Local research copy downloaded; no card number or cardholder details visible. Redistribution permission remains pending."
+      },
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "research_download_path": ".artwork-research-downloads/bpi-debit-mastercard.jpg",
+      "artwork_verified": true
+    },
+    {
+      "id": "bpi-platinum-rewards-mastercard",
+      "issuer": "BPI",
+      "product": "BPI Platinum Rewards Card",
+      "variant": "Current artwork variant not confirmed",
+      "card_network": "Mastercard",
+      "card_type": "credit",
+      "account_types": [
+        "credit_card"
+      ],
+      "official_product_url": "https://www.bpi.com.ph/personal/cards/credit-cards/bpi-platinum-rewards-mastercard",
+      "candidate_image_url": "https://s7ap1.scene7.com/is/image/bpi/hero_xs_Platinum%20Rewards?qlt=85&ts=1697441872861&dpr=off",
+      "image_format": "jpeg",
+      "image_width": 1280,
+      "image_height": 1280,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official BPI product page confirms the product; a variant-specific artwork URL was not identified."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-page-embedded-external",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "jpeg",
+        "content_length": 88873,
+        "note": "Local research copy downloaded from the image embedded by BPI official product page; visible cardholder name requires safety confirmation before integration. Redistribution permission remains pending."
+      },
+      "research_download_path": ".artwork-research-downloads/bpi-platinum-rewards-mastercard.jpg",
+      "artwork_verified": true
+    },
+    {
+      "id": "gcash-klook-travel-card",
+      "issuer": "GCash",
+      "product": "GCash Klook Travel Card",
+      "variant": "Co-branded variant; network/design needs product-page confirmation",
+      "card_network": null,
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://help.gcash.com/hc/en-us/articles/21907534783769-GCash-Card-FAQs",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GCash FAQ describes the co-branded product; an exact image source and current availability were not confirmed."
+      ],
+      "source_check": "failed",
+      "last_checked_on": "2026-11-02"
+    },
+    {
+      "id": "gcash-mastercard-legacy",
+      "issuer": "GCash",
+      "product": "GCash Mastercard",
+      "variant": "Legacy Mastercard; usable through expiry of issued cards",
+      "card_network": "Mastercard",
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://help.gcash.com/hc/en-us/articles/21907534783769-GCash-Card-FAQs",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GCash FAQ says existing Mastercard cards may be used until expiry; new applications move to Visa. The card image is unavailable for review."
+      ],
+      "source_check": "failed",
+      "last_checked_on": "2026-11-02"
+    },
+    {
+      "id": "gcash-visa-card",
+      "issuer": "GCash",
+      "product": "GCash Visa Card",
+      "variant": "Current Visa prepaid design not confirmed",
+      "card_network": "Visa",
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://help.gcash.com/hc/en-us/articles/30286702730265-How-to-order-GCash-Card",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GCash help confirms a prepaid Visa card linked to GCash; automated page request returned HTTP 403, so no image was inspected."
+      ],
+      "source_check": "failed",
+      "last_checked_on": "2026-11-02"
+    },
+    {
+      "id": "gotyme-fifa-pitch-black",
+      "issuer": "GoTyme",
+      "product": "FIFA World Cup 2026 GoTyme Visa Debit Card",
+      "variant": "Limited edition Pitch Black; current availability not confirmed",
+      "card_network": "Visa",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.gotyme.com.ph/stories/visa-gotyme-fifa-world-cup-2026-filipino-fans",
+      "candidate_image_url": "https://d1ef7ke0x2i9g8.cloudfront.net/hong-kong/_regular420/6802120/pitch-black-trophy-gold.webp",
+      "image_format": "webp",
+      "image_width": 420,
+      "image_height": 300,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GoTyme pages confirm this limited-edition card variant by Ross Du. The Beat Asia published a composite image credited to Visa and GoTyme showing the card face; this third-party image is only a low-resolution research reference. Campaign ended in 2026; current card availability is unconfirmed. Permission for reuse is pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "third-party-or-unofficial",
+      "artwork_verified": true,
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "webp",
+        "content_length": 5398,
+        "note": "Third-party publisher image captioned as showing Pitch Black and Trophy Gold cards, courtesy of Visa and GoTyme. Downloaded and visually inspected at 420×300; too small and composite for card-face integration. Redistribution permission pending."
+      },
+      "research_download_path": ".artwork-research-downloads/gotyme-fifa-press-photo.webp"
+    },
+    {
+      "id": "gotyme-fifa-trophy-gold",
+      "issuer": "GoTyme",
+      "product": "FIFA World Cup 2026 GoTyme Visa Debit Card",
+      "variant": "Limited edition Trophy Gold; current availability not confirmed",
+      "card_network": "Visa",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.gotyme.com.ph/stories/visa-gotyme-fifa-world-cup-2026-filipino-fans",
+      "candidate_image_url": "https://d1ef7ke0x2i9g8.cloudfront.net/hong-kong/_regular420/6802120/pitch-black-trophy-gold.webp",
+      "image_format": "webp",
+      "image_width": 420,
+      "image_height": 300,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GoTyme pages confirm this limited-edition card variant by Ross Du. The Beat Asia published a composite image credited to Visa and GoTyme showing the card face; this third-party image is only a low-resolution research reference. Campaign ended in 2026; current card availability is unconfirmed. Permission for reuse is pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "third-party-or-unofficial",
+      "artwork_verified": true,
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "webp",
+        "content_length": 5398,
+        "note": "Third-party publisher image captioned as showing Pitch Black and Trophy Gold cards, courtesy of Visa and GoTyme. Downloaded and visually inspected at 420×300; too small and composite for card-face integration. Redistribution permission pending."
+      },
+      "research_download_path": ".artwork-research-downloads/gotyme-fifa-press-photo.webp"
+    },
+    {
+      "id": "gotyme-visa-debit-classic",
+      "issuer": "GoTyme",
+      "product": "GoTyme Visa Debit Card",
+      "variant": "Classic design shown on official payments page",
+      "card_network": "Visa",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.gotyme.com.ph/payments/",
+      "candidate_image_url": "https://www.gotyme.com.ph/static-assets/images/visa-debit-card-shop.png",
+      "image_format": "png",
+      "image_width": 1002,
+      "image_height": 693,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official GoTyme payments page labels the image as its Visa debit card. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "artwork_verified": true,
+      "research_download_path": ".artwork-research-downloads/gotyme-visa-debit-card.png",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "png",
+        "content_length": 124205,
+        "note": "Downloaded into git-ignored research storage and visually inspected; redistribution permission pending."
+      }
+    },
+    {
+      "id": "maribank-physical-debit-mastercard",
+      "issuer": "MariBank",
+      "product": "MariBank Physical Debit Card",
+      "variant": "New physical design announced September 2025; exact face image not found",
+      "card_network": "Mastercard",
+      "card_type": "debit",
+      "account_types": [
+        "bank"
+      ],
+      "official_product_url": "https://www.maribank.ph/help-center/article/10319",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official MariBank help article confirms the physical card received a new design starting September 2025, but the page did not expose the card-face image. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "not-found",
+      "artwork_verified": false,
+      "image_check": {
+        "status": "not-found",
+        "note": "Official page confirms product, but no exact card artwork image was exposed."
+      }
+    },
+    {
+      "id": "maya-bukad-visa",
+      "issuer": "Maya",
+      "product": "Maya Bukad Card",
+      "variant": "Limited-edition Visa design by Raxenne Maniquiz",
+      "card_network": "Visa",
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://www.maya.ph/bukadcard",
+      "candidate_image_url": "https://www.maya.ph/hubfs/Deals%20Page%202026/09/091026%20-%20BukadCard_Product_KV_Deals%20v2.jpg",
+      "image_format": "jpeg",
+      "image_width": 1025,
+      "image_height": 682,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official Maya page confirms the current Bukad artist card. Download is a promotional image showing the card in a hand, not an isolated card-face asset. Redistribution permission pending."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02",
+      "image_source_classification": "official-issuer-cdn",
+      "artwork_verified": true,
+      "research_download_path": ".artwork-research-downloads/maya-bukad-card-promo.jpg",
+      "image_check": {
+        "status": "accessible",
+        "http_status": 200,
+        "image_format": "jpeg",
+        "content_length": 58691,
+        "note": "Downloaded into git-ignored research storage and visually inspected; redistribution permission pending."
+      }
+    },
+    {
+      "id": "maya-physical-card-mastercard",
+      "issuer": "Maya",
+      "product": "Maya Physical Card",
+      "variant": "Mastercard network; current face design not confirmed",
+      "card_network": "Mastercard",
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://www.maya.ph/maya-updates",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Maya states that new physical Mastercard cards are available; current product-specific art was not isolated from page imagery."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02"
+    },
+    {
+      "id": "maya-physical-card-visa",
+      "issuer": "Maya",
+      "product": "Maya Physical Card",
+      "variant": "Visa network; current face design not confirmed",
+      "card_network": "Visa",
+      "card_type": "prepaid",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://www.maya.ph/maya-updates",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Maya states that new physical Visa cards are available; current product-specific art was not isolated from page imagery."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02"
+    },
+    {
+      "id": "maya-virtual-card",
+      "issuer": "Maya",
+      "product": "Maya Virtual Card",
+      "variant": "Card network is assigned at activation; exact design not confirmed",
+      "card_network": null,
+      "card_type": "virtual",
+      "account_types": [
+        "ewallet"
+      ],
+      "official_product_url": "https://www.maya.ph/pay-maya-card",
+      "candidate_image_url": null,
+      "image_format": null,
+      "image_width": null,
+      "image_height": null,
+      "source_verified": true,
+      "verified_on": "2026-11-02",
+      "permission_status": "pending",
+      "permission_evidence": null,
+      "local_asset_path": null,
+      "catalog_status": "candidate",
+      "notes": [
+        "Official Maya page confirms virtual cards but says card network/design can be assigned; no exact variant image was identified."
+      ],
+      "source_check": "read",
+      "last_checked_on": "2026-11-02"
+    }
+  ],
+  "source_attempts": [
+    {
+      "url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa/classic",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "496 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://www.bdo.com.ph/personal/cards/credit-cards/visa",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "474 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://www.bpi.com.ph/personal/cards/debit-cards",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "40 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://www.bpi.com.ph/personal/cards/credit-cards/bpi-platinum-rewards-mastercard",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "53 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://help.gcash.com/hc/en-us/articles/21907534783769-GCash-Card-FAQs",
+      "status": "failed",
+      "http_status": 403,
+      "checked_on": "2026-11-02",
+      "note": "HTTP 403; access was not retried or bypassed."
+    },
+    {
+      "url": "https://help.gcash.com/hc/en-us/articles/30286702730265-How-to-order-GCash-Card",
+      "status": "failed",
+      "http_status": 403,
+      "checked_on": "2026-11-02",
+      "note": "HTTP 403; access was not retried or bypassed."
+    },
+    {
+      "url": "https://www.maya.ph/maya-updates",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "35 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://www.maya.ph/pay-maya-card",
+      "status": "read",
+      "http_status": 200,
+      "checked_on": "2026-11-02",
+      "note": "79 image references; same-host product links scanned."
+    },
+    {
+      "url": "https://www.atome.ph/atome-card",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Official card page read; labeled Black, Pink, and White variants and embedded three matching card images."
+    },
+    {
+      "url": "https://www.maribank.ph/product/debit-card",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Official debit-card page read; product imagery did not show an isolated card face."
+    },
+    {
+      "url": "https://www.maribank.ph/help-center/article/10319",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Official help page states the physical card received a new design starting September 2025; no card-face asset exposed."
+    },
+    {
+      "url": "https://www.maya.ph/bukadcard",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Current official Bukad card page read; linked official Maya promotion shows the card design."
+    },
+    {
+      "url": "https://www.gotyme.com.ph/payments/",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Official payments page exposes the Visa debit card image."
+    },
+    {
+      "url": "https://www.gotyme.com.ph/stories/visa-gotyme-fifa-world-cup-2026-filipino-fans",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach Jina Reader",
+      "note": "Official story confirms Pitch Black and Trophy Gold editions by Ross Du; page imagery did not expose those card faces."
+    },
+    {
+      "url": "https://bankero.com.ph/new-look-same-perks-bdo-rolls-out-vertical-credit-cards/main-news/",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach web search/Jina Reader",
+      "note": "Third-party Bankero article dated September 25, 2026 reports BDO vertical credit card rollout. The embedded image URL returned HTTP 403; no image downloaded."
+    },
+    {
+      "url": "https://www.reddit.com/r/MariBankPH/comments/1vjf4pu/really_loving_the_new_maribank_debit_card/",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach web search/Jina Reader",
+      "note": "Public user discussion corroborates the updated MariBank card design. User-submitted card photos were excluded from downloads due to personal-card privacy."
+    },
+    {
+      "url": "https://www.reddit.com/r/DigitalbanksPh/comments/1nvzohi/vertical_maribank_card_finally_arrived/",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach web search/Jina Reader",
+      "note": "Public user discussion describes the new MariBank vertical card. User-submitted card photos were excluded from downloads due to personal-card privacy."
+    },
+    {
+      "url": "https://thebeat.asia/manila/venture/money/visa-gotyme-world-cup-raffle",
+      "status": "read",
+      "checked_on": "2026-11-02",
+      "method": "agent-reach web search/Jina Reader",
+      "note": "Third-party feature labels the composite Pitch Black/Trophy Gold card image as courtesy of Visa and GoTyme; the low-resolution file was downloaded for research only."
+    }
+  ]
+}

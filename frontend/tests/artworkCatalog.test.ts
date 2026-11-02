@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import {
@@ -27,7 +27,7 @@ const artworkWith = (overrides: Partial<WalletArtwork>): WalletArtwork => ({
   localAssetPath: '/card-art/example-card.svg',
   status: 'approved',
   verifiedOn: '2026-11-02',
-  permissionEvidence: 'Written permission recorded in the asset manifest.',
+  permissionEvidence: 'docs/design/artwork-permissions/example.json — redistribution permission evidence for this application bundle.',
   ...overrides,
 })
 
@@ -62,11 +62,13 @@ describe('wallet artwork catalog safety', () => {
 
   it('requires source verification and permission evidence before issuer artwork is selectable', () => {
     assert.equal(isSelectableWalletArtwork(artworkWith({ sourcePageUrl: null }), 'credit_card'), false)
+    assert.equal(isSelectableWalletArtwork(artworkWith({ sourcePageUrl: 'https:// not-a-url' }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ verifiedOn: null }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ verifiedOn: '2026-02-30' }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ verifiedOn: '2026-99-99' }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ permissionEvidence: null }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ permissionEvidence: '   ' }), 'credit_card'), false)
+    assert.equal(isSelectableWalletArtwork(artworkWith({ permissionEvidence: 'Permission pending; no redistribution license.' }), 'credit_card'), false)
     assert.equal(isSelectableWalletArtwork(artworkWith({ verifiedOn: '2024-02-29' }), 'credit_card'), true)
     assert.equal(isSelectableWalletArtwork(artworkWith({}), 'credit_card'), true)
   })
@@ -102,6 +104,27 @@ describe('wallet artwork catalog safety', () => {
     assert.equal(candidateArtwork.localAssetPath, null)
     assert.equal(candidateArtwork.permissionEvidence, null)
     assert.equal(defaultArtwork.localAssetPath, MONIKEY_DEFAULT_ARTWORK_PATH)
+  })
+
+  it('keeps catalog IDs unique so a duplicate cannot shadow another product', () => {
+    const ids = WALLET_ARTWORK_CATALOG.map((artwork) => artwork.id)
+    assert.equal(new Set(ids).size, ids.length)
+  })
+
+  it('has a bundled public asset for every approved local catalog entry', () => {
+    const approvedLocalArtwork = WALLET_ARTWORK_CATALOG.filter(
+      (artwork) => artwork.status === 'approved' && artwork.localAssetPath !== null,
+    )
+
+    assert.ok(approvedLocalArtwork.length > 0)
+    for (const artwork of approvedLocalArtwork) {
+      const assetPath = artwork.localAssetPath!
+      assert.equal(
+        existsSync(new URL(`../public/${assetPath.slice(1)}`, import.meta.url)),
+        true,
+        `${artwork.id} points to a missing public asset: ${assetPath}`,
+      )
+    }
   })
 
   it('falls back for missing, retired, candidate, or type-mismatched selections', () => {

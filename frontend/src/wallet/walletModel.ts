@@ -1,4 +1,5 @@
 import { MONIKEY_DEFAULT_ARTWORK_PATH, resolveWalletArtwork } from './artworkCatalog.ts'
+import { resolveWalletArtworkConcept } from './walletArtworkConcepts.ts'
 import { savedWalletArtworkId, type WalletPreferencesV1 } from './walletPreferences.ts'
 import type { AccountType, AccountsSnapshot } from '../types.ts'
 
@@ -11,6 +12,7 @@ export interface WalletCardVM {
   accountType: AccountType
   artworkId: string
   artUrl: string
+  isArtworkConcept: boolean
   primaryAmountCentavos: number
   primaryLabel: WalletAmountLabel
   availableCreditCentavos: number | null
@@ -30,14 +32,17 @@ function walletCard(
   availableCreditCentavos: number | null = null,
   creditLimitCentavos: number | null = null,
 ): WalletCardVM {
-  const artwork = resolveWalletArtwork(savedWalletArtworkId(preferences, account.id), account.type)
+  const artworkId = savedWalletArtworkId(preferences, account.id)
+  const concept = resolveWalletArtworkConcept(artworkId, account.type)
+  const artwork = concept ? null : resolveWalletArtwork(artworkId, account.type)
 
   return {
     accountId: account.id,
     accountName: account.name,
     accountType: account.type,
-    artworkId: artwork.id,
-    artUrl: artwork.localAssetPath ?? MONIKEY_DEFAULT_ARTWORK_PATH,
+    artworkId: concept?.id ?? artwork!.id,
+    artUrl: concept?.localAssetPath ?? artwork!.localAssetPath ?? MONIKEY_DEFAULT_ARTWORK_PATH,
+    isArtworkConcept: concept !== null,
     primaryAmountCentavos,
     primaryLabel,
     availableCreditCentavos,

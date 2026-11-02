@@ -23,8 +23,8 @@ import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
  *   Money you have  - cash, bank and e-wallet balances (ink)
  *   Money you owe   - credit cards: owed amount in the debt colour with the word "owed", a limit track,
  *                     and available credit, which is NOT cash and is never part of "money you have".
- * Below 1024px the sections stack; from 1024px they sit in two equal columns, each top-aligned (they are
- * not stretched to the same height). Balances are "as of today", so there is no month select here.
+ * The two sections stack at every width so each wallet gallery can use the full canvas and keep its
+ * account cards easy to identify. Balances are "as of today", so there is no month select here.
  * Account names and starting values can be edited from their rows; account types stay fixed. Add account opens the shared dialog in App.
  */
 function Bar({ className }: { className: string }) {
@@ -79,6 +79,21 @@ export function AccountsView({
   const loading = rowsLoading || totalsLoading
   // With no accounts yet, Add account is the single primary action and Add transaction is disabled.
   const addAccountVariant = hasAccounts ? 'secondary' : 'default'
+  const moneyHaveHeader = (
+    <>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
+        {totalsLoading ? (
+          <Bar className="h-6 w-28" />
+        ) : summaryFailed ? (
+          <InlineFailure what="the totals" onRetry={summaryRes.retry} focusAfter="#money-you-have-title" live />
+        ) : (
+          <MoneyText wrap centavos={summary.liquidBalance} className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
+        )}
+      </div>
+      <CardDescription>Cash, bank and e-wallet balances</CardDescription>
+    </>
+  )
 
   return (
     <div aria-busy={loading}>
@@ -105,53 +120,17 @@ export function AccountsView({
 
       <WalletViewToggle value={displayMode} onChange={setDisplayMode} />
 
-      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2 lg:items-start">
+      <div className="grid grid-cols-1 gap-4 md:gap-6">
         {/* Money you have */}
-        {accountsFailed ? (
-          <Card role="region" aria-labelledby="money-you-have-title">
-            <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
-            <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
-          </Card>
-        ) : (
-        <Card role="region" aria-labelledby="money-you-have-title">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <CardTitle id="money-you-have-title" tabIndex={-1}>
-              Money you have
-            </CardTitle>
-            {totalsLoading ? (
-              <Bar className="h-6 w-28" />
-            ) : summaryFailed ? (
-              <InlineFailure what="the totals" onRetry={summaryRes.retry} focusAfter="#money-you-have-title" live />
-            ) : (
-              <MoneyText wrap centavos={summary.liquidBalance} className="text-[1.375rem] font-semibold tracking-[-0.015em] md:text-2xl" />
-            )}
-          </div>
-          <CardDescription>Cash, bank and e-wallet balances</CardDescription>
-          {rowsLoading ? (
-            <ul aria-hidden="true">
-              {[0, 1, 2].map((i) => (
-                <li key={i} className="flex min-h-[68px] items-center justify-between gap-4 border-t border-rule py-2.5 first:border-t-0">
-                  <div className="grid gap-2">
-                    <Bar className="h-4 w-32" />
-                    <Bar className="h-3.5 w-20" />
-                  </div>
-                  <Bar className="h-5 w-24" />
-                </li>
-              ))}
-            </ul>
-          ) : rows.length === 0 ? (
-            <EmptyState
-              message="Add your first cash, bank or e-wallet account."
-              action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
-            />
-          ) : (
-            displayMode === 'list' ? (
-              <ul>
-                {rows.map((item) => (
-                  <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
-                ))}
-              </ul>
-            ) : (
+        <section role="region" aria-labelledby="money-you-have-title" className="grid min-w-0 gap-4 md:gap-6">
+          {accountsFailed ? (
+            <Card>
+              <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
+              <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
+            </Card>
+          ) : displayMode === 'cards' && !rowsLoading && rows.length > 0 ? (
+            <>
+              <Card>{moneyHaveHeader}</Card>
               <WalletGrid
                 items={wallet.liquid}
                 selectedAccountId={selectedId}
@@ -159,10 +138,37 @@ export function AccountsView({
                 onEdit={onEditAccount}
                 onPayCard={onPayCard}
               />
-            )
+            </>
+          ) : (
+            <Card>
+              {moneyHaveHeader}
+              {rowsLoading ? (
+                <ul aria-hidden="true">
+                  {[0, 1, 2].map((i) => (
+                    <li key={i} className="flex min-h-[68px] items-center justify-between gap-4 border-t border-rule py-2.5 first:border-t-0">
+                      <div className="grid gap-2">
+                        <Bar className="h-4 w-32" />
+                        <Bar className="h-3.5 w-20" />
+                      </div>
+                      <Bar className="h-5 w-24" />
+                    </li>
+                  ))}
+                </ul>
+              ) : rows.length === 0 ? (
+                <EmptyState
+                  message="Add your first cash, bank or e-wallet account."
+                  action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
+                />
+              ) : (
+                <ul>
+                  {rows.map((item) => (
+                    <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
+                  ))}
+                </ul>
+              )}
+            </Card>
           )}
-        </Card>
-        )}
+        </section>
 
         {/* Money you owe */}
         {accountsFailed ? (

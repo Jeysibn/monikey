@@ -1,4 +1,5 @@
 import type { AccountType } from '../types.ts'
+import { APPROVED_ISSUER_ARTWORK } from './approvedArtwork.generated.ts'
 
 export type ArtworkStatus = 'candidate' | 'verified' | 'approved' | 'rejected' | 'retired'
 export type WalletArtworkKind = 'physical' | 'virtual' | 'brand' | 'fallback'
@@ -60,10 +61,11 @@ const CANDIDATE_ARTWORK: WalletArtwork = {
 /** Static metadata catalog. Candidate entries never make external image requests. */
 export const WALLET_ARTWORK_CATALOG: readonly WalletArtwork[] = [
   MONIKEY_DEFAULT_ARTWORK,
+  ...APPROVED_ISSUER_ARTWORK,
   CANDIDATE_ARTWORK,
 ]
 
-const LOCAL_ARTWORK_PATH = /^\/card-art\/[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?\.(?:svg|png|webp)$/
+const LOCAL_ARTWORK_PATH = /^\/card-art\/[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?\.(?:svg|png|jpe?g|webp)$/
 const VERIFIED_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function isRealVerificationDate(value: string): boolean {
@@ -75,6 +77,18 @@ function isRealVerificationDate(value: string): boolean {
   const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
   const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
   return day >= 1 && day <= daysInMonth[month - 1]!
+}
+
+function isHttpsSourcePage(value: string | null): boolean {
+  if (!value) return false
+  try { return new URL(value).protocol === 'https:' && Boolean(new URL(value).hostname) }
+  catch { return false }
+}
+
+function hasRedistributionEvidence(value: string | null): boolean {
+  return Boolean(value?.trim().length
+    && /redistribut|public distribution|application bundle/i.test(value)
+    && /https:\/\/\S+|(?:^|\s)(?:docs|licenses|assets?)\/[\w./-]+/i.test(value))
 }
 
 /** Accept only simple, root-relative asset paths in the local artwork directory. */
@@ -94,10 +108,10 @@ export function isSelectableWalletArtwork(
   const originalFallback = canonicalFallback
     && artwork.permissionEvidence?.trim().length
   const issuerApprovalEvidence = artwork.kind !== 'fallback'
-    && artwork.sourcePageUrl?.startsWith('https://')
+    && isHttpsSourcePage(artwork.sourcePageUrl)
     && artwork.verifiedOn !== null
     && isRealVerificationDate(artwork.verifiedOn)
-    && artwork.permissionEvidence?.trim().length
+    && hasRedistributionEvidence(artwork.permissionEvidence)
 
   return artwork.status === 'approved'
     && isLocalWalletArtworkPath(artwork.localAssetPath)

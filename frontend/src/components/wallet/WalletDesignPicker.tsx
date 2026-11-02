@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { getSelectableWalletArtworks, MONIKEY_DEFAULT_ARTWORK_ID } from '@/wallet/artworkCatalog'
+import { getSelectableWalletArtworkConcepts } from '@/wallet/walletArtworkConcepts'
 import type { AccountType } from '@/types'
 
 export function WalletDesignPicker({
@@ -22,6 +23,7 @@ export function WalletDesignPicker({
   const [selection, setSelection] = useState(selectedArtworkId)
   const [message, setMessage] = useState('')
   const artworks = getSelectableWalletArtworks(accountType)
+  const concepts = getSelectableWalletArtworkConcepts(accountType)
   const hasIssuerArtwork = artworks.some((artwork) => artwork.kind !== 'fallback')
 
   const save = () => {
@@ -69,6 +71,36 @@ export function WalletDesignPicker({
           </label>
         ))}
       </fieldset>
+
+      {concepts.length > 0 && (
+        <fieldset disabled={disabled} className="m-0 grid gap-2 border-0 border-t border-rule pt-3">
+          <legend className="mb-1 text-sm font-semibold">Generated concepts</legend>
+          <p className="text-sm text-muted-foreground">Local design previews only. These are not official issuer artwork.</p>
+          {concepts.map((concept) => (
+            <label
+              key={concept.id}
+              className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-control border p-2.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring ${selection === concept.id ? 'border-primary bg-primary-soft/40' : 'border-border bg-card'}`}
+            >
+              <input
+                type="radio"
+                name={`wallet-appearance-${accountId}`}
+                value={concept.id}
+                checked={selection === concept.id}
+                onChange={() => {
+                  setSelection(concept.id)
+                  setMessage('')
+                }}
+                className="size-4 shrink-0 accent-primary"
+              />
+              <img src={concept.localAssetPath} alt="" className="h-12 w-[76px] shrink-0 rounded-control object-contain" />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="truncate text-sm font-semibold">{concept.label}</span>
+                <span className="truncate text-xs text-muted-foreground">{concept.description}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
 
       {message && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{message}</p>}
       <Button type="button" variant="secondary" className="w-full" disabled={disabled || selection === savedArtworkId} onClick={save}>

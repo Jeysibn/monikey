@@ -139,9 +139,9 @@ Begin with: one neutral MoniKey fallback for all account types and a **small, re
 - Preserve the screen navigation and header; label page **Accounts** initially to avoid breaking existing expectations. The primary content becomes the wallet gallery; the existing list remains accessible via `Cards | List` view toggle.
 - Preserve the finance summary, but do not copy the reference screenshot's confusing **assets / liabilities** presentation verbatim. Show net position, money you have, and money you owe with existing exact definitions.
 - A wallet card uses aspect ratio **1.586:1** (approximate ID-1 card proportion), corner radius ~16–20px, `object-fit: contain` for the whole design by default, and a predictable background behind any letterboxing. Never crop issuer marks merely to fill a box.
-- The actual product art is the dominant image. Place live balance/debt **below issuer artwork** in a high-contrast caption panel; never cover issuer artwork, printed text, chips, or payment-network marks. The original MoniKey fallback reserves an open area for live account name, type, balance/debt, and available credit on the card face, so the fallback remains useful when no issuer design is cleared for use.
+- The card art is the dominant image. Every card face, including fallback artwork, shows only the live balance/debt in a compact bottom-left label with no filled background; keep the lower-left artwork area clear where possible. Hide the MoniKey account name and type from the gallery tile and show them in the card details dialog opened by clicking the face. Put an upper-right three-dot menu on each tile for the existing Edit and Pay card actions. Credit cards also show owed-versus-available progress below the face and an explicit over-limit warning. Generated concepts remain local previews and must not be represented as approved issuer artwork.
 - Use the existing `MoneyText` formatting; never stringify centavos independently to make a displayed figure.
-- Selection highlights one card and reveals actions appropriate to its **MoniKey account type**, not the printed card network. Clicking the contextual menu does not accidentally trigger selection.
+- Selection highlights one card. The top-right menu exposes actions appropriate to its **MoniKey account type**, not the printed card network; activating the menu must not open the card details dialog.
 - A missing/failed image is replaced by the neutral fallback with a readable account label. Never show a broken image icon.
 - Keep grid and list headings/ordering logically identical. Zero accounts: reuse existing `EmptyState` and Add account action.
 
@@ -306,7 +306,9 @@ const exampleCandidate: WalletArtwork = {
 
 ---
 
-## 7. Implementation sequence and independent PRs
+## 7. Implementation sequence and numbered PR-sized batches
+
+**Terminology:** `Milestone N` refers to a roadmap milestone. `Wallet PR N` below names a numbered implementation batch in this specification; it is not a GitHub PR number and does not by itself indicate that a roadmap milestone was accepted. “Implemented” records that the batch's code checkpoint exists; GitHub review, branch merge, and release status are tracked separately.
 
 ### PR 1 — Contract and safe artwork infrastructure — implemented (`97927f6`)
 
@@ -413,7 +415,7 @@ The feature is done when: the Accounts view can render authentic **approved** ca
 
 ## 10. Current checkpoint and future handoff
 
-PRs 1–4 are implemented on `feat/account-ui-remake`; do not repeat them. Before treating the wallet remake as accepted, complete the outstanding visual/accessibility/device checks in §8 and obtain owner review. Do not add issuer artwork until exact product identity and redistribution rights are documented. PR5 remains deferred; if reconsidered, use explicit Move controls and add drag-and-drop only if it materially improves usability. No merge or deployment is authorized by this record.
+Wallet implementation batches 1–4 are present on `feat/account-ui-remake`; do not repeat them. Their completion does not mean the wallet remake has passed acceptance. Before treating it as accepted, complete the outstanding visual/accessibility/device checks in §8 and obtain owner review. Do not add issuer artwork until exact product identity and redistribution rights are documented. Batch 5 remains deferred; if reconsidered, use explicit Move controls and add drag-and-drop only if it materially improves usability. No deployment is authorized by this record.
 
 ---
 

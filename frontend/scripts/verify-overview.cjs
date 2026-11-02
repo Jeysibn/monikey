@@ -142,6 +142,11 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       else { check(`${W >= 1024 ? "224px sidebar" : "80px rail"} shown, bottom bar hidden`, !m.bottomBar && m.asideW === (W >= 1024 ? 224 : 80), `aside ${m.asideW}px`); eq("exactly one Add transaction button (page header)", await addTransactionButtons(p), 1); }
       eq("one filled primary action visible", await p.evaluate(() => [...document.querySelectorAll("button")].filter(b => b.getBoundingClientRect().width > 0 && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length), 1);
       check("every peso amount is on one line and inside its card", m.bad.length === 0, m.bad.join("; ") || "ok");
+      const traversalOrder = await p.evaluate(() => [...document.querySelectorAll("#net-position-label, #this-month-title, #credit-cards-title, #wallet-stack-title, #recent-activity-title")].map(element => element.id));
+      const expectedTraversalOrder = W >= 1024
+        ? ["net-position-label", "wallet-stack-title", "recent-activity-title", "this-month-title", "credit-cards-title"]
+        : ["net-position-label", "this-month-title", "credit-cards-title", "wallet-stack-title", "recent-activity-title"];
+      check("keyboard and screen-reader section order matches the visible layout", traversalOrder.join() === expectedTraversalOrder.join(), traversalOrder.join(" → "));
       check("touch targets ≥44px high (buttons, selects, nav) below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
       if (W >= 1024) {
         check("hero spans the top; wallet and recent activity share the next row", m.hero.y < m.wallets.y && m.wallets.y === m.recent.y && m.wallets.x < m.recent.x, JSON.stringify({ hero: m.hero, wallets: m.wallets, recent: m.recent }));
@@ -323,7 +328,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       hasMain: !!document.querySelector("main"), lang: document.documentElement.lang, title: document.title,
     }));
     eq("every visible button and select has an accessible name", sem.unnamed, 0);
-    check("each card is a labelled region", sem.regions.join() === "Recent activity,This month,Credit cards,Your accounts", sem.regions.join());
+    check("each card is a labelled region", sem.regions.join() === "Your accounts,Recent activity,This month,Credit cards", sem.regions.join());
     check("credit-limit tracks have text equivalents", sem.tracks.join() === "₱14,250.00 of ₱50,000.00 limit used,₱6,800.00 of ₱30,000.00 limit used", sem.tracks.join(" | "));
     check("no gradients or backdrop blur anywhere", sem.bad === 0);
     check("main landmark, lang and title present", sem.hasMain && sem.lang === "en" && sem.title === "MoniKey", `${sem.lang} / ${sem.title}`);

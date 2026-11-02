@@ -19,8 +19,18 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   const errors = [], external = [];
   const safe = async fn => { try { await fn(); } catch (e) { check("section aborted: " + String(e.message).split("\n")[0].slice(0, 220), false); } };
   /* Opens the app and goes to Accounts through the real navigation. */
-  async function open(width, { query = "", height = 900, stay = false, walletView = "list" } = {}) {
+  async function open(width, { query = "", height = 900, stay = false, walletView = "list", maribankConcept = false, mayaConcept = false, generatedConcepts = false, bdoConcept = false, bdoDebitConcept = false } = {}) {
     const ctx = await browser.newContext({ viewport: { width, height } });
+    if (maribankConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "2": { artworkId: "concept-maribank-generated" } } })));
+    if (mayaConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "4": { artworkId: "concept-maya-visa-platinum-generated" } } })));
+    if (generatedConcepts) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: {
+      "2": { artworkId: "concept-gotyme-visa-generated" },
+      "3": { artworkId: "concept-gcash-visa-debit-generated" },
+      "4": { artworkId: "concept-unionbank-rewards-visa-platinum-generated" },
+      "5": { artworkId: "concept-atome-credit-card-black-generated" },
+    } })));
+    if (bdoConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "5": { artworkId: "concept-bdo-visa-generated" } } })));
+    if (bdoDebitConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "2": { artworkId: "concept-bdo-debit-mastercard-generated" } } })));
     const page = await ctx.newPage();
     page.on("pageerror", e => errors.push(`pageerror@${width}${query}: ${e.message}`));
     page.on("console", m => { if (m.type() === "error" || m.type() === "warning") errors.push(`console.${m.type()}@${width}${query}: ${m.text().slice(0, 140)}`); });
@@ -60,28 +70,113 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const oweCards = p.locator(`${R.owe} ul > li`);
     eq("Cards view keeps the same three liquid accounts", await haveCards.count(), 3);
     eq("Cards view keeps both credit cards", await oweCards.count(), 2);
+    const faceSizes = await p.evaluate(({ have, owe }) => [have, owe].map(selector => {
+      const rect = document.querySelector(`${selector} ul > li button[aria-label^="View details for"]`).parentElement.getBoundingClientRect();
+      return [Math.round(rect.width), Math.round(rect.height)];
+    }), R);
+    check("all card types use the same Maya-sized face", faceSizes[0][0] === faceSizes[1][0] && faceSizes[0][1] === faceSizes[1][1], JSON.stringify(faceSizes));
     const haveCardText = (await p.locator(R.have).innerText()).replace(/\s+/g, " ");
     const oweCardText = (await p.locator(R.owe).innerText()).replace(/\s+/g, " ");
-    check("fallback cards keep full names and current amounts", /Cash on hand.*₱2,350\.00/.test(haveCardText) && /Blue Card.*₱14,250\.00.*₱35,750\.00.*₱50,000\.00/.test(oweCardText));
+    check("account names and types are hidden from gallery tiles", !/Cash on hand|Main Savings|GCash/.test(haveCardText) && !/Blue Card|Everyday Card/.test(oweCardText), `${haveCardText} | ${oweCardText}`);
     const faceText = await p.evaluate(({ have, owe }) => {
       const text = element => element?.innerText.replace(/\s+/g, " ") || "";
       return {
-        cash: text(document.querySelector(`${have} li button[aria-pressed] > div.relative`)),
-        card: text(document.querySelector(`${owe} li button[aria-pressed] > div.relative`)),
+        cash: text(document.querySelector(`${have} li button[aria-label^="View details for"]`)),
+        card: text(document.querySelector(`${owe} li button[aria-label^="View details for"]`)),
       };
     }, R);
-    check("fallback face carries the account name, type and balance", /MONIKEY · CASH.*Cash on hand.*Balance.*₱2,350\.00/.test(faceText.cash), faceText.cash);
-    check("fallback credit-card face carries owed, available credit and limit", /Blue Card.*Owed.*₱14,250\.00.*Available credit.*₱35,750\.00.*Limit.*₱50,000\.00/.test(faceText.card), faceText.card);
-    const firstSelect = haveCards.nth(0).locator('button[aria-pressed="true"]');
-    check("one account is visibly selected and exposes its existing edit action", await firstSelect.count() === 1 && await haveCards.nth(0).getByRole("button", { name: "Edit account, Cash on hand" }).isVisible());
-    await haveCards.nth(1).locator('button[aria-pressed="false"]').click();
-    check("keyboard-operable account selection moves the selected state", await haveCards.nth(1).locator('button[aria-pressed="true"]').count() === 1 && await haveCards.nth(0).locator('button[aria-pressed="true"]').count() === 0);
-    await oweCards.nth(0).locator('button[aria-pressed="false"]').click();
-    check("credit card selection exposes its existing Pay card action", await p.getByRole("button", { name: "Pay card, Blue Card" }).isEnabled());
+    check("fallback face shows only the balance, not the account name", /Balance.*₱2,350\.00/i.test(faceText.cash) && !/Cash on hand/.test(faceText.cash), faceText.cash);
+    check("fallback credit-card face shows only amount owed, not account or credit details", /Owed.*₱14,250\.00/i.test(faceText.card) && !/Blue Card|Available|Limit/.test(faceText.card), faceText.card);
+    check("credit card tiles show owed versus available progression", await oweCards.nth(0).getByRole("img", { name: /₱14,250\.00 owed, ₱35,750\.00 available/ }).count() === 1);
+    check("credit card tiles distinguish available credit at zero", /Available[\s\S]*₱35,750\.00/.test(await oweCards.nth(0).innerText()));
+    const menu = haveCards.nth(0).locator('summary[aria-label="Card actions for Cash on hand"]');
+    await menu.click();
+    check("three-dot card menu retains the existing edit action", await haveCards.nth(0).getByRole("button", { name: "Edit account" }).isVisible());
+    await p.keyboard.press("Escape");
+    const detailButton = haveCards.nth(1).getByRole("button", { name: /View details for Main Savings/ });
+    await detailButton.click();
+    const details = p.getByRole("dialog");
+    check("clicking a card opens full account details", /Main Savings/.test(await details.innerText()) && /Bank account/.test(await details.innerText()) && /₱48,725\.50/.test(await details.innerText()));
+    await p.keyboard.press("Escape");
+    check("Escape closes details and restores focus to the card", await detailButton.evaluate(el => document.activeElement === el));
+    await oweCards.nth(0).locator('summary[aria-label="Card actions for Blue Card"]').click();
+    check("credit card menu retains its existing Pay card action", await p.getByRole("button", { name: "Pay card" }).isEnabled());
     await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "List" }).click();
     const listed = (await p.locator(R.have).innerText()).replace(/\s+/g, " ");
     check("List returns to the existing account rows without changing amounts", /Main Savings.*₱48,725\.50/.test(listed) && /GCash.*₱3,120\.75/.test(listed));
     await p.context().close();
+  });
+
+  group = "Maya Visa Platinum concept on a credit card";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", mayaConcept: true });
+    const blueCard = p.locator(`${R.owe} ul > li`).nth(0);
+    const face = blueCard.getByRole("button", { name: /View details for Blue Card/ });
+    const faceText = (await face.innerText()).replace(/\s+/g, " ");
+    check("Maya card face shows only the owed amount, not the account name", /Owed ₱14,250\.00/i.test(faceText) && !/Blue Card|Available|Limit/.test(faceText), faceText);
+    const dimensions = await face.locator("xpath=..").locator("img").evaluate(img => ({ complete: img.complete, width: img.naturalWidth, height: img.naturalHeight }));
+    check("generated Maya asset loads without cropping the card frame", dimensions.complete && dimensions.width >= 1000 && dimensions.height >= 600, JSON.stringify(dimensions));
+    check("generated-art label and account name stay out of the card tile", !/Generated concept artwork|Blue Card|Credit card/.test(await blueCard.innerText()));
+    await face.click();
+    const dialog = p.getByRole("dialog");
+    check("Maya card details show name, type, available credit and limit", /Blue Card/.test(await dialog.innerText()) && /Credit card/.test(await dialog.innerText()) && /₱35,750\.00/.test(await dialog.innerText()) && /₱50,000\.00/.test(await dialog.innerText()));
+    await p.keyboard.press("Escape");
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-maya-card-face.png"), fullPage: true });
+    await p.context().close();
+  });
+
+  group = "Concept account details on the card face";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", maribankConcept: true });
+    const mainSavings = p.locator(`${R.have} ul > li`).nth(1);
+    const face = mainSavings.getByRole("button", { name: /View details for Main Savings/ });
+    const faceText = (await face.innerText()).replace(/\s+/g, " ");
+    check("MariBank card face shows the balance at bottom-left without the account name", /Balance ₱48,725\.50/i.test(faceText) && !/Main Savings/.test(faceText), faceText);
+    check("account name, type, and generated-art label are hidden from the tile", !/Main Savings|Bank account|Generated concept artwork/.test(await mainSavings.innerText()));
+    await face.click();
+    check("MariBank details appear in the popup", /Main Savings/.test(await p.getByRole("dialog").innerText()) && /Bank account/.test(await p.getByRole("dialog").innerText()) && /₱48,725\.50/.test(await p.getByRole("dialog").innerText()));
+    await p.keyboard.press("Escape");
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-maribank-card-face.png"), fullPage: true });
+    await p.context().close();
+  });
+
+  group = "Generated bank and credit-card concepts";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", generatedConcepts: true });
+    const checks = [
+      { section: R.have, index: 1, name: "Main Savings", amount: "₱48,725.50", src: "/card-art/concepts/gotyme-visa-concept.png" },
+      { section: R.have, index: 2, name: "GCash", amount: "₱3,120.75", src: "/card-art/concepts/gcash-visa-debit-concept.png" },
+      { section: R.owe, index: 0, name: "Blue Card", amount: "₱14,250.00", src: "/card-art/concepts/unionbank-rewards-visa-platinum-concept.png" },
+      { section: R.owe, index: 1, name: "Everyday Card", amount: "₱6,800.00", src: "/card-art/concepts/atome-credit-card-black-concept.png" },
+    ];
+    for (const item of checks) {
+      const account = p.locator(`${item.section} ul > li`).nth(item.index);
+      const face = account.getByRole("button", { name: new RegExp(`View details for ${item.name}`) });
+      const img = face.locator("xpath=..").locator("img");
+      const dimensions = await img.evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+      check(`${item.name} uses its local generated concept`, dimensions.src === item.src && dimensions.complete && dimensions.width >= 1000 && dimensions.height >= 600, JSON.stringify(dimensions));
+      const faceText = (await face.innerText()).replace(/\s+/g, " ");
+      check(`${item.name} face keeps the current amount visible without its account name`, faceText.includes(item.amount) && !faceText.includes(item.name), faceText);
+      check(`${item.name} hides name and generated-art label from the gallery tile`, !new RegExp(`${item.name}|Generated concept artwork`).test(await account.innerText()));
+    }
+    const values = await p.evaluate(() => [...document.querySelectorAll('[aria-labelledby="money-you-have-title"] li, [aria-labelledby="money-you-owe-title"] li')].map(item => item.innerText.replace(/\s+/g, " ")));
+    check("concept selection preserves account amounts and credit details", /₱48,725\.50/.test(values[1]) && /₱3,120\.75/.test(values[2]) && /₱14,250\.00/.test(values[3]) && /₱35,750\.00/.test(values[3]) && /₱6,800\.00/.test(values[4]) && /₱23,200\.00/.test(values[4]), values.join(" | "));
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-generated-concepts.png"), fullPage: true });
+    await p.context().close();
+
+    const bdo = await open(1280, { walletView: "cards", bdoConcept: true });
+    const everyday = bdo.locator(`${R.owe} ul > li`).nth(1);
+    const bdoImage = await everyday.getByRole("button", { name: /View details for Everyday Card/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+    check("Everyday Card can use the local BDO concept and preserves its balance", bdoImage.src === "/card-art/concepts/bdo-visa-concept.png" && bdoImage.complete && bdoImage.width >= 1000 && /₱6,800\.00/.test(await everyday.innerText()), JSON.stringify(bdoImage));
+    if (SHOTS) await bdo.screenshot({ path: path.join(SHOTS, "accounts-bdo-concept.png"), fullPage: true });
+    await bdo.context().close();
+
+    const debit = await open(1280, { walletView: "cards", bdoDebitConcept: true });
+    const main = debit.locator(`${R.have} ul > li`).nth(1);
+    const debitImage = await main.getByRole("button", { name: /View details for Main Savings/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+    check("Main Savings can use the local BDO debit concept and preserves its balance", debitImage.src === "/card-art/concepts/bdo-debit-mastercard-concept.png" && debitImage.complete && debitImage.width >= 1000 && /₱48,725\.50/.test(await main.innerText()), JSON.stringify(debitImage));
+    if (SHOTS) await debit.screenshot({ path: path.join(SHOTS, "accounts-bdo-debit-concept.png"), fullPage: true });
+    await debit.context().close();
   });
 
   /* ------------------------------------------------ values */
@@ -140,7 +235,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   for (const W of [360, 375, 768, 1280]) {
     group = `Accounts layout ${W}px`;
     await safe(async () => {
-      const p = await open(W, { height: W >= 768 ? 900 : 800 });
+      const p = await open(W, { height: W >= 768 ? 900 : 800, walletView: "cards" });
       const m = await p.evaluate(() => {
         const vis = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none"; };
         const rect = e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top + scrollY), w: Math.round(r.width), h: Math.round(r.height), r: Math.round(r.right) }; };
@@ -150,7 +245,9 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
         const addAcct = [...document.querySelectorAll("button")].filter(b => /^Add account$/.test(b.textContent.trim()) && vis(b)).map(rect);
         const bad = []; document.querySelectorAll("main li *, main section *, main [role=region] *").forEach(e => { if (!vis(e) || e.children.length || !/₱/.test(e.textContent)) return; const cs = getComputedStyle(e), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3, r = e.getBoundingClientRect(), box = e.closest("[class*=rounded-card]").getBoundingClientRect(); if (e.tagName === "SPAN" || e.tagName === "DIV") { if (r.height > lh * 1.6 && /^₱|^−₱/.test(e.textContent.trim()) && e.textContent.trim().length < 16) bad.push("wraps: " + e.textContent.trim()); if (r.right > box.right + 0.5) bad.push("overflows: " + e.textContent.trim()); } });
         const small = [...document.querySelectorAll("main button, nav button")].filter(e => vis(e) && e.getBoundingClientRect().height < 43.5).map(e => e.textContent.trim().slice(0, 16));
-        return { sw: document.documentElement.scrollWidth, iw: innerWidth, have, owe, h1, addAcct, bad, small, mainRight: Math.round(document.querySelector("main > div").getBoundingClientRect().right), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width), primaries: [...document.querySelectorAll("button")].filter(b => vis(b) && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length };
+        const mainSavings = document.querySelector('[aria-labelledby="money-you-have-title"] ul > li:nth-child(2)');
+        const mainSavingsArt = mainSavings?.querySelector('button[aria-label^="View details for"]')?.parentElement;
+        return { sw: document.documentElement.scrollWidth, iw: innerWidth, have, owe, h1, addAcct, bad, small, mainRight: Math.round(document.querySelector("main > div").getBoundingClientRect().right), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width), artW: mainSavingsArt ? Math.round(mainSavingsArt.getBoundingClientRect().width) : 0, primaries: [...document.querySelectorAll("button")].filter(b => vis(b) && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length };
       });
       check("no horizontal overflow", m.sw <= m.iw, `scrollWidth ${m.sw} / viewport ${m.iw}`);
       eq("exactly one visible 'Add account' button (no duplicate)", m.addAcct.length, 1);
@@ -164,13 +261,8 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
       eq("one filled primary action visible", m.primaries, 1);
       check("peso amounts stay on one line and inside their card", m.bad.length === 0, m.bad.join("; ") || "ok");
       check("touch targets ≥44px high below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
-      if (W >= 1024) {
-        const cols = (m.mainW - 24) / 2;
-        check(`two equal columns of ${Math.round(cols)}px, both starting at the same top`, Math.abs(m.have.w - cols) <= 1 && Math.abs(m.owe.w - cols) <= 1 && m.have.y === m.owe.y && m.have.x < m.owe.x, JSON.stringify({ have: m.have, owe: m.owe, mainW: m.mainW }));
-        check("columns are NOT stretched to the same height (intentionally unequal)", m.have.h !== m.owe.h, `have ${m.have.h}px vs owe section ${m.owe.h}px`);
-      } else {
-        check("sections stack: Money you have above Money you owe, both full width", m.have.y < m.owe.y && Math.abs(m.have.w - m.mainW) <= 1 && Math.abs(m.owe.w - m.mainW) <= 1, JSON.stringify({ have: m.have, owe: m.owe, mainW: m.mainW }));
-      }
+      check("sections stack full width: Money you have above Money you owe", m.have.y < m.owe.y && Math.abs(m.have.w - m.mainW) <= 1 && Math.abs(m.owe.w - m.mainW) <= 1, JSON.stringify({ have: m.have, owe: m.owe, mainW: m.mainW }));
+      check("Main Savings card face uses the wider gallery size", m.artW >= (W >= 1280 ? 275 : W >= 768 ? 250 : 250), `artwork width ${m.artW}px at ${W}px viewport`);
       if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `accounts-${W}.png`), fullPage: true });
       await p.context().close();
     });
@@ -195,6 +287,25 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     check("over limit: 'No credit available' and 'Over your limit'", /Everyday Card ₱36,800\.00 owed No credit available Limit ₱30,000\.00 · Over your limit/.test(f.oweText), f.oweText.slice(f.oweText.indexOf("Everyday")).slice(0, 200));
     check("over limit: the track is full (100%)", await p.locator(`${R.owe} [role=img] > div`).nth(1).evaluate(e => e.style.width) === "100%");
     check("over limit: Pay card is still enabled (there is debt to pay)", await p.getByRole("button", { name: "Pay card, Everyday Card" }).isEnabled());
+    await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "Cards" }).click();
+    const everydayCard = p.locator(`${R.owe} ul > li`).nth(1);
+    const everydayFaceButton = everydayCard.getByRole("button", { name: /View details for Everyday Card/ });
+    const everydayFace = everydayFaceButton;
+    let everydayFaceText = (await everydayFace.innerText()).replace(/\s+/g, " ");
+    let everydayCardText = (await everydayCard.innerText()).replace(/\s+/g, " ");
+    check("over-limit face shows only the owed amount", /Owed ₱36,800\.00/i.test(everydayFaceText) && !/Available|Limit|Over your limit/.test(everydayFaceText), everydayFaceText);
+    check("available credit progression and over-limit warning appear below the face", /Owed[\s\S]*₱36,800\.00[\s\S]*Available[\s\S]*No credit[\s\S]*Over your limit/.test(everydayCardText), everydayCardText);
+    await everydayCard.locator('summary[aria-label="Card actions for Everyday Card"]').click();
+    await everydayCard.getByRole("button", { name: "Edit account" }).click();
+    await p.locator("#aa-owed").waitFor();
+    await p.locator("#aa-owed").fill("30000.00");
+    await p.getByRole("button", { name: "Save changes" }).click();
+    await p.waitForFunction(() => document.querySelector("#aa-owed") === null);
+    await p.waitForTimeout(150);
+    everydayFaceText = (await everydayFace.innerText()).replace(/\s+/g, " ");
+    everydayCardText = (await everydayCard.innerText()).replace(/\s+/g, " ");
+    check("zero available credit amount stays on the card face", /Owed ₱30,000\.00/i.test(everydayFaceText) && !/Available|Limit/.test(everydayFaceText), everydayFaceText);
+    check("zero available credit is shown in the progression without an over-limit warning", /Available[\s\S]*No credit/.test(everydayCardText) && !/Over your limit/.test(everydayCardText), everydayCardText);
     await p.context().close();
     p = await open(1280, { query: "?demo=negative" }); f = await read(p);
     check("negative: GCash shows −₱879.25 with a 'Below zero' flag", /^GCash E-wallet Below zero −₱879\.25$/.test(f.rows[2]), f.rows[2]);

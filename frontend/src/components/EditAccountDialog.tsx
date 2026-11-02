@@ -8,8 +8,9 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import type { DataSource } from '@/dataSource'
 import type { AccountValues } from '@/lib/accountForm'
 import type { LedgerSnapshot } from '@/types'
-import { resolveWalletArtwork } from '@/wallet/artworkCatalog'
 import { savedWalletArtworkId, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
+import { resolveWalletArtworkConcept } from '@/wallet/walletArtworkConcepts'
+import { resolveWalletArtwork } from '@/wallet/artworkCatalog'
 
 type LoadState =
   | { id: number; status: 'loading' }
@@ -88,10 +89,11 @@ export function EditAccountDialog({
             appearance={{
               accountId: current.id,
               accountType: current.values.type,
-              selectedArtworkId: resolveWalletArtwork(
-                savedWalletArtworkId(walletPreferences, current.id),
-                current.values.type,
-              ).id,
+              selectedArtworkId: (() => {
+                const savedId = savedWalletArtworkId(walletPreferences, current.id)
+                if (savedId && resolveWalletArtworkConcept(savedId, current.values.type)) return savedId
+                return resolveWalletArtwork(savedId, current.values.type).id
+              })(),
               savedArtworkId: savedWalletArtworkId(walletPreferences, current.id),
               onSave: (artworkId) => onSaveAppearance(current.id, current.values.type, artworkId),
             }}

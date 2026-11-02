@@ -15,7 +15,7 @@ export function WalletGrid({
   onPayCard: (cardId: number) => void
 }) {
   return (
-    <ul className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+    <ul className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => (
         <WalletCard
           key={`${item.accountId}:${item.artUrl}`}
@@ -24,6 +24,7 @@ export function WalletGrid({
           onSelect={onSelect}
           onEdit={onEdit}
           onPayCard={onPayCard}
+          variant="accounts"
         />
       ))}
     </ul>

@@ -1,5 +1,6 @@
 import type { AccountType } from '../types.ts'
 import { resolveWalletArtwork } from './artworkCatalog.ts'
+import { resolveWalletArtworkConcept } from './walletArtworkConcepts.ts'
 
 export const WALLET_PREFERENCES_STORAGE_KEY = 'monikey.walletPreferences'
 
@@ -73,7 +74,7 @@ export function savedWalletArtworkId(preferences: WalletPreferencesV1, accountId
   return preferences.byAccountId[String(accountId)]?.artworkId ?? null
 }
 
-/** Save only a currently approved, type-matched catalog ID. No finance API is involved. */
+/** Save an approved artwork or an explicitly labeled local concept. No finance API is involved. */
 export function saveWalletArtworkPreference(
   accountId: number,
   artworkId: string,
@@ -86,7 +87,9 @@ export function saveWalletArtworkPreference(
     return { ok: false, preferences: current }
   }
 
-  if (resolveWalletArtwork(artworkId, accountType).id !== artworkId) {
+  const approvedArtwork = resolveWalletArtwork(artworkId, accountType).id === artworkId
+  const localConcept = resolveWalletArtworkConcept(artworkId, accountType) !== null
+  if (!approvedArtwork && !localConcept) {
     return { ok: false, preferences: current }
   }
 

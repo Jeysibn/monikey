@@ -35,7 +35,8 @@ For the production-like local stack, copy `.env.example` to `.env`, replace the 
 | `src/wire.ts` | Runtime checks and exact decimal-string/domain mapping for API payloads |
 | `src/index.css` | Design tokens, self-hosted Manrope `@font-face`, `@theme inline` |
 | `tests/` | Accounting, forms, resource behavior, HTTP routes, and wire-mapping unit tests (`npm test`) |
-| `scripts/verify-overview.cjs`, `scripts/verify-accounts.cjs` | Browser checks (need a local Chromium + playwright-core; see the script headers) |
+| `scripts/browser-runtime.cjs` | Shared Playwright Core and Chromium lookup for the browser verification scripts |
+| `scripts/verify-overview.cjs`, `scripts/verify-accounts.cjs` | Browser checks; resolve a project-local or cached Playwright Core and matching Chromium. Set `PW_CORE` or `CHROME_BIN` to override either path. |
 | `public/fonts/` | Manrope WOFF2 and its OFL licence; no CDN |
 | `components.json` | shadcn/ui configuration |
 

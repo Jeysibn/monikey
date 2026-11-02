@@ -6,9 +6,7 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const PW = process.env.PW_CORE || path.join(os.homedir(), ".agent-reach/tools/node/lib/node_modules/@playwright/cli/node_modules/playwright-core");
-const { chromium } = require(PW);
-const CHROME = process.env.CHROME_BIN || fs.readdirSync(path.join(os.homedir(), ".cache/ms-playwright")).filter(d => d.startsWith("chromium-")).sort().reverse().map(d => path.join(os.homedir(), ".cache/ms-playwright", d, "chrome-linux64/chrome")).find(p => fs.existsSync(p));
+const { chromium, executablePath: CHROME } = require("./browser-runtime.cjs");
 const BASE = process.env.BASE_URL || "http://localhost:4173/";
 const SHOTS = process.env.SHOTS_DIR || "";
 

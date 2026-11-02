@@ -2,7 +2,7 @@
 
 **Version:** 1.4 (ADR-021 Kakeibo metadata added)
 **Date:** 2026-11-02
-**Status:** Requirements and technical direction agreed. ADR-021 accepts staged Kakeibo metadata integration; PR A covers architecture and database foundation only. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M9 local Compose behavior and M11 health, persistence, ingress, logical restore, and image rollback were checked; see [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for current evidence and limits. This design does not claim off-cluster backup recovery or public deployment readiness.
+**Status:** Requirements and technical direction agreed. ADR-021 accepts staged Kakeibo metadata integration; PR A provides the architecture and database foundation, and PR B implements the backend API on top of migration 005. Frontend integration remains a later milestone. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M9 local Compose behavior and M11 health, persistence, ingress, logical restore, and image rollback were checked; see [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for current evidence and limits. This design does not claim off-cluster backup recovery or public deployment readiness.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -377,10 +377,10 @@ Neither planning nor review endpoints may mutate financial tables.
 | GET | `/api/accounts/{id}` | Read current_balance/current_debt and credit_limit for the account edit form (ADR-018) |
 | PUT | `/api/accounts/{id}` | Set name/current_balance/current_debt/credit_limit; account type is immutable (ADR-018) |
 | GET | `/api/categories?type=expense` | Seeded categories; optional type filter |
-| PUT | `/api/categories/{id}/default-kakeibo-envelope` | Future ADR-021 contract: set or clear a suggestion on an expense category only |
+| PATCH | `/api/categories/{id}/default-kakeibo-envelope` | Set or clear a suggested envelope on an expense category only |
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
-| POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note |
-| PUT | `/api/transactions/{id}` | Replace transaction's editable fields |
+| POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note, optional nullable `kakeibo_envelope` |
+| PUT | `/api/transactions/{id}` | Replace editable fields; omitted envelope preserves it for old clients, explicit `null` clears it |
 | DELETE | `/api/transactions/{id}` | Delete transaction; 204 on success |
 | GET | `/api/credit-card-payments?month=2026-10&limit=50` | Card payment history |
 | POST | `/api/credit-card-payments` | Create payment from liquid account to card |
@@ -391,17 +391,21 @@ Neither planning nor review endpoints may mutate financial tables.
 | PUT | `/api/account-transfers/{id}` | Edit a transfer |
 | DELETE | `/api/account-transfers/{id}` | Delete a transfer; 204 on success |
 | GET | `/api/summary?month=2026-10` | Liquid balance, card debt, net position, month income/expense |
-| GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Future contract: read/upsert optional monthly plan and dashboard; missing plan is `null` |
-| GET | `/api/kakeibo/months/{YYYY-MM}/report` | Future contract: ledger-derived income and expense actuals, envelope totals, unclassified amount and plan variance |
-| PUT | `/api/kakeibo/months/{YYYY-MM}/review` | Future contract: save bounded reflection, optional declared savings and closeout snapshot |
-| GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Future contract: Monday-based ledger summary and one weekly reflection per Monday |
+| GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Read or upsert an optional monthly plan and dashboard; missing plan is `null` |
+| GET | `/api/kakeibo/months/{YYYY-MM}/report` | Ledger-derived income and expense actuals, envelope totals, unclassified amount and plan variance |
+| PUT | `/api/kakeibo/months/{YYYY-MM}/review` | Save bounded reflection, optional declared savings and server-generated closeout snapshot |
+| GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Monday-based ledger summary and one weekly reflection per Monday |
 
-Future transaction request/read shapes include optional nullable
-`kakeibo_envelope`. Old create requests may omit it and save unclassified; old
-updates that omit it preserve the stored value, while explicit `null` clears
-it. Income must always have `NULL`. Category reads include optional
-`default_kakeibo_envelope`; only expense categories may set one. PR A records
-these contracts but does not implement API routes.
+Transaction request/read shapes include optional nullable `kakeibo_envelope`.
+Old create requests may omit it and save unclassified; old updates that omit it
+preserve the stored value, while explicit `null` clears it. Income must always
+have `NULL`. Category reads include `default_kakeibo_envelope`; only expense
+categories may set one. Money request values are decimal strings, validated as
+nonnegative where planning fields require it; money response values are decimal
+strings computed by PostgreSQL/Python `Decimal`. Weekly path dates must be
+Mondays. Review snapshots are computed from the server's current ledger report;
+clients cannot submit snapshot totals. Planning and review writes affect only
+Kakeibo metadata tables.
 
 Example input:
 

@@ -67,4 +67,33 @@ private homelab deployment. For another existing database, take and verify a
 backup, apply the migration, then deploy this API version; the API does not run
 migrations automatically.
 
+## Kakeibo API (ADR-021)
+
+Kakeibo routes require migration `database/005_kakeibo.sql`; the API does not
+apply it automatically. On existing databases, follow the verified backup and
+restore rehearsal requirements in [`../database/README.md`](../database/README.md)
+before migration or release. Plans and reflections write only to the two
+Kakeibo metadata tables.
+
+- `GET`/`PUT /api/kakeibo/months/{YYYY-MM}` reads or saves a plan. An unsaved
+  month is returned as `plan: null`. `GET .../report` returns ledger actuals,
+  four envelope totals, unclassified expense totals, and plan arithmetic.
+- `PUT /api/kakeibo/months/{YYYY-MM}/review` saves bounded written answers,
+  optional self-declared savings, and a server-generated snapshot of report
+  totals. It does not accept client-supplied totals.
+- `GET`/`PUT /api/kakeibo/weeks/{YYYY-MM-DD}` reads the inclusive Monday–Sunday
+  summary and upserts its reflection. The path date must be a Monday.
+- `PATCH /api/categories/{id}/default-kakeibo-envelope` sets or clears an
+  expense category's suggested envelope. It never changes existing
+  transactions.
+- Expense transaction create/read/update shapes carry nullable
+  `kakeibo_envelope`. Older creates may omit it and remain unclassified; older
+  updates that omit it preserve the current classification. Explicit `null`
+  clears it. Income cannot have an envelope.
+
+All money uses decimal strings in JSON. Reports sum only expense transactions
+for envelope spending: card purchases count once, while card payments and
+liquid-account transfers do not count. Historical NULL classifications remain
+visible as unclassified and included in total expenses.
+
 The routes and response shapes are described in the [TLD API contract](../docs/architecture/TLD.md#6-api-contract-version-1-api-prefix).

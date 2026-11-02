@@ -102,14 +102,15 @@ NULL envelope appears in the separate unclassified amount, included in total
 expenses. A category default is only a suggestion; changing it never changes
 transaction classifications.
 
-At closeout, the API will store a snapshot object containing decimal-string
+At closeout, the API stores a snapshot object containing decimal-string
 `actual_income`, `total_expenses`, `unclassified`, and an `envelopes` object
 with `needs`, `wants`, `culture`, and `unexpected` totals. The snapshot records
 the report used for the reflection; later ledger edits do not rewrite it. The
 API compares it with current report totals and surfaces a changed-actuals
-indicator. Snapshot shape validation belongs in the API.
+indicator. The API validates and generates the snapshot; clients cannot submit
+report totals as a snapshot.
 
-Future API contracts (for PR B; migration 005 does not implement endpoints):
+API contracts implemented in PR B (migration 005 itself does not implement endpoints):
 
 - Extend transaction read/create/update JSON with optional
   `kakeibo_envelope` (`needs`, `wants`, `culture`, `unexpected`, or `null`). An
@@ -117,7 +118,7 @@ Future API contracts (for PR B; migration 005 does not implement endpoints):
   old client preserves the stored value; explicit `null` clears it. Income must
   have NULL. Include `default_kakeibo_envelope` in category reads; a category
   default can be set or cleared only for an expense category. Proposed
-  `PUT /api/categories/{id}/default-kakeibo-envelope` body:
+  `PATCH /api/categories/{id}/default-kakeibo-envelope` body:
   `{"default_kakeibo_envelope":"needs"}` or `null` to clear it.
 - `GET /api/kakeibo/months/{YYYY-MM}` returns the saved plan or explicit
   `plan: null` plus the dashboard. `PUT` upserts `planned_income`,
@@ -128,7 +129,8 @@ Future API contracts (for PR B; migration 005 does not implement endpoints):
   and savings target/declaration fields.
   `PUT /api/kakeibo/months/{YYYY-MM}/review` accepts bounded review answers
   and optional `actual_saved_declared`; the server computes and stores the
-  snapshot from its current report rather than accepting client totals.
+  snapshot from its current report rather than accepting client totals. The
+  report flags when current actuals differ from the closeout snapshot.
 - `GET`/`PUT /api/kakeibo/weeks/{YYYY-MM-DD}` returns the ledger summary and
   upserts `surprise_note`, `worthwhile_note`, and `next_week_intention`; the
   path date must be Monday.

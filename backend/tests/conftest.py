@@ -17,5 +17,6 @@ def empty_financial_records() -> None:
     """Keep each test independent while preserving the seeded categories."""
     with open_connection() as connection:
         connection.execute(
-            "TRUNCATE credit_card_payments, transactions, accounts RESTART IDENTITY CASCADE"
+            "TRUNCATE kakeibo_weekly_reviews, kakeibo_month_plans, credit_card_payments, transactions, accounts RESTART IDENTITY CASCADE"
         )
+        connection.execute("UPDATE categories SET default_kakeibo_envelope = NULL")

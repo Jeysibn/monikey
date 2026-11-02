@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
 
 import psycopg
+from psycopg.types.json import Jsonb
 from fastapi import FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -21,6 +22,7 @@ logger = logging.getLogger("monikey.api")
 
 AccountType = Literal["cash", "bank", "ewallet", "credit_card"]
 CategoryType = Literal["income", "expense"]
+KakeiboEnvelope = Literal["needs", "wants", "culture", "unexpected"]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
@@ -71,6 +73,9 @@ PositiveMoney = Annotated[Money, Field(gt=0)]
 CalendarDate = Annotated[date, BeforeValidator(parse_calendar_date)]
 AccountName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 Note = Annotated[str | None, BeforeValidator(normalize_note)]
+NonnegativeMoney = Annotated[Money, Field(ge=0)]
+MonthIntention = Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=240)]
+ReviewText = Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=1000)]
 
 
 def parse_card_product_id(value: object) -> str | None:
@@ -103,6 +108,7 @@ class TransactionInput(InputModel):
     amount: PositiveMoney
     transaction_date: CalendarDate
     note: Note = None
+    kakeibo_envelope: KakeiboEnvelope | None = None
 
 
 class AccountUpdateInput(InputModel):
@@ -128,6 +134,38 @@ class TransferInput(InputModel):
     amount: PositiveMoney
     transfer_date: CalendarDate
     note: Note = None
+
+
+class CategoryEnvelopeInput(InputModel):
+    default_kakeibo_envelope: KakeiboEnvelope | None
+
+
+class KakeiboMonthPlanInput(InputModel):
+    planned_income: NonnegativeMoney
+    allocated_starting_funds: NonnegativeMoney
+    savings_target: NonnegativeMoney
+    prior_period_debt_reserve: NonnegativeMoney
+    needs_limit: NonnegativeMoney
+    wants_limit: NonnegativeMoney
+    culture_limit: NonnegativeMoney
+    unexpected_limit: NonnegativeMoney
+    monthly_intention: MonthIntention = None
+
+
+class KakeiboMonthReviewInput(InputModel):
+    actual_saved_declared: NonnegativeMoney | None = None
+    review_available: ReviewText = None
+    review_savings: ReviewText = None
+    review_change: ReviewText = None
+    review_appreciated: ReviewText = None
+    review_surprise: ReviewText = None
+    review_lesson: ReviewText = None
+
+
+class KakeiboWeekReviewInput(InputModel):
+    surprise_note: ReviewText = None
+    worthwhile_note: ReviewText = None
+    next_week_intention: ReviewText = None
 
 
 class ApiProblem(Exception):
@@ -242,6 +280,153 @@ def month_bounds(month: str) -> tuple[date, date]:
     return first_day, next_month
 
 
+def week_bounds(week_start_value: str) -> tuple[date, date, date]:
+    try:
+        week_start = parse_calendar_date(week_start_value)
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_field", str(error), "week_start") from None
+    if week_start.weekday() != 0:
+        raise ApiProblem(422, "invalid_field", "Week start must be a Monday.", "week_start")
+    try:
+        week_end = week_start + timedelta(days=6)
+        end_exclusive = week_start + timedelta(days=7)
+    except OverflowError:
+        raise ApiProblem(422, "invalid_field", "Week is outside the supported date range.", "week_start") from None
+    return week_start, week_end, end_exclusive
+
+
+def get_kakeibo_plan(connection: psycopg.Connection, month_start: date) -> dict[str, object] | None:
+    return connection.execute(
+        "SELECT * FROM kakeibo_month_plans WHERE month = %s",
+        (month_start,),
+    ).fetchone()
+
+
+def kakeibo_plan_response(row: dict[str, object] | None) -> dict[str, object] | None:
+    if row is None:
+        return None
+    money_fields = (
+        "planned_income",
+        "allocated_starting_funds",
+        "savings_target",
+        "prior_period_debt_reserve",
+        "needs_limit",
+        "wants_limit",
+        "culture_limit",
+        "unexpected_limit",
+    )
+    response: dict[str, object] = {
+        "month": row["month"].isoformat(),
+        "monthly_intention": row["monthly_intention"],
+        "actual_saved_declared": (
+            None if row["actual_saved_declared"] is None else format_money(row["actual_saved_declared"])
+        ),
+        "review_available": row["review_available"],
+        "review_savings": row["review_savings"],
+        "review_change": row["review_change"],
+        "review_appreciated": row["review_appreciated"],
+        "review_surprise": row["review_surprise"],
+        "review_lesson": row["review_lesson"],
+        "reviewed_at": None if row["reviewed_at"] is None else format_timestamp(row["reviewed_at"]),
+        "review_actuals_snapshot": row["review_actuals_snapshot"],
+        "created_at": format_timestamp(row["created_at"]),
+        "updated_at": format_timestamp(row["updated_at"]),
+    }
+    response.update({field: format_money(row[field]) for field in money_fields})
+    return response
+
+
+def kakeibo_actuals(connection: psycopg.Connection, start_date: date, end_date: date) -> dict[str, Decimal]:
+    row = connection.execute(
+        """
+        SELECT
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'income'), 0) AS actual_income,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense'), 0) AS total_expenses,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'needs'), 0) AS needs,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'wants'), 0) AS wants,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'culture'), 0) AS culture,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+          COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope IS NULL), 0) AS unclassified
+        FROM transactions AS t
+        JOIN categories AS c ON c.id = t.category_id
+        WHERE t.transaction_date >= %s AND t.transaction_date < %s
+        """,
+        (start_date, end_date),
+    ).fetchone()
+    return {key: Decimal(value) for key, value in row.items()}
+
+
+def kakeibo_month_response(
+    connection: psycopg.Connection,
+    month: str,
+) -> dict[str, object]:
+    start_date, end_date = month_bounds(month)
+    plan = get_kakeibo_plan(connection, start_date)
+    actuals = kakeibo_actuals(connection, start_date, end_date)
+    plan_json = kakeibo_plan_response(plan)
+
+    envelope_report: dict[str, dict[str, str | None]] = {}
+    available_to_allocate: Decimal | None = None
+    unallocated: Decimal | None = None
+    if plan is not None:
+        available_to_allocate = (
+            Decimal(plan["planned_income"])
+            + Decimal(plan["allocated_starting_funds"])
+            - Decimal(plan["savings_target"])
+            - Decimal(plan["prior_period_debt_reserve"])
+        )
+        total_limits = Decimal("0.00")
+        for envelope in ("needs", "wants", "culture", "unexpected"):
+            limit = Decimal(plan[f"{envelope}_limit"])
+            total_limits += limit
+            spent = actuals[envelope]
+            envelope_report[envelope] = {
+                "limit": format_money(limit),
+                "actual_spent": format_money(spent),
+                "remaining": format_money(limit - spent),
+            }
+        unallocated = available_to_allocate - total_limits
+    else:
+        for envelope in ("needs", "wants", "culture", "unexpected"):
+            envelope_report[envelope] = {
+                "limit": None,
+                "actual_spent": format_money(actuals[envelope]),
+                "remaining": None,
+            }
+
+    current_snapshot = {
+        "actual_income": format_money(actuals["actual_income"]),
+        "total_expenses": format_money(actuals["total_expenses"]),
+        "unclassified": format_money(actuals["unclassified"]),
+        "envelopes": {
+            envelope: format_money(actuals[envelope])
+            for envelope in ("needs", "wants", "culture", "unexpected")
+        },
+    }
+    reviewed_at = None if plan is None else plan["reviewed_at"]
+    saved_snapshot = None if plan is None else plan["review_actuals_snapshot"]
+    actuals_changed = bool(reviewed_at and saved_snapshot != current_snapshot)
+
+    return {
+        "month": month,
+        "plan": plan_json,
+        "planned_income": None if plan is None else format_money(plan["planned_income"]),
+        "actual_income": format_money(actuals["actual_income"]),
+        "available_to_allocate": None if available_to_allocate is None else format_money(available_to_allocate),
+        "unallocated": None if unallocated is None else format_money(unallocated),
+        "envelopes": envelope_report,
+        "unclassified_expenses": format_money(actuals["unclassified"]),
+        "total_expenses": format_money(actuals["total_expenses"]),
+        "savings_target": None if plan is None else format_money(plan["savings_target"]),
+        "actual_saved_declared": (
+            None if plan is None or plan["actual_saved_declared"] is None
+            else format_money(plan["actual_saved_declared"])
+        ),
+        "reviewed_at": None if reviewed_at is None else format_timestamp(reviewed_at),
+        "actuals_changed_since_review": actuals_changed,
+    }
+
+
 def account_positions_sql() -> str:
     """Return each account's computed position without joining two one-to-many tables."""
     return """
@@ -352,6 +537,7 @@ def validate_transaction_references(
     connection: psycopg.Connection,
     values: TransactionInput,
     expected_category_type: str | None = None,
+    kakeibo_envelope: KakeiboEnvelope | None = None,
 ) -> None:
     row = connection.execute(
         """
@@ -368,6 +554,8 @@ def validate_transaction_references(
         raise ApiProblem(400, "invalid_field", "Choose an existing category.", "category_id")
     if expected_category_type is not None and row["category_type"] != expected_category_type:
         raise ApiProblem(400, "invalid_account_type_combination", "Keep the transaction's income or expense category type when editing.", "category_id")
+    if kakeibo_envelope is not None and row["category_type"] != "expense":
+        raise ApiProblem(422, "invalid_field", "Income transactions cannot have a Kakeibo envelope.", "kakeibo_envelope")
     if row["account_type"] == "credit_card" and row["category_type"] != "expense":
         raise ApiProblem(400, "invalid_account_type_combination", "Credit-card accounts can only be used for expenses.", "category_id")
 
@@ -418,6 +606,7 @@ def transaction_response(row: dict[str, object]) -> dict[str, object]:
         "amount": format_money(row["amount"]),
         "transaction_date": row["transaction_date"].isoformat(),
         "note": row["note"],
+        "kakeibo_envelope": row["kakeibo_envelope"],
         "created_at": format_timestamp(row["created_at"]),
     }
 
@@ -449,7 +638,7 @@ def transfer_response(row: dict[str, object]) -> dict[str, object]:
 def get_transaction(connection: psycopg.Connection, record_id: int) -> dict[str, object]:
     row = connection.execute(
         """
-        SELECT id, account_id, category_id, amount, transaction_date, note, created_at
+        SELECT id, account_id, category_id, amount, transaction_date, note, kakeibo_envelope, created_at
         FROM transactions
         WHERE id = %s
         """,
@@ -597,7 +786,7 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
 
 @app.get("/api/categories")
 def list_categories(category_type: CategoryType | None = Query(default=None, alias="type")) -> list[dict[str, object]]:
-    query = "SELECT id, name, type FROM categories"
+    query = "SELECT id, name, type, default_kakeibo_envelope FROM categories"
     parameters: tuple[object, ...] = ()
     if category_type is not None:
         query += " WHERE type = %s"
@@ -608,6 +797,32 @@ def list_categories(category_type: CategoryType | None = Query(default=None, ali
     return rows
 
 
+@app.patch("/api/categories/{category_id}/default-kakeibo-envelope")
+def update_category_envelope_default(
+    values: CategoryEnvelopeInput,
+    category_id: Annotated[int, Path(gt=0)],
+) -> dict[str, object]:
+    with open_connection() as connection:
+        category = connection.execute(
+            "SELECT id, name, type FROM categories WHERE id = %s",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise ApiProblem(404, "not_found", "Category not found.")
+        if category["type"] != "expense" and values.default_kakeibo_envelope is not None:
+            raise ApiProblem(422, "invalid_field", "Only expense categories can have a Kakeibo default.", "default_kakeibo_envelope")
+        row = connection.execute(
+            """
+            UPDATE categories
+            SET default_kakeibo_envelope = %s
+            WHERE id = %s
+            RETURNING id, name, type, default_kakeibo_envelope
+            """,
+            (values.default_kakeibo_envelope, category_id),
+        ).fetchone()
+    return row
+
+
 @app.get("/api/transactions")
 def list_transactions(
     month: str,
@@ -616,7 +831,7 @@ def list_transactions(
 ) -> list[dict[str, object]]:
     start_date, end_date = month_bounds(month)
     query = """
-        SELECT t.id, t.account_id, t.category_id, t.amount, t.transaction_date, t.note, t.created_at
+        SELECT t.id, t.account_id, t.category_id, t.amount, t.transaction_date, t.note, t.kakeibo_envelope, t.created_at
         FROM transactions AS t
         WHERE t.transaction_date >= %s AND t.transaction_date < %s
     """
@@ -634,14 +849,14 @@ def list_transactions(
 @app.post("/api/transactions", status_code=201)
 def create_transaction(values: TransactionInput) -> dict[str, object]:
     with open_connection() as connection:
-        validate_transaction_references(connection, values)
+        validate_transaction_references(connection, values, kakeibo_envelope=values.kakeibo_envelope)
         row = connection.execute(
             """
-            INSERT INTO transactions (account_id, category_id, amount, transaction_date, note)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, account_id, category_id, amount, transaction_date, note, created_at
+            INSERT INTO transactions (account_id, category_id, amount, transaction_date, note, kakeibo_envelope)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, account_id, category_id, amount, transaction_date, note, kakeibo_envelope, created_at
             """,
-            (values.account_id, values.category_id, values.amount, values.transaction_date, values.note),
+            (values.account_id, values.category_id, values.amount, values.transaction_date, values.note, values.kakeibo_envelope),
         ).fetchone()
     return transaction_response(row)
 
@@ -654,7 +869,7 @@ def replace_transaction(
     with open_connection() as connection:
         existing = connection.execute(
             """
-            SELECT c.type AS category_type
+            SELECT c.type AS category_type, t.kakeibo_envelope
             FROM transactions AS t
             JOIN categories AS c ON c.id = t.category_id
             WHERE t.id = %s
@@ -663,15 +878,26 @@ def replace_transaction(
         ).fetchone()
         if existing is None:
             raise ApiProblem(404, "not_found", "Transaction not found.")
-        validate_transaction_references(connection, values, existing["category_type"])
+        envelope = (
+            values.kakeibo_envelope
+            if "kakeibo_envelope" in values.model_fields_set
+            else existing["kakeibo_envelope"]
+        )
+        validate_transaction_references(
+            connection,
+            values,
+            existing["category_type"],
+            envelope,
+        )
         row = connection.execute(
             """
             UPDATE transactions
-            SET account_id = %s, category_id = %s, amount = %s, transaction_date = %s, note = %s
+            SET account_id = %s, category_id = %s, amount = %s, transaction_date = %s, note = %s,
+                kakeibo_envelope = %s
             WHERE id = %s
-            RETURNING id, account_id, category_id, amount, transaction_date, note, created_at
+            RETURNING id, account_id, category_id, amount, transaction_date, note, kakeibo_envelope, created_at
             """,
-            (values.account_id, values.category_id, values.amount, values.transaction_date, values.note, record_id),
+            (values.account_id, values.category_id, values.amount, values.transaction_date, values.note, envelope, record_id),
         ).fetchone()
         if row is None:
             raise ApiProblem(404, "not_found", "Transaction not found.")
@@ -864,3 +1090,170 @@ def get_summary(month: str) -> dict[str, str]:
         "month_income": format_money(totals["month_income"]),
         "month_expenses": format_money(totals["month_expenses"]),
     }
+
+
+@app.get("/api/kakeibo/months/{month}")
+def get_kakeibo_month(month: str) -> dict[str, object]:
+    with open_connection() as connection:
+        return kakeibo_month_response(connection, month)
+
+
+@app.put("/api/kakeibo/months/{month}")
+def save_kakeibo_month(month: str, values: KakeiboMonthPlanInput) -> dict[str, object]:
+    start_date, _end_date = month_bounds(month)
+    with open_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO kakeibo_month_plans (
+              month, planned_income, allocated_starting_funds, savings_target,
+              prior_period_debt_reserve, needs_limit, wants_limit, culture_limit,
+              unexpected_limit, monthly_intention
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (month) DO UPDATE SET
+              planned_income = EXCLUDED.planned_income,
+              allocated_starting_funds = EXCLUDED.allocated_starting_funds,
+              savings_target = EXCLUDED.savings_target,
+              prior_period_debt_reserve = EXCLUDED.prior_period_debt_reserve,
+              needs_limit = EXCLUDED.needs_limit,
+              wants_limit = EXCLUDED.wants_limit,
+              culture_limit = EXCLUDED.culture_limit,
+              unexpected_limit = EXCLUDED.unexpected_limit,
+              monthly_intention = EXCLUDED.monthly_intention,
+              updated_at = NOW()
+            """,
+            (
+                start_date,
+                values.planned_income,
+                values.allocated_starting_funds,
+                values.savings_target,
+                values.prior_period_debt_reserve,
+                values.needs_limit,
+                values.wants_limit,
+                values.culture_limit,
+                values.unexpected_limit,
+                values.monthly_intention,
+            ),
+        )
+        return kakeibo_month_response(connection, month)
+
+
+@app.get("/api/kakeibo/months/{month}/report")
+def get_kakeibo_month_report(month: str) -> dict[str, object]:
+    with open_connection() as connection:
+        return kakeibo_month_response(connection, month)
+
+
+@app.put("/api/kakeibo/months/{month}/review")
+def save_kakeibo_month_review(month: str, values: KakeiboMonthReviewInput) -> dict[str, object]:
+    start_date, end_date = month_bounds(month)
+    with open_connection() as connection:
+        actuals = kakeibo_actuals(connection, start_date, end_date)
+        snapshot = {
+            "actual_income": format_money(actuals["actual_income"]),
+            "total_expenses": format_money(actuals["total_expenses"]),
+            "unclassified": format_money(actuals["unclassified"]),
+            "envelopes": {
+                envelope: format_money(actuals[envelope])
+                for envelope in ("needs", "wants", "culture", "unexpected")
+            },
+        }
+        connection.execute(
+            """
+            INSERT INTO kakeibo_month_plans (
+              month, actual_saved_declared, review_available, review_savings,
+              review_change, review_appreciated, review_surprise, review_lesson,
+              reviewed_at, review_actuals_snapshot
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            ON CONFLICT (month) DO UPDATE SET
+              actual_saved_declared = EXCLUDED.actual_saved_declared,
+              review_available = EXCLUDED.review_available,
+              review_savings = EXCLUDED.review_savings,
+              review_change = EXCLUDED.review_change,
+              review_appreciated = EXCLUDED.review_appreciated,
+              review_surprise = EXCLUDED.review_surprise,
+              review_lesson = EXCLUDED.review_lesson,
+              reviewed_at = NOW(),
+              review_actuals_snapshot = EXCLUDED.review_actuals_snapshot,
+              updated_at = NOW()
+            """,
+            (
+                start_date,
+                values.actual_saved_declared,
+                values.review_available,
+                values.review_savings,
+                values.review_change,
+                values.review_appreciated,
+                values.review_surprise,
+                values.review_lesson,
+                Jsonb(snapshot),
+            ),
+        )
+        return kakeibo_month_response(connection, month)
+
+
+def kakeibo_week_response(
+    connection: psycopg.Connection,
+    week_start: date,
+    week_end: date,
+    end_exclusive: date,
+) -> dict[str, object]:
+    actuals = kakeibo_actuals(connection, week_start, end_exclusive)
+    review = connection.execute(
+        """
+        SELECT week_start, surprise_note, worthwhile_note, next_week_intention,
+               created_at, updated_at
+        FROM kakeibo_weekly_reviews
+        WHERE week_start = %s
+        """,
+        (week_start,),
+    ).fetchone()
+    review_response = None
+    if review is not None:
+        review_response = {
+            "surprise_note": review["surprise_note"],
+            "worthwhile_note": review["worthwhile_note"],
+            "next_week_intention": review["next_week_intention"],
+            "created_at": format_timestamp(review["created_at"]),
+            "updated_at": format_timestamp(review["updated_at"]),
+        }
+    return {
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "spending_by_envelope": {
+            envelope: format_money(actuals[envelope])
+            for envelope in ("needs", "wants", "culture", "unexpected")
+        },
+        "unclassified_expenses": format_money(actuals["unclassified"]),
+        "total_expenses": format_money(actuals["total_expenses"]),
+        "review": review_response,
+    }
+
+
+@app.get("/api/kakeibo/weeks/{week_start}")
+def get_kakeibo_week(week_start: str) -> dict[str, object]:
+    start_date, end_date, end_exclusive = week_bounds(week_start)
+    with open_connection() as connection:
+        return kakeibo_week_response(connection, start_date, end_date, end_exclusive)
+
+
+@app.put("/api/kakeibo/weeks/{week_start}")
+def save_kakeibo_week(week_start: str, values: KakeiboWeekReviewInput) -> dict[str, object]:
+    start_date, end_date, end_exclusive = week_bounds(week_start)
+    with open_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO kakeibo_weekly_reviews (
+              week_start, surprise_note, worthwhile_note, next_week_intention
+            )
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (week_start) DO UPDATE SET
+              surprise_note = EXCLUDED.surprise_note,
+              worthwhile_note = EXCLUDED.worthwhile_note,
+              next_week_intention = EXCLUDED.next_week_intention,
+              updated_at = NOW()
+            """,
+            (start_date, values.surprise_note, values.worthwhile_note, values.next_week_intention),
+        )
+        return kakeibo_week_response(connection, start_date, end_date, end_exclusive)

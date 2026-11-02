@@ -6,6 +6,7 @@ import { InlineNotice } from '@/components/InlineNotice'
 import { MoneyText } from '@/components/MoneyText'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { monthLabel } from '@/lib/finance'
+import { planIsPlaceholder } from '@/lib/kakeibo'
 import { formatPeso } from '@/lib/money'
 import type { KakeiboMonth } from '@/types'
 
@@ -57,13 +58,24 @@ export function PlanSummary({ report }: { report: KakeiboMonth }) {
     </section>
   )
 
-  if (!plan || report.availableToAllocate === null || report.unallocated === null) {
+  // Saving a reflection for a month without a plan leaves a stored plan of ₱0.00 amounts (see planIsPlaceholder).
+  const placeholder = planIsPlaceholder(report)
+  if (!plan || placeholder || report.availableToAllocate === null || report.unallocated === null) {
     return (
       <Card role="region" aria-labelledby="kakeibo-plan-title" className="min-w-0">
-        <CardTitle id="kakeibo-plan-title" tabIndex={-1}>No plan for {label} yet</CardTitle>
+        <CardTitle id="kakeibo-plan-title" tabIndex={-1}>{placeholder ? `No plan amounts for ${label}` : `No plan for ${label} yet`}</CardTitle>
         <CardDescription>
-          A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
-          Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
+          {placeholder ? (
+            <>
+              Every plan amount for this month is ₱0.00. Use <span className="font-semibold text-foreground">Create plan</span> to set
+              what you expect to earn, set aside, and spend.
+            </>
+          ) : (
+            <>
+              A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
+              Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
+            </>
+          )}
         </CardDescription>
         {recorded}
       </Card>

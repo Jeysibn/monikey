@@ -219,7 +219,9 @@ describe('wire contract', () => {
     assert.equal(fromWireField('needs_limit'), 'needsLimit')
     assert.equal(fromWireField('planned_income'), 'plannedIncome')
     assert.equal(fromWireField('kakeibo_envelope'), 'envelope')
-    assert.equal(fromWireField('review_lesson'), undefined)
+    assert.equal(fromWireField('review_lesson'), 'lesson')
+    assert.equal(fromWireField('next_week_intention'), 'nextWeek')
+    assert.equal(fromWireField('review_actuals_snapshot'), undefined) // never a form field
   })
 })
 

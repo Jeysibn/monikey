@@ -1,4 +1,18 @@
-import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, KakeiboMonth, KakeiboPlan, KakeiboPlanValues } from './types.ts'
+import type {
+  AccountsSnapshot,
+  ActivityPage,
+  Category,
+  EntryTarget,
+  EntryValues,
+  FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboMonth,
+  KakeiboPlan,
+  KakeiboPlanValues,
+  KakeiboReviewValues,
+  KakeiboWeek,
+  KakeiboWeekNotes,
+} from './types.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 
 /*
@@ -41,6 +55,20 @@ export interface DataSource {
   loadKakeiboPlan(month: string, signal: AbortSignal): Promise<KakeiboPlan | null>
   /** Create or replace the month's plan. */
   saveKakeiboPlan(month: string, values: KakeiboPlanValues): Promise<void>
+  /**
+   * Save the month-end reflection. The server replaces every answer and takes a fresh snapshot of the month's
+   * ledger totals; the browser never sends totals. On a month with no plan the server also stores the plan
+   * amounts at ₱0.00.
+   */
+  saveKakeiboReview(month: string, values: KakeiboReviewValues): Promise<void>
+  /** One Monday-to-Sunday week ("YYYY-MM-DD", a Monday): its totals and notes. */
+  loadKakeiboWeek(weekStart: string, signal: AbortSignal): Promise<KakeiboWeek>
+  /** Replace the week's three notes (all three are always sent; a blank note is saved as empty). */
+  saveKakeiboWeek(weekStart: string, notes: KakeiboWeekNotes): Promise<void>
+  /** Set or clear (null) one expense's envelope, and nothing else about it. Refused for income. */
+  classifyExpense(transactionId: number, envelope: KakeiboEnvelope | null): Promise<void>
+  /** Set or clear an expense category's suggested envelope. Saved expenses keep their envelopes. */
+  setCategoryEnvelope(categoryId: number, envelope: KakeiboEnvelope | null): Promise<void>
 }
 
 /**

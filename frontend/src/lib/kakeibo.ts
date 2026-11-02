@@ -1,4 +1,15 @@
-import type { Category, Centavos, KakeiboEnvelope, KakeiboEnvelopeReport, KakeiboPlan, KakeiboPlanValues } from '../types.ts'
+import type {
+  Category,
+  Centavos,
+  KakeiboEnvelope,
+  KakeiboEnvelopeReport,
+  KakeiboMonth,
+  KakeiboPlan,
+  KakeiboPlanValues,
+  KakeiboReview,
+  KakeiboReviewValues,
+  KakeiboWeekNotes,
+} from '../types.ts'
 import { parseMoney } from './entryForm.ts'
 import { amountText } from './money.ts'
 
@@ -139,4 +150,128 @@ export function envelopeProgress(report: KakeiboEnvelopeReport): { state: Envelo
   if (report.spent > report.limit) return { state: 'over', percent: 100 }
   if (report.spent === report.limit) return { state: 'at-limit', percent: 100 }
   return { state: 'within', percent }
+}
+
+/* ---------- Weeks (Monday to Sunday, as the server counts them) ---------- */
+
+/*
+ * Calendar arithmetic on "YYYY-MM-DD" strings in UTC, so a time zone or a daylight-saving change can never
+ * move a date. A week belongs to no single month: the week of Monday 27 October 2025 ends on Sunday 2 November.
+ */
+const toUtc = (date: string): Date => new Date(`${date}T00:00:00Z`)
+const fromUtc = (d: Date): string => d.toISOString().slice(0, 10)
+
+export function addDays(date: string, days: number): string {
+  const d = toUtc(date)
+  d.setUTCDate(d.getUTCDate() + days)
+  return fromUtc(d)
+}
+
+/** The Monday on or before `date`. */
+export function mondayOf(date: string): string {
+  const day = toUtc(date).getUTCDay() // 0 = Sunday … 6 = Saturday
+  return addDays(date, day === 0 ? -6 : 1 - day)
+}
+
+export const isMonday = (date: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(date) && fromUtc(toUtc(date)) === date && toUtc(date).getUTCDay() === 1
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const shortDate = (date: string, withYear: boolean) => {
+  const [y, m, d] = date.split('-').map(Number)
+  return `${SHORT_MONTHS[m - 1]} ${d}${withYear ? `, ${y}` : ''}`
+}
+
+/** "Oct 27 – Nov 2, 2025"; both years when the week crosses into a new year ("Dec 29, 2025 – Jan 4, 2026"). */
+export function weekLabel(weekStart: string): string {
+  const end = addDays(weekStart, 6)
+  const sameYear = weekStart.slice(0, 4) === end.slice(0, 4)
+  return `${shortDate(weekStart, !sameYear)} – ${shortDate(end, true)}`
+}
+
+/**
+ * The weeks that touch a month (newest first), ending with the week that contains `today`: future weeks are
+ * not offered. Each is a Monday; the first may start in the month before, the last may end in the next.
+ */
+export function weeksOfMonth(month: string, today: string): string[] {
+  const first = `${month}-01`
+  const [y, m] = month.split('-').map(Number)
+  const last = addDays(m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`, -1)
+  const stop = mondayOf(last < today ? last : today)
+  const weeks: string[] = []
+  for (let monday = mondayOf(first); monday <= stop; monday = addDays(monday, 7)) weeks.push(monday)
+  return weeks.reverse()
+}
+
+/** The week shown first: the one containing today when it is in the month, otherwise the month's last week. */
+export function defaultWeek(month: string, today: string): string {
+  return weeksOfMonth(month, today)[0] ?? mondayOf(`${month}-01`)
+}
+
+/* ---------- Reflections ---------- */
+
+export const MAX_REFLECTION = 1000
+
+export const WEEK_QUESTIONS: { field: keyof KakeiboWeekNotes; question: string }[] = [
+  { field: 'surprise', question: 'What surprised me about my spending?' },
+  { field: 'worthwhile', question: 'Which expenses felt worthwhile?' },
+  { field: 'nextWeek', question: 'What will I do differently next week?' },
+]
+
+export const MONTH_QUESTIONS: { field: Exclude<keyof KakeiboReviewValues, 'savedDeclared'>; question: string }[] = [
+  { field: 'available', question: 'How much came in, and what was available to spend?' },
+  { field: 'savings', question: 'What did I mean to save, and what did I set aside?' },
+  { field: 'change', question: 'What is one change I will make next month?' },
+  { field: 'appreciated', question: 'Which purchase am I glad I made?' },
+  { field: 'surprise', question: 'What surprised me this month?' },
+  { field: 'lesson', question: 'What lesson will I keep?' },
+]
+
+export const EMPTY_WEEK_NOTES: KakeiboWeekNotes = { surprise: '', worthwhile: '', nextWeek: '' }
+
+export function validateWeekNotes(notes: KakeiboWeekNotes): Partial<Record<keyof KakeiboWeekNotes, string>> {
+  const errors: Partial<Record<keyof KakeiboWeekNotes, string>> = {}
+  for (const { field } of WEEK_QUESTIONS) {
+    if (notes[field].trim().length > MAX_REFLECTION) errors[field] = `Keep this under ${MAX_REFLECTION.toLocaleString('en')} characters.`
+  }
+  return errors
+}
+
+export function reviewValues(review: KakeiboReview | null): KakeiboReviewValues {
+  return {
+    savedDeclared: review?.savedDeclared == null ? '' : amountText(review.savedDeclared),
+    available: review?.available ?? '',
+    savings: review?.savings ?? '',
+    change: review?.change ?? '',
+    appreciated: review?.appreciated ?? '',
+    surprise: review?.surprise ?? '',
+    lesson: review?.lesson ?? '',
+  }
+}
+
+/** Self-reported savings: optional (blank), zero allowed, no negatives, at most two decimal places. */
+export function parseSavedDeclared(text: string): { ok: true; centavos: Centavos | null } | { ok: false; error: string } {
+  if (text.trim() === '') return { ok: true, centavos: null }
+  return parsePlanAmount(text)
+}
+
+export function validateReview(values: KakeiboReviewValues): Partial<Record<keyof KakeiboReviewValues, string>> {
+  const errors: Partial<Record<keyof KakeiboReviewValues, string>> = {}
+  const saved = parseSavedDeclared(values.savedDeclared)
+  if (!saved.ok) errors.savedDeclared = saved.error
+  for (const { field } of MONTH_QUESTIONS) {
+    if (values[field].trim().length > MAX_REFLECTION) errors[field] = `Keep this under ${MAX_REFLECTION.toLocaleString('en')} characters.`
+  }
+  return errors
+}
+
+/**
+ * True when a month's stored "plan" holds only zeros and no intention while a review exists. Saving a review
+ * for a month without a plan makes the server store the plan amounts at their default of ₱0.00, so this is
+ * shown as "no plan amounts set" rather than as a plan the person made. (A deliberate all-zero plan with a
+ * review reads the same; the wording stays true for both.)
+ */
+export function planIsPlaceholder(month: KakeiboMonth): boolean {
+  const plan = month.plan
+  if (!plan || !month.review || plan.monthlyIntention) return false
+  return [plan.plannedIncome, plan.allocatedStartingFunds, plan.savingsTarget, plan.priorPeriodDebtReserve, ...Object.values(plan.limits)].every((value) => value === 0)
 }

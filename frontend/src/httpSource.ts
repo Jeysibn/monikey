@@ -3,6 +3,7 @@ import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
 import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './types.ts'
 import { compareTimestamps } from './lib/timestamp.ts'
+import { isMonday } from './lib/kakeibo.ts'
 import {
   fromWireAccounts,
   fromWireEditableAccount,
@@ -10,6 +11,7 @@ import {
   fromWireField,
   fromWireKakeiboMonth,
   fromWireKakeiboPlan,
+  fromWireKakeiboWeek,
   fromWirePayment,
   fromWireTransfer,
   fromWireSummary,
@@ -18,6 +20,8 @@ import {
   toWireAccountUpdate,
   toWireEntryInput,
   toWireKakeiboPlan,
+  toWireKakeiboReview,
+  toWireWeekNotes,
   type WireCategory,
   type WirePayment,
   type WireTransaction,
@@ -65,7 +69,7 @@ async function getJson(url: string, signal: AbortSignal, fetcher: Fetcher): Prom
   }
 }
 
-async function write(url: string, method: 'POST' | 'PUT' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<Response> {
+async function write(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<Response> {
   const response = await fetcher(url, {
     method,
     headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -102,6 +106,17 @@ function manilaToday(): string {
 function kakeiboPath(month: string, suffix = ''): string {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('A Kakeibo month must look like 2026-10.')
   return `/api/kakeibo/months/${month}${suffix}`
+}
+
+/** "/api/kakeibo/weeks/2026-10-19". Only a real Monday reaches the path. */
+function weekPath(weekStart: string): string {
+  if (!isMonday(weekStart)) throw new Error('A Kakeibo week must start on a Monday, like 2026-10-19.')
+  return `/api/kakeibo/weeks/${weekStart}`
+}
+
+const positiveId = (value: number): number => {
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error('An ID must be a positive whole number.')
+  return value
 }
 
 function urlWithQuery(path: string, query: URLSearchParams): string {
@@ -230,6 +245,27 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
 
     async saveKakeiboPlan(month, values) {
       await write(kakeiboPath(month), 'PUT', fetcher, toWireKakeiboPlan(values))
+    },
+
+    async saveKakeiboReview(month, values) {
+      await write(kakeiboPath(month, '/review'), 'PUT', fetcher, toWireKakeiboReview(values))
+    },
+
+    async loadKakeiboWeek(weekStart, signal) {
+      return fromWireKakeiboWeek(await getJson(weekPath(weekStart), signal, fetcher), weekStart)
+    },
+
+    async saveKakeiboWeek(weekStart, notes) {
+      await write(weekPath(weekStart), 'PUT', fetcher, toWireWeekNotes(notes))
+    },
+
+    async classifyExpense(transactionId, envelope) {
+      await write(`/api/transactions/${positiveId(transactionId)}/kakeibo-envelope`, 'PATCH', fetcher, { kakeibo_envelope: envelope })
+    },
+
+    async setCategoryEnvelope(categoryId, envelope) {
+      await write(`/api/categories/${positiveId(categoryId)}/default-kakeibo-envelope`, 'PATCH', fetcher, { default_kakeibo_envelope: envelope })
+      categoriesRead = null // Activity and Quick Add read the new suggestion next time
     },
   }
 }

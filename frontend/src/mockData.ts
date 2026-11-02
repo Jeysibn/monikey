@@ -84,13 +84,44 @@ const kakeiboPlans: KakeiboPlan[] = [
   },
 ]
 
+// A fictional weekly check-in for the week of Mon 19 – Sun 25 October.
+const kakeiboWeekReviews: NonNullable<MockData['kakeiboWeekReviews']> = [
+  {
+    weekStart: '2026-10-19',
+    surprise: 'Small food buys added up faster than I thought.',
+    worthwhile: 'The movie night with friends.',
+    nextWeek: 'Pack lunch on Tuesday and Thursday.',
+    updatedAt: '2026-10-25T12:00:00.000Z',
+  },
+]
+
+// For ?demo=reviewed: an October reflection saved before "Lunch with team" (₱385.00, unclassified) was
+// recorded, so today's totals differ from its snapshot and the screen says so.
+const reviewedOctober: NonNullable<MockData['kakeiboReviews']>[number] = {
+  month: '2026-10',
+  savedDeclared: 400_000,
+  available: 'Salary and one freelance job; about ₱30,000 to spend.',
+  savings: 'I meant to save ₱5,000 and set aside ₱4,000.',
+  change: 'Cap eating out at two times a week.',
+  appreciated: 'The family dinner.',
+  surprise: 'How much Needs went over.',
+  lesson: 'Plan groceries before the week starts.',
+  reviewedAt: '2026-10-24T13:00:00.000Z',
+  snapshot: {
+    actualIncome: 3_650_000,
+    totalExpenses: 2_674_240,
+    unclassified: 64_000,
+    envelopes: { needs: 1_995_190, wants: 386_400, culture: 180_000, unexpected: 48_650 },
+  },
+}
+
 const payments: CreditCardPayment[] = [
   { id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 500_000, date: '2026-10-20', note: null, createdAt: '2026-10-20T10:00:00.000Z' },
 ]
 
 const transfers: AccountTransfer[] = []
 
-const base: MockData = { today: '2026-10-25', accounts, categories: kakeiboCategories, transactions, payments, transfers, kakeiboPlans }
+const base: MockData = { today: '2026-10-25', accounts, categories: kakeiboCategories, transactions, payments, transfers, kakeiboPlans, kakeiboWeekReviews }
 
 /**
  * Which fictional ledger to show. The default is the ledger above. The others exist so that rare
@@ -103,8 +134,9 @@ const base: MockData = { today: '2026-10-25', accounts, categories: kakeiboCateg
  *  - "many": 40 extra October entries (58 in all) so the Activity list is longer than one page
  *  - "huge": 1,200 extra October entries (1,218 in all) to reach the Activity list's 1,000-row cap
  *  - "no-plan": the same ledger with no Kakeibo plan (expenses recorded, nothing planned)
+ *  - "reviewed": October has a month-end reflection whose snapshot no longer matches the ledger
  */
-export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many' | 'huge' | 'no-plan'
+export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many' | 'huge' | 'no-plan' | 'reviewed'
 
 export function getMockData(scenario?: DemoScenario | null): MockData {
   if (scenario === 'overpaid') {
@@ -153,5 +185,6 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
     return { today: base.today, accounts: [], categories: kakeiboCategories, transactions: [], payments: [], transfers: [], kakeiboPlans: [] }
   }
   if (scenario === 'no-plan') return { ...base, kakeiboPlans: [] }
+  if (scenario === 'reviewed') return { ...base, kakeiboReviews: [reviewedOctober] }
   return base
 }

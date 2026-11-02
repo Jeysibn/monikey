@@ -93,11 +93,9 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     eq("Wants bar width", await card(p, "wants").locator('[role=img] > div').evaluate(el => el.style.width), "77%");
     eq("progress bars have a text alternative", await card(p, "culture").locator('[role=img]').getAttribute("aria-label"), "₱1,800.00 of ₱2,000.00 spent");
     check("unclassified ₱1,025.00, still counted in total expenses", /Not yet classified ₱1,025\.00 Expenses without an envelope\. They’re still counted in this month’s total expenses of ₱27,127\.40\./.test(t));
-    check("the later bulk-classification tool is mentioned without promising a date", /planned for a later update/.test(t));
+    check("the unclassified card offers Classify expenses", await p.getByRole("button", { name: "Classify expenses" }).isVisible());
     eq("Edit plan is offered", await planButton(p).innerText().then(T), "Edit plan");
     await shot(p, "kakeibo-375.png");
-    await p.getByRole("button", { name: "Open October 2026 activity" }).click(); await p.waitForTimeout(200);
-    eq("Open activity goes to Activity", await p.evaluate(() => document.querySelector("main h1").textContent), "Activity");
     await p.context().close();
   });
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
 import { EditAccountDialog } from '@/components/EditAccountDialog'
+import { ClassifyDialog } from '@/components/kakeibo/ClassifyDialog'
 import { KakeiboPlanDialog } from '@/components/kakeibo/KakeiboPlanDialog'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
@@ -13,7 +14,7 @@ import { describeWriteError } from '@/lib/apiErrors'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthLabel, monthOf, nextPageSize } from '@/lib/finance'
-import { supportsKakeibo } from '@/lib/kakeibo'
+import { defaultWeek, envelopeLabel, supportsKakeibo, weekLabel, weeksOfMonth } from '@/lib/kakeibo'
 import { createHttpSource } from '@/httpSource'
 import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
@@ -22,7 +23,7 @@ import { useResource } from '@/useResource'
 import { clearWalletCardProduct, readWalletPreferences, saveWalletCardProduct, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 import type { CardChoice } from '@/components/AccountForm'
 import { pendingCardUploads, serverStoresCards } from '@/wallet/walletModel'
-import type { ActivityItem, AddState, EntryTarget, KakeiboPlanValues, LedgerSnapshot } from '@/types'
+import type { ActivityItem, AddState, EntryTarget, KakeiboEnvelope, KakeiboPlanValues, KakeiboReviewValues, KakeiboWeekNotes, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
 import { KakeiboView } from '@/views/KakeiboView'
@@ -36,10 +37,10 @@ import { OverviewView } from '@/views/OverviewView'
  * confirmation message is built from the fresh ones; there are no optimistic updates.
  *
  * Preview hook for design review and tests: open the app with
- * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan
- *       | save-error | invalid | load-error | flaky | offline | slow
+ * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan | reviewed
+ *       | save-error | invalid | load-error | flaky | offline | slow | partial
  * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity, kakeibo,
- * kakeibo-plan; comma-separated)
+ * kakeibo-plan, kakeibo-week; comma-separated)
  * to make only those reads fail.
  * to see a loading state, a rare state, a failed save, a refused save, a failed first load, a failed reload,
  * no connection at all, or slow answers, without editing code. Anything else shows the normal ledger.
@@ -47,7 +48,7 @@ import { OverviewView } from '@/views/OverviewView'
 const params = new URLSearchParams(window.location.search)
 const demo = params.get('demo')
 const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
-const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan']
+const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan', 'reviewed']
 
 /** The mock's behaviour for the demos that are about failing or being slow (not about what the ledger holds). */
 const demoBehaviour = (d: string | null): MockOptions => {
@@ -64,6 +65,8 @@ const demoBehaviour = (d: string | null): MockOptions => {
       return { readFailures: 'always', writeFailures: 'always' }
     case 'slow':
       return { readDelayMs: 1500, writeDelayMs: 16_000 }
+    case 'partial':
+      return { failClassifyEvery: 2 } // every second expense classification fails
     default:
       return {}
   }
@@ -102,6 +105,12 @@ function App() {
   const [accountForm, setAccountForm] = useState<AccountValues | null>(null)
   const [editAccountId, setEditAccountId] = useState<number | null>(null)
   const [planMonth, setPlanMonth] = useState<string | null>(null) // the Kakeibo plan dialog is open for this month
+  const [classifyMonth, setClassifyMonth] = useState<string | null>(null) // the classify dialog is open for this month
+  const [categoriesVersion, setCategoriesVersion] = useState(0) // bumped after a category suggestion changes
+  // The weekly check-in's week belongs to one month; another month starts at its own default week.
+  const [weekPick, setWeekPick] = useState<{ month: string; week: string } | null>(null)
+  const weeks = weeksOfMonth(month, source.today)
+  const weekStart = weekPick?.month === month && weeks.includes(weekPick.week) ? weekPick.week : defaultWeek(month, source.today)
   const [session, setSession] = useState<EntrySession | null>(null)
   const [status, setStatus] = useState<StatusNote | null>(null)
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
@@ -112,7 +121,7 @@ function App() {
 
   // What the screens read. Each is fetched when its screen needs it and again after a write.
   const accounts = useResource('accounts', (signal) => source.loadAccounts(signal), version)
-  const categories = useResource('categories', (signal) => source.loadCategories(signal))
+  const categories = useResource('categories', (signal) => source.loadCategories(signal), categoriesVersion)
   const summary = useResource(view === 'activity' ? null : `summary:${month}`, (signal) => source.loadSummary(month, signal), version)
   const recent = useResource(
     view === 'overview' ? `recent:${month}` : null,
@@ -125,6 +134,7 @@ function App() {
     version,
   )
   const kakeibo = useResource(view === 'kakeibo' ? `kakeibo:${month}` : null, (signal) => source.loadKakeiboMonth(month, signal), version)
+  const kakeiboWeek = useResource(view === 'kakeibo' ? `kakeibo-week:${weekStart}` : null, (signal) => source.loadKakeiboWeek(weekStart, signal), version)
   const snapshot = useMemo<LedgerSnapshot | undefined>(
     () => (accounts.data && categories.data ? { ...accounts.data, categories: categories.data } : undefined),
     [accounts.data, categories.data],
@@ -351,6 +361,50 @@ function App() {
     setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.` })
     setPlanMonth(null)
   }
+  /* Reflections and classification (ADR-021, PR D): metadata only, so balances and totals never change. */
+  const saveWeek = async (week: string, notes: KakeiboWeekNotes) => {
+    try {
+      await source.saveKakeiboWeek(week, notes)
+    } catch (err) {
+      throw describeWriteError(err, 'save-reflection')
+    }
+    setVersion((v) => v + 1)
+    setStatus({ text: `Notes saved for the week of ${weekLabel(week)}.` })
+  }
+  const saveReview = async (reviewMonth: string, values: KakeiboReviewValues) => {
+    try {
+      await source.saveKakeiboReview(reviewMonth, values)
+    } catch (err) {
+      throw describeWriteError(err, 'save-reflection')
+    }
+    setVersion((v) => v + 1)
+    setStatus({ text: `${monthLabel(reviewMonth)} reflection saved, with this month's totals as they are now.` })
+  }
+  const openClassify = () => {
+    rememberOpener()
+    setClassifyMonth(month)
+  }
+  const classified = (count: number, envelope: KakeiboEnvelope | null, complete: boolean) => {
+    setVersion((v) => v + 1) // the report, the week and Activity show the new envelopes
+    if (!complete) return // the dialog stays open and says what failed
+    const noun = count === 1 ? 'expense' : 'expenses'
+    setStatus({ text: `${count} ${noun} ${envelope === null ? 'cleared' : `moved to ${envelopeLabel(envelope)}`}. Balances and totals are unchanged.` })
+    setClassifyMonth(null)
+  }
+  /** Saves each changed suggestion in turn; resolves with the categories that failed (the dialog keeps them). */
+  const saveSuggestions = async (changes: { id: number; envelope: KakeiboEnvelope | null }[]): Promise<number[]> => {
+    const failed: number[] = []
+    for (const change of changes) {
+      try {
+        await source.setCategoryEnvelope(change.id, change.envelope)
+      } catch {
+        failed.push(change.id)
+      }
+    }
+    if (failed.length < changes.length) setCategoriesVersion((v) => v + 1) // Quick Add reads the new suggestions
+    if (failed.length === 0) setStatus({ text: 'Suggestions saved. Expenses you already saved keep their envelopes.' })
+    return failed
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -435,14 +489,28 @@ function App() {
             onMonthChange={setMonth}
             onAdd={openAdd}
             onEditPlan={openPlan}
-            onOpenActivity={(m) => {
-              setMonth(m)
-              setAccountFilter(null)
-              setView('activity')
-            }}
+            weeks={weeks}
+            weekStart={weekStart}
+            week={kakeiboWeek}
+            onWeekChange={(week) => setWeekPick({ month, week })}
+            onSaveWeek={saveWeek}
+            onSaveReview={saveReview}
+            onClassify={openClassify}
+            categories={categories.data}
+            onSaveSuggestions={saveSuggestions}
+            onDialogOpen={() => rememberOpener()}
+            onDialogClosed={restoreFocus}
           />
         )}
       </AppShell>
+
+      <ClassifyDialog
+        month={classifyMonth}
+        source={source}
+        onClassified={classified}
+        onOpenChange={(open) => !open && setClassifyMonth(null)}
+        onClosed={restoreFocus}
+      />
 
       <KakeiboPlanDialog
         key={planMonth ?? 'closed'}

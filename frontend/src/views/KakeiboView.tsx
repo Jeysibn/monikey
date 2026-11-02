@@ -1,21 +1,24 @@
-import { NotebookPen, Plus } from 'lucide-react'
+import { ListChecks, NotebookPen, Plus } from 'lucide-react'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
+import { CategorySuggestionsCard } from '@/components/kakeibo/CategorySuggestions'
 import { EnvelopeCard } from '@/components/kakeibo/EnvelopeCard'
+import { MonthlyReviewCard } from '@/components/kakeibo/MonthlyReview'
+import { WeeklyReviewCard } from '@/components/kakeibo/WeeklyReview'
 import { PlanSummary } from '@/components/kakeibo/PlanSummary'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { isNotFound } from '@/dataSource'
 import { monthLabel, monthOptions } from '@/lib/finance'
-import { ENVELOPES } from '@/lib/kakeibo'
+import { ENVELOPES, planIsPlaceholder } from '@/lib/kakeibo'
 import { formatPeso } from '@/lib/money'
 import { useDelayedFlag } from '@/useDelayedFlag'
 import type { Resource } from '@/useResource'
-import type { AddState, KakeiboMonth } from '@/types'
+import type { AddState, Category, KakeiboEnvelope, KakeiboMonth, KakeiboReviewValues, KakeiboWeek, KakeiboWeekNotes } from '@/types'
 
 /*
  * Kakeibo (ADR-021): a simple monthly budget on top of the ledger. It answers, in order: how much do I plan
@@ -56,7 +59,7 @@ function Skeleton() {
   )
 }
 
-function Unclassified({ report, onOpenActivity }: { report: KakeiboMonth; onOpenActivity: () => void }) {
+function Unclassified({ report, onClassify }: { report: KakeiboMonth; onClassify: () => void }) {
   const label = monthLabel(report.month)
   return (
     <Card role="region" aria-labelledby="kakeibo-unclassified-title" className="min-w-0">
@@ -66,19 +69,16 @@ function Unclassified({ report, onOpenActivity }: { report: KakeiboMonth; onOpen
       </div>
       {report.totalExpenses === 0 ? (
         <CardDescription className="mb-0">No expenses recorded in {label} yet.</CardDescription>
-      ) : report.unclassifiedExpenses === 0 ? (
-        <CardDescription className="mb-0">Every expense in {label} has an envelope.</CardDescription>
       ) : (
         <>
           <CardDescription>
-            Expenses without an envelope. They&rsquo;re still counted in this month&rsquo;s total expenses of{' '}
-            {formatPeso(report.totalExpenses)}.
+            {report.unclassifiedExpenses === 0
+              ? `Every expense in ${label} has an envelope. You can still move one to a different envelope.`
+              : `Expenses without an envelope. They’re still counted in this month’s total expenses of ${formatPeso(report.totalExpenses)}.`}
           </CardDescription>
-          <p className="text-sm text-muted-foreground">
-            To classify one now, edit it in Activity. Sorting many earlier expenses at once is planned for a later update.
-          </p>
-          <Button variant="secondary" className="mt-3" onClick={onOpenActivity}>
-            Open {label} activity
+          <Button variant="secondary" className="mt-1" onClick={onClassify}>
+            <ListChecks aria-hidden="true" />
+            Classify expenses
           </Button>
         </>
       )}
@@ -95,7 +95,17 @@ export function KakeiboView({
   onMonthChange,
   onAdd,
   onEditPlan,
-  onOpenActivity,
+  weeks,
+  weekStart,
+  week,
+  onWeekChange,
+  onSaveWeek,
+  onSaveReview,
+  onClassify,
+  categories,
+  onSaveSuggestions,
+  onDialogOpen,
+  onDialogClosed,
 }: {
   today: string
   month: string
@@ -105,14 +115,24 @@ export function KakeiboView({
   onMonthChange: (month: string) => void
   onAdd: () => void
   onEditPlan: () => void
-  onOpenActivity: (month: string) => void
+  weeks: string[]
+  weekStart: string
+  week: Resource<KakeiboWeek>
+  onWeekChange: (weekStart: string) => void
+  onSaveWeek: (weekStart: string, notes: KakeiboWeekNotes) => Promise<void>
+  onSaveReview: (month: string, values: KakeiboReviewValues) => Promise<void>
+  onClassify: () => void
+  categories: Category[] | undefined
+  onSaveSuggestions: (changes: { id: number; envelope: KakeiboEnvelope | null }[]) => Promise<number[]>
+  onDialogOpen: () => void // remember the control that opened a dialog
+  onDialogClosed: (event: Event) => void // and return focus to it
 }) {
   // While another month loads, keep showing the last report only if it is for the month asked for.
   const report = kakeibo.data?.month === month ? kakeibo.data : undefined
   const waiting = forcedLoading || (!report && !kakeibo.error)
   const updating = useDelayedFlag(kakeibo.stale && !!report, 400)
   const unavailable = kakeibo.error && isNotFound(kakeibo.error) // an API from before Kakeibo has no such route
-  const hasPlan = report?.plan != null
+  const hasPlan = report?.plan != null && !planIsPlaceholder(report)
   const label = monthLabel(month)
 
   return (
@@ -164,9 +184,37 @@ export function KakeiboView({
             </div>
           </section>
           <div className="min-w-0 lg:col-span-5 lg:row-start-2">
-            <Unclassified report={report} onOpenActivity={() => onOpenActivity(month)} />
+            <Unclassified report={report} onClassify={onClassify} />
           </div>
         </div>
+      )}
+
+      {/* Looking back: lower on the page than the plan and envelopes, and opened only when wanted. */}
+      {!unavailable && !kakeibo.error && !waiting && report && (
+        <section aria-labelledby="kakeibo-reflect-title" className="mt-8 md:mt-10">
+          <h2 id="kakeibo-reflect-title" className="text-lg leading-[1.3] font-semibold tracking-[-0.01em] md:text-xl">Look back</h2>
+          <p className="mb-3 text-sm text-muted-foreground">Optional check-ins. No reminders, and nothing here changes your money.</p>
+          {/* Phone order: week, month, suggestions. From 1024px the suggestions sit under the week, beside the month. */}
+          <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:items-start">
+            <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+              <WeeklyReviewCard
+                weeks={weeks}
+                weekStart={weekStart}
+                week={week}
+                onWeekChange={onWeekChange}
+                onSave={onSaveWeek}
+                onOpen={onDialogOpen}
+                onClosed={onDialogClosed}
+              />
+            </div>
+            <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+              <MonthlyReviewCard report={report} onSave={onSaveReview} onOpen={onDialogOpen} onClosed={onDialogClosed} />
+            </div>
+            <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+              <CategorySuggestionsCard categories={categories} onSave={onSaveSuggestions} onOpen={onDialogOpen} onClosed={onDialogClosed} />
+            </div>
+          </div>
+        </section>
       )}
     </div>
   )

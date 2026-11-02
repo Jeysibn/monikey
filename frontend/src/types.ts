@@ -200,6 +200,58 @@ export interface KakeiboMonth {
   envelopes: Record<KakeiboEnvelope, KakeiboEnvelopeReport>
   unclassifiedExpenses: Centavos // expenses with no envelope; still part of total expenses
   totalExpenses: Centavos // every expense of the month, classified or not; card payments and transfers excluded
+  review: KakeiboReview | null // the month-end reflection, if one was saved
+  /** The server compared today's ledger totals with the review's snapshot and found a difference. */
+  actualsChangedSinceReview: boolean
+}
+
+/** Ledger totals the server stored when a monthly review was saved. Never worked out in the browser. */
+export interface KakeiboSnapshot {
+  actualIncome: Centavos
+  totalExpenses: Centavos
+  unclassified: Centavos
+  envelopes: Record<KakeiboEnvelope, Centavos>
+}
+
+/** A saved month-end reflection (PUT /api/kakeibo/months/{month}/review). */
+export interface KakeiboReview {
+  savedDeclared: Centavos | null // self-reported: what the person says they saved; never checked against accounts
+  available: string | null
+  savings: string | null
+  change: string | null
+  appreciated: string | null
+  surprise: string | null
+  lesson: string | null
+  reviewedAt: string // ISO timestamp of the last save
+  snapshot: KakeiboSnapshot | null
+}
+
+/** What a person types into the monthly reflection form. */
+export interface KakeiboReviewValues {
+  savedDeclared: string // empty for "not saying"
+  available: string
+  savings: string
+  change: string
+  appreciated: string
+  surprise: string
+  lesson: string
+}
+
+/** One Monday-to-Sunday week (GET /api/kakeibo/weeks/{monday}). It may cross into another month or year. */
+export interface KakeiboWeek {
+  weekStart: string // "YYYY-MM-DD", always a Monday
+  weekEnd: string // the Sunday, inclusive
+  spending: Record<KakeiboEnvelope, Centavos>
+  unclassifiedExpenses: Centavos
+  totalExpenses: Centavos
+  review: KakeiboWeekNotes & { updatedAt: string } | null
+}
+
+/** The three weekly notes. Saving always sends all three: the server replaces the whole set. */
+export interface KakeiboWeekNotes {
+  surprise: string
+  worthwhile: string
+  nextWeek: string
 }
 
 /** What a person types into the plan form (amounts are the text as typed). */
@@ -223,6 +275,8 @@ export interface MockData {
   payments: CreditCardPayment[]
   transfers: AccountTransfer[]
   kakeiboPlans?: KakeiboPlan[] // the mock's stored plans, one per month
+  kakeiboReviews?: (Omit<KakeiboReview, 'snapshot'> & { month: string; snapshot: KakeiboSnapshot })[] // month-end reflections
+  kakeiboWeekReviews?: (KakeiboWeekNotes & { weekStart: string; updatedAt: string })[] // weekly notes, by Monday
 }
 
 /** Whether Add transaction can be used: not until the accounts have loaded, and not before the first account exists. */

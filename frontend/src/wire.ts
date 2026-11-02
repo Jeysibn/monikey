@@ -15,9 +15,14 @@ import type {
   KakeiboMonth,
   KakeiboPlan,
   KakeiboPlanValues,
+  KakeiboReview,
+  KakeiboReviewValues,
+  KakeiboSnapshot,
+  KakeiboWeek,
+  KakeiboWeekNotes,
   LiquidAccountType,
 } from './types.ts'
-import { ENVELOPES, PLAN_MONEY_FIELDS, parsePlanAmount } from './lib/kakeibo.ts'
+import { ENVELOPES, PLAN_MONEY_FIELDS, isMonday, parsePlanAmount, parseSavedDeclared } from './lib/kakeibo.ts'
 
 export type WireMoney = string
 export type WireAccountType = AccountInfo['type']
@@ -499,7 +504,111 @@ export function fromWireKakeiboMonth(value: unknown, expectedMonth: string): Kak
   const unclassifiedExpenses = toCentavos(row.unclassified_expenses, 'unclassified expenses')
   const totalExpenses = toCentavos(row.total_expenses, 'total expenses')
   if (actualIncome < 0 || unclassifiedExpenses < 0 || totalExpenses < unclassifiedExpenses) throw contractError('Kakeibo actuals')
-  return { month: expectedMonth, plan, actualIncome, availableToAllocate, unallocated, envelopes, unclassifiedExpenses, totalExpenses }
+  const review = row.plan ? fromWireKakeiboReview(row.plan) : null
+  const changed = row.actuals_changed_since_review ?? false
+  if (typeof changed !== 'boolean' || (changed && !review)) throw contractError('Kakeibo review status')
+  return { month: expectedMonth, plan, actualIncome, availableToAllocate, unallocated, envelopes, unclassifiedExpenses, totalExpenses, review, actualsChangedSinceReview: changed }
+}
+
+function reviewText(value: unknown, what: string): string | null {
+  if (value === undefined) return null
+  const text = nullableString(value, what)
+  if (text !== null && text.length > 1000) throw contractError(what)
+  return text
+}
+
+/** The totals stored with a review: decimal strings, never negative. */
+function fromWireSnapshot(value: unknown): KakeiboSnapshot | null {
+  if (value === null || value === undefined) return null
+  const row = record(value, 'review snapshot')
+  const money = (v: unknown) => {
+    const centavos = toCentavos(v, 'review snapshot amount')
+    if (centavos < 0) throw contractError('review snapshot amount')
+    return centavos
+  }
+  const envelopes = record(row.envelopes, 'review snapshot envelopes')
+  return {
+    actualIncome: money(row.actual_income),
+    totalExpenses: money(row.total_expenses),
+    unclassified: money(row.unclassified),
+    envelopes: { needs: money(envelopes.needs), wants: money(envelopes.wants), culture: money(envelopes.culture), unexpected: money(envelopes.unexpected) },
+  }
+}
+
+/** The month-end reflection inside a plan row; null until one has been saved (`reviewed_at` is null). */
+function fromWireKakeiboReview(value: unknown): KakeiboReview | null {
+  const row = record(value, 'Kakeibo plan')
+  if (row.reviewed_at === null || row.reviewed_at === undefined) return null
+  const saved = row.actual_saved_declared === null || row.actual_saved_declared === undefined ? null : toCentavos(row.actual_saved_declared, 'declared savings')
+  if (saved !== null && saved < 0) throw contractError('declared savings')
+  return {
+    savedDeclared: saved,
+    available: reviewText(row.review_available, 'review answer'),
+    savings: reviewText(row.review_savings, 'review answer'),
+    change: reviewText(row.review_change, 'review answer'),
+    appreciated: reviewText(row.review_appreciated, 'review answer'),
+    surprise: reviewText(row.review_surprise, 'review answer'),
+    lesson: reviewText(row.review_lesson, 'review answer'),
+    reviewedAt: createdAt(row.reviewed_at),
+    snapshot: fromWireSnapshot(row.review_actuals_snapshot),
+  }
+}
+
+/** GET (or PUT) /api/kakeibo/weeks/{monday}: the week's ledger totals and its notes, as the server reports them. */
+export function fromWireKakeiboWeek(value: unknown, expectedStart: string): KakeiboWeek {
+  const row = record(value, 'Kakeibo week')
+  if (row.week_start !== expectedStart || !isMonday(expectedStart)) throw contractError('Kakeibo week')
+  const weekEnd = calendarDate(row.week_end, 'Kakeibo week end')
+  const money = (v: unknown, what: string) => {
+    const centavos = toCentavos(v, what)
+    if (centavos < 0) throw contractError(what)
+    return centavos
+  }
+  const spending = record(row.spending_by_envelope, 'Kakeibo week envelopes')
+  const unclassifiedExpenses = money(row.unclassified_expenses, 'week unclassified expenses')
+  const totalExpenses = money(row.total_expenses, 'week total expenses')
+  let review: KakeiboWeek['review'] = null
+  if (row.review !== null && row.review !== undefined) {
+    const notes = record(row.review, 'week review')
+    review = {
+      surprise: reviewText(notes.surprise_note, 'week note') ?? '',
+      worthwhile: reviewText(notes.worthwhile_note, 'week note') ?? '',
+      nextWeek: reviewText(notes.next_week_intention, 'week note') ?? '',
+      updatedAt: createdAt(notes.updated_at),
+    }
+  }
+  const week: KakeiboWeek = {
+    weekStart: expectedStart,
+    weekEnd,
+    spending: { needs: money(spending.needs, 'week spending'), wants: money(spending.wants, 'week spending'), culture: money(spending.culture, 'week spending'), unexpected: money(spending.unexpected, 'week spending') },
+    unclassifiedExpenses,
+    totalExpenses,
+    review,
+  }
+  if (totalExpenses < unclassifiedExpenses) throw contractError('Kakeibo week totals')
+  return week
+}
+
+const noteOrNull = (text: string): string | null => text.trim() || null
+
+/** PUT /api/kakeibo/weeks/{monday}: always all three notes, because the server replaces the whole set. Blank is null. */
+export function toWireWeekNotes(notes: KakeiboWeekNotes): { surprise_note: string | null; worthwhile_note: string | null; next_week_intention: string | null } {
+  return { surprise_note: noteOrNull(notes.surprise), worthwhile_note: noteOrNull(notes.worthwhile), next_week_intention: noteOrNull(notes.nextWeek) }
+}
+
+/** PUT /api/kakeibo/months/{month}/review: every answer (blank is null) and the optional self-reported savings. No totals. */
+export function toWireKakeiboReview(values: KakeiboReviewValues): Record<string, string | null> {
+  const saved = parseSavedDeclared(values.savedDeclared)
+  if (!saved.ok) throw new Error('The review must be validated before it is sent.')
+  return {
+    actual_saved_declared: saved.centavos === null ? null : amountText(saved.centavos),
+    review_available: noteOrNull(values.available),
+    review_savings: noteOrNull(values.savings),
+    review_change: noteOrNull(values.change),
+    review_appreciated: noteOrNull(values.appreciated),
+    review_surprise: noteOrNull(values.surprise),
+    review_lesson: noteOrNull(values.lesson),
+  }
 }
 
 /** Validated plan form values as the PUT body. Every amount is sent, including zeros. */
@@ -576,6 +685,18 @@ export function fromWireField(field: unknown): string | undefined {
     culture_limit: 'cultureLimit',
     unexpected_limit: 'unexpectedLimit',
     monthly_intention: 'monthlyIntention',
+    // Kakeibo reflections
+    actual_saved_declared: 'savedDeclared',
+    review_available: 'available',
+    review_savings: 'savings',
+    review_change: 'change',
+    review_appreciated: 'appreciated',
+    review_surprise: 'surprise',
+    review_lesson: 'lesson',
+    surprise_note: 'surprise',
+    worthwhile_note: 'worthwhile',
+    next_week_intention: 'nextWeek',
+    default_kakeibo_envelope: 'envelope',
   }
   return fields[field] ?? (['amount', 'name', 'balance', 'limit', 'owed', 'account', 'card', 'destination', 'category', 'date', 'note'].includes(field) ? field : undefined)
 }

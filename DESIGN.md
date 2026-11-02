@@ -295,6 +295,9 @@ Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or bil
 | D18 | Kakeibo envelopes are chips under Category in Quick Add, with "Not sure yet"; a category's default is followed for a new expense only until the person picks, and otherwise offered as a "Use …" link | One light control; suggestions never overwrite a person's choice or a stored classification | Implemented (PR C) |
 | D19 | Envelope bars use primary blue, and `debt` orange when over the limit, with the overage in words and an icon; never red. A zero limit or no plan shows no bar | Gentle guidance, not guilt; no misleading progress | Implemented (PR C) |
 | D20 | The plan form shows a labelled display-only "Planning check (estimate)"; the dashboard shows only server figures | Lets an over-allocation be seen before saving, as Quick Add's estimates do; plans are never forced to balance | Implemented (PR C) |
+| D21 | Kakeibo reflections live in a "Look back" section under the plan and envelopes: a weekly check-in (Monday–Sunday week select, server totals, three optional notes) and a month-end reflection (server snapshot, changed-since warning, self-reported savings). Forms open in the shared dialog | Plan and envelopes stay the visual priority; dialogs bind a form to one week or month, so switching weeks never loses typing | Implemented (PR D) |
+| D22 | Classifying past expenses is a dialog from "Not yet classified": tick loaded expenses, choose one envelope (or Not classified), confirm, then one PATCH per expense with an honest saved/failed count | No hidden bulk change; partial failures keep the failed ones ticked; the list says when more history may exist | Implemented (PR D) |
+| D23 | "Pause before buying?" is a closed native disclosure in the expense envelope picker; nothing typed or chosen is stored | Optional, non-blocking guidance with no new data model | Implemented (PR D) |
 
 ## Owner decisions recorded (after the independent browser review)
 

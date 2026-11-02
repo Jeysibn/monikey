@@ -90,7 +90,12 @@ Not separate components (kept inline to avoid wrapper layers): the limit track (
 | `kakeibo/EnvelopeCard` | One envelope: spent, remaining (negative kept), a bar of the share spent; no bar for a zero limit or no plan. | envelope, `KakeiboEnvelopeReport` |
 | `kakeibo/KakeiboPlanDialog` + `KakeiboPlanForm` | Create/edit a plan: reads the stored plan fresh, validates (zero allowed, no negatives, ≤2 decimals), shows a display-only planning check, keeps values on failure. | month, `DataSource`, `onSubmit` |
 | `kakeibo/EnvelopePicker` | Quick Add's envelope chips (Needs, Wants, Culture, Unexpected, Not sure yet) and the category's suggestion as a "Use …" link. | value, suggestion, `onChange` |
-| `lib/kakeibo.ts` | Envelope names, plan validation, planning estimate, progress share, suggestion lookup. No saved figure is computed here. | pure functions |
+| `lib/kakeibo.ts` | Envelope names, plan validation, planning estimate, progress share, suggestion lookup; Monday-week date helpers and reflection validation (PR D). No saved figure is computed here. | pure functions |
+| `kakeibo/WeeklyReview` | Weekly check-in card (week select, the server's week totals, saved notes) and its three-question form; always sends all three notes. | weeks, week resource, `onSave` |
+| `kakeibo/MonthlyReview` | Month-end reflection card (saved time, server snapshot, changed-since warning, self-reported savings, answers) and its form; warns that saving again replaces the snapshot. | `KakeiboMonth`, `onSave` |
+| `kakeibo/ClassifyDialog` | Tick loaded expenses, choose an envelope or clear, confirm; one PATCH each with saved/failed counts; says when the list may be incomplete. | month, `DataSource`, `onClassified` |
+| `kakeibo/CategorySuggestions` | Card listing category suggestions and a dialog to set/clear them for expense categories only. | categories, `onSave` |
+| `kakeibo/useSaveForm`, `NoteField` | Shared save habits for the reflection forms; a labelled textarea field. | — |
 
 These wallet and Kakeibo components are additive to the historical 15-component inventory above. The current implementation paths are in `frontend/src/components/wallet/` and `frontend/src/wallet/`.
 

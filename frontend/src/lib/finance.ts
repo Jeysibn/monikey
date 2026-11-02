@@ -10,6 +10,8 @@ import type {
   FinancialSummary,
   KakeiboEnvelope,
   KakeiboMonth,
+  KakeiboSnapshot,
+  KakeiboWeek,
   LedgerSnapshot,
   MockData,
 } from '../types.ts'
@@ -147,34 +149,84 @@ export function summarize(data: MockData, month: string): FinancialSummary {
 }
 
 /**
+ * Kakeibo actuals between two dates (`from` inclusive, `until` exclusive), as the server's kakeibo_actuals works
+ * them out: only expense transactions count, so a card purchase counts once and card payments and transfers
+ * never do; an expense with no envelope is "unclassified" and still part of total expenses.
+ */
+function kakeiboActuals(data: MockData, from: string, until: string): KakeiboSnapshot {
+  const inRange = data.transactions.filter((t) => t.date >= from && t.date < until)
+  const ofType = (type: CategoryType) => inRange.filter((t) => typeOfCategory(data.categories, t.categoryId) === type)
+  const expenses = ofType('expense')
+  const spentOn = (envelope: KakeiboEnvelope | null) => sum(expenses.filter((t) => (t.envelope ?? null) === envelope).map((t) => t.amount))
+  return {
+    actualIncome: sum(ofType('income').map((t) => t.amount)),
+    totalExpenses: sum(expenses.map((t) => t.amount)),
+    unclassified: spentOn(null),
+    envelopes: { needs: spentOn('needs'), wants: spentOn('wants'), culture: spentOn('culture'), unexpected: spentOn('unexpected') },
+  }
+}
+
+const nextMonthStart = (month: string): string => {
+  const [y, m] = month.split('-').map(Number)
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+}
+
+/** The month's actuals in the shape a review snapshot stores. */
+export const kakeiboMonthSnapshot = (data: MockData, month: string): KakeiboSnapshot => kakeiboActuals(data, `${month}-01`, nextMonthStart(month))
+
+const sameSnapshot = (a: KakeiboSnapshot, b: KakeiboSnapshot): boolean =>
+  a.actualIncome === b.actualIncome && a.totalExpenses === b.totalExpenses && a.unclassified === b.unclassified &&
+  (['needs', 'wants', 'culture', 'unexpected'] as const).every((e) => a.envelopes[e] === b.envelopes[e])
+
+/**
  * The month's Kakeibo report (ADR-021), the mock's stand-in for GET /api/kakeibo/months/{month}/report.
- * Same rules as the server: only expense transactions count, so a card purchase counts once and card payments
- * and transfers never do; an expense with no envelope is "unclassified" and still part of total expenses;
- * remaining = limit − spent and may be negative; with no plan, limits and remainders are null.
+ * remaining = limit − spent and may be negative; with no plan, limits and remainders are null. A saved review
+ * keeps the snapshot taken when it was saved; `actualsChangedSinceReview` says whether today's totals differ.
  */
 export function kakeiboMonth(data: MockData, month: string): KakeiboMonth {
-  const expenses = data.transactions.filter((t) => monthOf(t.date) === month && typeOfCategory(data.categories, t.categoryId) === 'expense')
-  const income = data.transactions.filter((t) => monthOf(t.date) === month && typeOfCategory(data.categories, t.categoryId) === 'income')
+  const actuals = kakeiboMonthSnapshot(data, month)
   const plan = data.kakeiboPlans?.find((p) => p.month === month) ?? null
-  const spentOn = (envelope: KakeiboEnvelope | null) => sum(expenses.filter((t) => (t.envelope ?? null) === envelope).map((t) => t.amount))
   const envelopes = Object.fromEntries(
     (['needs', 'wants', 'culture', 'unexpected'] as const).map((envelope) => {
-      const spent = spentOn(envelope)
+      const spent = actuals.envelopes[envelope]
       const limit = plan ? plan.limits[envelope] : null
       return [envelope, { limit, spent, remaining: limit === null ? null : limit - spent }]
     }),
   ) as KakeiboMonth['envelopes']
   const available = plan ? plan.plannedIncome + plan.allocatedStartingFunds - plan.savingsTarget - plan.priorPeriodDebtReserve : null
   const limits = plan ? sum(Object.values(plan.limits)) : 0
+  const stored = data.kakeiboReviews?.find((r) => r.month === month) ?? null
+  const review = stored ? (({ month: _month, ...rest }) => rest)(stored) : null
   return {
     month,
     plan,
-    actualIncome: sum(income.map((t) => t.amount)),
+    actualIncome: actuals.actualIncome,
     availableToAllocate: available,
     unallocated: available === null ? null : available - limits,
     envelopes,
-    unclassifiedExpenses: spentOn(null),
-    totalExpenses: sum(expenses.map((t) => t.amount)),
+    unclassifiedExpenses: actuals.unclassified,
+    totalExpenses: actuals.totalExpenses,
+    review,
+    actualsChangedSinceReview: stored !== null && !sameSnapshot(stored.snapshot, actuals),
+  }
+}
+
+/** One Monday-to-Sunday week, the mock's stand-in for GET /api/kakeibo/weeks/{monday}. It ignores month edges. */
+export function kakeiboWeek(data: MockData, weekStart: string): KakeiboWeek {
+  const until = new Date(`${weekStart}T00:00:00Z`)
+  until.setUTCDate(until.getUTCDate() + 7)
+  const untilDate = until.toISOString().slice(0, 10)
+  const end = new Date(until)
+  end.setUTCDate(end.getUTCDate() - 1)
+  const actuals = kakeiboActuals(data, weekStart, untilDate)
+  const stored = data.kakeiboWeekReviews?.find((r) => r.weekStart === weekStart)
+  return {
+    weekStart,
+    weekEnd: end.toISOString().slice(0, 10),
+    spending: actuals.envelopes,
+    unclassifiedExpenses: actuals.unclassified,
+    totalExpenses: actuals.totalExpenses,
+    review: stored ? { surprise: stored.surprise, worthwhile: stored.worthwhile, nextWeek: stored.nextWeek, updatedAt: stored.updatedAt } : null,
   }
 }
 

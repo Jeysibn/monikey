@@ -101,8 +101,8 @@ BEGIN
     SELECT COUNT(*)
     FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-  ) <> 5 THEN
-    RAISE EXCEPTION 'Expected exactly five core tables';
+  ) <> 7 THEN
+    RAISE EXCEPTION 'Expected five financial tables and two Kakeibo metadata tables';
   END IF;
 
   IF (SELECT COUNT(*) FROM categories) <> 9 THEN

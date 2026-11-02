@@ -237,12 +237,7 @@ export function createMockSource({
         reviewedAt: nowIso(),
         snapshot: kakeiboMonthSnapshot(data, month), // taken by the "server", never sent by the screen
       }
-      // Like the API: a month with no plan gets a plan row whose amounts are the column default, ₱0.00.
-      const plans = data.kakeiboPlans ?? []
-      const withPlan = plans.some((p) => p.month === month)
-        ? plans
-        : [...plans, { month, plannedIncome: 0, allocatedStartingFunds: 0, savingsTarget: 0, priorPeriodDebtReserve: 0, limits: { needs: 0, wants: 0, culture: 0, unexpected: 0 }, monthlyIntention: null }]
-      data = { ...data, kakeiboPlans: withPlan, kakeiboReviews: [...(data.kakeiboReviews ?? []).filter((r) => r.month !== month), review] }
+      data = { ...data, kakeiboReviews: [...(data.kakeiboReviews ?? []).filter((r) => r.month !== month), review] }
     },
 
     loadKakeiboWeek: (weekStart: string, signal: AbortSignal): Promise<KakeiboWeek> =>

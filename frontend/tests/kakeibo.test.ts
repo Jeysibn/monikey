@@ -44,6 +44,7 @@ const plan: KakeiboPlanValues = {
 /* What the backend (main.py kakeibo_month_response) returns for the mock's fictional October. */
 const wireOctober = {
   month: '2026-10',
+  plan_status: 'saved',
   plan: {
     month: '2026-10-01',
     planned_income: '36000.00', allocated_starting_funds: '2000.00', savings_target: '5000.00', prior_period_debt_reserve: '3000.00',
@@ -72,7 +73,7 @@ const wireOctober = {
 }
 
 const wireEmptyMonth = (month: string) => ({
-  month, plan: null, planned_income: null, actual_income: '0.00', available_to_allocate: null, unallocated: null,
+  month, plan_status: 'not_saved', plan: null, review: null, planned_income: null, actual_income: '0.00', available_to_allocate: null, unallocated: null,
   envelopes: Object.fromEntries(['needs', 'wants', 'culture', 'unexpected'].map((e) => [e, { limit: null, actual_spent: '0.00', remaining: null }])),
   unclassified_expenses: '0.00', total_expenses: '0.00', savings_target: null, actual_saved_declared: null, reviewed_at: null, actuals_changed_since_review: false,
 })

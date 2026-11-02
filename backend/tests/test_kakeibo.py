@@ -4,6 +4,8 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from database import open_connection
+
 def create_account(client: TestClient, name: str, account_type: str, **fields: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "name": name,
@@ -191,6 +193,63 @@ def test_month_plan_report_snapshot_and_ledger_invariance(client: TestClient) ->
     assert income["kakeibo_envelope"] is None
     assert wants["kakeibo_envelope"] == "wants"
     assert unclassified["kakeibo_envelope"] is None
+
+
+def test_month_review_without_plan_stays_separate_from_zero_plan(client: TestClient) -> None:
+    review_body = {
+        "actual_saved_declared": "0.00",
+        "review_available": "No income this month.",
+        "review_savings": "I saved nothing.",
+        "review_change": "Plan earlier.",
+        "review_appreciated": None,
+        "review_surprise": None,
+        "review_lesson": None,
+    }
+    saved_review = client.put("/api/kakeibo/months/2026-09/review", json=review_body)
+    assert saved_review.status_code == 200, saved_review.text
+    response = saved_review.json()
+    assert response["plan"] is None
+    assert response["plan_status"] == "not_saved"
+    assert response["review"]["review_available"] == "No income this month."
+    assert response["review"]["actual_saved_declared"] == "0.00"
+    assert response["review"]["review_actuals_snapshot"] is not None
+    assert response["available_to_allocate"] is None
+    assert all(value["limit"] is None for value in response["envelopes"].values())
+
+    zero_plan = {
+        "planned_income": "0.00",
+        "allocated_starting_funds": "0.00",
+        "savings_target": "0.00",
+        "prior_period_debt_reserve": "0.00",
+        "needs_limit": "0.00",
+        "wants_limit": "0.00",
+        "culture_limit": "0.00",
+        "unexpected_limit": "0.00",
+        "monthly_intention": None,
+    }
+    saved_plan = client.put("/api/kakeibo/months/2026-09", json=zero_plan)
+    assert saved_plan.status_code == 200, saved_plan.text
+    assert saved_plan.json()["plan_status"] == "saved"
+    assert saved_plan.json()["plan"] is not None
+    assert saved_plan.json()["plan"]["planned_income"] == "0.00"
+    assert saved_plan.json()["review"] == response["review"]
+    assert saved_plan.json()["plan"]["review_actuals_snapshot"] == response["review"]["review_actuals_snapshot"]
+
+
+def test_legacy_plan_presence_is_reported_as_unknown(client: TestClient) -> None:
+    with open_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO kakeibo_month_plans (month, planned_income, needs_limit)
+            VALUES ('2026-08-01', 0, 0)
+            """
+        )
+
+    legacy = client.get("/api/kakeibo/months/2026-08")
+    assert legacy.status_code == 200, legacy.text
+    assert legacy.json()["plan_status"] == "legacy_unknown"
+    assert legacy.json()["plan"] is not None
+    assert legacy.json()["plan"]["planned_income"] == "0.00"
 
 
 def test_category_defaults_are_suggestions_and_income_is_restricted(client: TestClient) -> None:

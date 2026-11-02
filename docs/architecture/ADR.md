@@ -190,6 +190,16 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Consequences:** The schema grows to seven total tables: five financial tables and two Kakeibo metadata tables. Cross-table validation of transaction category type remains an API responsibility; the category-default expense-only rule is enforced as a row constraint. Off-cluster disaster recovery remains a release risk.
 - **Boundaries:** No banking integration, automatic expense labeling, notifications, new payment methods, automatic savings transfers, authentication, multiuser support, or public writable access. Wallet/card artwork remains unchanged.
 
+### ADR-021 amendment — Track explicit plan presence
+
+- **Status:** Accepted for PR E release readiness.
+- **Context:** Monthly plans and reflections share one metadata row. In PR B, saving a reflection without a plan created that row, and its numeric defaults made it look like a deliberately saved all-zero budget.
+- **Decision:** Migration 006 adds nullable `plan_presence` with `saved` and `not_saved` values. A plan PUT sets `saved`; a reflection-only insert sets `not_saved`. The API returns `plan_status` and puts a saved reflection in a separate top-level `review` field. A deliberate all-zero plan remains a plan.
+- **Legacy compatibility:** Existing rows retain `plan_presence = NULL`, reported as `legacy_unknown`. The migration does not infer intent from zero values, dates, or review fields. The existing plan values and reflection remain readable. A later explicit plan PUT confirms the plan as saved; unresolved rows require owner review before any manual backfill.
+- **Write behavior:** Review writes preserve plan fields and presence on existing rows; plan writes preserve review answers and snapshots. Only an explicit monthly review save refreshes its financial snapshot. Ledger edits never rewrite it.
+- **Alternatives:** Nullable plan amounts (would spread null handling across each plan field); infer absence from zero values or review timestamps (ambiguous and unsafe).
+- **Consequences:** Fresh databases apply migration 006 after 005. Existing databases apply it once after verifying migrations and rehearsing backup/restore. The added nullable field is tolerated by older code, but an older API writing a new plan cannot set its presence; on re-upgrade that row remains explicitly `legacy_unknown` until confirmed. A frontend receiving a non-null plan from an older API without `plan_status` treats it as `legacy_unknown` rather than assuming it was deliberate.
+
 ## Change-control template
 
 Use this for future changes:

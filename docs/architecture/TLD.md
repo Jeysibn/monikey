@@ -1,8 +1,8 @@
 # MoniKey v1 — Technical-Level Design (TLD)
 
-**Version:** 1.4 (ADR-021 Kakeibo metadata added)
-**Date:** 2026-11-02
-**Status:** Requirements and technical direction agreed. ADR-021 accepts staged Kakeibo metadata integration; PR A provides the architecture and database foundation, and PR B implements the backend API on top of migration 005. Frontend integration remains a later milestone. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M9 local Compose behavior and M11 health, persistence, ingress, logical restore, and image rollback were checked; see [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for current evidence and limits. This design does not claim off-cluster backup recovery or public deployment readiness.
+**Version:** 1.5 (ADR-021 plan-presence amendment and release integration)
+**Date:** 2026-11-03
+**Status:** ADR-021's Kakeibo API and frontend are implemented on the integration branch. PR E adds explicit plan-presence tracking, local integration and recovery rehearsal, and a release runbook; it does not authorize deployment. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. Prior full React/API browser acceptance and screen-reader checks remain limited. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current PR E evidence and limitations. This design does not claim production backup verification or off-cluster recovery.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -219,6 +219,7 @@ erDiagram
     }
     KAKEIBO_MONTH_PLANS {
       date month PK
+      varchar plan_presence
       numeric planned_income
       numeric allocated_starting_funds
       numeric savings_target
@@ -362,6 +363,15 @@ total expenses, each envelope and unclassified expenses. Later ledger edits
 must flag changed actuals without replacing the saved reflection snapshot.
 Neither planning nor review endpoints may mutate financial tables.
 
+Migration 006 adds nullable `plan_presence`: `saved` means a plan was explicitly
+submitted, and `not_saved` means a reflection-only row has no plan. A deliberate
+all-zero plan is still `saved`. Pre-006 rows remain `NULL` and are reported as
+`legacy_unknown`; zero values are never used to guess intent. The monthly API
+returns reflections in a separate top-level `review`, so a reflection can be
+read while `plan` is `null`. Legacy review fields remain within a non-null plan
+object for compatibility. Plan PUT preserves the existing review and snapshot;
+review PUT refreshes the snapshot only when explicitly saved.
+
 **Example:** Bank starts ₱5,000; card starts ₱0 debt; ₱1,000 grocery card purchase; ₱600 bank card payment → bank ₱4,400, card debt ₱400, net tracked position ₱4,000, monthly expenses ₱1,000. No double count.
 
 **Edge cases to test:** editing/deleting a purchase after a card payment, negative liquid balances (display as negative, not silently clamp), overpayment/card credit, dates across month boundaries, zero transaction history, same category name under income/expense.
@@ -392,7 +402,7 @@ Neither planning nor review endpoints may mutate financial tables.
 | PUT | `/api/account-transfers/{id}` | Edit a transfer |
 | DELETE | `/api/account-transfers/{id}` | Delete a transfer; 204 on success |
 | GET | `/api/summary?month=2026-10` | Liquid balance, card debt, net position, month income/expense |
-| GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Read or upsert an optional monthly plan and dashboard; missing plan is `null` |
+| GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Read/upsert an optional plan; returns `plan_status` (`saved`, `not_saved`, `legacy_unknown`) and keeps review available when `plan` is `null` |
 | GET | `/api/kakeibo/months/{YYYY-MM}/report` | Ledger-derived income and expense actuals, envelope totals, unclassified amount and plan variance |
 | PUT | `/api/kakeibo/months/{YYYY-MM}/review` | Save bounded reflection, optional declared savings and server-generated closeout snapshot |
 | GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Monday-based ledger summary and one weekly reflection per Monday; PUT replaces all three note fields, so omitted fields clear |

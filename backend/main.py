@@ -340,6 +340,24 @@ def kakeibo_plan_response(row: dict[str, object] | None) -> dict[str, object] | 
     return response
 
 
+def kakeibo_review_response(row: dict[str, object] | None) -> dict[str, object] | None:
+    if row is None or row["reviewed_at"] is None:
+        return None
+    return {
+        "actual_saved_declared": (
+            None if row["actual_saved_declared"] is None else format_money(row["actual_saved_declared"])
+        ),
+        "review_available": row["review_available"],
+        "review_savings": row["review_savings"],
+        "review_change": row["review_change"],
+        "review_appreciated": row["review_appreciated"],
+        "review_surprise": row["review_surprise"],
+        "review_lesson": row["review_lesson"],
+        "reviewed_at": format_timestamp(row["reviewed_at"]),
+        "review_actuals_snapshot": row["review_actuals_snapshot"],
+    }
+
+
 def kakeibo_actuals(connection: psycopg.Connection, start_date: date, end_date: date) -> dict[str, Decimal]:
     row = connection.execute(
         """
@@ -367,12 +385,18 @@ def kakeibo_month_response(
     start_date, end_date = month_bounds(month)
     plan = get_kakeibo_plan(connection, start_date)
     actuals = kakeibo_actuals(connection, start_date, end_date)
-    plan_json = kakeibo_plan_response(plan)
+    plan_status = (
+        "not_saved" if plan is None
+        else "legacy_unknown" if plan["plan_presence"] is None
+        else plan["plan_presence"]
+    )
+    has_plan = plan_status != "not_saved"
+    plan_json = kakeibo_plan_response(plan if has_plan else None)
 
     envelope_report: dict[str, dict[str, str | None]] = {}
     available_to_allocate: Decimal | None = None
     unallocated: Decimal | None = None
-    if plan is not None:
+    if has_plan and plan is not None:
         available_to_allocate = (
             Decimal(plan["planned_income"])
             + Decimal(plan["allocated_starting_funds"])
@@ -413,21 +437,23 @@ def kakeibo_month_response(
 
     return {
         "month": month,
+        "plan_status": plan_status,
         "plan": plan_json,
-        "planned_income": None if plan is None else format_money(plan["planned_income"]),
+        "planned_income": None if not has_plan or plan is None else format_money(plan["planned_income"]),
         "actual_income": format_money(actuals["actual_income"]),
         "available_to_allocate": None if available_to_allocate is None else format_money(available_to_allocate),
         "unallocated": None if unallocated is None else format_money(unallocated),
         "envelopes": envelope_report,
         "unclassified_expenses": format_money(actuals["unclassified"]),
         "total_expenses": format_money(actuals["total_expenses"]),
-        "savings_target": None if plan is None else format_money(plan["savings_target"]),
+        "savings_target": None if not has_plan or plan is None else format_money(plan["savings_target"]),
         "actual_saved_declared": (
             None if plan is None or plan["actual_saved_declared"] is None
             else format_money(plan["actual_saved_declared"])
         ),
         "reviewed_at": None if reviewed_at is None else format_timestamp(reviewed_at),
         "actuals_changed_since_review": actuals_changed,
+        "review": kakeibo_review_response(plan),
     }
 
 
@@ -1145,9 +1171,9 @@ def save_kakeibo_month(month: str, values: KakeiboMonthPlanInput) -> dict[str, o
             INSERT INTO kakeibo_month_plans (
               month, planned_income, allocated_starting_funds, savings_target,
               prior_period_debt_reserve, needs_limit, wants_limit, culture_limit,
-              unexpected_limit, monthly_intention
+              unexpected_limit, monthly_intention, plan_presence
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'saved')
             ON CONFLICT (month) DO UPDATE SET
               planned_income = EXCLUDED.planned_income,
               allocated_starting_funds = EXCLUDED.allocated_starting_funds,
@@ -1158,6 +1184,7 @@ def save_kakeibo_month(month: str, values: KakeiboMonthPlanInput) -> dict[str, o
               culture_limit = EXCLUDED.culture_limit,
               unexpected_limit = EXCLUDED.unexpected_limit,
               monthly_intention = EXCLUDED.monthly_intention,
+              plan_presence = 'saved',
               updated_at = NOW()
             """,
             (
@@ -1199,11 +1226,11 @@ def save_kakeibo_month_review(month: str, values: KakeiboMonthReviewInput) -> di
         connection.execute(
             """
             INSERT INTO kakeibo_month_plans (
-              month, actual_saved_declared, review_available, review_savings,
+              month, plan_presence, actual_saved_declared, review_available, review_savings,
               review_change, review_appreciated, review_surprise, review_lesson,
               reviewed_at, review_actuals_snapshot
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            VALUES (%s, 'not_saved', %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
             ON CONFLICT (month) DO UPDATE SET
               actual_saved_declared = EXCLUDED.actual_saved_declared,
               review_available = EXCLUDED.review_available,

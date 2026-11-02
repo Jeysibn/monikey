@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { isNotFound } from '@/dataSource'
 import { monthLabel, monthOptions } from '@/lib/finance'
-import { ENVELOPES, planIsPlaceholder } from '@/lib/kakeibo'
+import { ENVELOPES } from '@/lib/kakeibo'
 import { formatPeso } from '@/lib/money'
 import { useDelayedFlag } from '@/useDelayedFlag'
 import type { Resource } from '@/useResource'
@@ -132,7 +132,8 @@ export function KakeiboView({
   const waiting = forcedLoading || (!report && !kakeibo.error)
   const updating = useDelayedFlag(kakeibo.stale && !!report, 400)
   const unavailable = kakeibo.error && isNotFound(kakeibo.error) // an API from before Kakeibo has no such route
-  const hasPlan = report?.plan != null && !planIsPlaceholder(report)
+  const hasPlan = report?.planStatus === 'saved'
+  const confirmLegacyPlan = report?.planStatus === 'legacy_unknown'
   const label = monthLabel(month)
 
   return (
@@ -144,9 +145,9 @@ export function KakeiboView({
         <UpdatingStamp show={updating} />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} id="kakeibo-month" />
         {!waiting && !kakeibo.error && report && (
-          <Button variant="secondary" onClick={onEditPlan} aria-label={`${hasPlan ? 'Edit' : 'Create'} the ${label} plan`}>
-            {hasPlan ? <NotebookPen aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            {hasPlan ? 'Edit plan' : 'Create plan'}
+          <Button variant="secondary" onClick={onEditPlan} aria-label={`${hasPlan ? 'Edit' : confirmLegacyPlan ? 'Confirm' : 'Create'} the ${label} plan`}>
+            {hasPlan || confirmLegacyPlan ? <NotebookPen aria-hidden="true" /> : <Plus aria-hidden="true" />}
+            {hasPlan ? 'Edit plan' : confirmLegacyPlan ? 'Confirm plan' : 'Create plan'}
           </Button>
         )}
       </PageHeader>

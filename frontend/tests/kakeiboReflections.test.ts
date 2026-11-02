@@ -16,7 +16,6 @@ import {
   isMonday,
   mondayOf,
   parseSavedDeclared,
-  planIsPlaceholder,
   reviewValues,
   validateReview,
   validateWeekNotes,
@@ -120,7 +119,7 @@ describe('wire contract', () => {
       created_at: '2024-02-29T12:00:00Z', updated_at: '2024-02-29T12:00:00Z',
     }
     const month = {
-      month: '2024-02', plan, planned_income: '0.00', actual_income: '1000.00', available_to_allocate: '0.00', unallocated: '0.00',
+      month: '2024-02', plan_status: 'saved', plan, planned_income: '0.00', actual_income: '1000.00', available_to_allocate: '0.00', unallocated: '0.00',
       envelopes: Object.fromEntries(['needs', 'wants', 'culture', 'unexpected'].map((e) => [e, { limit: '0.00', actual_spent: e === 'needs' ? '120.00' : e === 'wants' ? '50.00' : '0.00', remaining: e === 'needs' ? '-120.00' : e === 'wants' ? '-50.00' : '0.00' }])),
       unclassified_expenses: '50.00', total_expenses: '220.00', savings_target: '0.00', actual_saved_declared: '300.00', reviewed_at: '2024-02-29T12:00:00Z', actuals_changed_since_review: true,
     }
@@ -129,9 +128,33 @@ describe('wire contract', () => {
     assert.equal(parsed.review?.change, 'Reduce wants.')
     assert.deepEqual(parsed.review?.snapshot, { actualIncome: 100_000, totalExpenses: 20_000, unclassified: 5_000, envelopes: { needs: 10_000, wants: 5_000, culture: 0, unexpected: 0 } })
     assert.equal(parsed.actualsChangedSinceReview, true)
-    assert.equal(planIsPlaceholder(parsed), true) // a review saved without a plan leaves ₱0.00 plan amounts
+    assert.equal(parsed.planStatus, 'saved') // zero amounts remain a valid, explicitly saved plan
+    const oldApiRow: Record<string, unknown> = { ...month }
+    delete oldApiRow.plan_status
+    assert.equal(fromWireKakeiboMonth(oldApiRow, '2024-02').planStatus, 'legacy_unknown')
     assert.throws(() => fromWireKakeiboMonth({ ...month, plan: { ...plan, reviewed_at: null } }, '2024-02')) // "changed" with no review
     assert.throws(() => fromWireKakeiboMonth({ ...month, plan: { ...plan, review_actuals_snapshot: { ...plan.review_actuals_snapshot, total_expenses: '-1.00' } } }, '2024-02'))
+  })
+
+  it('reads a reflection-only month without inventing a plan', () => {
+    const noPlan = {
+      month: '2024-02', plan_status: 'not_saved', plan: null, planned_income: null,
+      actual_income: '1000.00', available_to_allocate: null, unallocated: null,
+      envelopes: Object.fromEntries(['needs', 'wants', 'culture', 'unexpected'].map((e) => [e, { limit: null, actual_spent: '0.00', remaining: null }])),
+      unclassified_expenses: '0.00', total_expenses: '0.00', savings_target: null, actual_saved_declared: '0.00',
+      reviewed_at: '2024-02-29T12:00:00Z', actuals_changed_since_review: false,
+      review: {
+        actual_saved_declared: '300.00', review_available: 'Income covered the plan.', review_savings: null,
+        review_change: 'Reduce wants.', review_appreciated: null, review_surprise: null, review_lesson: null,
+        reviewed_at: '2024-02-29T12:00:00Z',
+        review_actuals_snapshot: { actual_income: '1000.00', total_expenses: '0.00', unclassified: '0.00', envelopes: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00' } },
+      },
+    }
+    const parsed = fromWireKakeiboMonth(noPlan, '2024-02')
+    assert.equal(parsed.plan, null)
+    assert.equal(parsed.planStatus, 'not_saved')
+    assert.equal(parsed.review?.available, 'Income covered the plan.')
+    assert.equal(parsed.review?.savedDeclared, 30_000)
   })
 })
 
@@ -274,14 +297,20 @@ describe('mock: month-end reflection and its snapshot', () => {
     assert.equal(month.review?.snapshot?.envelopes.wants, saved!.envelopes.wants + 5_000)
   })
 
-  it('a review on a month with no plan stores ₱0.00 plan amounts, like the API, and reads as a placeholder', async () => {
+  it('a review on a month with no plan remains separate from a deliberately saved zero plan', async () => {
     const source = createMockSource()
     await source.saveKakeiboReview('2026-09', answers)
     const month = await source.loadKakeiboMonth('2026-09', signal())
-    assert.equal(month.plan?.plannedIncome, 0)
-    assert.equal(month.availableToAllocate, 0)
-    assert.equal(planIsPlaceholder(month), true)
-    assert.equal(planIsPlaceholder(await source.loadKakeiboMonth('2026-10', signal())), false)
+    assert.equal(month.plan, null)
+    assert.equal(month.planStatus, 'not_saved')
+    assert.equal(month.availableToAllocate, null)
+    assert.equal(month.review?.available, 'Enough.')
+    const zeroPlan = { plannedIncome: '0', allocatedStartingFunds: '0', savingsTarget: '0', priorPeriodDebtReserve: '0', needsLimit: '0', wantsLimit: '0', cultureLimit: '0', unexpectedLimit: '0', monthlyIntention: '' }
+    await source.saveKakeiboPlan('2026-09', zeroPlan)
+    const savedZero = await source.loadKakeiboMonth('2026-09', signal())
+    assert.equal(savedZero.plan?.plannedIncome, 0)
+    assert.equal(savedZero.planStatus, 'saved')
+    assert.equal(savedZero.review?.available, 'Enough.')
   })
 
   it('refuses invalid savings with a 422 on that field', async () => {

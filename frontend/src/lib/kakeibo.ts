@@ -3,7 +3,6 @@ import type {
   Centavos,
   KakeiboEnvelope,
   KakeiboEnvelopeReport,
-  KakeiboMonth,
   KakeiboPlan,
   KakeiboPlanValues,
   KakeiboReview,
@@ -262,16 +261,4 @@ export function validateReview(values: KakeiboReviewValues): Partial<Record<keyo
     if (values[field].trim().length > MAX_REFLECTION) errors[field] = `Keep this under ${MAX_REFLECTION.toLocaleString('en')} characters.`
   }
   return errors
-}
-
-/**
- * True when a month's stored "plan" holds only zeros and no intention while a review exists. Saving a review
- * for a month without a plan makes the server store the plan amounts at their default of ₱0.00, so this is
- * shown as "no plan amounts set" rather than as a plan the person made. (A deliberate all-zero plan with a
- * review reads the same; the wording stays true for both.)
- */
-export function planIsPlaceholder(month: KakeiboMonth): boolean {
-  const plan = month.plan
-  if (!plan || !month.review || plan.monthlyIntention) return false
-  return [plan.plannedIncome, plan.allocatedStartingFunds, plan.savingsTarget, plan.priorPeriodDebtReserve, ...Object.values(plan.limits)].every((value) => value === 0)
 }

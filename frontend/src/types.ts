@@ -186,6 +186,8 @@ export interface KakeiboEnvelopeReport {
   remaining: Centavos | null // limit − spent, worked out by the server; negative when over the limit
 }
 
+export type KakeiboPlanStatus = 'saved' | 'not_saved' | 'legacy_unknown'
+
 /**
  * The month's Kakeibo report, exactly as the server works it out (GET /api/kakeibo/months/{month}/report).
  * Actual figures come from the ledger; plan figures are null when the month has no plan. The screen shows
@@ -193,6 +195,7 @@ export interface KakeiboEnvelopeReport {
  */
 export interface KakeiboMonth {
   month: string // "YYYY-MM"
+  planStatus: KakeiboPlanStatus // old rows are unknown until the owner explicitly confirms them
   plan: KakeiboPlan | null
   actualIncome: Centavos
   availableToAllocate: Centavos | null // planned income + starting funds − savings target − debt reserve

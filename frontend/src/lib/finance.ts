@@ -199,6 +199,7 @@ export function kakeiboMonth(data: MockData, month: string): KakeiboMonth {
   const review = stored ? (({ month: _month, ...rest }) => rest)(stored) : null
   return {
     month,
+    planStatus: plan ? 'saved' : 'not_saved',
     plan,
     actualIncome: actuals.actualIncome,
     availableToAllocate: available,

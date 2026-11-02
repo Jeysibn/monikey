@@ -93,4 +93,17 @@ describe('buildWalletGalleryModel', () => {
       assert.equal(item.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
     }
   })
+
+  it('resolves unknown or retired saved artwork to MoniKey default for live accounts', () => {
+    const model = buildWalletGalleryModel(snapshot, {
+      version: 1,
+      byAccountId: {
+        '1': { artworkId: 'removed-artwork' },
+        '999': { artworkId: MONIKEY_DEFAULT_ARTWORK_ID },
+      },
+    })
+
+    assert.equal(model.liquid.find((item) => item.accountId === 1)?.artworkId, MONIKEY_DEFAULT_ARTWORK_ID)
+    assert.equal(model.liquid.some((item) => item.accountId === 999), false)
+  })
 })

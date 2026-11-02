@@ -8,6 +8,8 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import type { DataSource } from '@/dataSource'
 import type { AccountValues } from '@/lib/accountForm'
 import type { LedgerSnapshot } from '@/types'
+import { resolveWalletArtwork } from '@/wallet/artworkCatalog'
+import { savedWalletArtworkId, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 type LoadState =
   | { id: number; status: 'loading' }
@@ -18,14 +20,18 @@ export function EditAccountDialog({
   accountId,
   source,
   snapshot,
+  walletPreferences,
   onSubmit,
+  onSaveAppearance,
   onOpenChange,
   onClosed,
 }: {
   accountId: number | null
   source: DataSource
   snapshot: LedgerSnapshot
+  walletPreferences: WalletPreferencesV1
   onSubmit: (id: number, values: AccountValues) => Promise<void>
+  onSaveAppearance: (id: number, type: AccountValues['type'], artworkId: string) => boolean
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
 }) {
@@ -79,6 +85,16 @@ export function EditAccountDialog({
             snapshot={snapshot}
             initial={current.values}
             nameRef={nameRef}
+            appearance={{
+              accountId: current.id,
+              accountType: current.values.type,
+              selectedArtworkId: resolveWalletArtwork(
+                savedWalletArtworkId(walletPreferences, current.id),
+                current.values.type,
+              ).id,
+              savedArtworkId: savedWalletArtworkId(walletPreferences, current.id),
+              onSave: (artworkId) => onSaveAppearance(current.id, current.values.type, artworkId),
+            }}
             onDirty={() => setDirty(true)}
             onSavingChange={setSaving}
             onSubmit={(values) => onSubmit(current.id, values)}

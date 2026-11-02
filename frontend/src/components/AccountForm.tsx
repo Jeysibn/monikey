@@ -8,6 +8,7 @@ import { FormField } from '@/components/FormField'
 import { InlineNotice } from '@/components/InlineNotice'
 import { MoneyInput } from '@/components/MoneyInput'
 import { SegmentedControl } from '@/components/SegmentedControl'
+import { WalletDesignPicker } from '@/components/wallet/WalletDesignPicker'
 import { isCardType, MAX_NAME, validateAccount, type AccountField, type AccountValues } from '@/lib/accountForm'
 import { SLOW_SAVE_MS, SLOW_SAVE_TEXT, WriteError } from '@/lib/apiErrors'
 import { describedBy } from '@/lib/describedBy'
@@ -42,6 +43,7 @@ export function AccountForm({
   onSavingChange,
   onSubmit,
   onCancel,
+  appearance,
 }: {
   mode: 'add' | 'edit'
   excludeAccountId?: number
@@ -52,6 +54,13 @@ export function AccountForm({
   onSavingChange: (saving: boolean) => void
   onSubmit: (values: AccountValues) => Promise<void>
   onCancel: () => void
+  appearance?: {
+    accountId: number
+    accountType: AccountType
+    selectedArtworkId: string
+    savedArtworkId: string | null
+    onSave: (artworkId: string) => boolean
+  }
 }) {
   const [values, setValues] = useState(initial)
   const [touched, setTouched] = useState<Set<AccountField>>(new Set())
@@ -224,6 +233,16 @@ export function AccountForm({
             </FormField>
           )}
         </fieldset>
+        {mode === 'edit' && appearance && (
+          <WalletDesignPicker
+            accountId={appearance.accountId}
+            accountType={appearance.accountType}
+            selectedArtworkId={appearance.selectedArtworkId}
+            savedArtworkId={appearance.savedArtworkId}
+            disabled={saving}
+            onSave={appearance.onSave}
+          />
+        )}
       </DialogBody>
 
       <DialogFooter>

@@ -17,6 +17,7 @@ import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
 import type { MockOptions } from '@/mockSource'
 import { useResource } from '@/useResource'
+import { readWalletPreferences, saveWalletArtworkPreference, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 import type { ActivityItem, AddState, EntryTarget, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
@@ -25,7 +26,7 @@ import { OverviewView } from '@/views/OverviewView'
 /*
  * App state is deliberately small (TLD section 4): the data source and what it has reported, which view is
  * showing, the month and account filters, the open dialog and one status message. No router, no store
- * library, no persistence. Screens read figures from the DataSource (today the mock; the API later) and never
+ * library, and only local presentation preferences are persisted. Screens read figures from the DataSource and never
  * calculate from stored rows. After a write the figures are fetched again (spec section 7) and the
  * confirmation message is built from the fresh ones; there are no optimistic updates.
  *
@@ -82,6 +83,7 @@ function App() {
   )
   const [version, setVersion] = useState(0) // bumped after a write so every screen fetches again
   const [view, setView] = useState<View>('overview')
+  const [walletPreferences, setWalletPreferences] = useState<WalletPreferencesV1>(() => readWalletPreferences())
   const [month, setMonth] = useState(() => monthOf(source.today))
   const [accountFilter, setAccountFilter] = useState<number | null>(null) // Activity's account filter
   // The page size belongs to one combination of filters; a different month or account starts again at one page.
@@ -255,6 +257,11 @@ function App() {
     setStatus({ text: accountUpdatedMessage(values) })
     setEditAccountId(null)
   }
+  const saveWalletAppearance = (id: number, type: AccountValues['type'], artworkId: string) => {
+    const result = saveWalletArtworkPreference(id, artworkId, type, walletPreferences)
+    if (result.ok) setWalletPreferences(result.preferences)
+    return result.ok
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -321,6 +328,7 @@ function App() {
             onEditAccount={editAccount}
             onPayCard={openPay}
             onTransfer={openTransfer}
+            walletPreferences={walletPreferences}
           />
         )}
       </AppShell>
@@ -350,7 +358,9 @@ function App() {
             accountId={editAccountId}
             source={source}
             snapshot={snapshot}
+            walletPreferences={walletPreferences}
             onSubmit={updateAccount}
+            onSaveAppearance={saveWalletAppearance}
             onOpenChange={(open) => !open && setEditAccountId(null)}
             onClosed={restoreFocus}
           />

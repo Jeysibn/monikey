@@ -15,6 +15,7 @@ import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import type { Resource } from '@/useResource'
 import type { AccountsSnapshot, AddState, FinancialSummary } from '@/types'
 import { buildWalletGalleryModel } from '@/wallet/walletModel'
+import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 /*
  * Accounts (docs/design/UI_UX_SPEC.md section 6). Question: "What do I have, and what do I owe, account
@@ -43,6 +44,7 @@ export function AccountsView({
   onEditAccount,
   onPayCard,
   onTransfer,
+  walletPreferences,
 }: {
   accounts: Resource<AccountsSnapshot> // the rows and cards
   summary: Resource<FinancialSummary> // the two totals
@@ -53,6 +55,7 @@ export function AccountsView({
   onEditAccount: (accountId: number, from: HTMLElement) => void
   onPayCard: (cardId: number) => void
   onTransfer: () => void
+  walletPreferences: WalletPreferencesV1
 }) {
   const [displayMode, setDisplayMode] = useState<WalletViewMode>('cards')
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
@@ -62,7 +65,7 @@ export function AccountsView({
   const summary = summaryRes.data ?? NO_SUMMARY
   const rows = snapshot?.liquid ?? []
   const cards = snapshot?.cards ?? []
-  const wallet = snapshot ? buildWalletGalleryModel(snapshot) : { liquid: [], cards: [] }
+  const wallet = snapshot ? buildWalletGalleryModel(snapshot, walletPreferences) : { liquid: [], cards: [] }
   const allWalletCards = [...wallet.liquid, ...wallet.cards]
   const selectedId = allWalletCards.some((item) => item.accountId === selectedAccountId)
     ? selectedAccountId

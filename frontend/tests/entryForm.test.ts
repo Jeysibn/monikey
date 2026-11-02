@@ -268,7 +268,7 @@ describe('ledger: editing and deleting (Milestone 4.5b)', () => {
   const edit = (d: typeof data, v: EntryValues, t: EntryTarget) => ledgerReducer(d, toUpdateAction(v, t))
 
   it('loads an entry into form values (kind from the category, amount as editable text)', () => {
-    assert.deepEqual(entryValues(data, tx(17)), { kind: 'expense', amount: '385.00', accountId: GCASH, cardId: null, destinationAccountId: null, categoryId: FOOD, date: '2026-10-24', note: 'Lunch with team' })
+    assert.deepEqual(entryValues(data, tx(17)), { kind: 'expense', amount: '385.00', accountId: GCASH, cardId: null, destinationAccountId: null, categoryId: FOOD, date: '2026-10-24', note: 'Lunch with team', envelope: null })
     assert.equal(entryValues(data, tx(11))!.kind, 'income')
     assert.deepEqual(entryValues(data, payment), { kind: 'payment', amount: '5000.00', accountId: MAIN, cardId: BLUE, destinationAccountId: null, categoryId: null, date: '2026-10-20', note: '' })
     assert.equal(entryValues(data, tx(999)), null)

@@ -9,6 +9,7 @@ import { MoneyInput } from '@/components/MoneyInput'
 import { FieldError, FormField } from '@/components/FormField'
 import { InlineNotice } from '@/components/InlineNotice'
 import { SegmentedControl } from '@/components/SegmentedControl'
+import { EnvelopePicker } from '@/components/kakeibo/EnvelopePicker'
 import {
   accountOptionLabel,
   accountsFor,
@@ -24,6 +25,7 @@ import {
 import { SLOW_SAVE_MS, SLOW_SAVE_TEXT, WriteError } from '@/lib/apiErrors'
 import { describedBy } from '@/lib/describedBy'
 import { isCard } from '@/lib/finance'
+import { suggestedEnvelope } from '@/lib/kakeibo'
 import { accountById, cardOf } from '@/lib/snapshot'
 import { amountText, formatPeso } from '@/lib/money'
 import { useDelayedFlag } from '@/useDelayedFlag'
@@ -35,6 +37,10 @@ import type { AccountInfo, LedgerSnapshot } from '@/types'
  * on success or rejects with the message to show). While saving, every field is disabled.
  * Errors appear on blur and on submit. A failed submit shows a summary and moves focus to it.
  * The preview and the notices are display-only estimates (see lib/entryForm.ts).
+ * An expense also gets a Kakeibo envelope (ADR-021) when the server supports it. A new expense follows its
+ * category's suggested envelope until the person picks one themselves; after that, changing the category never
+ * replaces their choice. An entry being edited keeps its stored envelope (even "not classified") unless the
+ * person changes it.
  */
 const KINDS: { value: EntryKind; label: string }[] = [
   { value: 'expense', label: 'Expense' },
@@ -50,10 +56,11 @@ const FIELD_ID: Record<EntryField, string> = {
   card: 'qa-card',
   destination: 'qa-destination',
   category: 'qa-category-0',
+  envelope: 'qa-envelope-0',
   date: 'qa-date',
   note: 'qa-note',
 }
-const FIELD_ORDER: EntryField[] = ['amount', 'account', 'destination', 'card', 'category', 'date', 'note']
+const FIELD_ORDER: EntryField[] = ['amount', 'account', 'destination', 'card', 'category', 'envelope', 'date', 'note']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
 
 function AccountOptions({ accounts, snapshot, withFigures }: { accounts: AccountInfo[]; snapshot: LedgerSnapshot; withFigures: boolean }) {
@@ -113,6 +120,8 @@ export function TransactionForm({
   // Fields the person has actually changed. Leaving an untouched field shows no error: the message would
   // grow the bottom sheet and push the control the person is tapping out from under their finger.
   const edited = useRef<Set<EntryField>>(new Set())
+  // True once the envelope is the person's own choice. A stored entry's envelope already is.
+  const envelopeChosen = useRef(editing)
 
   const errors = validate(values, snapshot)
   const shown = (field: EntryField) =>
@@ -139,6 +148,7 @@ export function TransactionForm({
 
   const changeKind = (kind: EntryKind) => {
     onDirty()
+    envelopeChosen.current = false
     setValues((v) => switchKind(v, kind, snapshot))
     setTouched((t) => {
       const next = new Set(t)
@@ -352,7 +362,11 @@ export function TransactionForm({
                       name="qa-category"
                       value={c.id}
                       checked={values.categoryId === c.id}
-                      onChange={() => set({ categoryId: c.id }, 'category')}
+                      onChange={() => {
+                        // Until the person picks an envelope, a new expense follows the category's suggestion.
+                        const follow = values.kind === 'expense' && values.envelope !== undefined && !envelopeChosen.current
+                        set({ categoryId: c.id, ...(follow ? { envelope: suggestedEnvelope(snapshot.categories, c.id) } : {}) }, 'category')
+                      }}
                       onBlur={() => blur('category')}
                       className="peer sr-only"
                     />
@@ -371,6 +385,20 @@ export function TransactionForm({
               </div>
               {categoryError && <FieldError id="qa-category-error" message={categoryError} />}
             </fieldset>
+          )}
+
+          {values.kind === 'expense' && values.envelope !== undefined && (
+            <EnvelopePicker
+              value={values.envelope}
+              suggestion={suggestedEnvelope(snapshot.categories, values.categoryId)}
+              categoryName={snapshot.categories.find((c) => c.id === values.categoryId)?.name ?? null}
+              error={shown('envelope')}
+              onChange={(envelope) => {
+                envelopeChosen.current = true
+                set({ envelope }, 'envelope')
+              }}
+              onBlur={() => blur('envelope')}
+            />
           )}
 
           {preview && amountValid && (

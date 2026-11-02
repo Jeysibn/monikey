@@ -8,6 +8,8 @@ import type {
   Category,
   CategoryType,
   FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboMonth,
   LedgerSnapshot,
   MockData,
 } from '../types.ts'
@@ -145,6 +147,38 @@ export function summarize(data: MockData, month: string): FinancialSummary {
 }
 
 /**
+ * The month's Kakeibo report (ADR-021), the mock's stand-in for GET /api/kakeibo/months/{month}/report.
+ * Same rules as the server: only expense transactions count, so a card purchase counts once and card payments
+ * and transfers never do; an expense with no envelope is "unclassified" and still part of total expenses;
+ * remaining = limit − spent and may be negative; with no plan, limits and remainders are null.
+ */
+export function kakeiboMonth(data: MockData, month: string): KakeiboMonth {
+  const expenses = data.transactions.filter((t) => monthOf(t.date) === month && typeOfCategory(data.categories, t.categoryId) === 'expense')
+  const income = data.transactions.filter((t) => monthOf(t.date) === month && typeOfCategory(data.categories, t.categoryId) === 'income')
+  const plan = data.kakeiboPlans?.find((p) => p.month === month) ?? null
+  const spentOn = (envelope: KakeiboEnvelope | null) => sum(expenses.filter((t) => (t.envelope ?? null) === envelope).map((t) => t.amount))
+  const envelopes = Object.fromEntries(
+    (['needs', 'wants', 'culture', 'unexpected'] as const).map((envelope) => {
+      const spent = spentOn(envelope)
+      const limit = plan ? plan.limits[envelope] : null
+      return [envelope, { limit, spent, remaining: limit === null ? null : limit - spent }]
+    }),
+  ) as KakeiboMonth['envelopes']
+  const available = plan ? plan.plannedIncome + plan.allocatedStartingFunds - plan.savingsTarget - plan.priorPeriodDebtReserve : null
+  const limits = plan ? sum(Object.values(plan.limits)) : 0
+  return {
+    month,
+    plan,
+    actualIncome: sum(income.map((t) => t.amount)),
+    availableToAllocate: available,
+    unallocated: available === null ? null : available - limits,
+    envelopes,
+    unclassifiedExpenses: spentOn(null),
+    totalExpenses: sum(expenses.map((t) => t.amount)),
+  }
+}
+
+/**
  * Income, expenses, card payments and account transfers for one month as a single list, newest first.
  * Order: date, then creation time, then expenses/income before payments, then id (all descending),
  * so entries on the same day never swap places between renders.
@@ -183,6 +217,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
         categoryId: t.categoryId,
         date: t.date,
         note: t.note ?? '',
+        envelope: t.envelope ?? null,
       },
     })
   }

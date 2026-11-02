@@ -2,9 +2,10 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery,
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
 import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
 import { amountText } from './lib/money.ts'
-import { activityPage, buildSnapshot, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
+import { activityPage, buildSnapshot, kakeiboMonth, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
+import { parsePlanAmount, validatePlan } from './lib/kakeibo.ts'
 import { getMockData, type DemoScenario } from './mockData.ts'
-import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, MockData } from './types.ts'
+import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, KakeiboMonth, KakeiboPlan, KakeiboPlanValues, MockData } from './types.ts'
 
 /*
  * The mock behind the DataSource seam. It keeps the fictional ledger in memory, applies writes with the same
@@ -24,7 +25,7 @@ export interface MockOptions {
   failNextWrite?: boolean // the first save, delete or new account fails once (?demo=save-error)
   invalidNextWrite?: boolean // the first save or new account is refused with a 422 and a field (?demo=invalid)
   readFailures?: ReadFailures | null // ?demo=load-error (once), ?demo=flaky (second), ?demo=offline (always)
-  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, summary, activity); all if omitted (?failing=summary)
+  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, summary, activity, kakeibo, kakeibo-plan); all if omitted (?failing=summary)
   writeFailures?: 'always' | null // ?demo=offline: no write goes through
   readDelayMs?: number // ?demo=slow: every read takes this long
   writeDelayMs?: number // ?demo=slow: every write takes this long (long enough to show the "taking longer" notice)
@@ -120,6 +121,9 @@ export function createMockSource({
     saveEntry: async (values: EntryValues, target?: EntryTarget): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'amount')
       if (target && !entryExists(data, target)) throw new ApiError(404, 'not_found', GONE_ON_EDIT)
+      // The API's ADR-021 check: only an expense may carry an envelope.
+      const category = data.categories.find((c) => c.id === values.categoryId)
+      if (values.envelope && category?.type !== 'expense') throw new ApiError(422, 'invalid_field', 'Income transactions cannot have a Kakeibo envelope.', 'envelope')
       data = ledgerReducer(data, target ? toUpdateAction(values, target) : toAction(values, nowIso()))
     },
 
@@ -168,6 +172,33 @@ export function createMockSource({
         throw new ApiError(422, 'invalid_field', 'This correction exceeds the supported account range.', values.type === 'credit_card' ? 'owed' : 'balance')
       }
       data = { ...data, accounts: data.accounts.map((account) => account.id === id ? updated : account) }
+    },
+
+    loadKakeiboMonth: (month: string, signal: AbortSignal): Promise<KakeiboMonth> =>
+      read('kakeibo', `kakeibo:${month}`, signal, () => kakeiboMonth(data, month)),
+
+    loadKakeiboPlan: (month: string, signal: AbortSignal): Promise<KakeiboPlan | null> =>
+      read('kakeibo-plan', `kakeibo-plan:${month}`, signal, () => kakeiboMonth(data, month).plan),
+
+    saveKakeiboPlan: async (month: string, values: KakeiboPlanValues): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'plannedIncome')
+      // The API refuses a negative amount or more than two decimal places with a 422 on that field.
+      const invalid = Object.keys(validatePlan(values))[0]
+      if (invalid) throw new ApiError(422, 'invalid_field', 'The request could not be validated.', invalid)
+      const money = (text: string) => {
+        const parsed = parsePlanAmount(text)
+        return parsed.ok ? parsed.centavos : 0
+      }
+      const plan: KakeiboPlan = {
+        month,
+        plannedIncome: money(values.plannedIncome),
+        allocatedStartingFunds: money(values.allocatedStartingFunds),
+        savingsTarget: money(values.savingsTarget),
+        priorPeriodDebtReserve: money(values.priorPeriodDebtReserve),
+        limits: { needs: money(values.needsLimit), wants: money(values.wantsLimit), culture: money(values.cultureLimit), unexpected: money(values.unexpectedLimit) },
+        monthlyIntention: values.monthlyIntention.trim() || null,
+      }
+      data = { ...data, kakeiboPlans: [...(data.kakeiboPlans ?? []).filter((p) => p.month !== month), plan] }
     },
   }
 }

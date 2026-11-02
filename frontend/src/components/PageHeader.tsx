@@ -26,7 +26,7 @@ export function PageHeader({
       <h1 tabIndex={-1} className="text-2xl leading-[1.15] font-semibold tracking-[-0.02em] md:text-[1.75rem]">
         {title}
       </h1>
-      <div className="flex items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2.5">
         {children}
         <Button className="hidden md:inline-flex" onClick={onAdd} disabled={addBlocked(addState)}>
           <Plus aria-hidden="true" />

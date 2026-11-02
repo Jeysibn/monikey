@@ -160,3 +160,16 @@ BEGIN
 END $$;
 
 ROLLBACK;
+
+-- The fixtures were committed before migration 005 so the migration could be
+-- tested with pre-existing rows. Remove only those synthetic rows afterward
+-- so the existing accounting suite starts with its original clean fixture set.
+DELETE FROM account_transfers WHERE note = 'Synthetic liquid transfer';
+DELETE FROM credit_card_payments WHERE note = 'Synthetic card payment';
+DELETE FROM transactions WHERE note LIKE 'Synthetic %';
+DELETE FROM accounts
+WHERE name IN (
+  'Kakeibo migration cash',
+  'Kakeibo migration bank',
+  'Kakeibo migration card'
+);

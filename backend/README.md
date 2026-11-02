@@ -82,14 +82,18 @@ Kakeibo metadata tables.
   optional self-declared savings, and a server-generated snapshot of report
   totals. It does not accept client-supplied totals.
 - `GET`/`PUT /api/kakeibo/weeks/{YYYY-MM-DD}` reads the inclusive Monday–Sunday
-  summary and upserts its reflection. The path date must be a Monday.
+  summary and replaces its reflection. The path date must be a Monday; every
+  `PUT` supplies the complete note set, and omitted note fields are saved as
+  `null`.
 - `PATCH /api/categories/{id}/default-kakeibo-envelope` sets or clears an
   expense category's suggested envelope. It never changes existing
   transactions.
 - Expense transaction create/read/update shapes carry nullable
   `kakeibo_envelope`. Older creates may omit it and remain unclassified; older
   updates that omit it preserve the current classification. Explicit `null`
-  clears it. Income cannot have an envelope.
+  clears it. `PATCH /api/transactions/{id}/kakeibo-envelope` requires a
+  `kakeibo_envelope` property that may be an envelope name or `null`. It only
+  updates that column, and it accepts expense transactions only.
 
 All money uses decimal strings in JSON. Reports sum only expense transactions
 for envelope spending: card purchases count once, while card payments and

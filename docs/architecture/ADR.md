@@ -1,8 +1,8 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.6
+**Version:** 1.7
 **Date:** 2026-11-02
-**Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–13 are implemented, including the private Kubernetes deployment. M13 liquid-account transfers and migration 002 are deployed, and the owner confirms the feature is working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
+**Status:** Adopted as the design baseline. ADR-021 accepts staged Kakeibo metadata integration; PR A supplies architecture and database foundation only. M5 mock UI approval is recorded; M6–7 and M9–13 are implemented, including the private Kubernetes deployment. M13 liquid-account transfers and migration 002 are deployed, and the owner confirms the feature is working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.
@@ -177,6 +177,19 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Consequences:** The five-table scope is unchanged and no dependency is added. Migration 004 must be reviewed and applied after a verified backup, like 002 and 003. Until it is deployed, the frontend keeps the choice in browser storage; afterwards it sends any locally saved choice once for accounts whose stored value is `NULL`, then clears the local copy. ADR-019 still governs which artwork may be shown; this ADR replaces only its "artwork does not alter API payloads" clause, because the card ID is now part of the account payload.
 - **Supersedes:** The browser-only storage in ADR-019.
 
+## ADR-021 — Integrate Kakeibo as planning and reflection metadata
+
+- **Status:** Accepted for staged implementation on 2026-11-02. PR A defines the architecture and schema; API, UI, and release acceptance remain future work.
+- **Context:** The owner wants a private, single-user Kakeibo practice in MoniKey without creating a second accounting system or changing wallet behavior.
+- **Decision:** Keep the five financial tables authoritative. Add `kakeibo_envelope` to expense transactions and a nullable suggestion field to expense categories. Add only `kakeibo_month_plans` and `kakeibo_weekly_reviews` as metadata tables. Historical expenses stay unclassified until explicitly reviewed. Monthly plan arithmetic and reflections never create or modify accounts, transactions, card payments, or transfers.
+- **Planning and reporting:** Use the four envelopes `needs`, `wants`, `culture`, and `unexpected`. Compute plan availability as planned income plus explicitly allocated starting funds, less savings target and prior-period debt reserve. Compute envelope actuals from expense transactions by calendar month. Purchases on credit cards count once; card payments and liquid transfers are excluded. Preserve negative envelope remainders and show unclassified historical expenses separately while including them in total expenses.
+- **Savings and closeout:** Keep the savings target distinct from optional user-declared actual savings. Neither is derived from leftover envelope limits, balances, or transfers. On closeout, preserve a compact decimal-string snapshot of actual income, total expenses, four envelope totals, and unclassified expenses. Later ledger changes may flag the snapshot as stale but must not rewrite it.
+- **API compatibility:** Future transaction fields are optional during rollout. Old create requests with no envelope save `NULL`; old update requests that omit the field preserve the existing classification. Explicit `null` clears it. Income transactions must have `NULL`; only expense categories may have defaults. All API money remains decimal strings. PR A adds no endpoint implementation.
+- **Migration:** Use forward-only `database/005_kakeibo.sql`, after ADR-020 migration 004. Existing transactions are not backfilled. Existing databases require a verified backup, rehearsal on a prior-schema copy, and a reviewed restore/rollback plan before applying. Compose applies 005 only when initializing a new empty database.
+- **Alternatives:** Store envelopes as categories (rejected: multiple expenses with one category may have different intent); derive savings from transfers or budget leftovers (rejected: they do not prove actual saved funds); add a separate budgeting ledger or service (rejected: duplicates financial state and adds unnecessary scope).
+- **Consequences:** The schema grows to seven total tables: five financial tables and two Kakeibo metadata tables. Cross-table validation of transaction category type remains an API responsibility; the category-default expense-only rule is enforced as a row constraint. Off-cluster disaster recovery remains a release risk.
+- **Boundaries:** No banking integration, automatic expense labeling, notifications, new payment methods, automatic savings transfers, authentication, multiuser support, or public writable access. Wallet/card artwork remains unchanged.
+
 ## Change-control template
 
 Use this for future changes:
@@ -217,3 +230,4 @@ Use this for future changes:
 - **v1.4 (2026-10-26):** ADR-017 accepts transfers between liquid accounts, adding a dedicated table and API/UI flow.
 - **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no official issuer art is approved by this decision. Labeled AI-generated concept artwork is allowed and included.
 - **v1.6 (2026-11-02):** ADR-020 stores each account's chosen card (`accounts.card_product_id`) in the database; Codex implements migration 004 and the API.
+- **v1.7 (2026-11-02):** ADR-021 accepts Kakeibo planning/reflection metadata, nullable transaction envelopes and category suggestions, and two metadata tables; migration 005 and API/UI follow-up are staged separately.

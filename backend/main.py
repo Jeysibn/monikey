@@ -140,6 +140,10 @@ class CategoryEnvelopeInput(InputModel):
     default_kakeibo_envelope: KakeiboEnvelope | None
 
 
+class TransactionEnvelopeInput(InputModel):
+    kakeibo_envelope: KakeiboEnvelope | None
+
+
 class KakeiboMonthPlanInput(InputModel):
     planned_income: NonnegativeMoney
     allocated_starting_funds: NonnegativeMoney
@@ -898,6 +902,40 @@ def replace_transaction(
             RETURNING id, account_id, category_id, amount, transaction_date, note, kakeibo_envelope, created_at
             """,
             (values.account_id, values.category_id, values.amount, values.transaction_date, values.note, envelope, record_id),
+        ).fetchone()
+        if row is None:
+            raise ApiProblem(404, "not_found", "Transaction not found.")
+    return transaction_response(row)
+
+
+@app.patch("/api/transactions/{record_id}/kakeibo-envelope")
+def patch_transaction_envelope(
+    values: TransactionEnvelopeInput,
+    record_id: Annotated[int, Path(gt=0)],
+) -> dict[str, object]:
+    with open_connection() as connection:
+        existing = connection.execute(
+            """
+            SELECT c.type AS category_type
+            FROM transactions AS t
+            JOIN categories AS c ON c.id = t.category_id
+            WHERE t.id = %s
+            FOR UPDATE OF t
+            """,
+            (record_id,),
+        ).fetchone()
+        if existing is None:
+            raise ApiProblem(404, "not_found", "Transaction not found.")
+        if existing["category_type"] != "expense":
+            raise ApiProblem(422, "invalid_field", "Only expense transactions can use this endpoint.", "kakeibo_envelope")
+        row = connection.execute(
+            """
+            UPDATE transactions
+            SET kakeibo_envelope = %s
+            WHERE id = %s
+            RETURNING id, account_id, category_id, amount, transaction_date, note, kakeibo_envelope, created_at
+            """,
+            (values.kakeibo_envelope, record_id),
         ).fetchone()
         if row is None:
             raise ApiProblem(404, "not_found", "Transaction not found.")

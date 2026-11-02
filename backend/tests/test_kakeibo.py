@@ -296,9 +296,87 @@ def test_weekly_reviews_use_monday_weeks_and_calendar_boundaries(client: TestCli
     assert saved.status_code == 200
     assert saved.json()["review"]["next_week_intention"] == "Plan the commute."
     assert client.put("/api/kakeibo/weeks/2026-02-23", json={"surprise_note": "Updated."}).status_code == 200
-    assert client.get("/api/kakeibo/weeks/2026-02-23").json()["review"]["surprise_note"] == "Updated."
+    updated_review = client.get("/api/kakeibo/weeks/2026-02-23").json()["review"]
+    assert updated_review["surprise_note"] == "Updated."
+    assert updated_review["worthwhile_note"] is None
+    assert updated_review["next_week_intention"] is None
     assert client.get("/api/kakeibo/weeks/2026-02-24").status_code == 422
     assert client.get("/api/kakeibo/weeks/not-a-date").status_code == 422
+
+
+def test_transaction_envelope_patch_changes_only_classification(client: TestClient) -> None:
+    bank = create_account(client, "Classification Bank", "bank", opening_balance="500.00")
+    salary = category_id(client, "Salary", "income")
+    food = category_id(client, "Food", "expense")
+    expense = create_transaction(client, bank["id"], food, "45.25", "2026-04-12", include_envelope=False)
+    income = create_transaction(client, bank["id"], salary, "1200.00", "2026-04-01", include_envelope=False)
+
+    transaction_fields = {"id", "account_id", "category_id", "amount", "transaction_date", "note", "created_at"}
+    before_expense = client.get("/api/transactions", params={"month": "2026-04"}).json()
+    before_accounts = client.get("/api/accounts").json()
+    before_report = client.get("/api/kakeibo/months/2026-04/report").json()
+    expense_before = next(row for row in before_expense if row["id"] == expense["id"])
+    income_before = next(row for row in before_expense if row["id"] == income["id"])
+
+    classified = client.patch(
+        f"/api/transactions/{expense['id']}/kakeibo-envelope",
+        json={"kakeibo_envelope": "needs"},
+    )
+    assert classified.status_code == 200, classified.text
+    assert classified.json()["kakeibo_envelope"] == "needs"
+    assert {key: classified.json()[key] for key in transaction_fields} == {
+        key: expense_before[key] for key in transaction_fields
+    }
+    income_after = next(
+        row
+        for row in client.get("/api/transactions", params={"month": "2026-04"}).json()
+        if row["id"] == income["id"]
+    )
+    assert {key: income_after[key] for key in transaction_fields} == {
+        key: income_before[key] for key in transaction_fields
+    }
+    assert client.get("/api/accounts").json() == before_accounts
+
+    after_classification = client.get("/api/kakeibo/months/2026-04/report").json()
+    assert after_classification["envelopes"]["needs"]["actual_spent"] == "45.25"
+    assert after_classification["unclassified_expenses"] == "0.00"
+    assert after_classification["total_expenses"] == before_report["total_expenses"] == "45.25"
+
+    cleared = client.patch(
+        f"/api/transactions/{expense['id']}/kakeibo-envelope",
+        json={"kakeibo_envelope": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["kakeibo_envelope"] is None
+    assert {key: cleared.json()[key] for key in transaction_fields} == {
+        key: expense_before[key] for key in transaction_fields
+    }
+    after_clear = client.get("/api/kakeibo/months/2026-04/report").json()
+    assert after_clear["envelopes"]["needs"]["actual_spent"] == "0.00"
+    assert after_clear["unclassified_expenses"] == "45.25"
+    assert after_clear["total_expenses"] == before_report["total_expenses"]
+    assert client.get("/api/accounts").json() == before_accounts
+
+    income_classification = client.patch(
+        f"/api/transactions/{income['id']}/kakeibo-envelope",
+        json={"kakeibo_envelope": "needs"},
+    )
+    assert income_classification.status_code == 422
+    assert income_classification.json()["error"]["field"] == "kakeibo_envelope"
+    income_clear = client.patch(
+        f"/api/transactions/{income['id']}/kakeibo-envelope",
+        json={"kakeibo_envelope": None},
+    )
+    assert income_clear.status_code == 422
+
+    missing = client.patch(
+        "/api/transactions/999999/kakeibo-envelope",
+        json={"kakeibo_envelope": "needs"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "not_found"
+    missing_required_field = client.patch(f"/api/transactions/{expense['id']}/kakeibo-envelope", json={})
+    assert missing_required_field.status_code == 422
 
 
 def test_month_path_money_validation_and_zero_savings_target(client: TestClient) -> None:

@@ -81,7 +81,18 @@ Not separate components (kept inline to avoid wrapper layers): the limit track (
 | `wallet/walletModel.ts` | Project existing snapshot values and saved appearance into wallet card view models; does not calculate money. | `AccountsSnapshot`, local preferences |
 | `wallet/walletPreferences.ts` | Parse, validate and persist versioned browser-local artwork selections. | Local storage adapter; safe defaults on invalid or denied storage |
 
-These wallet components are additive to the historical 15-component inventory above. The current implementation paths are in `frontend/src/components/wallet/` and `frontend/src/wallet/`.
+### Kakeibo components added in PR C (ADR-021)
+
+| Component/module | Job | Main inputs / behavior |
+|---|---|---|
+| `views/KakeiboView` | The Kakeibo view: month select, Create/Edit plan, the plan summary, four envelopes and the not-yet-classified total. Loading, error (with Retry) and "server too old" states. | `Resource<KakeiboMonth>`, month, plan/activity callbacks |
+| `kakeibo/PlanSummary` | Plan figures ("Your plan") kept apart from ledger figures ("Recorded so far"); server's available-to-allocate and unallocated/over-allocated with a warning. Empty state when there is no plan. | `KakeiboMonth` |
+| `kakeibo/EnvelopeCard` | One envelope: spent, remaining (negative kept), a bar of the share spent; no bar for a zero limit or no plan. | envelope, `KakeiboEnvelopeReport` |
+| `kakeibo/KakeiboPlanDialog` + `KakeiboPlanForm` | Create/edit a plan: reads the stored plan fresh, validates (zero allowed, no negatives, ≤2 decimals), shows a display-only planning check, keeps values on failure. | month, `DataSource`, `onSubmit` |
+| `kakeibo/EnvelopePicker` | Quick Add's envelope chips (Needs, Wants, Culture, Unexpected, Not sure yet) and the category's suggestion as a "Use …" link. | value, suggestion, `onChange` |
+| `lib/kakeibo.ts` | Envelope names, plan validation, planning estimate, progress share, suggestion lookup. No saved figure is computed here. | pure functions |
+
+These wallet and Kakeibo components are additive to the historical 15-component inventory above. The current implementation paths are in `frontend/src/components/wallet/` and `frontend/src/wallet/`.
 
 **Why `FormField` and `SegmentedControl` exist even though ADR-015 warns against wrappers:** both fix repeated accessibility wiring that is easy to get wrong six times in two forms; neither wraps a shadcn component's behaviour. Revisit if they grow beyond ~40 lines.
 

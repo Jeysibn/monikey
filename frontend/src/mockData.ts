@@ -1,4 +1,4 @@
-import type { Account, AccountTransfer, Category, CreditCardPayment, MockData, Transaction } from './types.ts'
+import type { Account, AccountTransfer, Category, CreditCardPayment, KakeiboEnvelope, KakeiboPlan, MockData, Transaction } from './types.ts'
 
 /*
  * Fictional Philippine-peso data for Milestone 4.2. No real accounts, people or amounts.
@@ -8,6 +8,11 @@ import type { Account, AccountTransfer, Category, CreditCardPayment, MockData, T
  * Opening values are the balances on Oct 1; balances are always CALCULATED from them
  * (see lib/finance.ts), never typed in, so the figures cannot drift apart.
  * Categories are the seeded set from the TLD.
+ *
+ * Kakeibo (ADR-021): a fictional October plan, an envelope on most October expenses, and two left
+ * unclassified (₱1,025.00) to show that state. Needs is planned at ₱18,000.00 and ₱19,951.90 is spent,
+ * so one envelope is over its limit. Some expense categories suggest an envelope; Food and Other don't,
+ * because the same category can be a need one day and a want the next.
  */
 
 const accounts: Account[] = [
@@ -29,38 +34,55 @@ const categories: Category[] = [
   { id: 8, name: 'Shopping', type: 'expense' },
   { id: 9, name: 'Other', type: 'expense' },
 ]
+const defaultEnvelopes: Record<number, KakeiboEnvelope> = { 5: 'needs', 6: 'needs', 7: 'needs', 8: 'wants' }
+const kakeiboCategories: Category[] = categories.map((c) => ({ ...c, defaultEnvelope: defaultEnvelopes[c.id] ?? null }))
 
-// [id, date, accountId, categoryId, amount in centavos, note]
-type Row = [number, string, number, number, number, string]
+// [id, date, accountId, categoryId, amount in centavos, note, Kakeibo envelope (expenses; null = unclassified)]
+type Row = [number, string, number, number, number, string, KakeiboEnvelope | null]
 const rows: Row[] = [
-  [1, '2026-10-02', 2, 7, 850_000, 'Apartment rent'],
-  [2, '2026-10-03', 1, 6, 142_025, 'Wet market'],
-  [3, '2026-10-05', 3, 7, 186_540, 'Electricity bill'],
-  [4, '2026-10-06', 2, 7, 149_900, 'Internet'],
-  [5, '2026-10-07', 1, 4, 21_500, 'Coffee and pandesal'],
-  [6, '2026-10-08', 2, 2, 450_000, 'Logo project'],
-  [7, '2026-10-09', 1, 5, 34_000, 'Commute'],
-  [8, '2026-10-11', 4, 4, 125_000, 'Dinner with family'],
-  [9, '2026-10-12', 5, 8, 239_900, 'Online order'],
-  [10, '2026-10-14', 4, 6, 318_075, 'Supermarket'],
-  [11, '2026-10-15', 2, 1, 3_200_000, 'October salary'],
-  [12, '2026-10-16', 3, 7, 30_000, 'Mobile load'],
-  [13, '2026-10-18', 5, 7, 180_000, 'Gym membership'],
-  [14, '2026-10-19', 3, 9, 64_000, 'Movie night'],
-  [15, '2026-10-21', 1, 9, 48_650, 'Pharmacy'],
-  [16, '2026-10-23', 4, 6, 284_650, 'Supermarket'],
-  [17, '2026-10-24', 3, 4, 38_500, 'Lunch with team'],
+  [1, '2026-10-02', 2, 7, 850_000, 'Apartment rent', 'needs'],
+  [2, '2026-10-03', 1, 6, 142_025, 'Wet market', 'needs'],
+  [3, '2026-10-05', 3, 7, 186_540, 'Electricity bill', 'needs'],
+  [4, '2026-10-06', 2, 7, 149_900, 'Internet', 'needs'],
+  [5, '2026-10-07', 1, 4, 21_500, 'Coffee and pandesal', 'wants'],
+  [6, '2026-10-08', 2, 2, 450_000, 'Logo project', null],
+  [7, '2026-10-09', 1, 5, 34_000, 'Commute', 'needs'],
+  [8, '2026-10-11', 4, 4, 125_000, 'Dinner with family', 'wants'],
+  [9, '2026-10-12', 5, 8, 239_900, 'Online order', 'wants'],
+  [10, '2026-10-14', 4, 6, 318_075, 'Supermarket', 'needs'],
+  [11, '2026-10-15', 2, 1, 3_200_000, 'October salary', null],
+  [12, '2026-10-16', 3, 7, 30_000, 'Mobile load', 'needs'],
+  [13, '2026-10-18', 5, 7, 180_000, 'Gym membership', 'culture'],
+  [14, '2026-10-19', 3, 9, 64_000, 'Movie night', null],
+  [15, '2026-10-21', 1, 9, 48_650, 'Pharmacy', 'unexpected'],
+  [16, '2026-10-23', 4, 6, 284_650, 'Supermarket', 'needs'],
+  [17, '2026-10-24', 3, 4, 38_500, 'Lunch with team', null],
 ]
 
-const transactions: Transaction[] = rows.map(([id, date, accountId, categoryId, amount, note]) => ({
+const transactions: Transaction[] = rows.map(([id, date, accountId, categoryId, amount, note, envelope]) => ({
   id,
   accountId,
   categoryId,
   amount,
   date,
   note,
+  envelope,
   createdAt: `${date}T${String(8 + (id % 10)).padStart(2, '0')}:00:00.000Z`,
 }))
+
+// Planned income 36,000 + starting funds 2,000 − savings 5,000 − debt reserve 3,000 = 30,000 available;
+// the four limits add up to 28,000, so 2,000 is unallocated.
+const kakeiboPlans: KakeiboPlan[] = [
+  {
+    month: '2026-10',
+    plannedIncome: 3_600_000,
+    allocatedStartingFunds: 200_000,
+    savingsTarget: 500_000,
+    priorPeriodDebtReserve: 300_000,
+    limits: { needs: 1_800_000, wants: 500_000, culture: 200_000, unexpected: 300_000 },
+    monthlyIntention: 'Cook at home on weekdays and keep weekends for one treat.',
+  },
+]
 
 const payments: CreditCardPayment[] = [
   { id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 500_000, date: '2026-10-20', note: null, createdAt: '2026-10-20T10:00:00.000Z' },
@@ -68,7 +90,7 @@ const payments: CreditCardPayment[] = [
 
 const transfers: AccountTransfer[] = []
 
-const base: MockData = { today: '2026-10-25', accounts, categories, transactions, payments, transfers }
+const base: MockData = { today: '2026-10-25', accounts, categories: kakeiboCategories, transactions, payments, transfers, kakeiboPlans }
 
 /**
  * Which fictional ledger to show. The default is the ledger above. The others exist so that rare
@@ -80,8 +102,9 @@ const base: MockData = { today: '2026-10-25', accounts, categories, transactions
  *  - "paid-off": Blue Card paid in full (₱14,250.00 from Main Savings), so it owes nothing
  *  - "many": 40 extra October entries (58 in all) so the Activity list is longer than one page
  *  - "huge": 1,200 extra October entries (1,218 in all) to reach the Activity list's 1,000-row cap
+ *  - "no-plan": the same ledger with no Kakeibo plan (expenses recorded, nothing planned)
  */
-export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many' | 'huge'
+export type DemoScenario = 'overpaid' | 'negative' | 'no-accounts' | 'over-limit' | 'paid-off' | 'many' | 'huge' | 'no-plan'
 
 export function getMockData(scenario?: DemoScenario | null): MockData {
   if (scenario === 'overpaid') {
@@ -127,7 +150,8 @@ export function getMockData(scenario?: DemoScenario | null): MockData {
     return { ...base, transactions: [...transactions, ...extra] }
   }
   if (scenario === 'no-accounts') {
-    return { today: base.today, accounts: [], categories, transactions: [], payments: [], transfers: [] }
+    return { today: base.today, accounts: [], categories: kakeiboCategories, transactions: [], payments: [], transfers: [], kakeiboPlans: [] }
   }
+  if (scenario === 'no-plan') return { ...base, kakeiboPlans: [] }
   return base
 }

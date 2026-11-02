@@ -1,4 +1,4 @@
-import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary } from './types.ts'
+import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, KakeiboMonth, KakeiboPlan, KakeiboPlanValues } from './types.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 
 /*
@@ -33,6 +33,14 @@ export interface DataSource {
   addAccount(values: AccountValues, card?: string | null): Promise<number | null>
   /** `card` undefined keeps the stored card; null clears it. */
   updateAccount(id: number, values: AccountValues, card?: string | null): Promise<void>
+
+  /* Kakeibo (ADR-021). Months are "YYYY-MM". Plans are planning figures: saving one never changes the ledger. */
+  /** The month's plan and its ledger actuals, every total worked out by the server (the dashboard). */
+  loadKakeiboMonth(month: string, signal: AbortSignal): Promise<KakeiboMonth>
+  /** The month's stored plan, read fresh for the plan form; null when the month has none. */
+  loadKakeiboPlan(month: string, signal: AbortSignal): Promise<KakeiboPlan | null>
+  /** Create or replace the month's plan. */
+  saveKakeiboPlan(month: string, values: KakeiboPlanValues): Promise<void>
 }
 
 /**

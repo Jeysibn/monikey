@@ -10,8 +10,14 @@ import type {
   Category,
   Centavos,
   FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboEnvelopeReport,
+  KakeiboMonth,
+  KakeiboPlan,
+  KakeiboPlanValues,
   LiquidAccountType,
 } from './types.ts'
+import { ENVELOPES, PLAN_MONEY_FIELDS, parsePlanAmount } from './lib/kakeibo.ts'
 
 export type WireMoney = string
 export type WireAccountType = AccountInfo['type']
@@ -40,6 +46,8 @@ export interface WireCategory {
   id: number
   name: string
   type: Category['type']
+  /** ADR-021. Absent from a server that predates Kakeibo. */
+  default_kakeibo_envelope?: KakeiboEnvelope | null
 }
 
 export interface WireTransaction {
@@ -49,6 +57,8 @@ export interface WireTransaction {
   amount: WireMoney
   transaction_date: string
   note: string | null
+  /** ADR-021. Absent from a server that predates Kakeibo. */
+  kakeibo_envelope?: KakeiboEnvelope | null
   created_at: string
 }
 
@@ -88,6 +98,20 @@ export interface WireEntryInput {
   amount: WireMoney
   transaction_date: string
   note: string | null
+  /** ADR-021, expenses only. Left out for income and for a server that predates Kakeibo; null is "not classified". */
+  kakeibo_envelope?: KakeiboEnvelope | null
+}
+
+export interface WireKakeiboPlanInput {
+  planned_income: WireMoney
+  allocated_starting_funds: WireMoney
+  savings_target: WireMoney
+  prior_period_debt_reserve: WireMoney
+  needs_limit: WireMoney
+  wants_limit: WireMoney
+  culture_limit: WireMoney
+  unexpected_limit: WireMoney
+  monthly_intention: string | null
 }
 
 export interface WirePaymentInput {
@@ -186,13 +210,26 @@ function createdAt(value: unknown): string {
   return timestamp
 }
 
+const isEnvelope = (value: unknown): value is KakeiboEnvelope => typeof value === 'string' && (ENVELOPES as readonly string[]).includes(value)
+
+/** A nullable envelope field: undefined when an older server leaves it out. */
+function envelopeField(row: Record<string, unknown>, field: string, what: string): KakeiboEnvelope | null | undefined {
+  if (!(field in row)) return undefined
+  const value = row[field]
+  if (value === null) return null
+  if (isEnvelope(value)) return value
+  throw contractError(what)
+}
+
 function parseCategory(value: unknown): Category {
   const row = record(value, 'category')
   const type = row.type
   if (type !== 'income' && type !== 'expense') throw contractError('category')
   const name = string(row.name, 'category')
   if (!name.trim()) throw contractError('category')
-  return { id: id(row.id, 'category'), name, type }
+  const defaultEnvelope = envelopeField(row, 'default_kakeibo_envelope', 'category envelope')
+  if (type === 'income' && defaultEnvelope) throw contractError('category envelope') // only expense categories may suggest one
+  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }) }
 }
 
 const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -303,6 +340,8 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
   if (note !== null && note.length > 120) throw contractError('transaction note')
   const timestamp = createdAt(row.created_at)
   const transactionId = id(row.id, 'transaction')
+  const envelope = envelopeField(row, 'kakeibo_envelope', 'transaction envelope')
+  if (category.type === 'income' && envelope) throw contractError('transaction envelope') // income is never classified
   return {
     key: `t-${transactionId}`,
     kind: category.type,
@@ -315,7 +354,10 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
     accountType: account.type,
     cardName: null,
     destinationAccountName: null,
-    entry: { kind: category.type, amount: amountText(amount), accountId, cardId: null, destinationAccountId: null, categoryId, date, note: note ?? '' },
+    entry: {
+      kind: category.type, amount: amountText(amount), accountId, cardId: null, destinationAccountId: null, categoryId, date, note: note ?? '',
+      ...(envelope === undefined ? {} : { envelope }),
+    },
     createdAt: timestamp,
   }
 }
@@ -398,7 +440,86 @@ export function toWireEntryInput(values: EntryValues): WireEntryInput | WirePaym
     return { source_account_id: values.accountId, destination_account_id: values.destinationAccountId, amount, transfer_date: values.date, note }
   }
   if (values.categoryId === null) throw new Error('The entry must be validated before it is sent.')
-  return { account_id: values.accountId, category_id: values.categoryId, amount, transaction_date: values.date, note }
+  const base: WireEntryInput = { account_id: values.accountId, category_id: values.categoryId, amount, transaction_date: values.date, note }
+  // Only an expense carries an envelope. Leaving the field out of an update keeps the stored one (ADR-021).
+  return values.kind === 'expense' && values.envelope !== undefined ? { ...base, kakeibo_envelope: values.envelope } : base
+}
+
+/* ---------- Kakeibo (ADR-021) ---------- */
+
+function nullableMoney(value: unknown, what: string): Centavos | null {
+  return value === null ? null : toCentavos(value, what)
+}
+
+/** The stored plan inside a month response; `month` is "YYYY-MM" and the server's plan month is its first day. */
+export function fromWireKakeiboPlan(value: unknown, month: string): KakeiboPlan | null {
+  if (value === null) return null
+  const row = record(value, 'Kakeibo plan')
+  if (row.month !== `${month}-01`) throw contractError('Kakeibo plan month')
+  const money = (field: string) => {
+    const centavos = toCentavos(row[field], 'Kakeibo plan amount')
+    if (centavos < 0) throw contractError('Kakeibo plan amount')
+    return centavos
+  }
+  const intention = row.monthly_intention === undefined ? null : nullableString(row.monthly_intention, 'monthly intention')
+  return {
+    month,
+    plannedIncome: money('planned_income'),
+    allocatedStartingFunds: money('allocated_starting_funds'),
+    savingsTarget: money('savings_target'),
+    priorPeriodDebtReserve: money('prior_period_debt_reserve'),
+    limits: { needs: money('needs_limit'), wants: money('wants_limit'), culture: money('culture_limit'), unexpected: money('unexpected_limit') },
+    monthlyIntention: intention,
+  }
+}
+
+function envelopeReport(value: unknown, planned: boolean): KakeiboEnvelopeReport {
+  const row = record(value, 'Kakeibo envelope')
+  const spent = toCentavos(row.actual_spent, 'envelope spending')
+  const limit = nullableMoney(row.limit, 'envelope limit')
+  const remaining = nullableMoney(row.remaining, 'envelope remaining')
+  // A planned month has a limit and a remainder for every envelope; a month with no plan has neither.
+  if (spent < 0 || (planned ? limit === null || remaining === null || limit < 0 || remaining !== limit - spent : limit !== null || remaining !== null)) {
+    throw contractError('Kakeibo envelope figures')
+  }
+  return { limit, spent, remaining }
+}
+
+/** GET (or PUT) /api/kakeibo/months/{month}[/report]: the plan and the month's ledger actuals, as the server worked them out. */
+export function fromWireKakeiboMonth(value: unknown, expectedMonth: string): KakeiboMonth {
+  const row = record(value, 'Kakeibo month')
+  if (row.month !== expectedMonth) throw contractError('Kakeibo month')
+  const plan = fromWireKakeiboPlan(row.plan ?? null, expectedMonth)
+  const wireEnvelopes = record(row.envelopes, 'Kakeibo envelopes')
+  const envelopes = Object.fromEntries(ENVELOPES.map((envelope) => [envelope, envelopeReport(wireEnvelopes[envelope], plan !== null)])) as Record<KakeiboEnvelope, KakeiboEnvelopeReport>
+  const availableToAllocate = nullableMoney(row.available_to_allocate, 'available to allocate')
+  const unallocated = nullableMoney(row.unallocated, 'unallocated amount')
+  if ((plan === null) !== (availableToAllocate === null) || (plan === null) !== (unallocated === null)) throw contractError('Kakeibo plan figures')
+  const actualIncome = toCentavos(row.actual_income, 'actual income')
+  const unclassifiedExpenses = toCentavos(row.unclassified_expenses, 'unclassified expenses')
+  const totalExpenses = toCentavos(row.total_expenses, 'total expenses')
+  if (actualIncome < 0 || unclassifiedExpenses < 0 || totalExpenses < unclassifiedExpenses) throw contractError('Kakeibo actuals')
+  return { month: expectedMonth, plan, actualIncome, availableToAllocate, unallocated, envelopes, unclassifiedExpenses, totalExpenses }
+}
+
+/** Validated plan form values as the PUT body. Every amount is sent, including zeros. */
+export function toWireKakeiboPlan(values: KakeiboPlanValues): WireKakeiboPlanInput {
+  const money = (field: (typeof PLAN_MONEY_FIELDS)[number]): WireMoney => {
+    const parsed = parsePlanAmount(values[field])
+    if (!parsed.ok) throw new Error('The plan must be validated before it is sent.')
+    return amountText(parsed.centavos)
+  }
+  return {
+    planned_income: money('plannedIncome'),
+    allocated_starting_funds: money('allocatedStartingFunds'),
+    savings_target: money('savingsTarget'),
+    prior_period_debt_reserve: money('priorPeriodDebtReserve'),
+    needs_limit: money('needsLimit'),
+    wants_limit: money('wantsLimit'),
+    culture_limit: money('cultureLimit'),
+    unexpected_limit: money('unexpectedLimit'),
+    monthly_intention: values.monthlyIntention.trim() || null,
+  }
 }
 
 /** `card` is included only when given: undefined leaves the field out (for a server that predates ADR-020). */
@@ -444,6 +565,17 @@ export function fromWireField(field: unknown): string | undefined {
     current_debt: 'owed',
     opening_balance: 'balance',
     opening_debt: 'owed',
+    kakeibo_envelope: 'envelope',
+    // Kakeibo plan fields (the plan form uses the same names in camelCase)
+    planned_income: 'plannedIncome',
+    allocated_starting_funds: 'allocatedStartingFunds',
+    savings_target: 'savingsTarget',
+    prior_period_debt_reserve: 'priorPeriodDebtReserve',
+    needs_limit: 'needsLimit',
+    wants_limit: 'wantsLimit',
+    culture_limit: 'cultureLimit',
+    unexpected_limit: 'unexpectedLimit',
+    monthly_intention: 'monthlyIntention',
   }
   return fields[field] ?? (['amount', 'name', 'balance', 'limit', 'owed', 'account', 'card', 'destination', 'category', 'date', 'note'].includes(field) ? field : undefined)
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
 import { EditAccountDialog } from '@/components/EditAccountDialog'
+import { KakeiboPlanDialog } from '@/components/kakeibo/KakeiboPlanDialog'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
@@ -11,7 +12,8 @@ import { accountSavedMessage, accountUpdatedMessage, type AccountValues } from '
 import { describeWriteError } from '@/lib/apiErrors'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
-import { ACTIVITY_PAGE_SIZE, monthOf, nextPageSize } from '@/lib/finance'
+import { ACTIVITY_PAGE_SIZE, monthLabel, monthOf, nextPageSize } from '@/lib/finance'
+import { supportsKakeibo } from '@/lib/kakeibo'
 import { createHttpSource } from '@/httpSource'
 import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
@@ -20,9 +22,10 @@ import { useResource } from '@/useResource'
 import { clearWalletCardProduct, readWalletPreferences, saveWalletCardProduct, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 import type { CardChoice } from '@/components/AccountForm'
 import { pendingCardUploads, serverStoresCards } from '@/wallet/walletModel'
-import type { ActivityItem, AddState, EntryTarget, LedgerSnapshot } from '@/types'
+import type { ActivityItem, AddState, EntryTarget, KakeiboPlanValues, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
+import { KakeiboView } from '@/views/KakeiboView'
 import { OverviewView } from '@/views/OverviewView'
 
 /*
@@ -33,9 +36,10 @@ import { OverviewView } from '@/views/OverviewView'
  * confirmation message is built from the fresh ones; there are no optimistic updates.
  *
  * Preview hook for design review and tests: open the app with
- * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge
+ * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan
  *       | save-error | invalid | load-error | flaky | offline | slow
- * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity; comma-separated)
+ * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity, kakeibo,
+ * kakeibo-plan; comma-separated)
  * to make only those reads fail.
  * to see a loading state, a rare state, a failed save, a refused save, a failed first load, a failed reload,
  * no connection at all, or slow answers, without editing code. Anything else shows the normal ledger.
@@ -43,7 +47,7 @@ import { OverviewView } from '@/views/OverviewView'
 const params = new URLSearchParams(window.location.search)
 const demo = params.get('demo')
 const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
-const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge']
+const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan']
 
 /** The mock's behaviour for the demos that are about failing or being slow (not about what the ledger holds). */
 const demoBehaviour = (d: string | null): MockOptions => {
@@ -97,6 +101,7 @@ function App() {
 
   const [accountForm, setAccountForm] = useState<AccountValues | null>(null)
   const [editAccountId, setEditAccountId] = useState<number | null>(null)
+  const [planMonth, setPlanMonth] = useState<string | null>(null) // the Kakeibo plan dialog is open for this month
   const [session, setSession] = useState<EntrySession | null>(null)
   const [status, setStatus] = useState<StatusNote | null>(null)
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
@@ -119,6 +124,7 @@ function App() {
     (signal) => source.loadActivity({ month, accountId: accountFilter, limit: pageSize }, signal),
     version,
   )
+  const kakeibo = useResource(view === 'kakeibo' ? `kakeibo:${month}` : null, (signal) => source.loadKakeiboMonth(month, signal), version)
   const snapshot = useMemo<LedgerSnapshot | undefined>(
     () => (accounts.data && categories.data ? { ...accounts.data, categories: categories.data } : undefined),
     [accounts.data, categories.data],
@@ -187,7 +193,9 @@ function App() {
   const startEntry = (snap: LedgerSnapshot, kind: EntryKind, cardId: number | null, accountId?: number): EntryValues => {
     const last = accountId ?? (kind === 'payment' ? lastPayFrom.current : lastAccount.current)
     const usable = last !== null && accountsFor(kind, 'account', snap).some((a) => a.id === last)
-    return { kind, amount: '', accountId: usable ? last : null, cardId, destinationAccountId: null, categoryId: null, date: source.today, note: '' }
+    // A new expense starts "not classified" (ADR-021); against a server without Kakeibo the field is left out.
+    const envelope = supportsKakeibo(snap.categories) ? { envelope: null } : {}
+    return { kind, amount: '', accountId: usable ? last : null, cardId, destinationAccountId: null, categoryId: null, date: source.today, note: '', ...envelope }
   }
   const openAdd = () => {
     if (!snapshot) return
@@ -328,6 +336,21 @@ function App() {
     setStatus({ text: accountUpdatedMessage(values) })
     setEditAccountId(null)
   }
+  /** Kakeibo plan (ADR-021): a planning record only, so the ledger and every account stay as they are. */
+  const openPlan = () => {
+    rememberOpener()
+    setPlanMonth(month)
+  }
+  const savePlan = async (planFor: string, values: KakeiboPlanValues, existed: boolean) => {
+    try {
+      await source.saveKakeiboPlan(planFor, values)
+    } catch (err) {
+      throw describeWriteError(err, 'save-plan') // the form keeps what was typed and shows this
+    }
+    setVersion((v) => v + 1)
+    setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.` })
+    setPlanMonth(null)
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -402,7 +425,33 @@ function App() {
             walletPreferences={walletPreferences}
           />
         )}
+        {view === 'kakeibo' && (
+          <KakeiboView
+            today={source.today}
+            month={month}
+            kakeibo={kakeibo}
+            loading={demoLoading}
+            addState={addState}
+            onMonthChange={setMonth}
+            onAdd={openAdd}
+            onEditPlan={openPlan}
+            onOpenActivity={(m) => {
+              setMonth(m)
+              setAccountFilter(null)
+              setView('activity')
+            }}
+          />
+        )}
       </AppShell>
+
+      <KakeiboPlanDialog
+        key={planMonth ?? 'closed'}
+        month={planMonth}
+        source={source}
+        onSubmit={savePlan}
+        onOpenChange={(open) => !open && setPlanMonth(null)}
+        onClosed={restoreFocus}
+      />
 
       {snapshot && (
         <>

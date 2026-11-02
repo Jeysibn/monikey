@@ -8,6 +8,8 @@ import {
   fromWireEditableAccount,
   fromWireCategories,
   fromWireField,
+  fromWireKakeiboMonth,
+  fromWireKakeiboPlan,
   fromWirePayment,
   fromWireTransfer,
   fromWireSummary,
@@ -15,6 +17,7 @@ import {
   toWireAccountInput,
   toWireAccountUpdate,
   toWireEntryInput,
+  toWireKakeiboPlan,
   type WireCategory,
   type WirePayment,
   type WireTransaction,
@@ -93,6 +96,12 @@ function manilaToday(): string {
   const day = part('day')
   if (!year || !month || !day) throw new Error('Could not read today in Asia/Manila.')
   return `${year}-${month}-${day}`
+}
+
+/** "/api/kakeibo/months/2026-10" (+ suffix). The month is checked first, so nothing else can reach the path. */
+function kakeiboPath(month: string, suffix = ''): string {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('A Kakeibo month must look like 2026-10.')
+  return `/api/kakeibo/months/${month}${suffix}`
 }
 
 function urlWithQuery(path: string, query: URLSearchParams): string {
@@ -206,6 +215,21 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
 
     async updateAccount(id, values: AccountValues, card?: string | null) {
       await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values, card))
+    },
+
+    async loadKakeiboMonth(month, signal) {
+      return fromWireKakeiboMonth(await getJson(kakeiboPath(month, '/report'), signal, fetcher), month)
+    },
+
+    async loadKakeiboPlan(month, signal) {
+      const body = await getJson(kakeiboPath(month), signal, fetcher)
+      const row = object(body)
+      if (!row || row.month !== month || !('plan' in row)) throw failure(500)
+      return fromWireKakeiboPlan(row.plan, month)
+    },
+
+    async saveKakeiboPlan(month, values) {
+      await write(kakeiboPath(month), 'PUT', fetcher, toWireKakeiboPlan(values))
     },
   }
 }

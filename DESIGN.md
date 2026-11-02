@@ -203,15 +203,15 @@ These ratios were computed during design. Rendered text and field contrast were 
 
 Desktop arithmetic at 1280px: sidebar 224 + canvas 1056 − 2×24 margins = **1008 content**; 12 columns → column 62, gap 24; span-6 = 492, span-3 = 234; `492 + 234 + 234 + 2×24 = 1008` ✓. Content never exceeds 1440 (centred beyond that). *(Raised from 1032 on 2026-11-02 at the owner's request, so wide desktops use their space and wallet cards are not cramped.)*
 
-### Navigation (three views, no router)
+### Navigation (four views, no router)
 
 | Viewport | Navigation | Add transaction |
 |---|---|---|
-| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · **Add** (the filled item, rightmost for thumb reach). Icon + short label on every item. | Bottom-bar item |
-| 768–1023 | **Left rail**, 80px: icon over label, three items; the active item's icon sits in a soft-blue pill. | Page-header button |
-| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then three labelled items. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
+| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · Kakeibo · **Add** (the filled item, rightmost for thumb reach). Five equal columns (≥57px each at 320px), icon over a 12px label on every item, Add included. | Bottom-bar item |
+| 768–1023 | **Left rail**, 80px: icon over label, four items; the active item's icon sits in a soft-blue pill. | Page-header button |
+| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then four labelled items. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
 
-The three destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1.
+The four destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1.
 
 ---
 
@@ -267,7 +267,7 @@ Studied for **patterns only** — no branding, screenshots, copy or assets were 
 
 ## Out of scope for v1 design
 
-Budgets, goals, recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account deletion, category management, export.
+Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account deletion, category management, export.
 
 ---
 
@@ -291,6 +291,10 @@ Budgets, goals, recurring bills, due dates or billing cycles, investments, bank 
 | D15 | Net position is a flat deep-cobalt hero card with an inline `Money you have − Card debt` equation | Gives the product one focal point; replaces the pale equation strip (the critique found the strip text-only) | Approved by owner and implemented |
 | D16 | Active navigation item = soft-blue pill everywhere (bottom bar, rail, sidebar) | One selected-state language; colour only on a small selected mark | Implemented |
 | D14 | No custom numeric keypad or quick-amount chips | Native decimal keyboard keeps paste, accessibility and less code; revisit after real use | Recorded |
+| D17 | Kakeibo (ADR-021) is a fourth view; the phone bar becomes five equal columns and Add a filled tile shaped like its neighbours | Five items fit 320px only at equal widths; Add keeps the filled colour and the rightmost slot | Implemented (PR C) |
+| D18 | Kakeibo envelopes are chips under Category in Quick Add, with "Not sure yet"; a category's default is followed for a new expense only until the person picks, and otherwise offered as a "Use …" link | One light control; suggestions never overwrite a person's choice or a stored classification | Implemented (PR C) |
+| D19 | Envelope bars use primary blue, and `debt` orange when over the limit, with the overage in words and an icon; never red. A zero limit or no plan shows no bar | Gentle guidance, not guilt; no misleading progress | Implemented (PR C) |
+| D20 | The plan form shows a labelled display-only "Planning check (estimate)"; the dashboard shows only server figures | Lets an over-allocation be seen before saving, as Quick Add's estimates do; plans are never forced to balance | Implemented (PR C) |
 
 ## Owner decisions recorded (after the independent browser review)
 

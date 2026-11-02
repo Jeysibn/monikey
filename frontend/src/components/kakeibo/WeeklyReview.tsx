@@ -25,17 +25,17 @@ const WEEK_ID: Record<keyof KakeiboWeekNotes, string> = { surprise: 'kw-surprise
 function WeekTotals({ week }: { week: KakeiboWeek }) {
   return (
     <dl className="grid gap-1 text-[0.9375rem]">
-      <div className="flex items-baseline justify-between gap-3 pb-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 pb-1">
         <dt className="font-semibold">Total expenses</dt>
         <dd><MoneyText centavos={week.totalExpenses} className="text-lg font-semibold" /></dd>
       </div>
       {ENVELOPES.map((envelope) => (
-        <div key={envelope} className="flex items-baseline justify-between gap-3 text-muted-foreground">
+        <div key={envelope} className="flex flex-wrap items-baseline justify-between gap-x-3 text-muted-foreground">
           <dt>{ENVELOPE_INFO[envelope].label}</dt>
           <dd className="text-foreground"><MoneyText centavos={week.spending[envelope]} /></dd>
         </div>
       ))}
-      <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-muted-foreground">
         <dt>Not classified</dt>
         <dd className="text-foreground"><MoneyText centavos={week.unclassifiedExpenses} /></dd>
       </div>
@@ -168,7 +168,7 @@ export function WeeklyReviewCard({
             )}
             <Button
               variant="secondary"
-              className="mt-3"
+              className="mt-3 h-auto min-h-11 max-w-full whitespace-normal py-2"
               onClick={() => {
                 onOpen()
                 guard.current = { saving: false, dirty: false }

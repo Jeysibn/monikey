@@ -46,7 +46,7 @@ function Skeleton() {
           ))}
         </div>
       </Card>
-      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
+      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-7 lg:grid-cols-1 xl:grid-cols-2">
         {ENVELOPES.map((envelope) => (
           <Card key={envelope} className="grid gap-4">
             <Bar className="h-10 w-36" />
@@ -76,7 +76,7 @@ function Unclassified({ report, onClassify }: { report: KakeiboMonth; onClassify
               ? `Every expense in ${label} has an envelope. You can still move one to a different envelope.`
               : `Expenses without an envelope. They’re still counted in this month’s total expenses of ${formatPeso(report.totalExpenses)}.`}
           </CardDescription>
-          <Button variant="secondary" className="mt-1" onClick={onClassify}>
+          <Button variant="secondary" className="mt-1 h-auto min-h-11 max-w-full whitespace-normal py-2" onClick={onClassify}>
             <ListChecks aria-hidden="true" />
             Classify expenses
           </Button>
@@ -178,7 +178,8 @@ export function KakeiboView({
                 {report.totalExpenses === 0 ? `No expenses recorded in ${label} yet.` : 'Spending this month, by envelope'}
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* From 1024px the envelopes share 7 of 12 columns beside the plan; two cards side by side only fit from 1280px. */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {ENVELOPES.map((envelope) => (
                 <EnvelopeCard key={envelope} envelope={envelope} report={report.envelopes[envelope]} />
               ))}

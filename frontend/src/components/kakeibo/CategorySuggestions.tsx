@@ -112,7 +112,7 @@ export function CategorySuggestionsCard({
           ? 'No category suggests an envelope yet.'
           : set.map((c) => `${c.name}: ${envelopeLabel(c.defaultEnvelope)}`).join(' · ')}
       </CardDescription>
-      <Button variant="secondary" disabled={!categories} onClick={() => { onOpen(); setOpen(true) }}>
+      <Button variant="secondary" className="h-auto min-h-11 max-w-full whitespace-normal py-2" disabled={!categories} onClick={() => { onOpen(); setOpen(true) }}>
         <Tags aria-hidden="true" />
         Edit suggestions
       </Button>

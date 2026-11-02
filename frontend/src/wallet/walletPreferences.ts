@@ -1,12 +1,12 @@
 import type { AccountType } from '../types.ts'
-import { resolveWalletArtwork } from './artworkCatalog.ts'
-import { resolveWalletArtworkConcept } from './walletArtworkConcepts.ts'
+import { findCardProduct } from './cardProducts.ts'
 
 export const WALLET_PREFERENCES_STORAGE_KEY = 'monikey.walletPreferences'
 
 export interface WalletPreferencesV1 {
   version: 1
-  byAccountId: Record<string, { artworkId: string | null }>
+  /** productId is the card chosen when the account was added (cardProducts.ts); older entries have only artworkId. */
+  byAccountId: Record<string, { artworkId: string | null; productId?: string }>
 }
 
 export interface WalletPreferenceStorage {
@@ -49,7 +49,8 @@ export function parseWalletPreferences(raw: string | null): WalletPreferencesV1 
       if (!isRecord(value)) continue
       if (typeof value.artworkId !== 'string' && value.artworkId !== null) continue
       if (typeof value.artworkId === 'string' && value.artworkId.length > 100) continue
-      byAccountId[accountId] = { artworkId: value.artworkId }
+      const productId = typeof value.productId === 'string' && /^[a-z0-9-]{1,100}$/.test(value.productId) ? value.productId : undefined
+      byAccountId[accountId] = productId ? { artworkId: value.artworkId, productId } : { artworkId: value.artworkId }
     }
 
     return { version: 1, byAccountId }
@@ -74,37 +75,55 @@ export function savedWalletArtworkId(preferences: WalletPreferencesV1, accountId
   return preferences.byAccountId[String(accountId)]?.artworkId ?? null
 }
 
-/** Save an approved artwork or an explicitly labeled local concept. No finance API is involved. */
-export function saveWalletArtworkPreference(
-  accountId: number,
-  artworkId: string,
-  accountType: AccountType,
+export function savedWalletProductId(preferences: WalletPreferencesV1, accountId: number): string | null {
+  return preferences.byAccountId[String(accountId)]?.productId ?? null
+}
+
+function writePreferences(
+  target: WalletPreferenceStorage,
+  preferences: WalletPreferencesV1,
   current: WalletPreferencesV1,
-  storage?: WalletPreferenceStorage | null,
 ): { ok: boolean; preferences: WalletPreferencesV1 } {
-  const target = storageOrBrowser(storage)
-  if (!target || !Number.isSafeInteger(accountId) || accountId < 1) {
-    return { ok: false, preferences: current }
-  }
-
-  const approvedArtwork = resolveWalletArtwork(artworkId, accountType).id === artworkId
-  const localConcept = resolveWalletArtworkConcept(artworkId, accountType) !== null
-  if (!approvedArtwork && !localConcept) {
-    return { ok: false, preferences: current }
-  }
-
-  const preferences: WalletPreferencesV1 = {
-    version: 1,
-    byAccountId: {
-      ...current.byAccountId,
-      [String(accountId)]: { artworkId },
-    },
-  }
-
   try {
     target.setItem(WALLET_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences))
     return { ok: true, preferences }
   } catch {
     return { ok: false, preferences: current }
   }
+}
+
+/** Save the card picked for an account in Add or Edit. The card must exist for the account's type. */
+export function saveWalletCardProduct(
+  accountId: number,
+  productId: string,
+  accountType: AccountType,
+  current: WalletPreferencesV1,
+  storage?: WalletPreferenceStorage | null,
+): { ok: boolean; preferences: WalletPreferencesV1 } {
+  const target = storageOrBrowser(storage)
+  const product = findCardProduct(productId, accountType)
+  if (!target || !product || !Number.isSafeInteger(accountId) || accountId < 1) {
+    return { ok: false, preferences: current }
+  }
+
+  return writePreferences(target, {
+    version: 1,
+    byAccountId: {
+      ...current.byAccountId,
+      [String(accountId)]: { artworkId: null, productId: product.id },
+    },
+  }, current)
+}
+
+/** Remove an account's card ("Other" in the picker), so it shows the MoniKey card again. */
+export function clearWalletCardProduct(
+  accountId: number,
+  current: WalletPreferencesV1,
+  storage?: WalletPreferenceStorage | null,
+): { ok: boolean; preferences: WalletPreferencesV1 } {
+  const target = storageOrBrowser(storage)
+  if (!target) return { ok: false, preferences: current }
+  const byAccountId = { ...current.byAccountId }
+  delete byAccountId[String(accountId)]
+  return writePreferences(target, { version: 1, byAccountId }, current)
 }

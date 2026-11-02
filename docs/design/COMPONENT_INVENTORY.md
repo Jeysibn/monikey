@@ -8,7 +8,7 @@
 
 ## Current status after wallet PR4
 
-Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `WalletDesignPicker`, and `WalletStack`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. The artwork catalog defaults to the bundled MoniKey fallback. PR5 ordering/synchronization remains deferred.
+Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `CardProductPicker` (which replaced the Edit-time `WalletDesignPicker`), and `WalletStack`. The card catalog lives in `wallet/cardProducts.ts`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. The artwork catalog defaults to the bundled MoniKey fallback. PR5 ordering/synchronization remains deferred.
 
 ## Historical status through Milestone 4.9
 
@@ -75,7 +75,7 @@ Not separate components (kept inline to avoid wrapper layers): the limit track (
 | `WalletCard` | Render one account's selected state, local artwork/fallback, balance or debt, and supported actions. | `WalletCardVM`, selection callback, edit/pay callbacks |
 | `WalletGrid` | Lay out wallet cards in the Accounts Cards view. | Account card models and selection/actions |
 | `WalletViewToggle` | Switch the Accounts page between Cards and List. | `cards \| list`, `onChange` |
-| `WalletDesignPicker` | Select an approved catalog design for an existing account. | Account ID/type, saved artwork ID, change callback |
+| `CardProductPicker` | In Add and Edit account, pick the bank or provider, then the exact card with its design. | Account type, chosen issuer/product, change callbacks |
 | `WalletStack` | Present account selection on Overview; phone scroll-snap rail and larger-screen selected card with Previous/Next controls. | Accounts resource, preferences, account actions, Accounts navigation callback |
 | `wallet/artworkCatalog.ts` | Define artwork metadata, allowlisted local paths and safe account-type-aware selection; resolve to fallback when unavailable/unapproved. | Static catalog and resolver functions |
 | `wallet/walletModel.ts` | Project existing snapshot values and saved appearance into wallet card view models; does not calculate money. | `AccountsSnapshot`, local preferences |

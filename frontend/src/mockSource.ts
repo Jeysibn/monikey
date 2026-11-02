@@ -122,12 +122,13 @@ export function createMockSource({
       data = ledgerReducer(data, toDeleteAction(target))
     },
 
-    addAccount: async (values: AccountValues): Promise<void> => {
+    addAccount: async (values: AccountValues): Promise<number | null> => {
       await beginWrite(FAILED_SAVE, 'name')
       // The API answers 409 for a duplicate name; the mock re-checks so a second tab could not slip one through.
       const taken = validateAccount(values, buildSnapshot(data)).name
       if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
       data = ledgerReducer(data, toAccountAction(values))
+      return data.accounts.at(-1)?.id ?? null
     },
 
     updateAccount: async (id: number, values: AccountValues): Promise<void> => {

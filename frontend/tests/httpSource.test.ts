@@ -97,6 +97,13 @@ test('writes send the agreed request bodies, routes, and HTTP verbs', async () =
   assert.deepEqual(JSON.parse(String(requests[4].init?.body)), { name: 'New Card', type: 'credit_card', opening_balance: '0.00', opening_debt: '0.00', credit_limit: '2000.00' })
 })
 
+test('adding an account resolves with the ID the server created, or null without one', async () => {
+  const created = createHttpSource(async () => new Response(JSON.stringify({ id: 42, name: 'Wallet', type: 'cash' }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+  assert.equal(await created.addAccount({ type: 'cash', name: 'Wallet', balance: '0.00', limit: '', owed: '' }), 42)
+  const empty = createHttpSource(async () => new Response(null, { status: 204 }))
+  assert.equal(await empty.addAccount({ type: 'cash', name: 'Wallet', balance: '0.00', limit: '', owed: '' }), null)
+})
+
 test('write errors keep the API code/status and map wire fields to form fields', async () => {
   const source = createHttpSource(async () => json({ error: { code: 'duplicate_account_name', message: 'You already have an account with that name.', field: 'name' } }, 409))
   await assert.rejects(source.addAccount({ type: 'cash', name: 'Cash', balance: '0.00', limit: '', owed: '' }), (error: unknown) => {

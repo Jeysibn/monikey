@@ -9,7 +9,7 @@
 **Feature:** Authentic issuer card artwork, wallet grid, dashboard wallet stack, and card-design selection<br>
 **Scope:** Visual/presentation enhancement; preserve MoniKey v1 accounting behavior
 
-> **Core decision:** A wallet must display the *actual, verified design of a specific issued bank, debit, credit, prepaid, or e-wallet card* when an approved artwork asset exists. Do **not** imitate bank card designs with arbitrary CSS gradients or AI-generated lookalikes. The artwork itself is a static image; MoniKey balances and interactions are separately rendered UI. If asset rights or authenticity are unresolved, use a neutral MoniKey fallback.
+> **Core decision:** A wallet must display the *actual, verified design of a specific issued bank, debit, credit, prepaid, or e-wallet card* when an approved artwork asset exists. AI-generated concept artwork is also allowed as a selectable local option, labeled as a generated design study that is not official issuer artwork (ADR-019). Do **not** imitate bank card designs with arbitrary CSS gradients. The artwork itself is a static image; MoniKey balances and interactions are separately rendered UI. If asset rights or authenticity are unresolved, use a neutral MoniKey fallback.
 
 ---
 
@@ -139,7 +139,7 @@ Begin with: one neutral MoniKey fallback for all account types and a **small, re
 - Preserve the screen navigation and header; label page **Accounts** initially to avoid breaking existing expectations. The primary content becomes the wallet gallery; the existing list remains accessible via `Cards | List` view toggle.
 - Preserve the finance summary, but do not copy the reference screenshot's confusing **assets / liabilities** presentation verbatim. Show net position, money you have, and money you owe with existing exact definitions.
 - A wallet card uses aspect ratio **1.586:1** (approximate ID-1 card proportion), corner radius ~16–20px, `object-fit: contain` for the whole design by default, and a predictable background behind any letterboxing. Never crop issuer marks merely to fill a box.
-- The card art is the dominant image. Every card face, including fallback artwork, shows only the live balance/debt in a compact bottom-left label with no filled background; keep the lower-left artwork area clear where possible. Hide the MoniKey account name and type from the gallery tile and show them in the card details dialog opened by clicking the face. Put an upper-right three-dot menu on each tile for the existing Edit and Pay card actions. Credit cards also show owed-versus-available progress below the face and an explicit over-limit warning. Generated concepts remain local previews and must not be represented as approved issuer artwork.
+- The card art is the dominant image, in a frameless 1–4 column grid of all accounts under a net-position banner (UI_UX_SPEC §6, owner reference design of 2026-11-02). The face prints its figure straight on the art, bottom-left within the left ~58%: Balance for liquid accounts; Available credit, a used-share line and "N% used" for credit cards. White text with a soft shadow by default; cards marked `faceInk: 'dark'` in `cardProducts.ts` (light designs, and MariBank orange for contrast) and the light MoniKey card use dark ink. No caption under the card; the MoniKey card prints the account name. Details open from the face; the upper-right three-dot menu keeps Edit and Pay card.
 - Use the existing `MoneyText` formatting; never stringify centavos independently to make a displayed figure.
 - Selection highlights one card. The top-right menu exposes actions appropriate to its **MoniKey account type**, not the printed card network; activating the menu must not open the card details dialog.
 - A missing/failed image is replaced by the neutral fallback with a readable account label. Never show a broken image icon.
@@ -156,7 +156,7 @@ Begin with: one neutral MoniKey fallback for all account types and a **small, re
 
 ### 4.3 Card design picker (first or second delivery)
 
-- Start with a **separate presentation section** in **Edit account**: “Card appearance”. A catalog picker displays thumbnail + issuer + exact product/variant + an explicit “MoniKey default”. For **Add account**, offer “Choose appearance” *after* account creation, once its new account ID is known. The current `DataSource.addAccount()` returns `void`, so do not guess the new ID by list position or name; a later approved API return-ID extension is an alternative.
+- The card is chosen in **Add account** (after the type, pick the bank or provider, then the exact card, for example BDO → BDO Visa Classic, Gold, Platinum or Signature, each with its own design; "Other" uses the MoniKey card) and can be changed anytime in **Edit account**, which preselects the current card. The catalog lives in `wallet/cardProducts.ts`. `DataSource.addAccount()` resolves with the new account ID from the create response, so the choice is saved against that ID; never guess it by list position or name. The choice is browser-local until ADR-020's `card_product_id` API field lands.
 - The financial `type` stays fixed on edit; changing only the image must not change account type, credit limit, opening balance, current owed amount, or transaction history.
 - Never auto-select a product based solely on account name (`BDO` could correspond to many card variants).
 - Show only approved, matching entries for the account type; disable or hide unavailable candidate assets. If none exist, say “Official design unavailable — using MoniKey default.”
@@ -240,16 +240,18 @@ frontend/
     card-art/
       monikey-default.svg       # original unbranded fallback
       [approved issuer files]   # only after authenticity + rights checks
+      generated/                # AI-generated demo card per catalog card + manifest.json (ADR-019)
   src/
     wallet/
-      artworkCatalog.ts        # verified metadata; no bundled unapproved imagery
+      artworkCatalog.ts        # verified metadata; no bundled unapproved official imagery
+      cardProducts.ts          # card catalog: provider, card, design and text colour
       walletPreferences.ts     # validated browser preference adapter
       walletModel.ts           # map AccountsSnapshot -> render model
     components/wallet/
       WalletCard.tsx           # artwork + financial text + accessible selection
       WalletGrid.tsx           # responsive CSS grid
       WalletStack.tsx          # Overview deck (phase 2)
-      WalletDesignPicker.tsx   # picker in add/edit flows (phase 2 if needed)
+      CardProductPicker.tsx    # Add account: provider, then exact card
       WalletViewToggle.tsx     # cards/list control
       WalletActions.tsx        # wrappers calling existing handlers
   tests/
@@ -319,7 +321,7 @@ const exampleCandidate: WalletArtwork = {
 - [x] Add unit tests for source/status/type gating.
 - [x] No DB changes or production finance writes.
 
-**Exit:** no issuer artwork is distributed unless recorded as approved; fallback always loads.
+**Exit:** no official issuer artwork is distributed unless recorded as approved; labeled AI-generated concepts are allowed (ADR-019); fallback always loads.
 
 ### PR 2 — Full Accounts wallet gallery — implemented (`496d03a`)
 
@@ -333,7 +335,7 @@ const exampleCandidate: WalletArtwork = {
 
 ### PR 3 — Artwork picker and local preference persistence — implemented (`bd8fc05`)
 
-- [x] Add the design picker to **Edit account** without putting presentation fields into financial `AccountValues` API payloads. Add-account appearance remains unavailable because creation does not return a reliable new ID.
+- [x] Add the design picker to **Edit account** without putting presentation fields into financial `AccountValues` API payloads. *(Superseded on 2026-11-02: the card is chosen in Add account and can be changed in Edit with the same picker; see §4.3.)*
 - [x] Store selected `artworkId` in versioned local preferences with robust parsing and fallback.
 - [x] Artwork changes do not change `type`, balances, debt, or limits.
 - [x] Resolve nonexistent/stale account IDs safely; storage failure produces a non-blocking notice.
@@ -439,7 +441,7 @@ Wallet implementation batches 1–4 are present on `feat/account-ui-remake`; do 
 - Whether per-browser selection is enough or a later PostgreSQL-backed synchronization is desired.
 - Whether artwork should be visible with balance inside the art; recommended starting behavior is separate caption to prevent blocking authentic graphics.
 
-**Risk policy:** unresolved authenticity or legal-use status means **fallback art**, not copied/generated imitation. Product identity research and permission clearance are separate gates.
+**Risk policy:** unresolved authenticity or legal-use status for official issuer artwork means **fallback art** (or a labeled AI-generated concept the user picks), never copied official imagery. Product identity research and permission clearance are separate gates.
 
 ---
 

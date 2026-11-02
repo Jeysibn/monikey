@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-import { AccountForm } from '@/components/AccountForm'
+import { AccountForm, type CardChoice } from '@/components/AccountForm'
 import { InlineNotice } from '@/components/InlineNotice'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { DataSource } from '@/dataSource'
 import type { AccountValues } from '@/lib/accountForm'
 import type { LedgerSnapshot } from '@/types'
-import { savedWalletArtworkId, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
-import { resolveWalletArtworkConcept } from '@/wallet/walletArtworkConcepts'
-import { resolveWalletArtwork } from '@/wallet/artworkCatalog'
+import { savedWalletProductId, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 type LoadState =
   | { id: number; status: 'loading' }
@@ -23,7 +21,6 @@ export function EditAccountDialog({
   snapshot,
   walletPreferences,
   onSubmit,
-  onSaveAppearance,
   onOpenChange,
   onClosed,
 }: {
@@ -31,8 +28,7 @@ export function EditAccountDialog({
   source: DataSource
   snapshot: LedgerSnapshot
   walletPreferences: WalletPreferencesV1
-  onSubmit: (id: number, values: AccountValues) => Promise<void>
-  onSaveAppearance: (id: number, type: AccountValues['type'], artworkId: string) => boolean
+  onSubmit: (id: number, values: AccountValues, card: CardChoice) => Promise<void>
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
 }) {
@@ -86,20 +82,10 @@ export function EditAccountDialog({
             snapshot={snapshot}
             initial={current.values}
             nameRef={nameRef}
-            appearance={{
-              accountId: current.id,
-              accountType: current.values.type,
-              selectedArtworkId: (() => {
-                const savedId = savedWalletArtworkId(walletPreferences, current.id)
-                if (savedId && resolveWalletArtworkConcept(savedId, current.values.type)) return savedId
-                return resolveWalletArtwork(savedId, current.values.type).id
-              })(),
-              savedArtworkId: savedWalletArtworkId(walletPreferences, current.id),
-              onSave: (artworkId) => onSaveAppearance(current.id, current.values.type, artworkId),
-            }}
+            initialProductId={savedWalletProductId(walletPreferences, current.id)}
             onDirty={() => setDirty(true)}
             onSavingChange={setSaving}
-            onSubmit={(values) => onSubmit(current.id, values)}
+            onSubmit={(values, card) => onSubmit(current.id, values, card)}
             onCancel={() => onOpenChange(false)}
           />
         ) : (

@@ -17,7 +17,8 @@ import { createMockSource } from '@/mockSource'
 import type { DemoScenario } from '@/mockData'
 import type { MockOptions } from '@/mockSource'
 import { useResource } from '@/useResource'
-import { readWalletPreferences, saveWalletArtworkPreference, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
+import { clearWalletCardProduct, readWalletPreferences, saveWalletCardProduct, type WalletPreferencesV1 } from '@/wallet/walletPreferences'
+import type { CardChoice } from '@/components/AccountForm'
 import type { ActivityItem, AddState, EntryTarget, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
 import { ActivityView } from '@/views/ActivityView'
@@ -233,12 +234,25 @@ function App() {
     rememberOpener()
     setAccountForm({ type: kind === 'credit card' ? 'credit_card' : 'cash', name: '', balance: '', limit: '', owed: '' })
   }
-  const saveAccount = async (values: AccountValues) => {
+  /*
+   * The chosen card is saved in this browser until the API stores it (ADR-020, docs/design/CODEX_HANDOFF_ADR_020.md).
+   * It is written only after the account save succeeds, against the ID the server reports.
+   */
+  const saveCardChoice = (accountId: number, type: AccountValues['type'], card: CardChoice) => {
+    if (card === undefined) return
+    const result = card.productId === null
+      ? clearWalletCardProduct(accountId, walletPreferences)
+      : saveWalletCardProduct(accountId, card.productId, type, walletPreferences)
+    if (result.ok) setWalletPreferences(result.preferences)
+  }
+  const saveAccount = async (values: AccountValues, card: CardChoice) => {
+    let accountId: number | null
     try {
-      await source.addAccount(values)
+      accountId = await source.addAccount(values)
     } catch (err) {
       throw describeWriteError(err, 'add-account') // a duplicate name is shown under Name
     }
+    if (accountId !== null) saveCardChoice(accountId, values.type, card)
     setVersion((v) => v + 1)
     setStatus({ text: accountSavedMessage(values) })
     setAccountForm(null)
@@ -247,20 +261,16 @@ function App() {
     rememberOpener(from)
     setEditAccountId(id)
   }
-  const updateAccount = async (id: number, values: AccountValues) => {
+  const updateAccount = async (id: number, values: AccountValues, card: CardChoice) => {
     try {
       await source.updateAccount(id, values)
     } catch (err) {
       throw describeWriteError(err, 'edit-account')
     }
+    saveCardChoice(id, values.type, card)
     setVersion((v) => v + 1)
     setStatus({ text: accountUpdatedMessage(values) })
     setEditAccountId(null)
-  }
-  const saveWalletAppearance = (id: number, type: AccountValues['type'], artworkId: string) => {
-    const result = saveWalletArtworkPreference(id, artworkId, type, walletPreferences)
-    if (result.ok) setWalletPreferences(result.preferences)
-    return result.ok
   }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
@@ -364,7 +374,6 @@ function App() {
             snapshot={snapshot}
             walletPreferences={walletPreferences}
             onSubmit={updateAccount}
-            onSaveAppearance={saveWalletAppearance}
             onOpenChange={(open) => !open && setEditAccountId(null)}
             onClosed={restoreFocus}
           />

@@ -1,6 +1,6 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.5
+**Version:** 1.6
 **Date:** 2026-11-02
 **Status:** Adopted as the design baseline. M5 mock UI approval is recorded; M6–7 and M9–13 are implemented, including the private Kubernetes deployment. M13 liquid-account transfers and migration 002 are deployed, and the owner confirms the feature is working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
@@ -163,10 +163,19 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ## ADR-019 — Wallet artwork is presentation-only
 
-- **Status:** Accepted by explicit owner instruction on 2026-11-02.
+- **Status:** Accepted by explicit owner instruction on 2026-11-02; amended by owner instruction the same day to allow and include AI-generated concept artwork.
 - **Context:** The proposed wallet-card UI uses a card image, while the approved visual system avoids decorative illustrations and gradients.
-- **Decision:** Allow a static artwork image as a visual-only exception for wallet cards. Use an original neutral MoniKey fallback whenever an exact issuer design is unavailable or its rights are unclear. Bundle issuer artwork only after the exact product/source is verified and permission evidence for redistribution is recorded. Catalog entries must be approved, match the account type, and reference a local allowlisted asset path before they can be selected. Candidate, verified-only, rejected, retired, missing, and mismatched entries resolve to the neutral fallback. Artwork does not alter account type, balances, API payloads, calculations, or ledger records.
-- **Consequences:** Local approved images can be rendered without runtime issuer/CDN requests. The initial catalog contains no approved third-party issuer assets; product-variant verification and licensing/permission evidence remain open for every issuer design.
+- **Decision:** Allow a static artwork image as a visual-only exception for wallet cards. Use an original neutral MoniKey fallback whenever no artwork is selected or a saved selection is no longer valid. Bundle official issuer artwork only after the exact product/source is verified and permission evidence for redistribution is recorded. Catalog entries must be approved, match the account type, and reference a local allowlisted asset path before they can be selected. Candidate, verified-only, rejected, retired, missing, and mismatched entries resolve to the neutral fallback. AI-generated concept artwork is also allowed and included: it is bundled as local files under `/card-art/generated/` (one per catalog card, made from [the card-art brief](../design/CODEX_CARD_ART_BRIEF.md)), labeled in the picker as demo images that are not official issuer artwork, limited to matching account types, and selectable without the official-artwork approval gate. Artwork does not alter account type, balances, API payloads, calculations, or ledger records.
+- **Consequences:** Local images can be rendered without runtime issuer/CDN requests. The initial catalog contains no approved official issuer assets; product-variant verification and licensing/permission evidence remain open for every official issuer design. Nineteen AI-generated demo card images (about 0.75 MB in total) ship with the app, one per card in the catalog; they replaced the first eight concept PNGs on 2026-11-02 and are expected to be replaced or refined. They resemble issuer cards and show issuer and card-network names (for example BDO, GCash, Maya, Visa, Mastercard); the owner accepts this for MoniKey's personal use.
+
+## ADR-020 — Store each account's chosen card in the database
+
+- **Status:** Accepted by explicit owner instruction on 2026-11-02. Implementation is split: Codex owns the migration and API ([handoff](../design/CODEX_HANDOFF_ADR_020.md)); Claude wires the frontend after the API lands.
+- **Context:** ADR-019 kept the wallet card choice in browser storage, so it was lost when site data was cleared and did not follow the owner to other devices. The owner wants the choice saved with the account, settable for existing accounts, and changeable at any time from Edit account.
+- **Decision:** Add one nullable column, `accounts.card_product_id VARCHAR(64)`, holding a card ID from the frontend catalog (`frontend/src/wallet/cardProducts.ts`, for example `bdo-visa-classic`). Cash accounts must keep it `NULL`. The API returns it for every account and accepts it on create and update. The server checks only its shape (lowercase words joined by hyphens) and the cash rule, not whether the ID exists in the catalog; the frontend renders an unknown ID as the neutral MoniKey card. The value is presentation only: it never changes account type, balances, debt, limits, calculations, or ledger records.
+- **Alternatives:** Keep browser storage only (rejected: lost on clear, no sync); a card-catalog table (rejected: a sixth table and duplicated catalog upkeep for a cosmetic choice).
+- **Consequences:** The five-table scope is unchanged and no dependency is added. Migration 004 must be reviewed and applied after a verified backup, like 002 and 003. Until it is deployed, the frontend keeps the choice in browser storage; afterwards it sends any locally saved choice once for accounts whose stored value is `NULL`, then clears the local copy. ADR-019 still governs which artwork may be shown; this ADR replaces only its "artwork does not alter API payloads" clause, because the card ID is now part of the account payload.
+- **Supersedes:** The browser-only storage in ADR-019.
 
 ## Change-control template
 
@@ -206,4 +215,5 @@ Use this for future changes:
 
 - **v1.3 (2026-10-24):** ADR-016 accepts a separate Obsidian second-brain learning workflow; repository and GitOps remain authoritative.
 - **v1.4 (2026-10-26):** ADR-017 accepts transfers between liquid accounts, adding a dedicated table and API/UI flow.
-- **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no issuer art is approved by this decision.
+- **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no official issuer art is approved by this decision. Labeled AI-generated concept artwork is allowed and included.
+- **v1.6 (2026-11-02):** ADR-020 stores each account's chosen card (`accounts.card_product_id`) in the database; Codex implements migration 004 and the API.

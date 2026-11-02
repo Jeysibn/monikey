@@ -62,14 +62,25 @@ async function getJson(url: string, signal: AbortSignal, fetcher: Fetcher): Prom
   }
 }
 
-async function write(url: string, method: 'POST' | 'PUT' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<void> {
+async function write(url: string, method: 'POST' | 'PUT' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<Response> {
   const response = await fetcher(url, {
     method,
     headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
-  if (response.ok) return
+  if (response.ok) return response
   throw apiError(response.status, await readJson(response))
+}
+
+/** The created account's ID from a successful POST /api/accounts; null if the body has none. */
+async function createdId(response: Response): Promise<number | null> {
+  try {
+    const body: unknown = await response.json()
+    const id = typeof body === 'object' && body !== null ? (body as { id?: unknown }).id : undefined
+    return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
 }
 
 function manilaToday(): string {
@@ -190,7 +201,7 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     },
 
     async addAccount(values: AccountValues) {
-      await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values))
+      return createdId(await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values)))
     },
 
     async updateAccount(id, values: AccountValues) {

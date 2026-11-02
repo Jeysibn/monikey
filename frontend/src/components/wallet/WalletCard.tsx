@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import { formatPeso } from '@/lib/money'
 import { MONIKEY_DEFAULT_ARTWORK_PATH } from '@/wallet/artworkCatalog'
-import type { WalletCardVM } from '@/wallet/walletModel'
-import { WalletCardDetailsContent, WalletCreditProgress } from './WalletCardDetailsDialog'
+import { faceFigure, usedShare, type WalletCardVM } from '@/wallet/walletModel'
+import { WalletCardDetailsContent } from './WalletCardDetailsDialog'
 
 const accountTypeLabels = {
   cash: 'Cash',
@@ -39,7 +39,7 @@ function AccountCardActions({
   return (
     <details
       ref={menuRef}
-      className="absolute top-2 right-2 z-20"
+      className="absolute top-1 right-1 z-20"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) menuRef.current?.removeAttribute('open')
       }}
@@ -50,9 +50,12 @@ function AccountCardActions({
       <summary
         ref={triggerRef}
         aria-label={`Card actions for ${item.accountName}`}
-        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-control border border-border bg-card text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
       >
-        <MoreHorizontal aria-hidden="true" className="size-5" />
+        {/* A small dark dot on the art; the whole 44px square is the target. */}
+        <span className="flex size-7 items-center justify-center rounded-full bg-black/45 text-white">
+          <MoreHorizontal aria-hidden="true" className="size-4" />
+        </span>
       </summary>
       <div className="absolute top-full right-0 mt-1 grid w-48 gap-1 rounded-card border border-border bg-card p-1">
         <Button
@@ -90,6 +93,45 @@ function AccountCardActions({
   )
 }
 
+/*
+ * Accounts card face (the owner's reference design): the figure sits straight on the artwork, bottom-left.
+ * Liquid accounts show their balance. Credit cards show the credit still available, a thin line filled by
+ * the share of the limit in use, and that share as "28% used". Card networks print their logo bottom-right,
+ * so the block keeps to the left ~58% of the card. Sizes follow the card's width (container query units),
+ * so the face reads the same in a four-column grid and on a phone. White text carries a soft shadow for
+ * contrast on any design; bright designs and the light MoniKey card use dark ink instead.
+ */
+function CardFace({ item, onLightArt }: { item: WalletCardVM; onLightArt: boolean }) {
+  // An image that failed to load falls back to the light MoniKey card, which always needs dark ink.
+  const dark = onLightArt || item.faceInk === 'dark'
+  const figure = faceFigure(item)
+  const used = usedShare(item)
+  return (
+    <span
+      className={`absolute bottom-[8%] left-[7%] z-10 grid w-[58%] min-w-0 ${dark ? 'text-[#0f1b2d] [text-shadow:0_0_3px_rgba(255,255,255,0.85)]' : 'text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]'}`}
+    >
+      <span className="text-[max(0.625rem,3.5cqw)] leading-tight font-semibold tracking-[0.08em] uppercase">{figure.label}</span>
+      <MoneyText centavos={figure.centavos} className="text-[max(1rem,7cqw)] leading-tight font-bold tracking-[-0.01em]" />
+      {used && (
+        <span aria-hidden="true" className={`mt-[2.4cqw] block h-[max(3px,1.3cqw)] overflow-hidden rounded-full ${dark ? 'bg-black/15' : 'bg-white/35'}`}>
+          <span className={`block h-full rounded-full ${dark ? 'bg-[#0f1b2d]' : 'bg-white'}`} style={{ width: `${used.percent}%` }} />
+        </span>
+      )}
+      {figure.note && (
+        <span className="mt-[1.2cqw] text-[max(0.5625rem,2.9cqw)] leading-tight font-semibold tracking-[0.06em] uppercase">{figure.note}</span>
+      )}
+    </span>
+  )
+}
+
+function faceLabel(item: WalletCardVM): string {
+  const figure = faceFigure(item)
+  const parts = [`View details for ${item.accountName}`, accountTypeLabels[item.accountType], `${figure.label} ${formatPeso(figure.centavos)}`]
+  if (figure.note) parts.push(figure.note)
+  if (item.accountType === 'credit_card' && item.creditLimitCentavos !== null) parts.push(`${formatPeso(item.creditLimitCentavos)} limit`)
+  return parts.join(', ')
+}
+
 export function WalletCard({
   item,
   selected,
@@ -119,7 +161,6 @@ export function WalletCard({
       ? 'Nothing to pay'
       : null
   const reasonId = `wallet-pay-reason-${item.accountId}`
-  const formattedAmount = formatPeso(item.primaryAmountCentavos)
 
   const imageFailed = () => {
     if (imageSrc !== MONIKEY_DEFAULT_ARTWORK_PATH) {
@@ -144,20 +185,30 @@ export function WalletCard({
     </span>
   )
 
+  const onLightArt = imageSrc === null || imageSrc === MONIKEY_DEFAULT_ARTWORK_PATH
+
   return (
     <Dialog open={isAccountsCard && detailsOpen} onOpenChange={setDetailsOpen}>
       <li className={`min-w-0 ${className}`}>
-        <article className={`relative h-full rounded-card border bg-card p-3 transition-colors duration-150 motion-reduce:transition-none ${isAccountsCard ? 'overflow-visible' : 'overflow-hidden'} ${selected ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background' : 'border-border'}`}>
-          <div className="relative aspect-[1.586/1] overflow-hidden rounded-[18px] bg-background">
+        <article
+          className={isAccountsCard
+            ? 'relative h-full'
+            : `relative h-full overflow-hidden rounded-card border bg-card p-3 transition-colors duration-150 motion-reduce:transition-none ${selected ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background' : 'border-border'}`}
+        >
+          <div
+            className={`relative aspect-[1.586/1] rounded-[18px] ${isAccountsCard
+              ? '@container' // no selected ring here: clicking opens details; keyboard focus keeps its outline
+              : 'overflow-hidden bg-background'}`}
+          >
             {imageSrc ? (
               <img
                 src={imageSrc}
                 alt=""
                 onError={imageFailed}
-                className="absolute inset-0 size-full object-contain"
+                className="absolute inset-0 size-full rounded-[18px] object-contain"
               />
             ) : (
-              <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-card text-muted-foreground">
+              <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center rounded-[18px] border border-border bg-card text-muted-foreground">
                 <span className="text-sm font-semibold">MoniKey</span>
               </div>
             )}
@@ -165,11 +216,17 @@ export function WalletCard({
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`View details for ${item.accountName}, ${accountTypeLabels[item.accountType]}, ${item.primaryLabel} ${formattedAmount}`}
-                  className="absolute inset-0 z-10 rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label={faceLabel(item)}
+                  className="absolute inset-0 z-10 cursor-pointer rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => onSelect(item.accountId)}
                 >
-                  {balanceOverlay}
+                  {onLightArt && (
+                    // The MoniKey card has no issuer name, so it carries the account name instead.
+                    <span className="absolute top-[36%] left-[11.75%] z-10 max-w-[76%] truncate text-[max(0.875rem,4.4cqw)] font-semibold text-foreground">
+                      {item.accountName}
+                    </span>
+                  )}
+                  <CardFace item={item} onLightArt={onLightArt} />
                   {fallbackNote && <span className="sr-only">{fallbackNote}</span>}
                 </button>
               </DialogTrigger>
@@ -188,16 +245,7 @@ export function WalletCard({
           </div>
 
           {isAccountsCard ? (
-            <>
-              {isCreditCard && <WalletCreditProgress item={item} />}
-              {isCreditCard && item.availableCreditCentavos !== null && item.availableCreditCentavos < 0 && item.primaryLabel === 'Owed' && (
-                <div className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-warning-ink">
-                  <TriangleAlert aria-hidden="true" className="size-4" />
-                  Over your limit
-                </div>
-              )}
-              {fallbackNote && <span className="sr-only">{fallbackNote}</span>}
-            </>
+            fallbackNote && <span className="sr-only">{fallbackNote}</span>
           ) : (
             <>
               <div className="mt-3 flex min-w-0 items-start justify-between gap-2">

@@ -15,7 +15,7 @@ export function WalletGrid({
   onPayCard: (cardId: number) => void
 }) {
   return (
-    <ul className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid min-w-0 grid-cols-1 gap-3 min-[30rem]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((item) => (
         <WalletCard
           key={`${item.accountId}:${item.artUrl}`}

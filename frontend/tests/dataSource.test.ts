@@ -115,9 +115,10 @@ describe('writes', () => {
   })
   it('a new account appears in the snapshot', async () => {
     const source = createMockSource()
-    await source.addAccount(wallet)
+    const id = await source.addAccount(wallet)
     const snapshot = await source.loadAccounts(signal)
     assert.equal(snapshot.accounts.at(-1)!.name, 'Wallet')
+    assert.equal(id, snapshot.accounts.at(-1)!.id) // the new ID, so the chosen card design can be saved for it
     assert.equal(snapshot.liquid.find((l) => l.account.name === 'Wallet')!.balance, 10_000)
   })
 })

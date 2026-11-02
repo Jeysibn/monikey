@@ -2,17 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { MONIKEY_DEFAULT_ARTWORK_ID, MONIKEY_DEFAULT_ARTWORK_PATH } from '../src/wallet/artworkCatalog.ts'
-import {
-  ATOME_BLACK_CREDIT_CONCEPT_ID,
-  BDO_DEBIT_MASTERCARD_CONCEPT_ID,
-  BDO_VISA_CONCEPT_ID,
-  GCASH_VISA_DEBIT_CONCEPT_ID,
-  GOTYME_VISA_CONCEPT_ID,
-  MARIBANK_CONCEPT_ARTWORK_ID,
-  MAYA_VISA_PLATINUM_CONCEPT_ARTWORK_ID,
-  UNIONBANK_REWARDS_VISA_PLATINUM_CONCEPT_ID,
-} from '../src/wallet/walletArtworkConcepts.ts'
-import { buildWalletGalleryModel } from '../src/wallet/walletModel.ts'
+import { buildWalletGalleryModel, faceFigure, usedShare } from '../src/wallet/walletModel.ts'
 import type { AccountsSnapshot } from '../src/types.ts'
 
 const snapshot: AccountsSnapshot = {
@@ -117,81 +107,82 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(model.liquid.some((item) => item.accountId === 999), false)
   })
 
-  it('shows an explicitly selected MariBank concept on Main Savings without changing its balance', () => {
-    const model = buildWalletGalleryModel(snapshot, {
-      version: 1,
-      byAccountId: { '2': { artworkId: MARIBANK_CONCEPT_ARTWORK_ID } },
-    })
-    const mainSavings = model.liquid.find((item) => item.accountId === 2)
-
-    assert.equal(mainSavings?.artworkId, MARIBANK_CONCEPT_ARTWORK_ID)
-    assert.equal(mainSavings?.artUrl, '/card-art/concepts/maribank-concept.png')
-    assert.equal(mainSavings?.isArtworkConcept, true)
-    assert.equal(mainSavings?.accountName, 'Main Savings')
-    assert.equal(mainSavings?.primaryAmountCentavos, 4_872_550)
-  })
-
-  it('shows an explicitly selected Maya concept on a credit card without changing its figures', () => {
-    const model = buildWalletGalleryModel(snapshot, {
-      version: 1,
-      byAccountId: { '4': { artworkId: MAYA_VISA_PLATINUM_CONCEPT_ARTWORK_ID } },
-    })
-    const blueCard = model.cards.find((item) => item.accountId === 4)
-
-    assert.equal(blueCard?.artworkId, MAYA_VISA_PLATINUM_CONCEPT_ARTWORK_ID)
-    assert.equal(blueCard?.artUrl, '/card-art/concepts/maya-visa-platinum-concept.png')
-    assert.equal(blueCard?.isArtworkConcept, true)
-    assert.equal(blueCard?.primaryAmountCentavos, 1_425_000)
-    assert.equal(blueCard?.availableCreditCentavos, 3_575_000)
-    assert.equal(blueCard?.creditLimitCentavos, 5_000_000)
-  })
-
-  it('maps generated bank and credit-card concepts without changing account values', () => {
+  it('maps a choice saved with an old concept ID to its generated card, without changing figures', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
-        '2': { artworkId: GOTYME_VISA_CONCEPT_ID },
-        '4': { artworkId: UNIONBANK_REWARDS_VISA_PLATINUM_CONCEPT_ID },
-        '5': { artworkId: ATOME_BLACK_CREDIT_CONCEPT_ID },
-        '6': { artworkId: BDO_VISA_CONCEPT_ID },
+        '2': { artworkId: 'concept-maribank-generated' },
+        '3': { artworkId: 'concept-gcash-visa-debit-generated' },
+        '4': { artworkId: 'concept-maya-visa-platinum-generated' },
+        '5': { artworkId: 'concept-atome-credit-card-black-generated' },
+        '6': { artworkId: 'concept-bdo-visa-generated' },
+        '7': { artworkId: 'concept-maribank-generated' }, // a bank design saved on a credit card: ignored
       },
     })
-    const mainSavings = model.liquid.find((item) => item.accountId === 2)
-    const [unionBank, atome, bdo] = model.cards
-
-    assert.deepEqual([mainSavings?.artworkId, mainSavings?.artUrl, mainSavings?.primaryAmountCentavos], [
-      GOTYME_VISA_CONCEPT_ID,
-      '/card-art/concepts/gotyme-visa-concept.png',
-      4_872_550,
-    ])
+    const byId = Object.fromEntries([...model.liquid, ...model.cards].map((item) => [item.accountId, item]))
     assert.deepEqual(
-      [unionBank?.artworkId, atome?.artworkId, bdo?.artworkId],
-      [UNIONBANK_REWARDS_VISA_PLATINUM_CONCEPT_ID, ATOME_BLACK_CREDIT_CONCEPT_ID, BDO_VISA_CONCEPT_ID],
+      [2, 3, 4, 5, 6].map((id) => [byId[id]!.productLabel, byId[id]!.artUrl]),
+      [
+        ['MariBank Debit Card', '/card-art/generated/maribank-debit.webp'],
+        ['GCash Visa Card', '/card-art/generated/gcash-visa.webp'],
+        ['Maya Visa Platinum', '/card-art/generated/maya-visa-platinum.webp'],
+        ['Atome Credit Card Black', '/card-art/generated/atome-credit-black.webp'],
+        ['BDO Visa Classic', '/card-art/generated/bdo-visa-classic.webp'],
+      ],
     )
-    assert.deepEqual([unionBank?.primaryAmountCentavos, atome?.primaryAmountCentavos, bdo?.primaryAmountCentavos], [1_425_000, 50_000, 0])
-    assert.deepEqual([unionBank?.availableCreditCentavos, atome?.availableCreditCentavos, bdo?.availableCreditCentavos], [3_575_000, 1_050_000, 2_000_000])
+    assert.equal(byId[7]!.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
+    assert.deepEqual([byId[2]!.primaryAmountCentavos, byId[4]!.primaryAmountCentavos, byId[4]!.availableCreditCentavos], [4_872_550, 1_425_000, 3_575_000])
   })
 
-  it('maps generated debit-card concepts to bank and e-wallet accounts without changing balances', () => {
+  it('shows the card chosen when the account was added, with its name, without changing figures', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
-        '2': { artworkId: BDO_DEBIT_MASTERCARD_CONCEPT_ID },
-        '3': { artworkId: GCASH_VISA_DEBIT_CONCEPT_ID },
+        '2': { artworkId: null, productId: 'maribank-debit' },
+        '4': { artworkId: null, productId: 'bdo-visa-gold' },
+        '5': { artworkId: null, productId: 'maribank-debit' },
       },
     })
-    const mainSavings = model.liquid.find((item) => item.accountId === 2)
-    const gcash = model.liquid.find((item) => item.accountId === 3)
+    const savings = model.liquid.find((item) => item.accountId === 2)!
+    assert.equal(savings.productLabel, 'MariBank Debit Card')
+    assert.equal(savings.artUrl, '/card-art/generated/maribank-debit.webp')
+    assert.equal(savings.primaryAmountCentavos, 4_872_550)
+    const gold = model.cards.find((item) => item.accountId === 4)!
+    assert.equal(gold.productLabel, 'BDO Visa Gold')
+    assert.equal(gold.artUrl, '/card-art/generated/bdo-visa-gold.webp')
+    const mismatched = model.cards.find((item) => item.accountId === 5)!
+    assert.equal(mismatched.productLabel, null)
+    assert.equal(mismatched.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
+  })
 
-    assert.deepEqual([mainSavings?.artworkId, mainSavings?.artUrl, mainSavings?.primaryAmountCentavos], [
-      BDO_DEBIT_MASTERCARD_CONCEPT_ID,
-      '/card-art/concepts/bdo-debit-mastercard-concept.png',
-      4_872_550,
-    ])
-    assert.deepEqual([gcash?.artworkId, gcash?.artUrl, gcash?.primaryAmountCentavos], [
-      GCASH_VISA_DEBIT_CONCEPT_ID,
-      '/card-art/concepts/gcash-visa-debit-concept.png',
-      312_075,
-    ])
+  it('shows available credit and the share of the limit used on credit card faces', () => {
+    const model = buildWalletGalleryModel(snapshot)
+    const cards = Object.fromEntries(model.cards.map((item) => [item.accountName, item]))
+    assert.deepEqual(faceFigure(cards['Blue Card']!), { label: 'Available credit', centavos: cards['Blue Card']!.availableCreditCentavos!, note: `${Math.round(usedShare(cards['Blue Card']!)!.percent)}% used` })
+    assert.equal(faceFigure(cards['Paid Off Card']!).note, '0% used')
+    assert.match(faceFigure(cards['Overpaid Card']!).note ?? '', /^0% used · ₱[\d,.]+ card credit$/)
+    const over = faceFigure(cards['Over Limit Card']!)
+    assert.equal(over.label, 'Over limit by')
+    assert.equal(over.centavos, -cards['Over Limit Card']!.availableCreditCentavos!)
+    assert.equal(usedShare(model.liquid[0]!), null)
+    assert.deepEqual(faceFigure(model.liquid[0]!), { label: 'Balance', centavos: -12_000, note: 'Below zero' })
+  })
+
+  it('reports a tiny balance as under 1% used, never as unused', () => {
+    const [card] = buildWalletGalleryModel(snapshot).cards
+    assert.equal(usedShare({ ...card!, primaryLabel: 'Owed', primaryAmountCentavos: 100, creditLimitCentavos: 5_000_000 })!.text, 'Under 1% used')
+  })
+
+  it('uses dark text on light designs and the MoniKey card, white on dark designs', () => {
+    const model = buildWalletGalleryModel(snapshot, {
+      version: 1,
+      byAccountId: {
+        '2': { artworkId: null, productId: 'maribank-debit' },
+        '3': { artworkId: null, productId: 'gcash-visa' },
+      },
+    })
+    assert.equal(model.liquid.find((item) => item.accountId === 2)!.faceInk, 'dark')
+    assert.equal(model.liquid.find((item) => item.accountId === 3)!.faceInk, 'light')
+    assert.equal(model.liquid.find((item) => item.accountId === 1)!.faceInk, 'dark')
   })
 })

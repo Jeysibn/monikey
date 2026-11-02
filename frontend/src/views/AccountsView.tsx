@@ -23,8 +23,9 @@ import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
  *   Money you have  - cash, bank and e-wallet balances (ink)
  *   Money you owe   - credit cards: owed amount in the debt colour with the word "owed", a limit track,
  *                     and available credit, which is NOT cash and is never part of "money you have".
- * The two sections stack at every width so each wallet gallery can use the full canvas and keep its
- * account cards easy to identify. Balances are "as of today", so there is no month select here.
+ * Cards view (the owner's reference design): a net-position banner with both totals, then one grid of every
+ * account's card, 1 to 4 per row. List view keeps the two sections, stacked at every width.
+ * Balances are "as of today", so there is no month select here.
  * Account names and starting values can be edited from their rows; account types stay fixed. Add account opens the shared dialog in App.
  */
 function Bar({ className }: { className: string }) {
@@ -120,6 +121,77 @@ export function AccountsView({
 
       <WalletViewToggle value={displayMode} onChange={setDisplayMode} />
 
+      {displayMode === 'cards' ? (
+        <div className="grid grid-cols-1 gap-4 md:gap-5">
+          {/* Net position banner: both totals side by side. Available credit is never part of either. */}
+          <Card>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <CardTitle id="net-position-title" tabIndex={-1}>Net position</CardTitle>
+              {totalsLoading ? (
+                <Bar className="h-7 w-36" />
+              ) : summaryFailed ? (
+                <InlineFailure what="the totals" onRetry={summaryRes.retry} focusAfter="#money-you-have-title" live />
+              ) : (
+                <MoneyText wrap centavos={summary.netPosition} className="text-[1.625rem] font-semibold tracking-[-0.02em] md:text-[1.875rem]" />
+              )}
+            </div>
+            <dl className="mt-3 grid grid-cols-1 gap-2 min-[30rem]:grid-cols-2">
+              <div className="grid gap-0.5 rounded-control bg-secondary px-3.5 py-3">
+                <dt id="money-you-have-title" tabIndex={-1} className="text-sm text-muted-foreground">Money you have</dt>
+                <dd className="m-0">
+                  {totalsLoading || summaryFailed ? <Bar className="h-6 w-28" /> : (
+                    <MoneyText wrap centavos={summary.liquidBalance} className="text-lg font-semibold md:text-xl" />
+                  )}
+                </dd>
+              </div>
+              <div className="grid gap-0.5 rounded-control bg-secondary px-3.5 py-3">
+                <dt id="money-you-owe-title" tabIndex={-1} className="text-sm text-muted-foreground">Money you owe</dt>
+                <dd className="m-0">
+                  {totalsLoading || summaryFailed ? <Bar className="h-6 w-28" /> : (
+                    <span>
+                      <MoneyText wrap centavos={summary.outstandingDebt} kind="debt" className="text-lg font-semibold md:text-xl" />
+                      {' '}
+                      <span className="text-sm font-medium text-debt">owed</span>
+                    </span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+            <CardDescription className="mt-3 mb-0">
+              Available credit isn&rsquo;t cash and isn&rsquo;t part of your total money.
+            </CardDescription>
+          </Card>
+
+          <section aria-labelledby="all-accounts-title" className="min-w-0">
+            <h2 id="all-accounts-title" className="sr-only">All accounts</h2>
+            {accountsFailed ? (
+              <Card>
+                <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#net-position-title" />
+              </Card>
+            ) : rowsLoading ? (
+              <ul aria-hidden="true" className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {[0, 1, 2, 3].map((i) => (
+                  <li key={i}><Bar className="aspect-[1.586/1] w-full rounded-[18px]" /></li>
+                ))}
+              </ul>
+            ) : allWalletCards.length === 0 ? (
+              <EmptyState
+                className="rounded-card"
+                message="Add your first cash, bank, e-wallet or credit card account."
+                action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
+              />
+            ) : (
+              <WalletGrid
+                items={allWalletCards}
+                selectedAccountId={selectedId}
+                onSelect={setSelectedAccountId}
+                onEdit={onEditAccount}
+                onPayCard={onPayCard}
+              />
+            )}
+          </section>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-4 md:gap-6">
         {/* Money you have */}
         <section role="region" aria-labelledby="money-you-have-title" className="grid min-w-0 gap-4 md:gap-6">
@@ -128,17 +200,6 @@ export function AccountsView({
               <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
               <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
             </Card>
-          ) : displayMode === 'cards' && !rowsLoading && rows.length > 0 ? (
-            <>
-              <Card>{moneyHaveHeader}</Card>
-              <WalletGrid
-                items={wallet.liquid}
-                selectedAccountId={selectedId}
-                onSelect={setSelectedAccountId}
-                onEdit={onEditAccount}
-                onPayCard={onPayCard}
-              />
-            </>
           ) : (
             <Card>
               {moneyHaveHeader}
@@ -225,21 +286,11 @@ export function AccountsView({
                   action={<Button variant="secondary" onClick={() => onAddAccount('credit card')}>Add credit card</Button>}
                 />
               )}
-              {displayMode === 'list' ? (
-                cards.map((status) => (
-                  <Card key={status.account.id}>
-                    <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
-                  </Card>
-                ))
-              ) : (
-                <WalletGrid
-                  items={wallet.cards}
-                  selectedAccountId={selectedId}
-                  onSelect={setSelectedAccountId}
-                  onEdit={onEditAccount}
-                  onPayCard={onPayCard}
-                />
-              )}
+              {cards.map((status) => (
+                <Card key={status.account.id}>
+                  <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
+                </Card>
+              ))}
               {cards.length > 0 && (
                 <button
                   type="button"
@@ -255,6 +306,7 @@ export function AccountsView({
         </section>
         )}
       </div>
+      )}
     </div>
   )
 }

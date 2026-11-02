@@ -26,7 +26,8 @@ export interface DataSource {
   /** Create (no target) or replace (target) an expense, income, card payment or account transfer. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>
   deleteEntry(target: EntryTarget): Promise<void>
-  addAccount(values: AccountValues): Promise<void>
+  /** Resolves with the new account's ID when the server reports one (null otherwise). */
+  addAccount(values: AccountValues): Promise<number | null>
   updateAccount(id: number, values: AccountValues): Promise<void>
 }
 

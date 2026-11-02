@@ -10,13 +10,75 @@ from __future__ import annotations
 import json
 import os
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import HTTPHandler, HTTPRedirectHandler, Request, build_opener
 
 
-BASE_URL = os.environ.get("MONIKEY_E2E_BASE_URL", "http://127.0.0.1:8080/api")
+SAFE_TEST_BASE_URL = "http://127.0.0.1:8080/api"
+BASE_URL = SAFE_TEST_BASE_URL
+
+
+class RejectRedirects(HTTPRedirectHandler):
+    """Do not let urllib follow a server redirect to another destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class DirectHTTPHandler(HTTPHandler):
+    """Handle allowed HTTP URLs before urllib's environment proxy handler."""
+
+    handler_order = 0
+
+
+def validate_local_destination(url: str) -> str:
+    """Allow only the local Compose frontend and its same-origin API paths."""
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError("Integration URL must be the permitted local test destination.") from error
+
+    valid_path = parsed.path == "/" or parsed.path == "/api" or parsed.path.startswith("/api/")
+    if (
+        parsed.scheme != "http"
+        or parsed.netloc != "127.0.0.1:8080"
+        or parsed.hostname != "127.0.0.1"
+        or port != 8080
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or not valid_path
+    ):
+        raise ValueError("Integration URL must be the permitted local test destination.")
+    return url
+
+
+def validate_base_url(value: str) -> str:
+    """Reject environment overrides unless they exactly name the test stack."""
+    if value != SAFE_TEST_BASE_URL:
+        raise ValueError(f"MONIKEY_E2E_BASE_URL must be exactly {SAFE_TEST_BASE_URL!r}.")
+    return value
+
+
+def configured_base_url() -> str:
+    return validate_base_url(os.environ.get("MONIKEY_E2E_BASE_URL", SAFE_TEST_BASE_URL))
+
+
+def local_opener():
+    # The direct handler runs before urllib's environment-based ProxyHandler.
+    return build_opener(DirectHTTPHandler(), RejectRedirects())
+
+
+def open_local_destination(destination: str | Request, timeout: int = 8):
+    url = destination.full_url if isinstance(destination, Request) else destination
+    validate_local_destination(url)
+    return local_opener().open(destination, timeout=timeout)
 
 
 def call(method: str, path: str, body: dict[str, object] | None = None, expected: int = 200):
+    if not path.startswith("/") or path.startswith("//"):
+        raise ValueError("API path must be local and relative to the permitted API base.")
     data = None if body is None else json.dumps(body).encode()
     request = Request(
         BASE_URL + path,
@@ -25,7 +87,7 @@ def call(method: str, path: str, body: dict[str, object] | None = None, expected
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urlopen(request, timeout=8) as response:
+        with open_local_destination(request, timeout=8) as response:
             status, raw = response.status, response.read()
     except HTTPError as error:
         status, raw = error.code, error.read()
@@ -69,8 +131,10 @@ def create_transaction(
 
 
 def main() -> None:
+    global BASE_URL
+    BASE_URL = configured_base_url()
     assert call("GET", "/health/ready")["status"] == "ok"
-    page = urlopen(BASE_URL.removesuffix("/api") + "/", timeout=8).read().decode()
+    page = open_local_destination(BASE_URL.removesuffix("/api") + "/", timeout=8).read().decode()
     assert '<div id="root"></div>' in page and "assets/index-" in page
     assert call("GET", "/accounts") == []
 

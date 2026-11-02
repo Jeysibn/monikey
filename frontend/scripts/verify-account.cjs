@@ -28,7 +28,11 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     if (view !== "Overview") await nav(page, view);
     return page;
   }
-  const nav = async (p, name) => { await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100); };
+  const nav = async (p, name) => {
+    await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100);
+    // Accounts opens on the wallet card deck (since the wallet gallery); these checks read the List layout.
+    if (name === "Accounts") { await p.locator('[role=group][aria-label="Account display"] button:has-text("List")').click(); await p.waitForTimeout(100); }
+  };
   const T = s => s.replace(/\s+/g, " ").trim();
   const mainText = p => p.evaluate(() => document.querySelector("main").innerText.replace(/\s+/g, " ").trim());
   const dlg = p => p.locator('[role="dialog"]');
@@ -130,7 +134,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await addAccountBtn(p).click(); await p.waitForTimeout(150);
     await p.fill("#aa-name", "Piggy"); await p.fill("#aa-balance", "250");
     await submit(p).click(); await p.waitForTimeout(250);
-    check("notice shown, dialog open, everything kept, Save enabled again", await dialogOpen(p) && /Couldn't save\. Check your connection and try again\. Your entry is still here\./.test(await dText(p)) && await p.inputValue("#aa-name") === "Piggy" && await p.inputValue("#aa-balance") === "250" && await submit(p).isEnabled());
+    check("notice shown, dialog open, everything kept, Save enabled again", await dialogOpen(p) && /Couldn't save\. Check your connection and try again\. Your account details are still here\./.test(await dText(p)) && await p.inputValue("#aa-name") === "Piggy" && await p.inputValue("#aa-balance") === "250" && await submit(p).isEnabled());
     await submit(p).click(); await p.waitForTimeout(250);
     check("retrying adds it", !(await dialogOpen(p)) && await status(p) === "Account added: Piggy." && (await mainText(p)).includes("Piggy"));
   });

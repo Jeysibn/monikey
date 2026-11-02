@@ -45,19 +45,22 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   await safe(async () => {
     const p = await open(375, { query: "?demo=load-error" });
     const a = await alerts(p);
-    eq("four blocks failed on their own: summary, credit cards, recent activity, and the categories (a banner)", a.length, 4);
+    // Overview also shows the wallet deck, which reads the accounts on its own (since the Overview wallet deck).
+    eq("five blocks failed on their own: summary, credit cards, accounts, recent activity, and the categories (a banner)", a.length, 5);
     check("the summary block says so, with no 'Last updated' (nothing ever loaded)", a.includes("Couldn't load your summary. Retry"), a.join(" | "));
-    check("credit cards, recent activity and the categories say so too", a.includes("Couldn't load your credit cards. Retry") && a.includes("Couldn't load recent activity. Retry") && a.includes("Couldn't load the categories. Retry"));
+    check("credit cards, accounts, recent activity and the categories say so too", a.includes("Couldn't load your credit cards. Retry") && a.includes("Couldn't load your accounts. Retry") && a.includes("Couldn't load recent activity. Retry") && a.includes("Couldn't load the categories. Retry"));
     check("'This month' explains instead of showing zeros", /Not available until your summary loads\./.test(await mainText(p)) && !/₱0\.00/.test(await mainText(p)));
     check("Add transaction is disabled (the accounts have not loaded) and still reads 'Add transaction'", await addBtn(p).isDisabled() && /Add transaction/.test(await addBtn(p).getAttribute("aria-label")));
     check("each Retry has a specific name", await retry(p, "your summary").count() === 1 && await retry(p, "your credit cards").count() === 1 && await retry(p, "recent activity").count() === 1 && await retry(p, "the categories").count() === 1);
     await shot(p, "states-load-error-overview-375.png");
     await retry(p, "your summary").click(); await p.waitForTimeout(300);
     const after = await alerts(p);
-    check("retrying the summary fixes only that block", after.length === 3 && /Net position/.test(await mainText(p)) && !/Couldn't load your summary/.test(after.join(" ")), after.join(" | "));
+    check("retrying the summary fixes only that block", after.length === 4 && /Net position/.test(await mainText(p)) && !/Couldn't load your summary/.test(after.join(" ")), after.join(" | "));
     await retry(p, "your credit cards").click(); await p.waitForTimeout(300);
     check("retrying the cards restores them; Add transaction waits for the categories too", /Blue Card/.test(await mainText(p)) && await addBtn(p).isDisabled());
     await retry(p, "recent activity").click(); await p.waitForTimeout(300);
+    // The wallet deck and the card list read the same accounts, so retrying the cards may already have restored it.
+    if (await retry(p, "your accounts").count()) { await retry(p, "your accounts").click(); await p.waitForTimeout(300); }
     await retry(p, "the categories").click(); await p.waitForTimeout(300);
     check("then Add transaction is enabled", await addBtn(p).isEnabled());
     eq("no failed block is left", (await alerts(p)).length, 0);
@@ -152,7 +155,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   group = "?demo=offline: nothing works, and the screen says so";
   await safe(async () => {
     const p = await open(375, { query: "?demo=offline" });
-    eq("four blocks failed (the categories banner too)", (await alerts(p)).length, 4);
+    eq("five blocks failed (the accounts and the categories banner too)", (await alerts(p)).length, 5);
     await retry(p, "your summary").click(); await p.waitForTimeout(300);
     check("Retry fails again and the message stays (no spinner forever, no blank)", /Couldn't load your summary/.test((await alerts(p)).join(" ")) && await retry(p, "your summary").isVisible());
     check("Add transaction stays disabled (there are no accounts to add to)", await addBtn(p).isDisabled());

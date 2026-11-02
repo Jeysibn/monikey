@@ -41,7 +41,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
 
   group = "Layout and order";
   await safe(async () => {
-    for (const w of [320, 375, 768, 1440]) {
+    for (const w of [320, 375, 768, 1024, 1440]) {
       const p = await open(w);
       eq(`${w}px: no horizontal scroll`, await overflow(p), 0);
       const order = await p.evaluate(() => [...document.querySelectorAll("main h2")].map(h => h.textContent.trim()));
@@ -154,10 +154,11 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
 
     const r = await open(375, { query: "?demo=no-plan" });
     await r.getByRole("button", { name: "Write reflection" }).click(); await r.waitForTimeout(250);
-    check("with no plan, the form says the plan amounts will be stored as ₱0.00", /October 2026 has no plan\. Saving a reflection also stores its plan amounts as ₱0\.00/.test(T(await dlg(r).innerText())));
+    // ADR-021 amendment (migration 006): a reflection-only save no longer stores plan amounts.
+    check("with no plan, the form says the reflection is stored separately from any plan", /October 2026 has no saved plan\. The reflection and its totals will be stored separately/.test(T(await dlg(r).innerText())) && !/₱0\.00 plan|stores its plan amounts/.test(T(await dlg(r).innerText())));
     await dlg(r).locator("button[type=submit]").click(); await r.waitForTimeout(400);
     t = await text(r, "kakeibo-plan-title");
-    check("afterwards the plan card says no plan amounts, not a plan you made", /No plan amounts for October 2026/.test(t) && !/Your October 2026 plan/.test(t));
+    check("afterwards the plan card still says there is no plan (a reflection is not a saved budget)", /No plan for October 2026 yet/.test(t) && !/Your October 2026 plan/.test(t));
     eq("and still offers Create plan", await r.locator('main button:has-text("Create plan")').count(), 1);
     await r.context().close();
   });

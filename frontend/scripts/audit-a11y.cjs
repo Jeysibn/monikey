@@ -50,7 +50,7 @@ const PAGE_HELPERS = `
   }
   const nav = async (p, name) => { await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100); };
   const shot = (p, name) => SHOTS ? p.screenshot({ path: path.join(SHOTS, name), fullPage: false }) : null;
-  const VIEWS = ["Overview", "Activity", "Accounts"];
+  const VIEWS = ["Overview", "Activity", "Accounts", "Kakeibo"];
 
   /* ------------------------------------------------------------ 1. structure and names, per view */
   group = "Structure and names";
@@ -136,7 +136,7 @@ const PAGE_HELPERS = `
       const cv = document.createElement("canvas").getContext("2d");
       const selectCut = [...document.querySelectorAll("select")].filter(__vis).filter(s => { const cs = getComputedStyle(s); cv.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; const text = s.options[s.selectedIndex]?.text || ""; return cv.measureText(text).width > s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) + 1; }).map(s => __sel(s) + " shows \"" + (s.options[s.selectedIndex]?.text || "") + "\"");
       // An ordinary amount must never break across lines at the normal text size (only the very largest may, as a last resort).
-      const wrapped = [...document.querySelectorAll("main *")].filter(__vis).filter(e => e.children.length <= 1 && /^[−+]?₱[\d,]{1,9}\.\d{2}(\s*owed)?$/.test(e.textContent.trim())).filter(e => { const r = document.createRange(); r.selectNodeContents(e); return new Set([...r.getClientRects()].map(x => Math.round(x.top / 4))).size > 1; }).slice(0, 3).map(e => e.textContent.trim());
+      const wrapped = [...document.querySelectorAll("main *")].filter(__vis).filter(e => e.children.length <= 1 && /^[−+]?₱[\d,]{1,9}\.\d{2}(\s*owed)?$/.test(e.textContent.trim())).filter(e => { const r = document.createRange(); r.selectNodeContents(e); const rs = [...r.getClientRects()].filter(x => x.width > 0); /* mixed font sizes share a line with different tops; a real wrap puts one box wholly below another */ return rs.some(a => rs.some(b => b.top >= a.bottom - 1)); }).slice(0, 3).map(e => e.textContent.trim());
       return { over, offenders, small, tiny, clipped, smallText, wrapped, selectCut };
     }, W);
     const w = `${view}@${W}`;
@@ -153,7 +153,7 @@ const PAGE_HELPERS = `
 
   /* ------------------------------------------------------------ 4. keyboard: focus visible, not obscured, order */
   group = "Keyboard and focus";
-  for (const [view, W] of [["Overview", 375], ["Activity", 375], ["Accounts", 375], ["Overview", 1280], ["Activity", 1280], ["Accounts", 1280]]) await safe(`focus ${view}@${W}`, async () => {
+  for (const [view, W] of [["Overview", 375], ["Activity", 375], ["Accounts", 375], ["Kakeibo", 375], ["Overview", 1280], ["Activity", 1280], ["Accounts", 1280], ["Kakeibo", 1280]]) await safe(`focus ${view}@${W}`, async () => {
     const p = await open(W, { view });
     await p.evaluate(() => document.body.focus()); await p.mouse.click(2, 2);
     const stops = [];
@@ -297,6 +297,8 @@ const PAGE_HELPERS = `
   group = "Worst-case content (long names, huge amounts)";
   for (const W of [320, 375, 1280]) await safe(`worst@${W}`, async () => {
     const p = await open(W, { view: "Accounts", height: 900 });
+    // The "Add credit card" slot is in the List layout; Accounts opens on the card deck.
+    await p.locator('[role=group][aria-label="Account display"] button:has-text("List")').click(); await p.waitForTimeout(100);
     const longName = "Ñandú Cooperativa de Ahorro y Crédito de los Trabajadores del Mercado 60"; // 60+ chars, accents
     await p.locator('main button:has-text("Add account"):visible').first().click(); await p.waitForTimeout(150);
     await p.fill("#aa-name", longName.slice(0, 60)); await p.locator("label:has(input[value=bank])").click(); await p.fill("#aa-balance", "9,999,999,999.99");

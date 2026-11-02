@@ -21,9 +21,8 @@ import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 /*
  * Overview (docs/design/UI_UX_SPEC.md section 4). Question it answers: "After what I owe, how much do I
- * really have?" Blocks, in reading order: position card, this month, credit cards, recent activity.
- * Below 1024px they stack in that order; from 1024px the position card spans the top, recent activity sits
- * on the left (7 of 12 columns) and "this month" + "credit cards" on the right (5 of 12).
+ * really have?" Phone order: position, this month, credit cards, account wallet, recent activity. From 1024px,
+ * the position spans the top, wallet and recent activity share the next row, then month and credit cards.
  * All totals come from lib/finance.ts, which stands in for the API during this milestone.
  */
 
@@ -195,8 +194,8 @@ export function OverviewView({
           </section>
         )}
 
-        {/* 4. Recent activity: below the money cards on phones and tablets, on the left from 1024px */}
-        <div className="order-3 min-w-0 lg:order-none lg:col-span-7">
+        {/* Recent activity shares the main wallet row at desktop and follows the wallet on smaller screens. */}
+        <div className="order-5 min-w-0 lg:order-none lg:col-span-5 lg:col-start-8 lg:row-start-2">
           <Card aria-labelledby="recent-activity-title" role="region">
             <CardHeader>
               <CardTitle id="recent-activity-title" tabIndex={-1}>Recent activity</CardTitle>
@@ -243,9 +242,9 @@ export function OverviewView({
           </Card>
         </div>
 
-        <div className="order-2 grid min-w-0 gap-4 md:gap-6 lg:order-none lg:col-span-5">
+        <div className="order-2 grid min-w-0 gap-4 md:gap-6 lg:contents">
           {/* 2. This month. Income and expenses of the selected month; card payments are not counted. */}
-          <Card role="region" aria-labelledby="this-month-title">
+          <Card role="region" aria-labelledby="this-month-title" className="min-w-0 lg:col-span-6 lg:row-start-3">
             <CardTitle id="this-month-title">This month</CardTitle>
             <CardDescription>{label} · card payments aren&rsquo;t counted as expenses</CardDescription>
             {summaryRes.error ? (
@@ -269,7 +268,7 @@ export function OverviewView({
           </Card>
 
           {/* 3. Credit cards. Balances are "as of today", so they do not change with the month. */}
-          <Card role="region" aria-labelledby="credit-cards-title">
+          <Card role="region" aria-labelledby="credit-cards-title" className="min-w-0 lg:col-span-6 lg:col-start-7 lg:row-start-3">
             <CardTitle id="credit-cards-title" tabIndex={-1}>Credit cards</CardTitle>
             <CardDescription>Available credit isn&rsquo;t cash.</CardDescription>
             {accountsRes.error ? (
@@ -303,14 +302,17 @@ export function OverviewView({
             )}
           </Card>
 
-          <WalletStack
-            accounts={accountsRes}
-            preferences={walletPreferences}
-            onEditAccount={onEditAccount}
-            onPayCard={onPayCard}
-            onTransfer={onTransfer}
-            onOpenAccounts={onOpenAccounts}
-          />
+          <div className="order-4 min-w-0 lg:order-none lg:col-span-7 lg:col-start-1 lg:row-start-2">
+            <WalletStack
+              accounts={accountsRes}
+              loading={forcedLoading}
+              preferences={walletPreferences}
+              onEditAccount={onEditAccount}
+              onPayCard={onPayCard}
+              onTransfer={onTransfer}
+              onOpenAccounts={onOpenAccounts}
+            />
+          </div>
         </div>
       </div>
     </div>

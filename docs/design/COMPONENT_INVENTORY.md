@@ -1,12 +1,16 @@
 # MoniKey Component Inventory
 
-**Status: APPROVED by the owner; mock-backed frontend implemented through Milestone 4.9.** This inventory describes the React pieces for the three views and v1 entry flows. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md). See the current implementation summary below and the [Milestone 4.9 report](FRONTEND_STATES_4_9.md).
+**Status: The baseline through Milestone 4.9 is owner-approved; wallet PRs 1–4 are implemented on the feature branch, with visual/device acceptance still open.** This inventory describes the React pieces for the three views, v1 entry flows, and wallet presentation. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md). See the current implementation summary below and the [wallet implementation record](AUTHENTIC_WALLET_UI_SPEC.md).
 
 **Rule of thumb for an entry-level developer:** a component exists only if it is used in at least two places *or* it hides a tricky accessibility detail. Everything else stays inline in the view.
 
 ---
 
-## Current status after Milestone 4.9
+## Current status after wallet PR4
+
+Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `WalletDesignPicker`, and `WalletStack`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. The artwork catalog defaults to the bundled MoniKey fallback. PR5 ordering/synchronization remains deferred.
+
+## Historical status through Milestone 4.9
 
 Milestone 4.3 ([`FRONTEND_ACCOUNTS_4_3.md`](FRONTEND_ACCOUNTS_4_3.md)) added `AccountRow` and `AccountsView`. Milestones 4.4–4.9 added Activity, entry flows, responsive refinements, the data-source seam, and resilient resource states. The inventory below describes the current frontend:
 
@@ -40,7 +44,7 @@ Milestone 4.3 ([`FRONTEND_ACCOUNTS_4_3.md`](FRONTEND_ACCOUNTS_4_3.md)) added `Ac
 | `<input type="radio">` | The segmented type switch (visually restyled; real radios inside a `<fieldset><legend>`). |
 | `<nav>`, `<main>`, `<h1>` | Landmarks and page title. |
 
-## 3. Custom components (15)
+## 3. Existing custom components (15 before wallet PRs)
 
 Each is small and has one job. File names are proposals; folder layout in §5.
 
@@ -63,6 +67,21 @@ Each is small and has one job. File names are proposals; folder layout in §5.
 | 15 | `SkeletonValue` | Flat grey bar at an amount's or row's real size for loading. | `width`, `height` | all views | — |
 
 Not separate components (kept inline to avoid wrapper layers): the limit track (inside `CreditCardSummary`), the equation inside the hero card (in the Overview view), the date-group heading (inside Activity), month and account selects (a `FormField` or plain `<select>` in the view).
+
+### Wallet components added in PRs 1–4
+
+| Component/module | Job | Main inputs / behavior |
+|---|---|---|
+| `WalletCard` | Render one account's selected state, local artwork/fallback, balance or debt, and supported actions. | `WalletCardVM`, selection callback, edit/pay callbacks |
+| `WalletGrid` | Lay out wallet cards in the Accounts Cards view. | Account card models and selection/actions |
+| `WalletViewToggle` | Switch the Accounts page between Cards and List. | `cards \| list`, `onChange` |
+| `WalletDesignPicker` | Select an approved catalog design for an existing account. | Account ID/type, saved artwork ID, change callback |
+| `WalletStack` | Present account selection on Overview; phone scroll-snap rail and larger-screen selected card with Previous/Next controls. | Accounts resource, preferences, account actions, Accounts navigation callback |
+| `wallet/artworkCatalog.ts` | Define artwork metadata, allowlisted local paths and safe account-type-aware selection; resolve to fallback when unavailable/unapproved. | Static catalog and resolver functions |
+| `wallet/walletModel.ts` | Project existing snapshot values and saved appearance into wallet card view models; does not calculate money. | `AccountsSnapshot`, local preferences |
+| `wallet/walletPreferences.ts` | Parse, validate and persist versioned browser-local artwork selections. | Local storage adapter; safe defaults on invalid or denied storage |
+
+These wallet components are additive to the historical 15-component inventory above. The current implementation paths are in `frontend/src/components/wallet/` and `frontend/src/wallet/`.
 
 **Why `FormField` and `SegmentedControl` exist even though ADR-015 warns against wrappers:** both fix repeated accessibility wiring that is easy to get wrong six times in two forms; neither wraps a shadcn component's behaviour. Revisit if they grow beyond ~40 lines.
 

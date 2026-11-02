@@ -102,9 +102,12 @@ Not included: top bar, search, notifications, profile, settings, floating button
 | 1 | **Position card** | What is my net position? | A flat **deep-cobalt hero card** (white text, no gradient). Label "Net position" and "As of today"; the hero amount (36 / 40 / 44px, 600); the finding sentence; then the **equation drawn inline** — **Money you have** `−` **Card debt** (debt in a light orange so it reads on navy, with its label) — which is the signature element. A muted line adds "Plus ₱… card credit (overpaid)" or "An account is below zero." when that applies. |
 | 2 | **This month** | How is the month going? | Two label-left / value-right rows: **Income** `+₱36,500.00` (green) and **Expenses** `₱27,127.40`; sub-caption "October 2026 · card payments aren't counted as expenses". Rows (not side-by-side columns) so large amounts never wrap at 360px. |
 | 3 | **Credit cards** | What do I owe, and how much room is left? | One compact `CreditCardSummary` per card: name, owed amount, limit track, "₱35,750.00 available", **Pay card** button. |
-| 4 | **Recent activity** | What just happened? | 5 rows on mobile, 6 on desktop; "View all" opens Activity. Card payments appear here with their own marker. |
+| 4 | **Your accounts** | Which account do I want to inspect or act on? | Wallet stack reuses the Accounts card renderer. Select an account to reveal its balance/debt and supported actions; Previous/Next controls navigate the desktop stack, and the phone layout is a scroll-snap card rail. "View accounts" opens Accounts. |
+| 5 | **Recent activity** | What just happened? | 5 rows on mobile, 6 on desktop; "View all" opens Activity. Card payments appear here with their own marker. |
 
-No charts, no sparklines, no percentages, no progress rings. The limit track is the only graphic.
+No charts, no sparklines, no percentages, no progress rings. The limit track and wallet artwork are the only graphics. Wallet imagery is presentation-only and follows [ADR-019](../architecture/ADR.md#adr-019--wallet-artwork-is-presentation-only); when no approved exact product asset exists, show the original neutral MoniKey card.
+
+**Implemented layout note:** At phone and tablet widths, sections follow the order above. At `lg` and wider, the position card spans the top; Your accounts (7 columns) and Recent activity (5 columns) share the next row, followed by This month and Credit cards in equal columns. Wallet card selection/actions do not change ledger data. The wireframes above predate the wallet stack and its desktop placement; use this note for the current layout.
 
 ### Mobile wireframe (375px)
 
@@ -314,12 +317,18 @@ Two clearly named sections, in this order, always:
 
 Separation does **not** rely on colour: different headings, different icons (`Wallet` vs `CreditCard`), the word "owed", and a limit track that only credit cards have. Available credit is always in muted grey.
 
+### Implemented account presentation
+
+Accounts defaults to the **Cards** gallery and provides a **List** toggle that preserves the established row and `CreditCardSummary` presentation. Card selection exposes the account's existing supported actions (Edit, Pay card when applicable); Transfer remains an explicit page action. A selected card's artwork is chosen from the safe local catalog, with a neutral MoniKey fallback. Edit account includes the appearance picker; Add account does not yet offer appearance selection because account creation does not return a reliable new account ID. Local appearance preferences are browser-local and do not sync across devices.
+
+The wireframes below document the original row-based account presentation; use this paragraph and the responsive guidelines for the current default Cards view.
+
 ### Contents
-- h1 "Accounts"; secondary **Add account**; primary **Add transaction** (≥768px). On mobile, **Add account** sits on its own row under the title.
-- **Money you have:** one card of rows. Each row: account name (16/500) and type text ("Cash", "Bank account", "E-wallet") on line 2; balance right (24/600 in section, 16/600 inside narrow rows). Grouped in the order Cash → Bank → E-wallet; no group headings when a type has no accounts.
-- **Money you owe:** one `CreditCardSummary` card per credit card — name, "Owed" chip, owed amount (24/600, `debt`), limit track (filled = owed, remainder = available), "₱35,750.00 available" and "Limit ₱50,000.00", and a **Pay card** secondary button (full width on mobile).
+- h1 "Accounts"; **Transfer** and **Add account** actions; the shell's **Add transaction** action remains available. On phones, Transfer and Add account sit in the action row under the title.
+- **Cards view (default):** the Money you have section shows one wallet card per cash, bank, or e-wallet account; Money you owe shows one wallet card per credit card. Section subtotals remain in the headings. Selecting a card exposes the existing account actions; card debt and credit details retain their text labels.
+- **List view:** Money you have uses the previous account rows (account name, type, balance), grouped Cash → Bank → E-wallet. Money you owe uses one `CreditCardSummary` per credit card with owed amount, limit track, available credit, limit and **Pay card** action.
 - A dashed **+ Add credit card** slot ends the liabilities section (opens Add account on type *Credit card*).
-- No edit or delete for accounts (v1 only creates and lists).
+- Account editing is supported; account deletion is not part of v1.
 
 ### Mobile wireframe (375px)
 

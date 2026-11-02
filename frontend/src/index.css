@@ -183,3 +183,8 @@
     }
   }
 }
+
+/* Focus indicators should appear immediately instead of fading with a button's color transition (WCAG 2.2, 2.4.7). */
+[data-slot="button"] {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+}

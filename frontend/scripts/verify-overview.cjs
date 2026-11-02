@@ -121,7 +121,10 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         document.querySelectorAll("main span.block, main dd span, main li button span:last-child, main .whitespace-nowrap").forEach(e => {
           if (!vis(e)) return; const cs = getComputedStyle(e), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3, r = e.getBoundingClientRect();
           if (/₱/.test(e.textContent) && e.children.length === 0) {
-            const box = e.closest("section, [role=region]").getBoundingClientRect();
+            // In the Overview account rail, later cards intentionally sit beyond the region's visible
+            // viewport and are reached by horizontal scrolling. Check each amount against its own card.
+            const card = e.closest("article");
+            const box = (card || e.closest("section, [role=region]")).getBoundingClientRect();
             if (r.height > lh * 1.5) bad.push("wraps: " + e.textContent.trim());
             if (r.right > box.right + 0.5 || r.left < box.left - 0.5) bad.push("overflows: " + e.textContent.trim());
           }
@@ -141,9 +144,10 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       check("every peso amount is on one line and inside its card", m.bad.length === 0, m.bad.join("; ") || "ok");
       check("touch targets ≥44px high (buttons, selects, nav) below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
       if (W >= 1024) {
-        check("hero spans the top; recent activity left of the right column", m.hero.y < m.recent.y && m.recent.y === m.month.y && m.recent.x < m.month.x, JSON.stringify({ hero: m.hero, recent: m.recent, month: m.month }));
+        check("hero spans the top; wallet and recent activity share the next row", m.hero.y < m.wallets.y && m.wallets.y === m.recent.y && m.wallets.x < m.recent.x, JSON.stringify({ hero: m.hero, wallets: m.wallets, recent: m.recent }));
         const cols = (m.mainW - 24 * 11) / 12; const span = n => Math.round(n * cols + (n - 1) * 24);
-        check(`12-column grid: recent activity = 7 columns (${span(7)}px), right column = 5 (${span(5)}px)`, Math.abs(m.recent.w - span(7)) <= 1 && Math.abs(m.month.w - span(5)) <= 1, `recent ${m.recent.w}, month ${m.month.w}, content ${m.mainW}`);
+        check(`wallet/recent split is 7 + 5 columns (${span(7)}px / ${span(5)}px)`, Math.abs(m.wallets.w - span(7)) <= 1 && Math.abs(m.recent.w - span(5)) <= 1, `wallet ${m.wallets.w}, recent ${m.recent.w}, content ${m.mainW}`);
+        check("This month and Credit cards share the row below the wallet", m.month.y === m.cards.y && m.month.y > m.wallets.y && m.month.w === m.cards.w && m.month.x < m.cards.x, JSON.stringify({ month: m.month, cards: m.cards }));
       } else {
         check("stacked order: hero, this month, credit cards, wallet stack, recent activity", m.hero.y < m.month.y && m.month.y < m.cards.y && m.cards.y < m.wallets.y && m.wallets.y < m.recent.y, `y: ${m.hero.y} < ${m.month.y} < ${m.cards.y} < ${m.wallets.y} < ${m.recent.y}`);
         check("every block uses the full content width", [m.hero, m.month, m.cards, m.wallets, m.recent].every(r => Math.abs(r.w - m.mainW) <= 1), `content ${m.mainW}; ${[m.hero, m.month, m.cards, m.wallets, m.recent].map(r => r.w).join("/")}`);

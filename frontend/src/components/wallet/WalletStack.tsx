@@ -22,6 +22,7 @@ function SkeletonCard() {
 
 export function WalletStack({
   accounts,
+  loading = false,
   preferences,
   onEditAccount,
   onPayCard,
@@ -29,6 +30,7 @@ export function WalletStack({
   onOpenAccounts,
 }: {
   accounts: Resource<AccountsSnapshot>
+  loading?: boolean
   preferences: WalletPreferencesV1
   onEditAccount: (accountId: number, from: HTMLElement) => void
   onPayCard: (cardId: number) => void
@@ -40,7 +42,7 @@ export function WalletStack({
   const wallet = snapshot ? buildWalletGalleryModel(snapshot, preferences) : null
   const items = wallet ? [...wallet.liquid, ...wallet.cards] : []
 
-  if (snapshot && items.length === 0 && !accounts.error) return null
+  if (!loading && snapshot && items.length === 0 && !accounts.error) return null
 
   const selectedIndex = Math.max(0, items.findIndex((item) => item.accountId === selectedAccountId))
   const selected = items[selectedIndex]
@@ -56,13 +58,13 @@ export function WalletStack({
     <Card role="region" aria-labelledby="wallet-stack-title" className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <CardTitle id="wallet-stack-title">Your accounts</CardTitle>
-        {snapshot && !accounts.error && <span className="text-sm text-muted-foreground">{items.length} {items.length === 1 ? 'account' : 'accounts'}</span>}
+        {snapshot && !loading && !accounts.error && <span className="text-sm text-muted-foreground">{items.length} {items.length === 1 ? 'account' : 'accounts'}</span>}
       </div>
       <CardDescription>Choose an account to see its current balance or card debt.</CardDescription>
 
       {accounts.error ? (
         <ErrorBlock what="your accounts" updatedAt={accounts.updatedAt} onRetry={accounts.retry} focusAfter="#wallet-stack-title" className="mt-3" />
-      ) : !snapshot ? (
+      ) : loading || !snapshot ? (
         <div className="mt-3" aria-hidden="true"><SkeletonCard /></div>
       ) : (
         <>

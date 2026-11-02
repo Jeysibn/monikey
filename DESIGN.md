@@ -31,7 +31,7 @@ MoniKey is a calm, honest notebook for everyday money. It should feel like a fri
 4. **Colour goes on data and the one primary action**, not on chrome. Most of the screen is ink on white and pale grey.
 5. **One primary action per screen.** Everything else is secondary or text.
 6. **Flat surfaces.** Tone steps and 1px borders separate things. Shadows are for what floats (dialogs, sheets).
-7. **No decoration.** No gradients, glass, glow, 3D, illustration, emoji, or icons inside tinted squares.
+7. **No decoration.** No gradients, glass, glow, 3D, emoji, or icons inside tinted squares. Wallet cards may use a static, local image from the approved artwork catalog, with the original neutral MoniKey fallback when no approved exact design is available (ADR-019; see [wallet UI spec](docs/design/AUTHENTIC_WALLET_UI_SPEC.md)). Do not hotlink issuer art or use unapproved assets.
 8. **Motion is feedback only.** No entrance animation, no animation library.
 9. **Mobile first.** Design at 360–375px, then add space for tablet and desktop.
 10. **Small, explainable parts.** Each piece should be understandable to an entry-level developer.

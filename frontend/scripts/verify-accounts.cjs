@@ -60,7 +60,18 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const oweCards = p.locator(`${R.owe} ul > li`);
     eq("Cards view keeps the same three liquid accounts", await haveCards.count(), 3);
     eq("Cards view keeps both credit cards", await oweCards.count(), 2);
-    check("fallback cards keep full names and current amounts", /Cash on hand.*₱2,350\.00/.test(await p.locator(R.have).innerText()) && /Blue Card.*₱14,250\.00.*₱35,750\.00.*₱50,000\.00/.test(await p.locator(R.owe).innerText()));
+    const haveCardText = (await p.locator(R.have).innerText()).replace(/\s+/g, " ");
+    const oweCardText = (await p.locator(R.owe).innerText()).replace(/\s+/g, " ");
+    check("fallback cards keep full names and current amounts", /Cash on hand.*₱2,350\.00/.test(haveCardText) && /Blue Card.*₱14,250\.00.*₱35,750\.00.*₱50,000\.00/.test(oweCardText));
+    const faceText = await p.evaluate(({ have, owe }) => {
+      const text = element => element?.innerText.replace(/\s+/g, " ") || "";
+      return {
+        cash: text(document.querySelector(`${have} li button[aria-pressed] > div.relative`)),
+        card: text(document.querySelector(`${owe} li button[aria-pressed] > div.relative`)),
+      };
+    }, R);
+    check("fallback face carries the account name, type and balance", /MONIKEY · CASH.*Cash on hand.*Balance.*₱2,350\.00/.test(faceText.cash), faceText.cash);
+    check("fallback credit-card face carries owed, available credit and limit", /Blue Card.*Owed.*₱14,250\.00.*Available credit.*₱35,750\.00.*Limit.*₱50,000\.00/.test(faceText.card), faceText.card);
     const firstSelect = haveCards.nth(0).locator('button[aria-pressed="true"]');
     check("one account is visibly selected and exposes its existing edit action", await firstSelect.count() === 1 && await haveCards.nth(0).getByRole("button", { name: "Edit account, Cash on hand" }).isVisible());
     await haveCards.nth(1).locator('button[aria-pressed="false"]').click();
@@ -68,7 +79,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await oweCards.nth(0).locator('button[aria-pressed="false"]').click();
     check("credit card selection exposes its existing Pay card action", await p.getByRole("button", { name: "Pay card, Blue Card" }).isEnabled());
     await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "List" }).click();
-    const listed = await p.locator(R.have).innerText();
+    const listed = (await p.locator(R.have).innerText()).replace(/\s+/g, " ");
     check("List returns to the existing account rows without changing amounts", /Main Savings.*₱48,725\.50/.test(listed) && /GCash.*₱3,120\.75/.test(listed));
     await p.context().close();
   });

@@ -43,6 +43,9 @@ export function WalletCard({
   }
 
   const isCreditCard = item.accountType === 'credit_card'
+  // The fallback is our own neutral card face, so account details can safely
+  // be composed into it. Issuer artwork stays untouched when it is approved.
+  const showFallbackDetails = imageSrc === MONIKEY_DEFAULT_ARTWORK_PATH || imageSrc === null
   const reason = item.primaryLabel === 'Card credit'
     ? 'No debt to pay'
     : item.primaryLabel === 'Nothing owed'
@@ -73,13 +76,48 @@ export function WalletCard({
                 className="block size-full object-contain"
               />
             ) : (
-              <div aria-hidden="true" className="flex size-full items-center justify-center text-muted-foreground">
+              <div aria-hidden="true" className="flex size-full items-center justify-center bg-card text-muted-foreground">
                 <span className="text-sm font-semibold">MoniKey</span>
+              </div>
+            )}
+            {showFallbackDetails && (
+              <div className="absolute inset-0 flex flex-col justify-between bg-card/95 p-3 text-foreground sm:p-4">
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-primary-ink sm:text-xs">MoniKey · {accountTypeLabels[item.accountType]}</div>
+                    <div className="mt-1 line-clamp-2 break-words text-sm leading-4 font-semibold sm:text-base sm:leading-5">{item.accountName}</div>
+                  </div>
+                  {isCreditCard && <CreditCard aria-hidden="true" className="size-4 shrink-0 text-primary-ink sm:size-5" />}
+                </div>
+                <div className="flex min-w-0 items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-medium text-muted-foreground sm:text-xs">{item.primaryLabel}</div>
+                    <MoneyText
+                      centavos={item.primaryAmountCentavos}
+                      kind={item.primaryLabel === 'Owed' ? 'debt' : 'plain'}
+                      wrap
+                      className={`block text-sm leading-4 font-bold tracking-[-0.015em] sm:text-lg sm:leading-5 ${primaryColor}`}
+                    />
+                  </div>
+                  {isCreditCard && (
+                    <div className="max-w-[48%] text-right">
+                      <div className="text-[10px] text-muted-foreground sm:text-xs">Available credit</div>
+                      {item.availableCreditCentavos !== null && item.availableCreditCentavos > 0
+                        ? <MoneyText centavos={item.availableCreditCentavos} wrap className="block text-xs leading-4 font-semibold sm:text-sm" />
+                        : <span className="block text-xs leading-4 font-semibold sm:text-sm">None</span>}
+                      {item.creditLimitCentavos !== null && (
+                        <div className="mt-0.5 text-[10px] leading-3 text-muted-foreground sm:text-xs sm:leading-4">
+                          Limit <MoneyText centavos={item.creditLimitCentavos} wrap />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="mt-3 flex min-w-0 items-start justify-between gap-2">
+          {!showFallbackDetails && <div className="mt-3 flex min-w-0 items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="break-words text-base leading-5 font-semibold">{item.accountName}</div>
               <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -93,9 +131,9 @@ export function WalletCard({
                 Selected
               </span>
             )}
-          </div>
+          </div>}
 
-          <div className="mt-3 border-t border-rule pt-3">
+          {!showFallbackDetails && <div className="mt-3 border-t border-rule pt-3">
             <div className="flex items-start justify-between gap-2">
               <span className="pt-1 text-sm text-muted-foreground">{item.primaryLabel}</span>
               <MoneyText
@@ -135,7 +173,13 @@ export function WalletCard({
               </div>
             )}
             {fallbackNote && <span className="sr-only">{fallbackNote}</span>}
-          </div>
+          </div>}
+          {showFallbackDetails && (item.accountType === 'cash' || item.accountType === 'bank' || item.accountType === 'ewallet') && item.primaryAmountCentavos < 0 && (
+            <div className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-warning-ink">
+              <TriangleAlert aria-hidden="true" className="size-4" />
+              Below zero
+            </div>
+          )}
         </button>
 
         {selected && (

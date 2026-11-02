@@ -60,10 +60,11 @@ Landscape phones (height <500px): the bottom bar stays (4 items need only 64px),
 ### Overview
 | | 375 / 360 | 768 | 1024 | 1280 |
 |---|---|---|---|---|
-| Order | Position → This month → Credit cards → Recent activity | same | Position (12) / Recent activity (7) beside a right column (5) of This month + Credit cards | same; at 1280 the split is 578 / 406 (see §2) |
+| Order | Position → This month → Credit cards → Your accounts → Recent activity | same | Position (12), then Your accounts (7) beside Recent activity (5), then This month (6) beside Credit cards (6) | same; at 1280 the splits are 578 / 406 and 492 / 492; at 1440 they are 592 / 416 and 504 / 504 (§2) |
 | Position card (hero) | label, hero amount (36), sentence, then the inline equation `Money you have − Card debt` in two columns | hero 40; same layout | hero 44; sentence left, equation right | same |
-| Recent rows | 5 | 5 | 6 | 6–7 (balance to the right column; verify in browser) |
-| Credit cards | stacked | two side by side (one if only one card) | stacked in right column | stacked in right column |
+| Recent rows | 5 | 5 | 6 | 6–7 (visual balance with the wallet row; verify in browser) |
+| Credit cards | stacked | two side by side (one if only one card) | below the wallet row, half width | below the wallet row, half width |
+| Your accounts | Horizontal scroll-snap wallet cards with visible account actions | same phone rail; no desktop stack | Selected card with previous/next controls and adjacent decorative previews; 7 columns beside Recent activity | Selected stack layout; 7 columns beside Recent activity; previews remain decorative |
 
 ### Activity
 | | Phone | 768+ |
@@ -77,8 +78,11 @@ Landscape phones (height <500px): the bottom bar stays (4 items need only 64px),
 | | Phone & tablet | ≥1024 |
 |---|---|---|
 | Layout | One column: *Money you have* then *Money you owe* | Two equal columns (6 + 6), each top-aligned and **not** stretched |
-| Add account | Own row under the h1, right-aligned | In the page header, left of *Add transaction* |
-| Credit cards | Stacked; **Pay card** full width | Stacked; **Pay card** auto width |
+| Presentation | Cards gallery by default; it uses two columns from 640px when the section has room. **List** toggle restores the readable account rows and credit-card summaries. | Cards gallery by default; each half-width section uses one column until the wider `xl` layout can fit two. **List** toggle restores the readable account rows and credit-card summaries. |
+| Selection | Card is keyboard-selectable; selected account actions are available on the card. Transfer and Add account stay in the header action row. | Same actions; selected account is visually indicated and its existing actions remain available. |
+| Credit cards | Stacked; **Pay card** action fits the selected card | Stacked; **Pay card** action auto width |
+
+The Accounts wallet grid uses two columns at `sm` widths, one at `lg` inside the two-column page, and two again at `xl`. This component-specific `sm` behavior is an exception to the general page breakpoints above. The Overview wallet stack uses a horizontal scroll-snap rail below `md`. At `md` and wider it presents a selected card with explicit Previous/Next controls; adjacent card images are decorative previews. No drag-and-drop or persistent ordering is implemented.
 
 ### Dialogs (Quick Add, Add account, Delete)
 | | Phone | 768+ |

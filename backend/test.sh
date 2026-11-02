@@ -48,6 +48,7 @@ run_sql_file() {
 
 run_sql_file "$repo_root/database/001_init.sql"
 run_sql_file "$repo_root/database/seed.sql"
+run_sql_file "$repo_root/database/004_account_card_product.sql"
 
 port_mapping="$(docker port "$test_container" 5432/tcp | head -n 1)"
 test_port="${port_mapping##*:}"

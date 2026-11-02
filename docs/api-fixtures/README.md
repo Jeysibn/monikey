@@ -25,5 +25,7 @@ personal data are used.
 `accounts-list.json` and `summary-month.json` also cover a negative liquid
 balance, an overpaid card, and an over-limit card. API tests compare response
 data with these fixtures; frontend mapper tests can read the same JSON files.
+Every account response fixture includes `card_product_id`, which is `null` when
+no card has been selected.
 Timestamps in examples are stable samples; runtime API responses use the actual
 UTC `created_at` values from PostgreSQL.

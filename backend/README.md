@@ -19,10 +19,14 @@ changing ledger rows or monthly income/expenses. Corrections whose resulting
 baseline exceeds NUMERIC(12,2) are rejected with 422.
 
 Existing databases require `database/003_current_account_amounts.sql` after a
-verified backup (and migration 002 if not already applied). Deploy frontend and
-API together: the edit contract replaces the old opening-value fields. The API
-does not apply migrations. Regression tests were added; database-backed execution
-is pending in this Windows environment because Docker is unavailable.
+verified backup (and migration 002 if not already applied). Account card choices
+require `database/004_account_card_product.sql` after a verified backup. Apply
+these migrations manually on existing databases; Compose includes migration 004
+when initializing a new empty database. The API validates a card
+ID's shape and rejects non-null choices for cash accounts, but it does not check
+IDs against the frontend catalog. For ADR-020, apply migration 004, release the
+API, then release the frontend that sends the card choice. Account editing's
+current-amount contract still requires the matching frontend/API versions.
 
 ## Local setup
 

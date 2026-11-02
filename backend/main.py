@@ -24,6 +24,7 @@ CategoryType = Literal["income", "expense"]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
+CardProductPattern = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 MAX_MONEY_CENTAVOS = 2**52 - 1
 MAX_API_MONEY = Decimal(MAX_MONEY_CENTAVOS) / 100
 
@@ -72,6 +73,17 @@ AccountName = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 Note = Annotated[str | None, BeforeValidator(normalize_note)]
 
 
+def parse_card_product_id(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > 64 or not CardProductPattern.fullmatch(value):
+        raise ValueError("Choose a card from the list.")
+    return value
+
+
+CardProductId = Annotated[str | None, BeforeValidator(parse_card_product_id)]
+
+
 class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -82,6 +94,7 @@ class AccountInput(InputModel):
     opening_balance: Money = Decimal("0.00")
     opening_debt: Money = Decimal("0.00")
     credit_limit: Money | None = None
+    card_product_id: CardProductId = None
 
 
 class TransactionInput(InputModel):
@@ -98,6 +111,7 @@ class AccountUpdateInput(InputModel):
     current_balance: SignedMoney
     current_debt: SignedMoney
     credit_limit: Money | None = None
+    card_product_id: CardProductId = None
 
 
 class PaymentInput(InputModel):
@@ -149,6 +163,8 @@ async def handle_validation_error(
     }
     if field:
         payload["field"] = field
+    if field == "card_product_id":
+        payload["message"] = "Choose a card from the list."
     return JSONResponse(status_code=422, content={"error": payload})
 
 
@@ -236,6 +252,7 @@ def account_positions_sql() -> str:
           a.opening_balance,
           a.opening_debt,
           a.credit_limit,
+          a.card_product_id,
           CASE
             WHEN a.type = 'credit_card' THEN
               a.opening_debt
@@ -286,6 +303,7 @@ def account_response(row: dict[str, object]) -> dict[str, object]:
         "id": row["id"],
         "name": row["name"],
         "type": row["type"],
+        "card_product_id": row["card_product_id"],
     }
     if row["type"] == "credit_card":
         credit_limit = Decimal(row["credit_limit"])
@@ -309,6 +327,7 @@ def account_edit_response(row: dict[str, object]) -> dict[str, object]:
         "id": row["id"],
         "name": row["name"],
         "type": row["type"],
+        "card_product_id": row["card_product_id"],
         "current_balance": format_money(row["position"] if row["type"] != "credit_card" else 0),
         "current_debt": format_money(row["position"] if row["type"] == "credit_card" else 0),
         "credit_limit": None if row["credit_limit"] is None else format_money(Decimal(row["credit_limit"])),
@@ -316,6 +335,8 @@ def account_edit_response(row: dict[str, object]) -> dict[str, object]:
 
 
 def validate_account_input(values: AccountInput) -> None:
+    if values.type == "cash" and values.card_product_id is not None:
+        raise ApiProblem(422, "invalid_field", "Cash accounts don't have a card.", "card_product_id")
     if values.type == "credit_card":
         if values.opening_balance != 0:
             raise ApiProblem(400, "invalid_account_type_combination", "Credit cards cannot have an opening cash balance.", "opening_balance")
@@ -484,11 +505,11 @@ def create_account(values: AccountInput) -> dict[str, object]:
         with open_connection() as connection:
             row = connection.execute(
                 """
-                INSERT INTO accounts (name, type, opening_balance, opening_debt, credit_limit)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO accounts (name, type, opening_balance, opening_debt, credit_limit, card_product_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (values.name, values.type, values.opening_balance, values.opening_debt, values.credit_limit),
+                (values.name, values.type, values.opening_balance, values.opening_debt, values.credit_limit, values.card_product_id),
             ).fetchone()
             account = connection.execute(
                 f"{account_positions_sql()} WHERE a.id = %s",
@@ -525,7 +546,7 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
     try:
         with open_connection() as connection:
             existing = connection.execute(
-                "SELECT type FROM accounts WHERE id = %s FOR UPDATE",
+                "SELECT type, card_product_id FROM accounts WHERE id = %s FOR UPDATE",
                 (account_id,),
             ).fetchone()
             if existing is None:
@@ -537,6 +558,13 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
                     "Account type cannot be changed after creation.",
                     "type",
                 )
+            card_product_id = (
+                values.card_product_id
+                if "card_product_id" in values.model_fields_set
+                else existing["card_product_id"]
+            )
+            if values.type == "cash" and card_product_id is not None:
+                raise ApiProblem(422, "invalid_field", "Cash accounts don't have a card.", "card_product_id")
             current = connection.execute(
                 f"{account_positions_sql()} WHERE a.id = %s", (account_id,),
             ).fetchone()
@@ -553,10 +581,10 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
             connection.execute(
                 """
                 UPDATE accounts
-                SET name = %s, opening_balance = %s, opening_debt = %s, credit_limit = %s
+                SET name = %s, opening_balance = %s, opening_debt = %s, credit_limit = %s, card_product_id = %s
                 WHERE id = %s
                 """,
-                (values.name, opening_balance, opening_debt, values.credit_limit, account_id),
+                (values.name, opening_balance, opening_debt, values.credit_limit, card_product_id, account_id),
             )
             row = connection.execute(
                 f"{account_positions_sql()} WHERE a.id = %s",

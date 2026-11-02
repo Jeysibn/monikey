@@ -28,6 +28,11 @@ restart/backup-restore evidence are documented in the
   it to an existing database; apply 002 first if needed. No financial records
   are rewritten by the migration. Creation still requires nonnegative opening
   amounts through API validation.
+- `004_account_card_product.sql` adds the nullable `card_product_id` presentation
+  choice and constraints for its ID format and cash-account exclusion (ADR-020).
+  Compose applies it while initializing a new empty database. Verify a backup
+  before applying it manually to an existing database; the API does not apply
+  migrations automatically.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
@@ -35,7 +40,7 @@ restart/backup-restore evidence are documented in the
   totals, month boundaries, edits, and deletes.
 - `test.sh` starts a temporary PostgreSQL container without publishing a port
   or mounting persistent storage, applies the schema, simulates the old baseline
-  constraints, applies migration 003 twice, seeds categories twice, runs the
+  constraints, applies migration 003 twice and migration 004, seeds categories twice, runs the
   accounting checks, and removes the container on exit.
 
 ## Run the checks

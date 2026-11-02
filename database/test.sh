@@ -42,6 +42,7 @@ docker exec "$test_container" psql --set=ON_ERROR_STOP=1 --username=postgres --d
   --command='ALTER TABLE accounts ADD CONSTRAINT accounts_opening_balance_check CHECK (opening_balance >= 0), ADD CONSTRAINT accounts_opening_debt_check CHECK (opening_debt >= 0);'
 run_sql_file "$script_dir/003_current_account_amounts.sql"
 run_sql_file "$script_dir/003_current_account_amounts.sql"
+run_sql_file "$script_dir/004_account_card_product.sql"
 run_sql_file "$script_dir/seed.sql"
 run_sql_file "$script_dir/seed.sql"
 run_sql_file "$script_dir/tests/accounting.sql"

@@ -3,12 +3,14 @@
     "id": 1,
     "name": "Test Wallet",
     "type": "ewallet",
+    "card_product_id": null,
     "balance": "-10.25"
   },
   {
     "id": 2,
     "name": "Test Overpaid Card",
     "type": "credit_card",
+    "card_product_id": null,
     "credit_limit": "5000.00",
     "outstanding_signed_debt": "-50.00",
     "available_credit": "5050.00",
@@ -19,6 +21,7 @@
     "id": 3,
     "name": "Test Over-limit Card",
     "type": "credit_card",
+    "card_product_id": null,
     "credit_limit": "5000.00",
     "outstanding_signed_debt": "5200.00",
     "available_credit": "-200.00",

@@ -2,6 +2,7 @@
   "id": 4,
   "name": "Blue Card",
   "type": "credit_card",
+  "card_product_id": null,
   "opening_balance": "0.00",
   "opening_debt": "2000.00",
   "credit_limit": "50000.00"

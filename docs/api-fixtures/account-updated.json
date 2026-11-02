@@ -2,5 +2,6 @@
   "id": 1,
   "name": "Updated Savings",
   "type": "bank",
+  "card_product_id": null,
   "balance": "45000.00"
 }

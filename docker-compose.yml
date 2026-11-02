@@ -11,6 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
       - ./database/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
+      - ./database/004_account_card_product.sql:/docker-entrypoint-initdb.d/003_account_card_product.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U monikey_app -d monikey_dev"]
       interval: 5s

@@ -2,6 +2,7 @@
   "id": 1,
   "name": "Main Savings",
   "type": "bank",
+  "card_product_id": null,
   "opening_balance": "45000.00",
   "opening_debt": "0.00",
   "credit_limit": null

@@ -15,24 +15,100 @@ Do not begin if the backup cannot be read and restored, the database starting sc
 
 ## Migration inventory and order
 
-The database initialization files are ordered as follows:
+The numbered schema migrations for an existing database are separate from the
+fresh-install initialization filenames in Compose:
 
-1. `database/001_init.sql` — core accounting tables and seed categories.
-2. `database/003_current_account_amounts.sql` — signed current-account amounts.
-3. `database/004_account_card_product.sql` — card product metadata.
-4. `database/005_kakeibo.sql` — optional envelope fields and Kakeibo plan/review metadata.
-5. `database/006_kakeibo_plan_presence.sql` — explicit plan-presence state.
+1. `database/001_init.sql` — initial schema/bootstrap for a new, empty database.
+   Never run it against an existing database.
+2. `database/002_account_transfers.sql` — historical schema migration that adds
+   `account_transfers` and its indexes to databases created before transfers.
+   Apply only if inspection shows the table or required indexes are missing.
+3. `database/003_current_account_amounts.sql` — removes the old nonnegative
+   baseline constraints so current balances and signed card debt can be set.
+   Apply only if inspection shows those old constraints remain.
+4. `database/004_account_card_product.sql` — adds the nullable `card_product_id`
+   and its constraints. Apply only if the column and constraints are absent.
+5. `database/005_kakeibo.sql` — adds envelope metadata and the two Kakeibo tables.
+   Apply only if those columns, tables, constraints, and report index are absent.
+6. `database/006_kakeibo_plan_presence.sql` — adds the nullable explicit plan
+   state. Apply only if `plan_presence` is absent.
 
-`database/002` is the seed file in the fresh-install Compose sequence; it is not a numbered schema migration. Before upgrading an existing database, inspect its schema and apply only migrations that are actually missing, in order. Do not replay `001_init.sql` against an existing database. Compose's `/docker-entrypoint-initdb.d` scripts run only when PostgreSQL initializes an empty data directory; changing the Compose mounts does not migrate an existing volume.
+Inspect the live database schema before deciding which migrations are missing.
+For each migration, check its expected tables, columns, constraints, and indexes
+against the SQL file and the current schema; do not infer migration state from
+the Compose filenames or assume every database has the same starting point.
+Where a migration is partially applied or its state is unclear, stop and resolve
+that state before continuing. After inspection and the verified-backup and
+restore-test prerequisites, apply only the missing migrations in numeric order
+from 002 through 006. Do not run 001 against existing data.
 
-For a reviewed database host, the operator should use the established private connection and substitute the approved database name and credentials without putting secrets in shell history. Apply each missing migration in order, stopping on the first SQL error:
+Use read-only catalog queries to inspect the target schema. For example:
+
+```sql
+SELECT to_regclass('public.account_transfers') AS account_transfers,
+       to_regclass('public.kakeibo_month_plans') AS kakeibo_month_plans,
+       to_regclass('public.kakeibo_weekly_reviews') AS kakeibo_weekly_reviews;
+
+SELECT table_name, column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN ('accounts', 'categories', 'transactions', 'kakeibo_month_plans')
+  AND column_name IN ('card_product_id', 'default_kakeibo_envelope', 'kakeibo_envelope', 'plan_presence')
+ORDER BY table_name, column_name;
+
+SELECT conrelid::regclass AS table_name, conname, pg_get_constraintdef(oid)
+FROM pg_constraint
+WHERE conrelid IN ('public.accounts'::regclass, 'public.categories'::regclass, 'public.transactions'::regclass)
+ORDER BY table_name, conname;
+
+SELECT tablename, indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename IN ('account_transfers', 'transactions')
+ORDER BY tablename, indexname;
+```
+
+Compare the catalog results with the migration files: 002's transfer table and
+two indexes; 003's legacy opening-balance/debt constraints; 004's card column
+and checks; 005's category/transaction fields, tables, and report index; and
+006's `plan_presence` column. If any migration is only partially represented,
+stop rather than replaying a non-idempotent migration over existing objects.
+
+`docker-compose.yml` uses initialization mounts whose destination names do not
+match that historical migration sequence:
+
+- `database/001_init.sql` → `001_init.sql`
+- `database/seed.sql` → `002_seed.sql`
+- `database/004_account_card_product.sql` → `003_account_card_product.sql`
+- `database/005_kakeibo.sql` → `004_kakeibo.sql`
+- `database/006_kakeibo_plan_presence.sql` → `005_kakeibo_plan_presence.sql`
+
+Thus `database/002_account_transfers.sql` is a real legacy schema migration,
+not the Compose file named `002_seed.sql`. A current fresh install gets the
+final baseline from `001_init.sql`, loads `seed.sql`, then applies the fresh
+schema forms of migrations 004, 005, and 006. The current `001_init.sql`
+already includes liquid transfers and signed opening amounts, so fresh
+installs do not need migrations 002 or 003 separately. Compose's
+`/docker-entrypoint-initdb.d` scripts run only when PostgreSQL initializes an
+empty data directory; changing mounts does not migrate an existing volume.
+
+For an existing database, the operator should use the established private
+connection and substitute the approved database name and credentials without
+putting secrets in shell history. After inspection, apply only the migrations
+confirmed missing, in order, stopping on the first SQL error. These are the
+possible commands; omit every migration that inspection confirms is already
+present:
 
 ```bash
+psql "$MONIKEY_DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_account_transfers.sql
+psql "$MONIKEY_DATABASE_URL" -v ON_ERROR_STOP=1 -f database/003_current_account_amounts.sql
+psql "$MONIKEY_DATABASE_URL" -v ON_ERROR_STOP=1 -f database/004_account_card_product.sql
 psql "$MONIKEY_DATABASE_URL" -v ON_ERROR_STOP=1 -f database/005_kakeibo.sql
 psql "$MONIKEY_DATABASE_URL" -v ON_ERROR_STOP=1 -f database/006_kakeibo_plan_presence.sql
 ```
 
-Run only the commands for migrations confirmed missing. Do not use production credentials in local or CI environments.
+Do not run `database/001_init.sql` against an existing database. Do not use
+production credentials in local or CI environments.
 
 Migration 006 leaves existing `plan_presence` values NULL. Such rows are reported as `legacy_unknown`: their stored amounts and reflections remain readable, but the system does not guess whether an old all-zero row was a deliberate plan or was created by a reflection-only save. The owner can confirm by saving a plan. New review-only rows are `not_saved`; an explicit plan save, including an all-zero plan, is `saved`.
 
@@ -87,6 +163,6 @@ sg docker -c 'bash database/rehearse_recovery.sh'
 
 The script built a pre-Kakeibo schema through migration 004 with synthetic accounts, transactions, one card payment, and one liquid transfer. It captured 3 accounts, 3 transactions, 1 payment, 1 transfer, totals of 1375.00 / 100.00 / 50.00, and account positions of 1725.00 / 1050.00 / 250.00. A custom-format `pg_dump` artifact passed `pg_restore --list`; restoring it into another database reproduced all counts, totals, and positions. Applying only 005 and 006 to a separate restored copy preserved the same figures and left all historical envelope values NULL. The API served the migrated copy and successfully saved a no-plan review and then an explicit zero plan without changing financial figures.
 
-The built frontend and backend were also started with the isolated Compose project `monikey-kakeibo-pr-e` using a placeholder password and an ephemeral volume. `python3 database/rehearse_http_integration.py` passed against `http://127.0.0.1:8080/api` through Nginx. It used only fictional data and checked monthly plans, classifications, payments/transfers exclusion, weekly and monthly reflections, snapshot change detection, validation errors, transaction editing/deletion, and unchanged account positions across metadata writes. The project was removed with `sg docker -c 'docker compose -p monikey-kakeibo-pr-e down --volumes'` after the rehearsal.
+The built frontend and backend were also started with the isolated Compose project `monikey-kakeibo-pr-e` using a placeholder password and an ephemeral volume. `python3 database/rehearse_http_integration.py` passed against `http://127.0.0.1:8080/api` through Nginx. The script allows only that loopback origin, rejects base-URL overrides and redirects, and routes directly around environment proxies. It used only fictional data and checked monthly plans, classifications, payments/transfers exclusion, weekly and monthly reflections, snapshot change detection, validation errors, transaction editing/deletion, and unchanged account positions across metadata writes. The project was removed with `sg docker -c 'docker compose -p monikey-kakeibo-pr-e down --volumes'` after the rehearsal.
 
 No Chromium, Chrome, Firefox, Playwright package, or browser test harness was installed in the environment. The HTTP test verifies the built React asset is served and exercises the same-origin proxy, but does not claim interactive browser, keyboard, screen-reader, viewport, or visual acceptance. Those checks remain outstanding.

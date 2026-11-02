@@ -52,3 +52,4 @@ run_sql_file "$script_dir/tests/kakeibo_plan_presence_before.sql"
 run_sql_file "$script_dir/006_kakeibo_plan_presence.sql"
 run_sql_file "$script_dir/tests/kakeibo_plan_presence.sql"
 run_sql_file "$script_dir/tests/accounting.sql"
+python3 -m unittest discover -s "$script_dir/tests" -p 'test_*.py'

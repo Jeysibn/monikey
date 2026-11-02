@@ -116,7 +116,9 @@ API contracts implemented in PR B (migration 005 itself does not implement endpo
   `kakeibo_envelope` (`needs`, `wants`, `culture`, `unexpected`, or `null`). An
   old create payload may omit it and saves as NULL. On update, omission from an
   old client preserves the stored value; explicit `null` clears it. Income must
-  have NULL. Include `default_kakeibo_envelope` in category reads; a category
+  have NULL. `PATCH /api/transactions/{id}/kakeibo-envelope` requires the
+  nullable `kakeibo_envelope` property, validates an existing expense
+  transaction, and updates only that field. Include `default_kakeibo_envelope` in category reads; a category
   default can be set or cleared only for an expense category. Proposed
   `PATCH /api/categories/{id}/default-kakeibo-envelope` body:
   `{"default_kakeibo_envelope":"needs"}` or `null` to clear it.
@@ -132,8 +134,9 @@ API contracts implemented in PR B (migration 005 itself does not implement endpo
   snapshot from its current report rather than accepting client totals. The
   report flags when current actuals differ from the closeout snapshot.
 - `GET`/`PUT /api/kakeibo/weeks/{YYYY-MM-DD}` returns the ledger summary and
-  upserts `surprise_note`, `worthwhile_note`, and `next_week_intention`; the
-  path date must be Monday.
+  replaces `surprise_note`, `worthwhile_note`, and `next_week_intention`; the
+  path date must be Monday. Each PUT is a complete replacement: omitted note
+  fields are cleared to NULL.
 - Keep all money values as decimal strings. Invalid month/week/envelope fields
   use the existing `{ "error": { "code", "message", "field"? } }` envelope.
   Planning and review endpoints may mutate only Kakeibo metadata, never

@@ -381,6 +381,7 @@ Neither planning nor review endpoints may mutate financial tables.
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
 | POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note, optional nullable `kakeibo_envelope` |
 | PUT | `/api/transactions/{id}` | Replace editable fields; omitted envelope preserves it for old clients, explicit `null` clears it |
+| PATCH | `/api/transactions/{id}/kakeibo-envelope` | Set or clear only an expense transaction's nullable envelope; other financial fields remain unchanged |
 | DELETE | `/api/transactions/{id}` | Delete transaction; 204 on success |
 | GET | `/api/credit-card-payments?month=2026-10&limit=50` | Card payment history |
 | POST | `/api/credit-card-payments` | Create payment from liquid account to card |
@@ -394,13 +395,15 @@ Neither planning nor review endpoints may mutate financial tables.
 | GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Read or upsert an optional monthly plan and dashboard; missing plan is `null` |
 | GET | `/api/kakeibo/months/{YYYY-MM}/report` | Ledger-derived income and expense actuals, envelope totals, unclassified amount and plan variance |
 | PUT | `/api/kakeibo/months/{YYYY-MM}/review` | Save bounded reflection, optional declared savings and server-generated closeout snapshot |
-| GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Monday-based ledger summary and one weekly reflection per Monday |
+| GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Monday-based ledger summary and one weekly reflection per Monday; PUT replaces all three note fields, so omitted fields clear |
 
-Transaction request/read shapes include optional nullable `kakeibo_envelope`.
+Transaction create/update shapes include optional nullable `kakeibo_envelope`.
 Old create requests may omit it and save unclassified; old updates that omit it
-preserve the stored value, while explicit `null` clears it. Income must always
-have `NULL`. Category reads include `default_kakeibo_envelope`; only expense
-categories may set one. Money request values are decimal strings, validated as
+preserve the stored value, while explicit `null` clears it. The dedicated
+`PATCH /api/transactions/{id}/kakeibo-envelope` requires the nullable field and
+updates only that transaction column; it validates that the record exists and
+is an expense. Income must always have `NULL`. Category reads include
+`default_kakeibo_envelope`; only expense categories may set one. Money request values are decimal strings, validated as
 nonnegative where planning fields require it; money response values are decimal
 strings computed by PostgreSQL/Python `Decimal`. Weekly path dates must be
 Mondays. Review snapshots are computed from the server's current ledger report;

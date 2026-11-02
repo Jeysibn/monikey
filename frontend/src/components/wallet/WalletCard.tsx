@@ -19,12 +19,14 @@ export function WalletCard({
   onSelect,
   onEdit,
   onPayCard,
+  className = '',
 }: {
   item: WalletCardVM
   selected: boolean
   onSelect: (accountId: number) => void
   onEdit: (accountId: number, from: HTMLElement) => void
   onPayCard: (cardId: number) => void
+  className?: string
 }) {
   const [imageSrc, setImageSrc] = useState<string | null>(item.artUrl)
   const [fallbackNote, setFallbackNote] = useState('')
@@ -54,7 +56,7 @@ export function WalletCard({
       : ''
 
   return (
-    <li className="min-w-0">
+    <li className={`min-w-0 ${className}`}>
       <article className={`h-full overflow-hidden rounded-card border bg-card p-3 transition-colors duration-150 motion-reduce:transition-none ${selected ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background' : 'border-border'}`}>
         <button
           type="button"

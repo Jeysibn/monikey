@@ -294,6 +294,10 @@ function App() {
             onAdd={openAdd}
             onAddAccount={() => openAddAccount()}
             onPayCard={openPay}
+            onEditAccount={editAccount}
+            onTransfer={openTransfer}
+            onOpenAccounts={() => setView('accounts')}
+            walletPreferences={walletPreferences}
             onOpenActivity={(m) => {
               setMonth(m)
               setView('activity')

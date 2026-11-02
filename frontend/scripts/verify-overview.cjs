@@ -42,6 +42,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     hero: 'section[aria-labelledby="net-position-label"]',
     month: '[aria-labelledby="this-month-title"]',
     cards: '[aria-labelledby="credit-cards-title"]',
+    wallets: '[aria-labelledby="wallet-stack-title"]',
     recent: '[aria-labelledby="recent-activity-title"]',
   };
   const texts = (p, sel) => p.locator(sel).evaluateAll(els => els.map(e => e.textContent.trim().replace(/\s+/g, " ")));
@@ -83,6 +84,33 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     await q.context().close();
   });
 
+  /* ---------------------------------------------------------------- wallet stack */
+  group = "Overview wallet stack selection and zero-account state";
+  await safe(async () => {
+    const phone = await open(375);
+    const visibleCards = phone.locator(`${R.wallets} li article > button[aria-pressed]:visible`);
+    eq("wallet stack reports all five accounts", await phone.locator(R.wallets).innerText().then(t => /5 accounts/.test(t)), true);
+    eq("phone rail shows all five selectable accounts", await visibleCards.count(), 5);
+    await visibleCards.nth(1).click();
+    eq("selecting a wallet marks that exact account selected", await visibleCards.nth(1).getAttribute("aria-pressed"), "true");
+    check("wallet stack links to Accounts", await phone.locator(R.wallets).getByRole("button", { name: "View all accounts" }).isVisible());
+    await phone.context().close();
+
+    const desktop = await open(1280);
+    const desktopCard = desktop.locator(`${R.wallets} li article > button[aria-pressed]:visible`);
+    eq("desktop presents one selected card from the stack", await desktopCard.count(), 1);
+    await desktop.locator(R.wallets).getByRole("button", { name: "Previous" }).click();
+    check("desktop previous control selects the prior account", /5 of 5/.test(await desktop.locator(R.wallets).innerText()));
+    await desktop.locator(R.wallets).getByRole("button", { name: "Next" }).click();
+    check("desktop next control selects the next account", /1 of 5/.test(await desktop.locator(R.wallets).innerText()));
+    await desktop.context().close();
+
+    const firstRun = await open(375, { query: "?demo=no-accounts" });
+    eq("zero accounts keep the existing onboarding CTA without an empty wallet stack", await firstRun.locator(R.wallets).count(), 0);
+    check("first-run Add account action remains visible", await firstRun.getByRole("button", { name: "Add account" }).isVisible());
+    await firstRun.context().close();
+  });
+
   /* ---------------------------------------------------------------- layout */
   for (const W of [360, 375, 768, 1280]) {
     group = `Layout ${W}px`;
@@ -104,7 +132,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         const navs = [...document.querySelectorAll('nav[aria-label="Main"]')].filter(vis).length;
         const aside = document.querySelector("aside"); const asideW = vis(aside) ? Math.round(aside.getBoundingClientRect().width) : 0;
         return { sw: document.documentElement.scrollWidth, iw: innerWidth, bad, small, navs, asideW, bottomBar: vis(document.querySelector("nav.fixed")), h1s: document.querySelectorAll("h1").length,
-          hero: rect(R.hero), recent: rect(R.recent), month: rect(R.month), cards: rect(R.cards), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width) };
+          hero: rect(R.hero), recent: rect(R.recent), month: rect(R.month), cards: rect(R.cards), wallets: rect(R.wallets), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width) };
       }, { R });
       check("no horizontal overflow", m.sw <= m.iw, `scrollWidth ${m.sw} / viewport ${m.iw}`);
       eq("exactly one h1", m.h1s, 1);
@@ -119,8 +147,8 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         const cols = (m.mainW - 24 * 11) / 12; const span = n => Math.round(n * cols + (n - 1) * 24);
         check(`12-column grid: recent activity = 7 columns (${span(7)}px), right column = 5 (${span(5)}px)`, Math.abs(m.recent.w - span(7)) <= 1 && Math.abs(m.month.w - span(5)) <= 1, `recent ${m.recent.w}, month ${m.month.w}, content ${m.mainW}`);
       } else {
-        check("stacked in the approved order: hero, this month, credit cards, recent activity", m.hero.y < m.month.y && m.month.y < m.cards.y && m.cards.y < m.recent.y, `y: ${m.hero.y} < ${m.month.y} < ${m.cards.y} < ${m.recent.y}`);
-        check("every block uses the full content width", [m.hero, m.month, m.cards, m.recent].every(r => Math.abs(r.w - m.mainW) <= 1), `content ${m.mainW}; ${[m.hero, m.month, m.cards, m.recent].map(r => r.w).join("/")}`);
+        check("stacked order: hero, this month, credit cards, wallet stack, recent activity", m.hero.y < m.month.y && m.month.y < m.cards.y && m.cards.y < m.wallets.y && m.wallets.y < m.recent.y, `y: ${m.hero.y} < ${m.month.y} < ${m.cards.y} < ${m.wallets.y} < ${m.recent.y}`);
+        check("every block uses the full content width", [m.hero, m.month, m.cards, m.wallets, m.recent].every(r => Math.abs(r.w - m.mainW) <= 1), `content ${m.mainW}; ${[m.hero, m.month, m.cards, m.wallets, m.recent].map(r => r.w).join("/")}`);
       }
       if (W >= 768 && W < 1024) { const cc = await p.locator(`${R.cards} .md\\:grid > div`).evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().left))); check("credit cards sit side by side on tablet", cc.length === 2 && cc[0] !== cc[1], cc.join(",")); }
       if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `overview-${W}.png`), fullPage: true });
@@ -293,7 +321,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       hasMain: !!document.querySelector("main"), lang: document.documentElement.lang, title: document.title,
     }));
     eq("every visible button and select has an accessible name", sem.unnamed, 0);
-    check("each card is a labelled region", sem.regions.join() === "Recent activity,This month,Credit cards", sem.regions.join());
+    check("each card is a labelled region", sem.regions.join() === "Recent activity,This month,Credit cards,Your accounts", sem.regions.join());
     check("credit-limit tracks have text equivalents", sem.tracks.join() === "₱14,250.00 of ₱50,000.00 limit used,₱6,800.00 of ₱30,000.00 limit used", sem.tracks.join(" | "));
     check("no gradients or backdrop blur anywhere", sem.bad === 0);
     check("main landmark, lang and title present", sem.hasMain && sem.lang === "en" && sem.title === "MoniKey", `${sem.lang} / ${sem.title}`);

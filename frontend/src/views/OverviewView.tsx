@@ -8,6 +8,7 @@ import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
+import { WalletStack } from '@/components/wallet/WalletStack'
 import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +17,7 @@ import { formatPeso } from '@/lib/money'
 import { useDelayedFlag } from '@/useDelayedFlag'
 import type { Resource } from '@/useResource'
 import type { AccountsSnapshot, ActivityItem, ActivityPage, AddState, FinancialSummary } from '@/types'
+import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 /*
  * Overview (docs/design/UI_UX_SPEC.md section 4). Question it answers: "After what I owe, how much do I
@@ -45,6 +47,10 @@ export function OverviewView({
   onAdd,
   onAddAccount,
   onPayCard,
+  onEditAccount,
+  onTransfer,
+  onOpenAccounts,
+  walletPreferences,
   onOpenActivity,
 }: {
   today: string
@@ -58,6 +64,10 @@ export function OverviewView({
   onAdd: () => void
   onAddAccount: () => void
   onPayCard: (cardId: number) => void
+  onEditAccount: (accountId: number, from: HTMLElement) => void
+  onTransfer: () => void
+  onOpenAccounts: () => void
+  walletPreferences: WalletPreferencesV1
   onOpenActivity: (month: string) => void
 }) {
   const summary = summaryRes.data ?? NO_SUMMARY
@@ -292,6 +302,15 @@ export function OverviewView({
               </div>
             )}
           </Card>
+
+          <WalletStack
+            accounts={accountsRes}
+            preferences={walletPreferences}
+            onEditAccount={onEditAccount}
+            onPayCard={onPayCard}
+            onTransfer={onTransfer}
+            onOpenAccounts={onOpenAccounts}
+          />
         </div>
       </div>
     </div>

@@ -101,7 +101,7 @@ function ReviewForm({
           )}
           {!report.plan && (
             <p className="text-sm text-muted-foreground">
-              {label} has no plan. Saving a reflection also stores its plan amounts as ₱0.00; you can set them later with Create plan.
+              {label} has no saved plan. The reflection and its totals will be stored separately; you can create a plan later.
             </p>
           )}
           <section aria-labelledby="kr-now-title" className="rounded-control bg-secondary px-3.5 py-3">

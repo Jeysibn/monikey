@@ -495,6 +495,14 @@ export function fromWireKakeiboMonth(value: unknown, expectedMonth: string): Kak
   const row = record(value, 'Kakeibo month')
   if (row.month !== expectedMonth) throw contractError('Kakeibo month')
   const plan = fromWireKakeiboPlan(row.plan ?? null, expectedMonth)
+  const planStatus = row.plan_status === undefined
+    // An older API cannot distinguish a zero plan from a review-only row.
+    ? (plan === null ? 'not_saved' : 'legacy_unknown')
+    : row.plan_status
+  if (!['saved', 'not_saved', 'legacy_unknown'].includes(String(planStatus))) throw contractError('Kakeibo plan status')
+  if ((planStatus === 'saved' && plan === null) || (planStatus === 'not_saved' && plan !== null) || (planStatus === 'legacy_unknown' && plan === null)) {
+    throw contractError('Kakeibo plan status')
+  }
   const wireEnvelopes = record(row.envelopes, 'Kakeibo envelopes')
   const envelopes = Object.fromEntries(ENVELOPES.map((envelope) => [envelope, envelopeReport(wireEnvelopes[envelope], plan !== null)])) as Record<KakeiboEnvelope, KakeiboEnvelopeReport>
   const availableToAllocate = nullableMoney(row.available_to_allocate, 'available to allocate')
@@ -504,10 +512,11 @@ export function fromWireKakeiboMonth(value: unknown, expectedMonth: string): Kak
   const unclassifiedExpenses = toCentavos(row.unclassified_expenses, 'unclassified expenses')
   const totalExpenses = toCentavos(row.total_expenses, 'total expenses')
   if (actualIncome < 0 || unclassifiedExpenses < 0 || totalExpenses < unclassifiedExpenses) throw contractError('Kakeibo actuals')
-  const review = row.plan ? fromWireKakeiboReview(row.plan) : null
+  const reviewSource = row.review === undefined ? row.plan : row.review
+  const review = reviewSource === null ? null : fromWireKakeiboReview(reviewSource)
   const changed = row.actuals_changed_since_review ?? false
   if (typeof changed !== 'boolean' || (changed && !review)) throw contractError('Kakeibo review status')
-  return { month: expectedMonth, plan, actualIncome, availableToAllocate, unallocated, envelopes, unclassifiedExpenses, totalExpenses, review, actualsChangedSinceReview: changed }
+  return { month: expectedMonth, planStatus: planStatus as KakeiboMonth['planStatus'], plan, actualIncome, availableToAllocate, unallocated, envelopes, unclassifiedExpenses, totalExpenses, review, actualsChangedSinceReview: changed }
 }
 
 function reviewText(value: unknown, what: string): string | null {

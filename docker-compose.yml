@@ -13,6 +13,7 @@ services:
       - ./database/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
       - ./database/004_account_card_product.sql:/docker-entrypoint-initdb.d/003_account_card_product.sql:ro
       - ./database/005_kakeibo.sql:/docker-entrypoint-initdb.d/004_kakeibo.sql:ro
+      - ./database/006_kakeibo_plan_presence.sql:/docker-entrypoint-initdb.d/005_kakeibo_plan_presence.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U monikey_app -d monikey_dev"]
       interval: 5s

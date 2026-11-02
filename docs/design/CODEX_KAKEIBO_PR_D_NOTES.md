@@ -1,15 +1,15 @@
 # Backend notes for Codex — Kakeibo PR D (frontend)
 
-**From:** Claude Code (frontend). **For:** Codex (backend). **Status:** information only; no backend change was made in PR D.
+**From:** Claude Code (frontend). **For:** Codex (backend). **Status:** historical PR D handoff. The no-plan ambiguity described below is addressed by the PR E amendment to ADR-021 and migration 006; the remaining notes are tracked as limitations, not new PR E scope.
 
-PR D uses the PR B endpoints as they are: `GET/PUT /api/kakeibo/weeks/{monday}`, `PUT /api/kakeibo/months/{month}/review`, `PATCH /api/transactions/{id}/kakeibo-envelope`, and `PATCH /api/categories/{id}/default-kakeibo-envelope`. The frontend works around the points below. Each one is worth a decision before PR E.
+PR D uses the PR B endpoints as they are: `GET/PUT /api/kakeibo/weeks/{monday}`, `PUT /api/kakeibo/months/{month}/review`, `PATCH /api/transactions/{id}/kakeibo-envelope`, and `PATCH /api/categories/{id}/default-kakeibo-envelope`. This is a historical handoff; remaining points below are known limitations for future scope.
 
-## 1. A review on a month with no plan creates a plan of ₱0.00 amounts
+## 1. Resolved in PR E: a review on a month with no plan creates a plan of ₱0.00 amounts
 
 `save_kakeibo_month_review` upserts `kakeibo_month_plans` with only the review columns. On a month with no row, the plan columns take their `DEFAULT 0`. After that, `GET .../report` returns a non-null `plan` with every amount `"0.00"` and `available_to_allocate: "0.00"`. That looks exactly like a plan the person saved with zeros.
 
-- **Frontend workaround:** when a review exists and every plan amount is zero with no intention, the plan card says "No plan amounts for {month}" and still offers **Create plan**. The review form warns first that saving stores the plan amounts as ₱0.00.
-- **Suggested fix (needs an ADR-021 amendment):** either a `plan_saved_at` column (null until `PUT /months/{m}`) returned as `plan: null` while unset, or nullable plan columns. Either change keeps the review row and tells the frontend that no plan was made.
+- **Prior frontend workaround (removed in PR E):** when a review existed and every plan amount was zero with no intention, the plan card said "No plan amounts for {month}" and offered **Create plan**. The review form warned that saving stored plan amounts as ₱0.00.
+- **Resolution:** migration 006 adds nullable `plan_presence`; explicit plan saves use `saved`, review-only inserts use `not_saved`, and pre-migration rows remain NULL/`legacy_unknown`. The API returns `plan: null` for `not_saved` and exposes reflection data independently. No historical intent is guessed.
 
 ## 2. No bulk classification endpoint, so batches are not atomic
 

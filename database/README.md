@@ -43,6 +43,10 @@ restart/backup-restore evidence are documented in the
   financial ledger rows. Verify a backup before applying it to an existing
   database; the API does not apply migrations automatically. Compose applies
   it after 004 when initializing a new empty database.
+- `006_kakeibo_plan_presence.sql` adds nullable `plan_presence` after 005.
+  `saved` and `not_saved` are explicit states; pre-006 rows remain NULL and
+  therefore `legacy_unknown`. It never infers intent from zero-valued columns.
+  Compose and both disposable test runners apply it after 005.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
@@ -53,10 +57,23 @@ restart/backup-restore evidence are documented in the
   `tests/kakeibo_migration.sql` checks that their balances and rows survive 005,
   verifies old transactions remain unclassified, and exercises metadata
   constraints. Its test-only writes are rolled back.
+- `tests/kakeibo_plan_presence_before.sql` creates a fictional ambiguous legacy
+  reflection before migration 006; `tests/kakeibo_plan_presence.sql` verifies
+  its values remain unchanged, stays unknown, and accepts only the new states.
 - `test.sh` starts a temporary PostgreSQL container without publishing a port
   or mounting persistent storage, applies the schema, simulates the old baseline
-  constraints, applies migrations 003–005, seeds categories twice, runs the
+  constraints, applies migrations 003–006 in order, seeds categories twice, runs the
   migration-preservation and accounting checks, and removes the container on exit.
+- `rehearse_recovery.sh` builds an earlier schema with fictional records in a
+  disposable PostgreSQL 17.6 container, creates and inspects a custom-format
+  backup, restores it to an independent database, applies only migrations 005
+  and 006 to a second restored copy, and calls the API against that copy. It
+  compares account positions, financial row counts and totals before and after.
+- `rehearse_http_integration.py` exercises a fresh Compose stack through the
+  frontend's same-origin `/api` proxy with synthetic data. Start the isolated
+  stack with the commands in the release runbook first. It does not launch a
+  browser and is not a substitute for keyboard, screen-reader, viewport, or
+  visual acceptance.
 
 ## Run the checks
 
@@ -74,6 +91,15 @@ records.
 The test does not inspect or mutate the live homelab database. Its migration
 check verifies that pre-existing cash/bank/card positions, transaction rows,
 card payments, and transfers remain unchanged.
+
+The migration and recovery rehearsal is:
+
+```bash
+sg docker -c 'bash database/rehearse_recovery.sh'
+```
+
+It is a disposable synthetic rehearsal, not proof that a production backup is
+available or recoverable. See the [Kakeibo release runbook](../docs/operations/KAKEIBO_RELEASE_RUNBOOK.md).
 
 ## Kakeibo data and arithmetic
 
@@ -109,6 +135,21 @@ the report used for the reflection; later ledger edits do not rewrite it. The
 API compares it with current report totals and surfaces a changed-actuals
 indicator. The API validates and generates the snapshot; clients cannot submit
 report totals as a snapshot.
+
+## Plan presence and legacy rows
+
+Migration 006 adds nullable `plan_presence`. API plan writes set `saved`, while
+a reflection-only insert sets `not_saved`. A deliberately saved all-zero plan
+remains a plan. A reflection-only month returns `plan: null` and keeps its
+answers and snapshot in a separate top-level `review` field.
+
+Rows created before migration 006 remain `NULL` (`legacy_unknown`). Their intent
+cannot be inferred reliably because prior review-only writes populated plan
+columns with zero defaults. Migration 006 performs no backfill. The API keeps
+their stored plan values readable with an explicit `legacy_unknown` status and
+returns their reflection separately. The UI asks the owner to confirm these
+values; an explicit plan save marks them `saved`. Do not batch-mark legacy rows
+as saved or unsaved without reviewing their history.
 
 API contracts implemented in PR B (migration 005 itself does not implement endpoints):
 

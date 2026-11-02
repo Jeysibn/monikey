@@ -6,7 +6,6 @@ import { InlineNotice } from '@/components/InlineNotice'
 import { MoneyText } from '@/components/MoneyText'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { monthLabel } from '@/lib/finance'
-import { planIsPlaceholder } from '@/lib/kakeibo'
 import { formatPeso } from '@/lib/money'
 import type { KakeiboMonth } from '@/types'
 
@@ -58,24 +57,13 @@ export function PlanSummary({ report }: { report: KakeiboMonth }) {
     </section>
   )
 
-  // Saving a reflection for a month without a plan leaves a stored plan of ₱0.00 amounts (see planIsPlaceholder).
-  const placeholder = planIsPlaceholder(report)
-  if (!plan || placeholder || report.availableToAllocate === null || report.unallocated === null) {
+  if (!plan || report.availableToAllocate === null || report.unallocated === null) {
     return (
       <Card role="region" aria-labelledby="kakeibo-plan-title" className="min-w-0">
-        <CardTitle id="kakeibo-plan-title" tabIndex={-1}>{placeholder ? `No plan amounts for ${label}` : `No plan for ${label} yet`}</CardTitle>
+        <CardTitle id="kakeibo-plan-title" tabIndex={-1}>No plan for {label} yet</CardTitle>
         <CardDescription>
-          {placeholder ? (
-            <>
-              Every plan amount for this month is ₱0.00. Use <span className="font-semibold text-foreground">Create plan</span> to set
-              what you expect to earn, set aside, and spend.
-            </>
-          ) : (
-            <>
-              A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
-              Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
-            </>
-          )}
+          A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
+          Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
         </CardDescription>
         {recorded}
       </Card>
@@ -89,6 +77,11 @@ export function PlanSummary({ report }: { report: KakeiboMonth }) {
         <CardTitle id="kakeibo-plan-title" tabIndex={-1}>Your {label} plan</CardTitle>
         <Tag>Plan</Tag>
       </div>
+      {report.planStatus === 'legacy_unknown' && (
+        <InlineNotice tone="warning" className="mt-3">
+          This month predates plan tracking. These saved amounts are preserved, but their original intent is unknown. Review and save the plan to confirm it.
+        </InlineNotice>
+      )}
       {plan.monthlyIntention && (
         <p className="mt-2 flex gap-2 text-[0.9375rem] text-foreground">
           <Quote aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />

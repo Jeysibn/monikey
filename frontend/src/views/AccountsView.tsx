@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 
 import { AccountRow } from '@/components/AccountRow'
 import { CreditCardSummary } from '@/components/CreditCardSummary'
+import { WalletGrid } from '@/components/wallet/WalletGrid'
+import { WalletViewToggle, type WalletViewMode } from '@/components/wallet/WalletViewToggle'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBlock, InlineFailure } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
@@ -11,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import type { Resource } from '@/useResource'
 import type { AccountsSnapshot, AddState, FinancialSummary } from '@/types'
+import { buildWalletGalleryModel } from '@/wallet/walletModel'
 
 /*
  * Accounts (docs/design/UI_UX_SPEC.md section 6). Question: "What do I have, and what do I owe, account
@@ -50,12 +54,19 @@ export function AccountsView({
   onPayCard: (cardId: number) => void
   onTransfer: () => void
 }) {
+  const [displayMode, setDisplayMode] = useState<WalletViewMode>('cards')
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const snapshot = accountsRes.data
   // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
   const hasAccounts = snapshot ? snapshot.accounts.length > 0 : true
   const summary = summaryRes.data ?? NO_SUMMARY
   const rows = snapshot?.liquid ?? []
   const cards = snapshot?.cards ?? []
+  const wallet = snapshot ? buildWalletGalleryModel(snapshot) : { liquid: [], cards: [] }
+  const allWalletCards = [...wallet.liquid, ...wallet.cards]
+  const selectedId = allWalletCards.some((item) => item.accountId === selectedAccountId)
+    ? selectedAccountId
+    : allWalletCards[0]?.accountId ?? null
   // Two requests feed this screen, and each failure is shown for what it affects and with its own time: the accounts
   // (the rows and cards) fail both sections; the summary (the two totals) fails only the totals, next to rows that loaded.
   const accountsFailed = accountsRes.error !== null
@@ -88,6 +99,8 @@ export function AccountsView({
           Add account
         </Button>
       </div>
+
+      <WalletViewToggle value={displayMode} onChange={setDisplayMode} />
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2 lg:items-start">
         {/* Money you have */}
@@ -129,11 +142,21 @@ export function AccountsView({
               action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
             />
           ) : (
-            <ul>
+            displayMode === 'list' ? (
+              <ul>
                 {rows.map((item) => (
-                <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
-              ))}
-            </ul>
+                  <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
+                ))}
+              </ul>
+            ) : (
+              <WalletGrid
+                items={wallet.liquid}
+                selectedAccountId={selectedId}
+                onSelect={setSelectedAccountId}
+                onEdit={onEditAccount}
+                onPayCard={onPayCard}
+              />
+            )
           )}
         </Card>
         )}
@@ -193,11 +216,21 @@ export function AccountsView({
                   action={<Button variant="secondary" onClick={() => onAddAccount('credit card')}>Add credit card</Button>}
                 />
               )}
-              {cards.map((status) => (
-                <Card key={status.account.id}>
-                  <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
-                </Card>
-              ))}
+              {displayMode === 'list' ? (
+                cards.map((status) => (
+                  <Card key={status.account.id}>
+                    <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
+                  </Card>
+                ))
+              ) : (
+                <WalletGrid
+                  items={wallet.cards}
+                  selectedAccountId={selectedId}
+                  onSelect={setSelectedAccountId}
+                  onEdit={onEditAccount}
+                  onPayCard={onPayCard}
+                />
+              )}
               {cards.length > 0 && (
                 <button
                   type="button"

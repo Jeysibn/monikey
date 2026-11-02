@@ -21,7 +21,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   const errors = [], external = [];
   const safe = async fn => { try { await fn(); } catch (e) { check("section aborted: " + String(e.message).split("\n")[0].slice(0, 220), false); } };
   /* Opens the app and goes to Accounts through the real navigation. */
-  async function open(width, { query = "", height = 900, stay = false } = {}) {
+  async function open(width, { query = "", height = 900, stay = false, walletView = "list" } = {}) {
     const ctx = await browser.newContext({ viewport: { width, height } });
     const page = await ctx.newPage();
     page.on("pageerror", e => errors.push(`pageerror@${width}${query}: ${e.message}`));
@@ -29,7 +29,10 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); });
     await page.goto(BASE + query); await page.evaluate(() => document.fonts.ready);
     page.W = width; page.big = width >= 768;
-    if (!stay) await nav(page, "Accounts");
+    if (!stay) {
+      await nav(page, "Accounts");
+      await page.getByRole("group", { name: "Account display" }).getByRole("button", { name: walletView === "cards" ? "Cards" : "List" }).click();
+    }
     return page;
   }
   const nav = async (p, name) => { await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100); };
@@ -50,6 +53,27 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     };
   });
   const countVisible = (p, text) => p.evaluate(text => [...document.querySelectorAll("button")].filter(b => { const r = b.getBoundingClientRect(); const s = getComputedStyle(b); return new RegExp(text).test(b.textContent + (b.getAttribute("aria-label") || "")) && r.width > 0 && r.height > 0 && s.display !== "none"; }).length, text);
+
+  /* ------------------------------------------------ wallet gallery */
+  group = "Wallet gallery and list toggle";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards" });
+    const haveCards = p.locator(`${R.have} ul > li`);
+    const oweCards = p.locator(`${R.owe} ul > li`);
+    eq("Cards view keeps the same three liquid accounts", await haveCards.count(), 3);
+    eq("Cards view keeps both credit cards", await oweCards.count(), 2);
+    check("fallback cards keep full names and current amounts", /Cash on hand.*₱2,350\.00/.test(await p.locator(R.have).innerText()) && /Blue Card.*₱14,250\.00.*₱35,750\.00.*₱50,000\.00/.test(await p.locator(R.owe).innerText()));
+    const firstSelect = haveCards.nth(0).locator('button[aria-pressed="true"]');
+    check("one account is visibly selected and exposes its existing edit action", await firstSelect.count() === 1 && await haveCards.nth(0).getByRole("button", { name: "Edit account, Cash on hand" }).isVisible());
+    await haveCards.nth(1).locator('button[aria-pressed="false"]').click();
+    check("keyboard-operable account selection moves the selected state", await haveCards.nth(1).locator('button[aria-pressed="true"]').count() === 1 && await haveCards.nth(0).locator('button[aria-pressed="true"]').count() === 0);
+    await oweCards.nth(0).locator('button[aria-pressed="false"]').click();
+    check("credit card selection exposes its existing Pay card action", await p.getByRole("button", { name: "Pay card, Blue Card" }).isEnabled());
+    await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "List" }).click();
+    const listed = await p.locator(R.have).innerText();
+    check("List returns to the existing account rows without changing amounts", /Main Savings.*₱48,725\.50/.test(listed) && /GCash.*₱3,120\.75/.test(listed));
+    await p.context().close();
+  });
 
   /* ------------------------------------------------ values */
   group = "Accounts values (default ledger)";
@@ -75,6 +99,33 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     check("Overview 'Money you have' and 'Card debt' equal the Accounts subtotals", o[1] === "₱54,196.25" && o[2] === "₱21,050.00", o.join(" / "));
     await p.context().close();
   });
+
+  for (const W of [320, 360, 375, 768, 1024, 1280, 1440]) {
+    group = `Wallet gallery layout ${W}px`;
+    await safe(async () => {
+      const p = await open(W, { walletView: "cards", height: W < 768 ? 800 : 900 });
+      const metrics = await p.evaluate(() => {
+        const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none"; };
+        const images = [...document.querySelectorAll('[aria-labelledby="money-you-have-title"] img, [aria-labelledby="money-you-owe-title"] img')];
+        const smallControls = [...document.querySelectorAll('[aria-label="Account display"] button, [aria-labelledby="money-you-have-title"] li button, [aria-labelledby="money-you-owe-title"] li button')]
+          .filter(visible)
+          .filter(e => e.getBoundingClientRect().height < 43.5)
+          .map(e => e.textContent.trim().slice(0, 20));
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: innerWidth,
+          imageCount: images.length,
+          imagesHaveSize: images.every(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }),
+          smallControls,
+        };
+      });
+      check("no horizontal overflow", metrics.scrollWidth <= metrics.viewportWidth, `${metrics.scrollWidth} / ${metrics.viewportWidth}`);
+      eq("all five fictional accounts render artwork", metrics.imageCount, 5);
+      check("card artwork has visible dimensions", metrics.imagesHaveSize);
+      check("phone controls meet 44px targets", W >= 768 || metrics.smallControls.length === 0, metrics.smallControls.join(", ") || "ok");
+      await p.context().close();
+    });
+  }
 
   /* ------------------------------------------------ layout */
   for (const W of [360, 375, 768, 1280]) {

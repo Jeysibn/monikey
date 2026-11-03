@@ -240,7 +240,7 @@ frontend/
     card-art/
       monikey-default.svg       # original unbranded fallback
       [approved issuer files]   # only after authenticity + rights checks
-      generated/                # AI-generated demo card per catalog card + manifest.json (ADR-019)
+      generated/                # REMOVED 2026-11-03: unverified issuer-style images (ADR-019 amendment)
   src/
     wallet/
       artworkCatalog.ts        # verified metadata; no bundled unapproved official imagery
@@ -321,7 +321,7 @@ const exampleCandidate: WalletArtwork = {
 - [x] Add unit tests for source/status/type gating.
 - [x] No DB changes or production finance writes.
 
-**Exit:** no official issuer artwork is distributed unless recorded as approved; labeled AI-generated concepts are allowed (ADR-019); fallback always loads.
+**Exit:** no official issuer artwork is distributed unless recorded as approved; AI-generated issuer-style concepts are no longer shipped (ADR-019 amendment, 2026-11-03); fallback always loads.
 
 ### PR 2 — Full Accounts wallet gallery — implemented (`496d03a`)
 

@@ -1,5 +1,7 @@
 # Image Brief for Codex — demo card artwork (19 cards)
 
+> **Withdrawn (2026-11-03): historical record only.** The 19 images this brief produced were removed from the release tree because their redistribution provenance and rights were never documented, and they imitate issuer card faces. Do **not** regenerate or restore them. MoniKey now draws every card with its original neutral artwork (ADR-019, amended 2026-11-03). The generated files remain in earlier Git history of the public repository; deleting them from the release branch does not erase that history.
+
 **For:** Codex (image generation). **From:** Claude Code (frontend). **Covers:** every card in `frontend/src/wallet/cardProducts.ts`.
 **Policy:** These are AI-generated demo images, allowed by ADR-019 (amended 2026-11-02). They are original designs in each issuer's colours, not copies of official card faces.
 

@@ -135,3 +135,19 @@ export function inspectImageHeader(buffer, filename) {
   if (/(?:\d[ -]?){13,19}/.test(text)) throw new Error('Image bytes contain a payment-number-like sequence; inspect and provide a clean product artwork file')
   return { format, width, height }
 }
+
+/**
+ * Release gate: list files under a card-art directory that are not allowed to ship, and source references to
+ * the removed generated-image directory. `allowed` is the set of root-relative paths ("/card-art/x.svg") that the
+ * approved catalog (plus the original MoniKey default) may bundle. Returns human-readable problems.
+ */
+export function findUnapprovedArtwork({ files, allowed, sources = [] }) {
+  const problems = []
+  for (const file of files) {
+    if (!allowed.has(file)) problems.push(`${file} is bundled but is not an approved artwork file`)
+  }
+  for (const { path, text } of sources) {
+    if (/card-art\/generated|card-art\/concepts/.test(text)) problems.push(`${path} references a removed, unapproved artwork directory`)
+  }
+  return problems
+}

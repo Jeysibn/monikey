@@ -10,3 +10,8 @@ export function inspectImageHeader(buffer: Buffer, filename: string): {
   width: number
   height: number
 }
+export function findUnapprovedArtwork(input: {
+  files: string[]
+  allowed: Set<string>
+  sources?: { path: string; text: string }[]
+}): string[]

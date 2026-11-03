@@ -1,5 +1,5 @@
 import { MONIKEY_DEFAULT_ARTWORK_PATH, resolveWalletArtwork } from './artworkCatalog.ts'
-import { cardProductImage, findCardProduct, findLegacyCardProduct } from './cardProducts.ts'
+import { findCardProduct, findLegacyCardProduct } from './cardProducts.ts'
 import { savedWalletArtworkId, savedWalletProductId, type WalletPreferencesV1 } from './walletPreferences.ts'
 import type { AccountInfo, AccountType, AccountsSnapshot } from '../types.ts'
 import { formatPeso } from '../lib/money.ts'
@@ -15,7 +15,7 @@ export interface WalletCardVM {
   artUrl: string
   /** The card picked for the account, such as "BDO Visa Classic"; null for none (the MoniKey card). */
   productLabel: string | null
-  /** Text colour on the card face: set per design; ink on the light MoniKey card. */
+  /** Text colour on the card face: ink, because every approved artwork is the light MoniKey card. */
   faceInk: 'light' | 'dark'
   primaryAmountCentavos: number
   primaryLabel: WalletAmountLabel
@@ -61,17 +61,18 @@ function walletCard(
   creditLimitCentavos: number | null = null,
 ): WalletCardVM {
   const product = accountCardProduct(account, preferences)
-  // Without a card, an approved issuer artwork (ADR-019) or the neutral MoniKey card.
-  const artwork = product ? null : resolveWalletArtwork(savedWalletArtworkId(preferences, account.id), account.type)
+  // A chosen card is a text label only: it never selects an image (ADR-019). Every card face uses artwork
+  // that passed the approval policy, which today is only the neutral original MoniKey card.
+  const artwork = resolveWalletArtwork(product ? null : savedWalletArtworkId(preferences, account.id), account.type)
 
   return {
     accountId: account.id,
     accountName: account.name,
     accountType: account.type,
-    artworkId: product ? product.id : artwork!.id,
-    artUrl: product ? cardProductImage(product) : artwork!.localAssetPath ?? MONIKEY_DEFAULT_ARTWORK_PATH,
+    artworkId: artwork.id,
+    artUrl: artwork.localAssetPath ?? MONIKEY_DEFAULT_ARTWORK_PATH,
     productLabel: product?.name ?? null,
-    faceInk: product ? product.faceInk : 'dark',
+    faceInk: 'dark',
     primaryAmountCentavos,
     primaryLabel,
     availableCreditCentavos,

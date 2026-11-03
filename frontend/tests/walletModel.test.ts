@@ -107,7 +107,7 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(model.liquid.some((item) => item.accountId === 999), false)
   })
 
-  it('maps a choice saved with an old concept ID to its generated card, without changing figures', () => {
+  it('maps a choice saved with an old concept ID to its card name on the neutral artwork, without changing figures', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
@@ -123,11 +123,11 @@ describe('buildWalletGalleryModel', () => {
     assert.deepEqual(
       [2, 3, 4, 5, 6].map((id) => [byId[id]!.productLabel, byId[id]!.artUrl]),
       [
-        ['MariBank Debit Card', '/card-art/generated/maribank-debit.webp'],
-        ['GCash Visa Card', '/card-art/generated/gcash-visa.webp'],
-        ['Maya Visa Platinum', '/card-art/generated/maya-visa-platinum.webp'],
-        ['Atome Credit Card Black', '/card-art/generated/atome-credit-black.webp'],
-        ['BDO Visa Classic', '/card-art/generated/bdo-visa-classic.webp'],
+        ['MariBank Debit Card', MONIKEY_DEFAULT_ARTWORK_PATH],
+        ['GCash Visa Card', MONIKEY_DEFAULT_ARTWORK_PATH],
+        ['Maya Visa Platinum', MONIKEY_DEFAULT_ARTWORK_PATH],
+        [null, MONIKEY_DEFAULT_ARTWORK_PATH], // Atome is no longer offered: neutral card, no product claim
+        ['BDO Visa Classic', MONIKEY_DEFAULT_ARTWORK_PATH],
       ],
     )
     assert.equal(byId[7]!.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
@@ -145,11 +145,11 @@ describe('buildWalletGalleryModel', () => {
     })
     const savings = model.liquid.find((item) => item.accountId === 2)!
     assert.equal(savings.productLabel, 'MariBank Debit Card')
-    assert.equal(savings.artUrl, '/card-art/generated/maribank-debit.webp')
+    assert.equal(savings.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
     assert.equal(savings.primaryAmountCentavos, 4_872_550)
     const gold = model.cards.find((item) => item.accountId === 4)!
     assert.equal(gold.productLabel, 'BDO Visa Gold')
-    assert.equal(gold.artUrl, '/card-art/generated/bdo-visa-gold.webp')
+    assert.equal(gold.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
     const mismatched = model.cards.find((item) => item.accountId === 5)!
     assert.equal(mismatched.productLabel, null)
     assert.equal(mismatched.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
@@ -173,7 +173,7 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(usedShare({ ...card!, primaryLabel: 'Owed', primaryAmountCentavos: 100, creditLimitCentavos: 5_000_000 })!.text, 'Under 1% used')
   })
 
-  it('uses dark text on light designs and the MoniKey card, white on dark designs', () => {
+  it('uses dark ink on every card, because the neutral MoniKey card is light', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
@@ -181,9 +181,7 @@ describe('buildWalletGalleryModel', () => {
         '3': { artworkId: null, productId: 'gcash-visa' },
       },
     })
-    assert.equal(model.liquid.find((item) => item.accountId === 2)!.faceInk, 'dark')
-    assert.equal(model.liquid.find((item) => item.accountId === 3)!.faceInk, 'light')
-    assert.equal(model.liquid.find((item) => item.accountId === 1)!.faceInk, 'dark')
+    for (const item of [...model.liquid, ...model.cards]) assert.equal(item.faceInk, 'dark')
   })
 
   it('prefers the card the server stores over one kept in the browser (ADR-020)', () => {

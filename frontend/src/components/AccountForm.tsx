@@ -8,11 +8,16 @@ import { FormField } from '@/components/FormField'
 import { InlineNotice } from '@/components/InlineNotice'
 import { MoneyInput } from '@/components/MoneyInput'
 import { SegmentedControl } from '@/components/SegmentedControl'
+import { CardProductPicker, OTHER_ISSUER } from '@/components/wallet/CardProductPicker'
 import { isCardType, MAX_NAME, validateAccount, type AccountField, type AccountValues } from '@/lib/accountForm'
 import { SLOW_SAVE_MS, SLOW_SAVE_TEXT, WriteError } from '@/lib/apiErrors'
 import { describedBy } from '@/lib/describedBy'
 import { useDelayedFlag } from '@/useDelayedFlag'
 import type { AccountType, LedgerSnapshot } from '@/types'
+import { cardProductsFor, findCardProduct, isCardAccountType, type CardProduct } from '@/wallet/cardProducts'
+
+/** The card chosen in the form: a product ID, null for "Other" (the MoniKey card), or undefined for no change. */
+export type CardChoice = { productId: string | null } | undefined
 
 /*
  * The Add/Edit account form (UI_UX_SPEC section 9). Same habits as the Quick Add form: errors appear when a
@@ -42,6 +47,7 @@ export function AccountForm({
   onSavingChange,
   onSubmit,
   onCancel,
+  initialProductId = null,
 }: {
   mode: 'add' | 'edit'
   excludeAccountId?: number
@@ -50,8 +56,10 @@ export function AccountForm({
   nameRef: RefObject<HTMLInputElement | null>
   onDirty: () => void
   onSavingChange: (saving: boolean) => void
-  onSubmit: (values: AccountValues) => Promise<void>
+  onSubmit: (values: AccountValues, card: CardChoice) => Promise<void>
   onCancel: () => void
+  /** Edit mode: the account's current card, preselected in the picker. */
+  initialProductId?: string | null
 }) {
   const [values, setValues] = useState(initial)
   const [touched, setTouched] = useState<Set<AccountField>>(new Set())
@@ -64,6 +72,11 @@ export function AccountForm({
   const slow = useDelayedFlag(saving, SLOW_SAVE_MS)
   const summaryRef = useRef<HTMLDivElement>(null)
   const edited = useRef<Set<AccountField>>(new Set()) // see TransactionForm: leaving an untouched field shows nothing
+  // The bank or provider, then the exact card (Add and Edit). Picking a card fills an empty Name with the
+  // card's name; a name the person typed is never replaced.
+  const [product, setProduct] = useState<CardProduct | null>(() => findCardProduct(initialProductId, initial.type))
+  const [issuer, setIssuer] = useState<string | null>(() => findCardProduct(initialProductId, initial.type)?.issuer ?? null)
+  const autoName = useRef<string | null>(null)
 
   const errors = validateAccount(values, snapshot, excludeAccountId)
   const shown = (field: AccountField) =>
@@ -76,6 +89,28 @@ export function AccountForm({
     if (field && serverField?.field === field) setServerField(null)
     onDirty()
     setValues((v) => ({ ...v, ...patch }))
+  }
+  const nameIsAuto = () => values.name === '' || values.name === autoName.current
+  const chooseType = (type: AccountType) => {
+    setIssuer(null)
+    setProduct(null)
+    const patch: Partial<AccountValues> = { type }
+    if (autoName.current !== null && values.name === autoName.current) patch.name = ''
+    autoName.current = null
+    set(patch)
+  }
+  const chooseProduct = (next: CardProduct | null) => {
+    setProduct(next)
+    if (!nameIsAuto()) return
+    autoName.current = next?.name ?? null
+    set({ name: next?.name ?? '' })
+  }
+  const chooseIssuer = (next: string) => {
+    setIssuer(next)
+    onDirty()
+    const offered = next === OTHER_ISSUER ? [] : cardProductsFor(values.type, next)
+    // A provider with a single card (MariBank, GoTyme) selects it straight away.
+    chooseProduct(offered.length === 1 ? offered[0]! : null)
   }
   const blur = (field: AccountField) => {
     if (edited.current.has(field)) setTouched((t) => new Set(t).add(field))
@@ -101,7 +136,9 @@ export function AccountForm({
     setSaving(true)
     onSavingChange(true)
     try {
-      await onSubmit(values)
+      // A picked card is saved; "Other" saves no card; an issuer with no card picked yet changes nothing.
+      const card: CardChoice = product ? { productId: product.id } : issuer === OTHER_ISSUER ? { productId: null } : undefined
+      await onSubmit(values, card)
     } catch (err) {
       const failure = err instanceof WriteError ? err : new WriteError(mode === 'edit' ? FAILED_EDIT : FAILED_ADD)
       const field = FIELD_ORDER.find((f) => f === failure.field)
@@ -164,12 +201,34 @@ export function AccountForm({
           )}
 
           {mode === 'add' ? (
-            <SegmentedControl legend="Type" name="aa-type" value={values.type} options={TYPES} onChange={(type) => set({ type })} />
+            <>
+              <SegmentedControl legend="Type" name="aa-type" value={values.type} options={TYPES} onChange={chooseType} />
+              {isCardAccountType(values.type) && (
+                <CardProductPicker
+                  accountType={values.type}
+                  issuer={issuer}
+                  productId={product?.id ?? null}
+                  onIssuerChange={chooseIssuer}
+                  onProductChange={chooseProduct}
+                />
+              )}
+            </>
           ) : (
-            <div className="grid gap-1.5">
-              <span className="text-sm font-medium">Account type</span>
-              <span className="text-base text-muted-foreground">{TYPES.find((option) => option.value === values.type)?.label}</span>
-            </div>
+            <>
+              <div className="grid gap-1.5">
+                <span className="text-sm font-medium">Account type</span>
+                <span className="text-base text-muted-foreground">{TYPES.find((option) => option.value === values.type)?.label}</span>
+              </div>
+              {isCardAccountType(values.type) && (
+                <CardProductPicker
+                  accountType={values.type}
+                  issuer={issuer}
+                  productId={product?.id ?? null}
+                  onIssuerChange={chooseIssuer}
+                  onProductChange={chooseProduct}
+                />
+              )}
+            </>
           )}
 
           <FormField id="aa-name" label="Name" error={nameError} helper={`Up to ${MAX_NAME} characters.`}>

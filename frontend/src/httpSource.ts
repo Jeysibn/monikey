@@ -3,11 +3,15 @@ import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
 import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './types.ts'
 import { compareTimestamps } from './lib/timestamp.ts'
+import { isMonday } from './lib/kakeibo.ts'
 import {
   fromWireAccounts,
   fromWireEditableAccount,
   fromWireCategories,
   fromWireField,
+  fromWireKakeiboMonth,
+  fromWireKakeiboPlan,
+  fromWireKakeiboWeek,
   fromWirePayment,
   fromWireTransfer,
   fromWireSummary,
@@ -15,6 +19,9 @@ import {
   toWireAccountInput,
   toWireAccountUpdate,
   toWireEntryInput,
+  toWireKakeiboPlan,
+  toWireKakeiboReview,
+  toWireWeekNotes,
   type WireCategory,
   type WirePayment,
   type WireTransaction,
@@ -62,14 +69,25 @@ async function getJson(url: string, signal: AbortSignal, fetcher: Fetcher): Prom
   }
 }
 
-async function write(url: string, method: 'POST' | 'PUT' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<void> {
+async function write(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', fetcher: Fetcher, body?: unknown): Promise<Response> {
   const response = await fetcher(url, {
     method,
     headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
-  if (response.ok) return
+  if (response.ok) return response
   throw apiError(response.status, await readJson(response))
+}
+
+/** The created account's ID from a successful POST /api/accounts; null if the body has none. */
+async function createdId(response: Response): Promise<number | null> {
+  try {
+    const body: unknown = await response.json()
+    const id = typeof body === 'object' && body !== null ? (body as { id?: unknown }).id : undefined
+    return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
 }
 
 function manilaToday(): string {
@@ -82,6 +100,23 @@ function manilaToday(): string {
   const day = part('day')
   if (!year || !month || !day) throw new Error('Could not read today in Asia/Manila.')
   return `${year}-${month}-${day}`
+}
+
+/** "/api/kakeibo/months/2026-10" (+ suffix). The month is checked first, so nothing else can reach the path. */
+function kakeiboPath(month: string, suffix = ''): string {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('A Kakeibo month must look like 2026-10.')
+  return `/api/kakeibo/months/${month}${suffix}`
+}
+
+/** "/api/kakeibo/weeks/2026-10-19". Only a real Monday reaches the path. */
+function weekPath(weekStart: string): string {
+  if (!isMonday(weekStart)) throw new Error('A Kakeibo week must start on a Monday, like 2026-10-19.')
+  return `/api/kakeibo/weeks/${weekStart}`
+}
+
+const positiveId = (value: number): number => {
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error('An ID must be a positive whole number.')
+  return value
 }
 
 function urlWithQuery(path: string, query: URLSearchParams): string {
@@ -189,12 +224,48 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       await write(`${collection}/${target.id}`, 'DELETE', fetcher)
     },
 
-    async addAccount(values: AccountValues) {
-      await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values))
+    async addAccount(values: AccountValues, card?: string | null) {
+      return createdId(await write('/api/accounts', 'POST', fetcher, toWireAccountInput(values, card)))
     },
 
-    async updateAccount(id, values: AccountValues) {
-      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values))
+    async updateAccount(id, values: AccountValues, card?: string | null) {
+      await write(`/api/accounts/${id}`, 'PUT', fetcher, toWireAccountUpdate(values, card))
+    },
+
+    async loadKakeiboMonth(month, signal) {
+      return fromWireKakeiboMonth(await getJson(kakeiboPath(month, '/report'), signal, fetcher), month)
+    },
+
+    async loadKakeiboPlan(month, signal) {
+      const body = await getJson(kakeiboPath(month), signal, fetcher)
+      const row = object(body)
+      if (!row || row.month !== month || !('plan' in row)) throw failure(500)
+      return fromWireKakeiboPlan(row.plan, month)
+    },
+
+    async saveKakeiboPlan(month, values) {
+      await write(kakeiboPath(month), 'PUT', fetcher, toWireKakeiboPlan(values))
+    },
+
+    async saveKakeiboReview(month, values) {
+      await write(kakeiboPath(month, '/review'), 'PUT', fetcher, toWireKakeiboReview(values))
+    },
+
+    async loadKakeiboWeek(weekStart, signal) {
+      return fromWireKakeiboWeek(await getJson(weekPath(weekStart), signal, fetcher), weekStart)
+    },
+
+    async saveKakeiboWeek(weekStart, notes) {
+      await write(weekPath(weekStart), 'PUT', fetcher, toWireWeekNotes(notes))
+    },
+
+    async classifyExpense(transactionId, envelope) {
+      await write(`/api/transactions/${positiveId(transactionId)}/kakeibo-envelope`, 'PATCH', fetcher, { kakeibo_envelope: envelope })
+    },
+
+    async setCategoryEnvelope(categoryId, envelope) {
+      await write(`/api/categories/${positiveId(categoryId)}/default-kakeibo-envelope`, 'PATCH', fetcher, { default_kakeibo_envelope: envelope })
+      categoriesRead = null // Activity and Quick Add read the new suggestion next time
     },
   }
 }

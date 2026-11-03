@@ -45,19 +45,22 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   await safe(async () => {
     const p = await open(375, { query: "?demo=load-error" });
     const a = await alerts(p);
-    eq("four blocks failed on their own: summary, credit cards, recent activity, and the categories (a banner)", a.length, 4);
+    // Overview also shows the wallet deck, which reads the accounts on its own (since the Overview wallet deck).
+    eq("five blocks failed on their own: summary, credit cards, accounts, recent activity, and the categories (a banner)", a.length, 5);
     check("the summary block says so, with no 'Last updated' (nothing ever loaded)", a.includes("Couldn't load your summary. Retry"), a.join(" | "));
-    check("credit cards, recent activity and the categories say so too", a.includes("Couldn't load your credit cards. Retry") && a.includes("Couldn't load recent activity. Retry") && a.includes("Couldn't load the categories. Retry"));
+    check("credit cards, accounts, recent activity and the categories say so too", a.includes("Couldn't load your credit cards. Retry") && a.includes("Couldn't load your accounts. Retry") && a.includes("Couldn't load recent activity. Retry") && a.includes("Couldn't load the categories. Retry"));
     check("'This month' explains instead of showing zeros", /Not available until your summary loads\./.test(await mainText(p)) && !/₱0\.00/.test(await mainText(p)));
     check("Add transaction is disabled (the accounts have not loaded) and still reads 'Add transaction'", await addBtn(p).isDisabled() && /Add transaction/.test(await addBtn(p).getAttribute("aria-label")));
     check("each Retry has a specific name", await retry(p, "your summary").count() === 1 && await retry(p, "your credit cards").count() === 1 && await retry(p, "recent activity").count() === 1 && await retry(p, "the categories").count() === 1);
     await shot(p, "states-load-error-overview-375.png");
     await retry(p, "your summary").click(); await p.waitForTimeout(300);
     const after = await alerts(p);
-    check("retrying the summary fixes only that block", after.length === 3 && /Net position/.test(await mainText(p)) && !/Couldn't load your summary/.test(after.join(" ")), after.join(" | "));
+    check("retrying the summary fixes only that block", after.length === 4 && /Net position/.test(await mainText(p)) && !/Couldn't load your summary/.test(after.join(" ")), after.join(" | "));
     await retry(p, "your credit cards").click(); await p.waitForTimeout(300);
     check("retrying the cards restores them; Add transaction waits for the categories too", /Blue Card/.test(await mainText(p)) && await addBtn(p).isDisabled());
     await retry(p, "recent activity").click(); await p.waitForTimeout(300);
+    // The wallet deck and the card list read the same accounts, so retrying the cards may already have restored it.
+    if (await retry(p, "your accounts").count()) { await retry(p, "your accounts").click(); await p.waitForTimeout(300); }
     await retry(p, "the categories").click(); await p.waitForTimeout(300);
     check("then Add transaction is enabled", await addBtn(p).isEnabled());
     eq("no failed block is left", (await alerts(p)).length, 0);
@@ -76,7 +79,8 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const b = await alerts(q);
     const acc = b.filter(x => /accounts/.test(x));
     check("Accounts: the accounts failure is announced once (one live alert, the second section's copy is silent)", acc.length === 1 && acc[0] === "Couldn't load accounts. Retry", b.join(" | "));
-    check("Accounts: both sections show it", ((await mainText(q)).match(/Couldn't load accounts\./g) || []).length === 2);
+    // Cards view (the default) has one grid, so the accounts failure shows once; List view keeps two sections.
+    check("Accounts: the card grid shows it once", ((await mainText(q)).match(/Couldn't load accounts\./g) || []).length === 1);
     await shot(q, "states-load-error-accounts-375.png");
     await q.locator('button[aria-label="Retry loading accounts"]').first().click(); await q.waitForTimeout(400);
     check("one Retry asks again for whatever failed, and both sections recover", !(await mainText(q)).includes("Couldn't load accounts") && /Cash on hand/.test(await mainText(q)) && /Blue Card/.test(await mainText(q)));
@@ -87,7 +91,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const p = await open(375, { query: "?demo=load-error&failing=summary", view: "Accounts" });
     const t = await mainText(p);
     check("only the summary fails: the rows and cards still show", /Cash on hand/.test(t) && /Blue Card/.test(t) && /Main Savings/.test(t));
-    check("only the totals say 'Couldn't load the totals.'", (t.match(/Couldn[’']t load the totals\./g) || []).length === 2 && !/Couldn[’']t load accounts/.test(t));
+    check("only the totals say 'Couldn't load the totals.' (once, in the net-position banner)", (t.match(/Couldn[’']t load the totals\./g) || []).length === 1 && !/Couldn[’']t load accounts/.test(t));
     check("and carry no 'Last updated' (the accounts request, which succeeded, must not lend its time)", !/Last updated/.test(t));
     eq("the same failure is announced once, not twice", await p.evaluate(() => [...document.querySelectorAll("main [role=alert]")].length), 1);
     check("(and no 'Last updated' even though the accounts loaded)", !/Last updated/.test(await mainText(p)));
@@ -95,7 +99,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.locator('button[aria-label="Retry loading the totals"]').first().click(); await p.waitForTimeout(300);
     check("Retry restores the totals", /₱54,196\.25/.test(await mainText(p)) && !/Couldn[’']t load/.test(await mainText(p)));
     const q = await open(375, { query: "?demo=load-error&failing=accounts", view: "Accounts" });
-    eq("both sections show the accounts failure but only one is a live alert", await q.evaluate(() => ({ blocks: [...document.querySelectorAll("main")].map(m => (m.innerText.match(/Couldn't load accounts\./g) || []).length)[0], alerts: document.querySelectorAll("main [role=alert]").length })).then(x => `${x.blocks}/${x.alerts}`), "2/1");
+    eq("the card grid shows the accounts failure once, as one live alert", await q.evaluate(() => ({ blocks: [...document.querySelectorAll("main")].map(m => (m.innerText.match(/Couldn't load accounts\./g) || []).length)[0], alerts: document.querySelectorAll("main [role=alert]").length })).then(x => `${x.blocks}/${x.alerts}`), "1/1");
     const c = await open(375, { query: "?demo=load-error&failing=categories" });
     const ct = await mainText(c);
     check("categories fail alone: the figures and cards are NOT reported as failed", /Net position/.test(ct) && /Blue Card/.test(ct) && !/Couldn't load your credit cards/.test(ct) && !/Couldn't load your summary/.test(ct));
@@ -125,7 +129,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await q.locator('button[aria-label="Retry loading accounts"]').first().focus();
     await q.keyboard.press("Enter"); await q.waitForTimeout(300);
     f = await focusInfo(q);
-    check("Accounts: focus lands on the Money you have heading", f.id === "money-you-have-title", JSON.stringify(f));
+    check("Accounts: focus lands on the Net position heading", f.id === "net-position-title", JSON.stringify(f));
     const a = await open(375, { query: "?demo=load-error", view: "Activity" });
     await a.locator('button[aria-label="Retry loading activity"]').focus();
     await a.keyboard.press("Enter"); await a.waitForTimeout(300);
@@ -151,11 +155,12 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
   group = "?demo=offline: nothing works, and the screen says so";
   await safe(async () => {
     const p = await open(375, { query: "?demo=offline" });
-    eq("four blocks failed (the categories banner too)", (await alerts(p)).length, 4);
+    eq("five blocks failed (the accounts and the categories banner too)", (await alerts(p)).length, 5);
     await retry(p, "your summary").click(); await p.waitForTimeout(300);
     check("Retry fails again and the message stays (no spinner forever, no blank)", /Couldn't load your summary/.test((await alerts(p)).join(" ")) && await retry(p, "your summary").isVisible());
     check("Add transaction stays disabled (there are no accounts to add to)", await addBtn(p).isDisabled());
-    check("the shell still works: navigating to Accounts shows its failure", (await (async () => { await nav(p, "Accounts"); return alerts(p); })()).length === 2);
+    // Accounts shows each failed request once: the categories banner, the totals (banner), and the accounts (grid).
+    check("the shell still works: navigating to Accounts shows its failures", await (async () => { await nav(p, "Accounts"); const a = await alerts(p); return a.length === 3 && a.some(x => /totals/.test(x)) && a.some(x => /accounts/.test(x)); })());
   });
 
   group = "?demo=slow: reads take 1.5 seconds";

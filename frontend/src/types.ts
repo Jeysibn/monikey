@@ -16,6 +16,11 @@ export interface AccountInfo {
   id: number
   name: string
   type: AccountType
+  /**
+   * The card chosen for the account (ADR-020), such as "bdo-visa-classic"; null for none. Absent when the
+   * server predates ADR-020, in which case the choice lives in browser storage.
+   */
+  cardProductId?: string | null
 }
 
 /** The mock's stored account: AccountInfo plus the opening values it calculates from. Only the mock source sees these. */
@@ -25,10 +30,18 @@ export interface Account extends AccountInfo {
   creditLimit: Centavos | null // credit cards only
 }
 
+/** Kakeibo's four spending envelopes (ADR-021). They say why money was spent; the category says on what. */
+export type KakeiboEnvelope = 'needs' | 'wants' | 'culture' | 'unexpected'
+
 export interface Category {
   id: number
   name: string
   type: CategoryType
+  /**
+   * The envelope suggested for new expenses in this category (ADR-021), or null for no suggestion. A suggestion
+   * only: it never changes saved expenses. Absent when the server predates Kakeibo.
+   */
+  defaultEnvelope?: KakeiboEnvelope | null
 }
 
 /** Income or expense. Which one it is comes from the category, never from the sign of the amount. */
@@ -40,6 +53,7 @@ export interface Transaction {
   date: string
   note: string | null
   createdAt: string // ISO timestamp; breaks ties between entries on the same date
+  envelope?: KakeiboEnvelope | null // expenses only; null (or absent) is unclassified
 }
 
 /** Money moved from a cash/bank/e-wallet account to a credit card. It is not an expense. */
@@ -123,6 +137,11 @@ export interface EntryValues {
   categoryId: number | null // expense and income only
   date: string // "YYYY-MM-DD"
   note: string
+  /**
+   * Expense only: the Kakeibo envelope, or null for "not classified". Undefined means the server predates
+   * Kakeibo: the field is then left out of the request, so an older API never sees it.
+   */
+  envelope?: KakeiboEnvelope | null
 }
 
 /** One stored entry: a row of the transactions table or of the credit-card payments table. */
@@ -149,6 +168,108 @@ export interface ActivityPage {
   hasMore: boolean
 }
 
+/** One month's Kakeibo plan as stored (ADR-021). Plans are planning figures, never account balances. */
+export interface KakeiboPlan {
+  month: string // "YYYY-MM"
+  plannedIncome: Centavos
+  allocatedStartingFunds: Centavos // money already held that the person chose to use this month
+  savingsTarget: Centavos // a goal set aside first, not money already saved
+  priorPeriodDebtReserve: Centavos // for paying off card debt from earlier months
+  limits: Record<KakeiboEnvelope, Centavos>
+  monthlyIntention: string | null
+}
+
+/** One envelope in the month's report. `limit` and `remaining` are null when the month has no plan. */
+export interface KakeiboEnvelopeReport {
+  limit: Centavos | null
+  spent: Centavos
+  remaining: Centavos | null // limit − spent, worked out by the server; negative when over the limit
+}
+
+export type KakeiboPlanStatus = 'saved' | 'not_saved' | 'legacy_unknown'
+
+/**
+ * The month's Kakeibo report, exactly as the server works it out (GET /api/kakeibo/months/{month}/report).
+ * Actual figures come from the ledger; plan figures are null when the month has no plan. The screen shows
+ * these numbers and never adds them up itself.
+ */
+export interface KakeiboMonth {
+  month: string // "YYYY-MM"
+  planStatus: KakeiboPlanStatus // old rows are unknown until the owner explicitly confirms them
+  plan: KakeiboPlan | null
+  actualIncome: Centavos
+  availableToAllocate: Centavos | null // planned income + starting funds − savings target − debt reserve
+  unallocated: Centavos | null // available to allocate − the four limits; negative when over-allocated
+  envelopes: Record<KakeiboEnvelope, KakeiboEnvelopeReport>
+  unclassifiedExpenses: Centavos // expenses with no envelope; still part of total expenses
+  totalExpenses: Centavos // every expense of the month, classified or not; card payments and transfers excluded
+  review: KakeiboReview | null // the month-end reflection, if one was saved
+  /** The server compared today's ledger totals with the review's snapshot and found a difference. */
+  actualsChangedSinceReview: boolean
+}
+
+/** Ledger totals the server stored when a monthly review was saved. Never worked out in the browser. */
+export interface KakeiboSnapshot {
+  actualIncome: Centavos
+  totalExpenses: Centavos
+  unclassified: Centavos
+  envelopes: Record<KakeiboEnvelope, Centavos>
+}
+
+/** A saved month-end reflection (PUT /api/kakeibo/months/{month}/review). */
+export interface KakeiboReview {
+  savedDeclared: Centavos | null // self-reported: what the person says they saved; never checked against accounts
+  available: string | null
+  savings: string | null
+  change: string | null
+  appreciated: string | null
+  surprise: string | null
+  lesson: string | null
+  reviewedAt: string // ISO timestamp of the last save
+  snapshot: KakeiboSnapshot | null
+}
+
+/** What a person types into the monthly reflection form. */
+export interface KakeiboReviewValues {
+  savedDeclared: string // empty for "not saying"
+  available: string
+  savings: string
+  change: string
+  appreciated: string
+  surprise: string
+  lesson: string
+}
+
+/** One Monday-to-Sunday week (GET /api/kakeibo/weeks/{monday}). It may cross into another month or year. */
+export interface KakeiboWeek {
+  weekStart: string // "YYYY-MM-DD", always a Monday
+  weekEnd: string // the Sunday, inclusive
+  spending: Record<KakeiboEnvelope, Centavos>
+  unclassifiedExpenses: Centavos
+  totalExpenses: Centavos
+  review: KakeiboWeekNotes & { updatedAt: string } | null
+}
+
+/** The three weekly notes. Saving always sends all three: the server replaces the whole set. */
+export interface KakeiboWeekNotes {
+  surprise: string
+  worthwhile: string
+  nextWeek: string
+}
+
+/** What a person types into the plan form (amounts are the text as typed). */
+export interface KakeiboPlanValues {
+  plannedIncome: string
+  allocatedStartingFunds: string
+  savingsTarget: string
+  priorPeriodDebtReserve: string
+  needsLimit: string
+  wantsLimit: string
+  cultureLimit: string
+  unexpectedLimit: string
+  monthlyIntention: string
+}
+
 export interface MockData {
   today: string
   accounts: Account[]
@@ -156,6 +277,9 @@ export interface MockData {
   transactions: Transaction[]
   payments: CreditCardPayment[]
   transfers: AccountTransfer[]
+  kakeiboPlans?: KakeiboPlan[] // the mock's stored plans, one per month
+  kakeiboReviews?: (Omit<KakeiboReview, 'snapshot'> & { month: string; snapshot: KakeiboSnapshot })[] // month-end reflections
+  kakeiboWeekReviews?: (KakeiboWeekNotes & { weekStart: string; updatedAt: string })[] // weekly notes, by Monday
 }
 
 /** Whether Add transaction can be used: not until the accounts have loaded, and not before the first account exists. */

@@ -1,4 +1,4 @@
-import type { AccountType, Centavos, EntryKind, EntryTarget, EntryValues, MockData } from '../types.ts'
+import type { AccountType, Centavos, EntryKind, EntryTarget, EntryValues, KakeiboEnvelope, MockData } from '../types.ts'
 import { parseAmount } from './entryForm.ts'
 import { amountText } from './money.ts'
 import { isCardType, parseAccountMoney, type AccountValues } from './accountForm.ts'
@@ -25,6 +25,7 @@ export type LedgerAction =
       amount: Centavos
       date: string
       note: string | null
+      envelope: KakeiboEnvelope | null // always null for income
       createdAt: string
     }
   | {
@@ -57,6 +58,7 @@ export type LedgerEdit =
       amount: Centavos
       date: string
       note: string | null
+      envelope?: KakeiboEnvelope | null // left out: keep the stored envelope (as the API does, ADR-021)
     }
   | {
       type: 'update-payment'
@@ -111,6 +113,7 @@ export function ledgerReducer(data: MockData, action: LedgerAction | LedgerEdit)
             amount: action.amount,
             date: action.date,
             note: action.note,
+            envelope: action.envelope,
             createdAt: action.createdAt,
           },
         ],
@@ -181,7 +184,8 @@ export function toAction(v: EntryValues, createdAt: string): LedgerAction {
     return { type: 'add-transfer', sourceAccountId: v.accountId, destinationAccountId: v.destinationAccountId, amount: amount.centavos, date: v.date, note, createdAt }
   }
   if (v.categoryId === null) throw new Error('toAction needs a category')
-  return { type: 'add-transaction', accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note, createdAt }
+  const envelope = v.kind === 'expense' ? v.envelope ?? null : null
+  return { type: 'add-transaction', accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note, envelope, createdAt }
 }
 
 /** Turns validated form values into an update of an existing entry (same id and creation time). */
@@ -198,7 +202,8 @@ export function toUpdateAction(v: EntryValues, target: EntryTarget): LedgerEdit 
     return { type: 'update-transfer', id: target.id, sourceAccountId: v.accountId, destinationAccountId: v.destinationAccountId, amount: amount.centavos, date: v.date, note }
   }
   if (v.categoryId === null) throw new Error('toUpdateAction needs a category')
-  return { type: 'update-transaction', id: target.id, accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note }
+  const edit: LedgerEdit = { type: 'update-transaction', id: target.id, accountId: v.accountId, categoryId: v.categoryId, amount: amount.centavos, date: v.date, note }
+  return v.kind === 'expense' && v.envelope !== undefined ? { ...edit, envelope: v.envelope } : edit
 }
 
 export const toDeleteAction = (target: EntryTarget): LedgerEdit =>
@@ -223,7 +228,7 @@ export function entryValues(data: MockData, t: EntryTarget): EntryValues | null 
   const row = data.transactions.find((x) => x.id === t.id)
   const category = row && data.categories.find((c) => c.id === row.categoryId)
   if (!row || !category) return null
-  return { kind: category.type as EntryKind, amount: amountText(row.amount), accountId: row.accountId, cardId: null, destinationAccountId: null, categoryId: row.categoryId, date: row.date, note: row.note ?? '' }
+  return { kind: category.type as EntryKind, amount: amountText(row.amount), accountId: row.accountId, cardId: null, destinationAccountId: null, categoryId: row.categoryId, date: row.date, note: row.note ?? '', envelope: row.envelope ?? null }
 }
 
 /** Turns validated Add account values into a ledger action (the mock's write; the API gets the same fields). */

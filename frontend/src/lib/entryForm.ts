@@ -15,7 +15,7 @@ export type { EntryKind, EntryValues } from '../types.ts'
  * centavos in the browser and are never saved. The real API will own every saved figure.
  */
 
-export type EntryField = 'amount' | 'account' | 'card' | 'destination' | 'category' | 'date' | 'note'
+export type EntryField = 'amount' | 'account' | 'card' | 'destination' | 'category' | 'envelope' | 'date' | 'note'
 export type EntryErrors = Partial<Record<EntryField, string>>
 
 export const MAX_NOTE = 120
@@ -85,12 +85,17 @@ export function validate(v: EntryValues, snapshot: LedgerSnapshot): EntryErrors 
   return errors
 }
 
-/** Changing the type keeps amount, date and note, clears the category, and clears an account that no longer fits. */
+/**
+ * Changing the type keeps amount, date and note, clears the category, and clears an account that no longer fits.
+ * Only an expense has a Kakeibo envelope, so any other type goes back to "not classified" (undefined stays
+ * undefined: the server predates Kakeibo).
+ */
 export function switchKind(v: EntryValues, kind: EntryKind, snapshot: LedgerSnapshot): EntryValues {
   return {
     ...v,
     kind,
     categoryId: null,
+    ...(v.envelope === undefined ? {} : { envelope: kind === 'expense' ? v.envelope : null }),
     cardId: kind === 'payment' ? v.cardId : null,
     destinationAccountId: kind === 'transfer' ? v.destinationAccountId : null,
     accountId: accountAllowed(kind, 'account', v.accountId, snapshot) ? v.accountId : null,

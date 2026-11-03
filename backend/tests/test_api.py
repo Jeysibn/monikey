@@ -117,11 +117,12 @@ def test_accounts_are_computed_and_duplicate_names_conflict(client: TestClient) 
         opening_debt="250.00",
         credit_limit="20000.00",
     )
-    assert bank == {"id": 1, "name": "Daily Bank", "type": "bank", "balance": "5000.00"}
+    assert bank == {"id": 1, "name": "Daily Bank", "type": "bank", "card_product_id": None, "balance": "5000.00"}
     assert card == {
         "id": 2,
         "name": "Travel Card",
         "type": "credit_card",
+        "card_product_id": None,
         "credit_limit": "20000.00",
         "outstanding_signed_debt": "250.00",
         "available_credit": "19750.00",
@@ -155,6 +156,125 @@ def test_accounts_are_computed_and_duplicate_names_conflict(client: TestClient) 
     )
     assert case_insensitive_duplicate.status_code == 409
     assert case_insensitive_duplicate.json()["error"]["code"] == "duplicate_account_name"
+
+
+def test_account_card_product_create_read_update_and_clear(client: TestClient) -> None:
+    bank = create_account(client, "Card Bank", "bank", card_product_id="not-in-catalog-yet")
+    cash = create_account(client, "Card Cash", "cash")
+    card = create_account(client, "Card Choice", "credit_card", credit_limit="1000.00")
+
+    assert bank["card_product_id"] == "not-in-catalog-yet"
+    assert cash["card_product_id"] is None
+    assert card["card_product_id"] is None
+    listed = {row["id"]: row for row in client.get("/api/accounts").json()}
+    assert listed[bank["id"]]["card_product_id"] == "not-in-catalog-yet"
+    assert listed[cash["id"]]["card_product_id"] is None
+    assert listed[card["id"]]["card_product_id"] is None
+    assert client.get(f"/api/accounts/{bank['id']}").json()["card_product_id"] == "not-in-catalog-yet"
+    assert client.get(f"/api/accounts/{card['id']}").json()["card_product_id"] is None
+
+    path = f"/api/accounts/{card['id']}"
+    payload = {
+        "name": "Card Choice",
+        "type": "credit_card",
+        "current_balance": "0.00",
+        "current_debt": "0.00",
+        "credit_limit": "1000.00",
+        "card_product_id": "bdo-visa-classic",
+    }
+    response = client.put(path, json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["card_product_id"] == "bdo-visa-classic"
+    assert client.get(path).json()["card_product_id"] == "bdo-visa-classic"
+
+    # Older clients omit the field; that must preserve the selected card.
+    response = client.put(path, json={key: value for key, value in payload.items() if key != "card_product_id"})
+    assert response.status_code == 200, response.text
+    assert response.json()["card_product_id"] == "bdo-visa-classic"
+
+    response = client.put(path, json={**payload, "card_product_id": None})
+    assert response.status_code == 200, response.text
+    assert response.json()["card_product_id"] is None
+
+
+def test_card_product_id_validation_and_cash_account_rule(client: TestClient) -> None:
+    for invalid in ["BDO Visa", "bdo--visa", "x" * 65, 42]:
+        response = client.post(
+            "/api/accounts",
+            json={"name": f"Invalid {str(invalid)[:12]}", "type": "bank", "card_product_id": invalid},
+        )
+        assert response.status_code == 422
+        assert response.json() == {
+            "error": {
+                "code": "invalid_field",
+                "message": "Choose a card from the list.",
+                "field": "card_product_id",
+            }
+        }
+
+    create_cash = client.post(
+        "/api/accounts",
+        json={"name": "Cash With Card", "type": "cash", "card_product_id": "bdo-visa-classic"},
+    )
+    assert create_cash.status_code == 422
+    assert create_cash.json()["error"] == {
+        "code": "invalid_field",
+        "message": "Cash accounts don't have a card.",
+        "field": "card_product_id",
+    }
+
+    cash = create_account(client, "Cash Without Card", "cash")
+    update_cash = client.put(
+        f"/api/accounts/{cash['id']}",
+        json={
+            "name": cash["name"],
+            "type": "cash",
+            "current_balance": "0.00",
+            "current_debt": "0.00",
+            "credit_limit": None,
+            "card_product_id": "bdo-visa-classic",
+        },
+    )
+    assert update_cash.status_code == 422
+    assert update_cash.json()["error"] == {
+        "code": "invalid_field",
+        "message": "Cash accounts don't have a card.",
+        "field": "card_product_id",
+    }
+
+
+def test_changing_card_product_does_not_change_financial_values(client: TestClient) -> None:
+    bank = create_account(client, "Choice Bank", "bank", opening_balance="1000.00")
+    card = create_account(client, "Choice Card", "credit_card", opening_debt="100.00", credit_limit="1000.00")
+    create_transaction(client, bank["id"], category_id(client, "Salary", "income"), "50.00")
+    create_transaction(client, card["id"], category_id(client, "Food", "expense"), "30.00")
+    create_payment(client, bank["id"], card["id"], "10.00")
+
+    def financial_snapshot() -> tuple[dict[str, tuple[object, ...]], dict[str, str]]:
+        accounts = client.get("/api/accounts").json()
+        positions = {
+            row["name"]: tuple(row.get(key) for key in (
+                "balance", "outstanding_signed_debt", "available_credit", "owed", "credit"
+            ))
+            for row in accounts
+        }
+        return positions, client.get("/api/summary", params={"month": "2026-10"}).json()
+
+    before = financial_snapshot()
+    for product_id in ("unknown-but-valid-id", None):
+        update = client.put(
+            f"/api/accounts/{card['id']}",
+            json={
+                "name": "Choice Card",
+                "type": "credit_card",
+                "current_balance": "0.00",
+                "current_debt": "120.00",
+                "credit_limit": "1000.00",
+                "card_product_id": product_id,
+            },
+        )
+        assert update.status_code == 200, update.text
+        assert financial_snapshot() == before
 
 
 def test_transaction_and_payment_crud_and_server_summaries(client: TestClient) -> None:

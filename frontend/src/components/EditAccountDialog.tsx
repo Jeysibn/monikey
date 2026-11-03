@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-import { AccountForm } from '@/components/AccountForm'
+import { AccountForm, type CardChoice } from '@/components/AccountForm'
 import { InlineNotice } from '@/components/InlineNotice'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { DataSource } from '@/dataSource'
 import type { AccountValues } from '@/lib/accountForm'
 import type { LedgerSnapshot } from '@/types'
+import { accountCardProduct } from '@/wallet/walletModel'
+import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 
 type LoadState =
   | { id: number; status: 'loading' }
@@ -18,6 +20,7 @@ export function EditAccountDialog({
   accountId,
   source,
   snapshot,
+  walletPreferences,
   onSubmit,
   onOpenChange,
   onClosed,
@@ -25,7 +28,8 @@ export function EditAccountDialog({
   accountId: number | null
   source: DataSource
   snapshot: LedgerSnapshot
-  onSubmit: (id: number, values: AccountValues) => Promise<void>
+  walletPreferences: WalletPreferencesV1
+  onSubmit: (id: number, values: AccountValues, card: CardChoice) => Promise<void>
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
 }) {
@@ -79,9 +83,13 @@ export function EditAccountDialog({
             snapshot={snapshot}
             initial={current.values}
             nameRef={nameRef}
+            initialProductId={(() => {
+              const account = snapshot.accounts.find((item) => item.id === current.id)
+              return account ? accountCardProduct(account, walletPreferences)?.id ?? null : null
+            })()}
             onDirty={() => setDirty(true)}
             onSavingChange={setSaving}
-            onSubmit={(values) => onSubmit(current.id, values)}
+            onSubmit={(values, card) => onSubmit(current.id, values, card)}
             onCancel={() => onOpenChange(false)}
           />
         ) : (

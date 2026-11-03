@@ -16,22 +16,36 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
 
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox", "--disable-gpu"] });
-  const errors = [], external = [];
+  const errors = [], external = [], artRequests = [];
   const safe = async fn => { try { await fn(); } catch (e) { check("section aborted: " + String(e.message).split("\n")[0].slice(0, 220), false); } };
   /* Opens the app and goes to Accounts through the real navigation. */
-  async function open(width, { query = "", height = 900, stay = false } = {}) {
+  async function open(width, { query = "", height = 900, stay = false, walletView = "list", maribankConcept = false, mayaConcept = false, generatedConcepts = false, bdoConcept = false, bdoDebitConcept = false } = {}) {
     const ctx = await browser.newContext({ viewport: { width, height } });
+    if (maribankConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "2": { artworkId: "concept-maribank-generated" } } })));
+    if (mayaConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "4": { artworkId: "concept-maya-visa-platinum-generated" } } })));
+    if (generatedConcepts) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: {
+      "2": { artworkId: "concept-gotyme-visa-generated" },
+      "3": { artworkId: "concept-gcash-visa-debit-generated" },
+      "4": { artworkId: "concept-unionbank-rewards-visa-platinum-generated" },
+      "5": { artworkId: "concept-atome-credit-card-black-generated" },
+    } })));
+    if (bdoConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "5": { artworkId: "concept-bdo-visa-generated" } } })));
+    if (bdoDebitConcept) await ctx.addInitScript(() => localStorage.setItem("monikey.walletPreferences", JSON.stringify({ version: 1, byAccountId: { "2": { artworkId: "concept-bdo-debit-mastercard-generated" } } })));
     const page = await ctx.newPage();
     page.on("pageerror", e => errors.push(`pageerror@${width}${query}: ${e.message}`));
     page.on("console", m => { if (m.type() === "error" || m.type() === "warning") errors.push(`console.${m.type()}@${width}${query}: ${m.text().slice(0, 140)}`); });
-    page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); });
+    page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); if (new URL(u).pathname.startsWith("/card-art/")) artRequests.push(new URL(u).pathname); });
     await page.goto(BASE + query); await page.evaluate(() => document.fonts.ready);
     page.W = width; page.big = width >= 768;
-    if (!stay) await nav(page, "Accounts");
+    if (!stay) {
+      await nav(page, "Accounts");
+      await page.getByRole("group", { name: "Account display" }).getByRole("button", { name: walletView === "cards" ? "Cards" : "List" }).click();
+    }
     return page;
   }
   const nav = async (p, name) => { await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100); };
-  const R = { have: '[aria-labelledby="money-you-have-title"]', owe: '[aria-labelledby="money-you-owe-title"]' };
+  // List view keeps the two sections; Cards view shows one grid (liquid accounts first, then credit cards).
+  const R = { have: '[aria-labelledby="money-you-have-title"]', owe: '[aria-labelledby="money-you-owe-title"]', grid: '[aria-labelledby="all-accounts-title"]' };
   const read = async p => p.evaluate(() => {
     const t = e => e.innerText.trim().replace(/\s+/g, " "); // visible text, so adjacent blocks are separated
     const have = document.querySelector('[aria-labelledby="money-you-have-title"]');
@@ -48,6 +62,128 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     };
   });
   const countVisible = (p, text) => p.evaluate(text => [...document.querySelectorAll("button")].filter(b => { const r = b.getBoundingClientRect(); const s = getComputedStyle(b); return new RegExp(text).test(b.textContent + (b.getAttribute("aria-label") || "")) && r.width > 0 && r.height > 0 && s.display !== "none"; }).length, text);
+
+  /* ------------------------------------------------ wallet gallery */
+  group = "Wallet gallery and list toggle";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards" });
+    const haveCards = p.locator(`${R.grid} ul > li:nth-child(-n+3)`);
+    const oweCards = p.locator(`${R.grid} ul > li:nth-child(n+4)`);
+    eq("Cards view keeps the same three liquid accounts", await haveCards.count(), 3);
+    eq("Cards view keeps both credit cards", await oweCards.count(), 2);
+    const faceSizes = await p.evaluate(({ grid }) => ["1", "4"].map(n => {
+      const rect = document.querySelector(`${grid} ul > li:nth-child(${n}) button[aria-label^="View details for"]`).parentElement.getBoundingClientRect();
+      return [Math.round(rect.width), Math.round(rect.height)];
+    }), R);
+    check("all card types use the same Maya-sized face", faceSizes[0][0] === faceSizes[1][0] && faceSizes[0][1] === faceSizes[1][1], JSON.stringify(faceSizes));
+    const gridText = (await p.locator(R.grid).innerText()).replace(/\s+/g, " ");
+    check("Cards view mixes every account in one grid, with no type captions under the cards", /Cash on hand/.test(gridText) && /Blue Card/.test(gridText) && !/Bank account|Credit card|E-wallet/.test(gridText), gridText);
+    const faceText = await p.evaluate(({ grid }) => {
+      const text = element => element?.innerText.replace(/\s+/g, " ") || "";
+      return {
+        cash: text(document.querySelector(`${grid} li:nth-child(1) button[aria-label^="View details for"]`)),
+        card: text(document.querySelector(`${grid} li:nth-child(4) button[aria-label^="View details for"]`)),
+      };
+    }, R);
+    check("the MoniKey card carries its account name and the balance bottom-left", /Cash on hand Balance ₱2,350\.00/i.test(faceText.cash), faceText.cash);
+    check("credit-card face shows available credit, the limit line, and the share used", /Blue Card Available credit ₱35,750\.00 29% used/i.test(faceText.card), faceText.card);
+    check("credit-card face names available credit, share used and limit for screen readers", await oweCards.nth(0).getByRole("button", { name: /Available credit ₱35,750\.00, 29% used, ₱50,000\.00 limit/ }).count() === 1);
+    const banner = (await p.locator("#net-position-title").locator("xpath=ancestor::*[contains(@class,'rounded-card')][1]").innerText()).replace(/\s+/g, " ");
+    check("net-position banner shows net, money you have and money you owe", /Net position ₱[\d,.]+/.test(banner) && /Money you have ₱54,196\.25/.test(banner) && /Money you owe ₱21,050\.00 owed/.test(banner), banner);
+    const lineRatio = await oweCards.nth(0).locator('button[aria-label^="View details for"] [aria-hidden="true"] > span').evaluate(fill => fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width);
+    check("credit-card limit line fills to the owed share of the limit (28.5%)", Math.abs(lineRatio - 0.285) < 0.02, lineRatio.toFixed(3));
+    const menu = haveCards.nth(0).locator('summary[aria-label="Card actions for Cash on hand"]');
+    await menu.click();
+    check("three-dot card menu retains the existing edit action", await haveCards.nth(0).getByRole("button", { name: "Edit account" }).isVisible());
+    await p.keyboard.press("Escape");
+    const detailButton = haveCards.nth(1).getByRole("button", { name: /View details for Main Savings/ });
+    await detailButton.click();
+    const details = p.getByRole("dialog");
+    check("clicking a card opens full account details", /Main Savings/.test(await details.innerText()) && /Bank account/.test(await details.innerText()) && /₱48,725\.50/.test(await details.innerText()));
+    await p.keyboard.press("Escape");
+    // Radix can move focus back one frame after the dialog closes, so wait for it instead of reading it instantly.
+    const focusBack = await detailButton.evaluate(el => new Promise(done => { const end = Date.now() + 1000; const tick = () => document.activeElement === el ? done(true) : Date.now() > end ? done(false) : requestAnimationFrame(tick); tick(); }));
+    check("Escape closes details and restores focus to the card", focusBack);
+    await oweCards.nth(0).locator('summary[aria-label="Card actions for Blue Card"]').click();
+    check("credit card menu retains its existing Pay card action", await p.getByRole("button", { name: "Pay card" }).isEnabled());
+    await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "List" }).click();
+    const listed = (await p.locator(R.have).innerText()).replace(/\s+/g, " ");
+    check("List returns to the existing account rows without changing amounts", /Main Savings.*₱48,725\.50/.test(listed) && /GCash.*₱3,120\.75/.test(listed));
+    await p.context().close();
+  });
+
+  group = "Maya Visa Platinum concept on a credit card";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", mayaConcept: true });
+    const blueCard = p.locator(`${R.grid} ul > li`).nth(3);
+    const face = blueCard.getByRole("button", { name: /View details for Blue Card/ });
+    const faceText = (await face.innerText()).replace(/\s+/g, " ");
+    check("a card with a saved Maya choice shows available credit, share used and the account name on the neutral card", /Available credit ₱35,750\.00 29% used/i.test(faceText) && /Blue Card/.test(faceText), faceText);
+    const dimensions = await face.locator("xpath=..").locator("img").evaluate(img => ({ complete: img.complete, width: img.naturalWidth, height: img.naturalHeight }));
+    check("the neutral MoniKey artwork loads (no issuer image)", dimensions.complete && dimensions.width > 0, JSON.stringify(dimensions));
+    eq("the card image is the MoniKey default", await face.locator("xpath=..").locator("img").evaluate(img => new URL(img.src).pathname), "/card-art/monikey-default.svg");
+    check("the neutral card carries the account name and no issuer name", /Blue Card/.test(await blueCard.innerText()) && !/Maya|Visa/.test(await blueCard.innerText()));
+    await face.click();
+    const dialog = p.getByRole("dialog");
+    check("Maya card details show name, type, available credit and limit", /Blue Card/.test(await dialog.innerText()) && /Credit card/.test(await dialog.innerText()) && /₱35,750\.00/.test(await dialog.innerText()) && /₱50,000\.00/.test(await dialog.innerText()));
+    await p.keyboard.press("Escape");
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-maya-card-face.png"), fullPage: true });
+    await p.context().close();
+  });
+
+  group = "Concept account details on the card face";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", maribankConcept: true });
+    const mainSavings = p.locator(`${R.grid} ul > li`).nth(1);
+    const face = mainSavings.getByRole("button", { name: /View details for Main Savings/ });
+    const faceText = (await face.innerText()).replace(/\s+/g, " ");
+    check("a saved MariBank choice shows the balance on the neutral card, with the account name", /Balance ₱48,725\.50/i.test(faceText) && /Main Savings/.test(faceText) && !/MariBank/.test(faceText), faceText);
+    check("no issuer name is claimed on the card", !/MariBank/.test(await mainSavings.innerText()));
+    await face.click();
+    check("MariBank details appear in the popup", /Main Savings/.test(await p.getByRole("dialog").innerText()) && /Bank account/.test(await p.getByRole("dialog").innerText()) && /₱48,725\.50/.test(await p.getByRole("dialog").innerText()));
+    await p.keyboard.press("Escape");
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-maribank-card-face.png"), fullPage: true });
+    await p.context().close();
+  });
+
+  group = "Saved card choices (including the retired Atome ID) draw the neutral card";
+  await safe(async () => {
+    const p = await open(1280, { walletView: "cards", generatedConcepts: true });
+    const checks = [
+      { index: 1, name: "Main Savings", amount: "₱48,725.50", src: "/card-art/monikey-default.svg" },
+      { index: 2, name: "GCash", amount: "₱3,120.75", src: "/card-art/monikey-default.svg" },
+      { index: 3, name: "Blue Card", amount: "₱35,750.00", src: "/card-art/monikey-default.svg" },
+      { index: 4, name: "Everyday Card", amount: "₱23,200.00", src: "/card-art/monikey-default.svg" },
+    ];
+    for (const item of checks) {
+      const account = p.locator(`${R.grid} ul > li`).nth(item.index);
+      const face = account.getByRole("button", { name: new RegExp(`View details for ${item.name}`) });
+      const img = face.locator("xpath=..").locator("img");
+      const dimensions = await img.evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+      check(`${item.name} uses the neutral MoniKey artwork`, dimensions.src === item.src && dimensions.complete && dimensions.width > 0, JSON.stringify(dimensions));
+      const faceText = (await face.innerText()).replace(/\s+/g, " ");
+      check(`${item.name} face keeps the current amount visible and names the account`, faceText.includes(item.amount) && faceText.includes(item.name), faceText);
+      check(`${item.name} claims no issuer or product name`, !/GoTyme|GCash Visa|UnionBank|Atome|Rewards/.test((await account.innerText()).replace(item.name, "")));
+    }
+    const values = await p.evaluate(() => [...document.querySelectorAll('[aria-labelledby="all-accounts-title"] li')].map(item => item.innerText.replace(/\s+/g, " ")));
+    check("concept selection preserves account amounts and credit details", /₱48,725\.50/.test(values[1]) && /₱3,120\.75/.test(values[2]) && /₱35,750\.00 29% used/i.test(values[3]) && /₱23,200\.00 23% used/i.test(values[4]), values.join(" | "));
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-generated-concepts.png"), fullPage: true });
+    await p.context().close();
+
+    const bdo = await open(1280, { walletView: "cards", bdoConcept: true });
+    const everyday = bdo.locator(`${R.grid} ul > li`).nth(4);
+    const bdoImage = await everyday.getByRole("button", { name: /View details for Everyday Card/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+    check("Everyday Card with a saved BDO choice uses the neutral artwork and preserves its balance", bdoImage.src === "/card-art/monikey-default.svg" && bdoImage.complete && bdoImage.width > 0 && /₱23,200\.00/.test(await everyday.innerText()), JSON.stringify(bdoImage));
+    if (SHOTS) await bdo.screenshot({ path: path.join(SHOTS, "accounts-bdo-concept.png"), fullPage: true });
+    await bdo.context().close();
+
+    const debit = await open(1280, { walletView: "cards", bdoDebitConcept: true });
+    const main = debit.locator(`${R.grid} ul > li`).nth(1);
+    const debitImage = await main.getByRole("button", { name: /View details for Main Savings/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
+    check("Main Savings with a saved BDO debit choice uses the neutral artwork and preserves its balance", debitImage.src === "/card-art/monikey-default.svg" && debitImage.complete && debitImage.width > 0 && /₱48,725\.50/.test(await main.innerText()), JSON.stringify(debitImage));
+    if (SHOTS) await debit.screenshot({ path: path.join(SHOTS, "accounts-bdo-debit-concept.png"), fullPage: true });
+    await debit.context().close();
+  });
 
   /* ------------------------------------------------ values */
   group = "Accounts values (default ledger)";
@@ -74,21 +210,94 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.context().close();
   });
 
+  for (const W of [320, 360, 375, 768, 1024, 1280, 1440]) {
+    group = `Wallet gallery layout ${W}px`;
+    await safe(async () => {
+      const p = await open(W, { walletView: "cards", height: W < 768 ? 800 : 900 });
+      const metrics = await p.evaluate(() => {
+        const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none"; };
+        const images = [...document.querySelectorAll('[aria-labelledby="all-accounts-title"] img')];
+        const smallControls = [...document.querySelectorAll('[aria-label="Account display"] button, [aria-labelledby="all-accounts-title"] li button, [aria-labelledby="all-accounts-title"] li summary')]
+          .filter(visible)
+          .filter(e => e.getBoundingClientRect().height < 43.5)
+          .map(e => e.textContent.trim().slice(0, 20));
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: innerWidth,
+          imageCount: images.length,
+          imagesHaveSize: images.every(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }),
+          smallControls,
+        };
+      });
+      check("no horizontal overflow", metrics.scrollWidth <= metrics.viewportWidth, `${metrics.scrollWidth} / ${metrics.viewportWidth}`);
+      eq("all five fictional accounts render artwork", metrics.imageCount, 5);
+      check("card artwork has visible dimensions", metrics.imagesHaveSize);
+      check("phone controls meet 44px targets", W >= 768 || metrics.smallControls.length === 0, metrics.smallControls.join(", ") || "ok");
+      await p.context().close();
+    });
+  }
+
+  group = "Add account card picker";
+  await safe(async () => {
+    const p = await open(390, { walletView: "cards" });
+    await p.getByRole("button", { name: "Add account" }).first().click();
+    const dialog = p.getByRole("dialog");
+    await dialog.locator("label", { hasText: /^Card$/ }).click();
+    eq("credit cards offer each issuer plus Other", await dialog.locator('input[name="aa-issuer"]').count(), 5);
+    check("Atome is not offered", !/Atome/.test(await dialog.innerText()));
+    await dialog.locator("label", { hasText: /^BDO$/ }).click();
+    eq("BDO lists all four of its credit cards", await dialog.locator('input[name="aa-card-product"]').count(), 4);
+    await dialog.locator("label", { hasText: "BDO Visa Classic" }).click();
+    eq("picking a card fills an empty name", await p.locator("#aa-name").inputValue(), "BDO Visa Classic");
+    check("the picker says the cards use MoniKey's design and the name is only a label", /Cards use MoniKey.s own design\. The name is a label; it isn.t the issuer.s official card design\./.test(await dialog.innerText()));
+    eq("every product tile shows the neutral artwork", await dialog.locator('input[name="aa-card-product"] + span img').evaluateAll(imgs => [...new Set(imgs.map(i => new URL(i.src).pathname))].join(",")), "/card-art/monikey-default.svg");
+    await dialog.locator("label", { hasText: /^Bank$/ }).first().click();
+    eq("changing type clears the filled-in name", await p.locator("#aa-name").inputValue(), "");
+    await dialog.locator("label", { hasText: /^MariBank$/ }).click();
+    eq("a provider with one card selects it straight away", await dialog.locator('input[name="aa-card-product"]:checked').getAttribute("value"), "maribank-debit");
+    await p.locator("#aa-balance").fill("1500.00");
+    await dialog.locator('button[type="submit"]').click();
+    await p.waitForFunction(() => document.querySelector("#aa-balance") === null);
+    const added = p.locator(`${R.grid} ul > li`, { has: p.locator('summary[aria-label="Card actions for MariBank Debit Card"]') });
+    const src = await added.locator("img").first().evaluate(img => new URL(img.src).pathname);
+    eq("the new account shows the neutral card (the choice is stored as a label)", src, "/card-art/monikey-default.svg");
+    await added.locator('summary[aria-label^="Card actions for"]').click();
+    await added.getByRole("button", { name: "Edit account" }).click();
+    await p.locator("#aa-name").waitFor();
+    const editText = await p.getByRole("dialog").innerText();
+    check("Edit preselects the account's provider and card", await p.locator('input[name="aa-issuer"]:checked').getAttribute("value") === "MariBank" && await p.locator('input[name="aa-card-product"]:checked').getAttribute("value") === "maribank-debit", editText.slice(0, 200));
+    await p.getByRole("dialog").locator("label", { hasText: /^GoTyme$/ }).click();
+    eq("changing the provider in Edit keeps the typed name", await p.locator("#aa-name").inputValue(), "MariBank Debit Card");
+    await p.getByRole("button", { name: "Save changes" }).click();
+    await p.waitForFunction(() => document.querySelector("#aa-name") === null);
+    const changed = await added.locator("img").first().evaluate(img => new URL(img.src).pathname);
+    eq("an existing account's card can be changed in Edit, still on the neutral card", changed, "/card-art/monikey-default.svg");
+    await added.locator('summary[aria-label^="Card actions for"]').click();
+    await added.getByRole("button", { name: "Edit account" }).click();
+    await p.locator("#aa-name").waitFor();
+    eq("the changed choice persists when Edit is reopened", await p.locator('input[name="aa-card-product"]:checked').getAttribute("value"), "gotyme-visa-debit");
+    await p.keyboard.press("Escape");
+    if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-add-card-picker.png"), fullPage: true });
+    await p.context().close();
+  });
+
   /* ------------------------------------------------ layout */
   for (const W of [360, 375, 768, 1280]) {
     group = `Accounts layout ${W}px`;
     await safe(async () => {
-      const p = await open(W, { height: W >= 768 ? 900 : 800 });
+      const p = await open(W, { height: W >= 768 ? 900 : 800, walletView: "cards" });
       const m = await p.evaluate(() => {
         const vis = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== "none"; };
         const rect = e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top + scrollY), w: Math.round(r.width), h: Math.round(r.height), r: Math.round(r.right) }; };
-        const have = rect(document.querySelector('[aria-labelledby="money-you-have-title"]'));
-        const owe = rect(document.querySelector('[aria-labelledby="money-you-owe-title"]'));
+        const banner = rect(document.querySelector("#net-position-title").closest("[class*=rounded-card]"));
+        const grid = rect(document.querySelector('[aria-labelledby="all-accounts-title"]'));
         const h1 = rect(document.querySelector("h1"));
         const addAcct = [...document.querySelectorAll("button")].filter(b => /^Add account$/.test(b.textContent.trim()) && vis(b)).map(rect);
-        const bad = []; document.querySelectorAll("main li *, main section *, main [role=region] *").forEach(e => { if (!vis(e) || e.children.length || !/₱/.test(e.textContent)) return; const cs = getComputedStyle(e), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3, r = e.getBoundingClientRect(), box = e.closest("[class*=rounded-card]").getBoundingClientRect(); if (e.tagName === "SPAN" || e.tagName === "DIV") { if (r.height > lh * 1.6 && /^₱|^−₱/.test(e.textContent.trim()) && e.textContent.trim().length < 16) bad.push("wraps: " + e.textContent.trim()); if (r.right > box.right + 0.5) bad.push("overflows: " + e.textContent.trim()); } });
+        const bad = []; document.querySelectorAll("main li *, main section *, main [role=region] *").forEach(e => { if (!vis(e) || e.children.length || !/₱/.test(e.textContent)) return; const cs = getComputedStyle(e), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3, r = e.getBoundingClientRect(), box = (e.closest("[class*=rounded-card]") || e.closest("li")).getBoundingClientRect(); if (e.tagName === "SPAN" || e.tagName === "DIV") { if (r.height > lh * 1.6 && /^₱|^−₱/.test(e.textContent.trim()) && e.textContent.trim().length < 16) bad.push("wraps: " + e.textContent.trim()); if (r.right > box.right + 0.5) bad.push("overflows: " + e.textContent.trim()); } });
         const small = [...document.querySelectorAll("main button, nav button")].filter(e => vis(e) && e.getBoundingClientRect().height < 43.5).map(e => e.textContent.trim().slice(0, 16));
-        return { sw: document.documentElement.scrollWidth, iw: innerWidth, have, owe, h1, addAcct, bad, small, mainRight: Math.round(document.querySelector("main > div").getBoundingClientRect().right), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width), primaries: [...document.querySelectorAll("button")].filter(b => vis(b) && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length };
+        const mainSavings = document.querySelector('[aria-labelledby="all-accounts-title"] ul > li:nth-child(2)');
+        const mainSavingsArt = mainSavings?.querySelector('button[aria-label^="View details for"]')?.parentElement;
+        return { sw: document.documentElement.scrollWidth, iw: innerWidth, banner, grid, h1, addAcct, bad, small, mainRight: Math.round(document.querySelector("main > div").getBoundingClientRect().right), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width), artW: mainSavingsArt ? Math.round(mainSavingsArt.getBoundingClientRect().width) : 0, primaries: [...document.querySelectorAll("button")].filter(b => vis(b) && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length };
       });
       check("no horizontal overflow", m.sw <= m.iw, `scrollWidth ${m.sw} / viewport ${m.iw}`);
       eq("exactly one visible 'Add account' button (no duplicate)", m.addAcct.length, 1);
@@ -102,13 +311,8 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
       eq("one filled primary action visible", m.primaries, 1);
       check("peso amounts stay on one line and inside their card", m.bad.length === 0, m.bad.join("; ") || "ok");
       check("touch targets ≥44px high below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
-      if (W >= 1024) {
-        const cols = (m.mainW - 24) / 2;
-        check(`two equal columns of ${Math.round(cols)}px, both starting at the same top`, Math.abs(m.have.w - cols) <= 1 && Math.abs(m.owe.w - cols) <= 1 && m.have.y === m.owe.y && m.have.x < m.owe.x, JSON.stringify({ have: m.have, owe: m.owe, mainW: m.mainW }));
-        check("columns are NOT stretched to the same height (intentionally unequal)", m.have.h !== m.owe.h, `have ${m.have.h}px vs owe section ${m.owe.h}px`);
-      } else {
-        check("sections stack: Money you have above Money you owe, both full width", m.have.y < m.owe.y && Math.abs(m.have.w - m.mainW) <= 1 && Math.abs(m.owe.w - m.mainW) <= 1, JSON.stringify({ have: m.have, owe: m.owe, mainW: m.mainW }));
-      }
+      check("net-position banner sits above the full-width card grid", m.banner.y < m.grid.y && Math.abs(m.banner.w - m.mainW) <= 1 && Math.abs(m.grid.w - m.mainW) <= 1, JSON.stringify({ banner: m.banner, grid: m.grid, mainW: m.mainW }));
+      check("cards are at least the grid minimum (3 per row at 1280, 2 at 768, 1 on phones)", m.artW >= (W >= 768 ? 300 : 280), `artwork width ${m.artW}px at ${W}px viewport`);
       if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `accounts-${W}.png`), fullPage: true });
       await p.context().close();
     });
@@ -133,6 +337,24 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     check("over limit: 'No credit available' and 'Over your limit'", /Everyday Card ₱36,800\.00 owed No credit available Limit ₱30,000\.00 · Over your limit/.test(f.oweText), f.oweText.slice(f.oweText.indexOf("Everyday")).slice(0, 200));
     check("over limit: the track is full (100%)", await p.locator(`${R.owe} [role=img] > div`).nth(1).evaluate(e => e.style.width) === "100%");
     check("over limit: Pay card is still enabled (there is debt to pay)", await p.getByRole("button", { name: "Pay card, Everyday Card" }).isEnabled());
+    await p.getByRole("group", { name: "Account display" }).getByRole("button", { name: "Cards" }).click();
+    const everydayCard = p.locator(`${R.grid} ul > li`).nth(4);
+    const everydayFaceButton = everydayCard.getByRole("button", { name: /View details for Everyday Card/ });
+    const everydayFace = everydayFaceButton;
+    let everydayFaceText = (await everydayFace.innerText()).replace(/\s+/g, " ");
+    let everydayCardText = (await everydayCard.innerText()).replace(/\s+/g, " ");
+    check("over-limit face says how far over the limit it is and the share used", /Everyday Card Over limit by ₱6,800\.00 123% used/i.test(everydayFaceText), everydayFaceText);
+    await everydayCard.locator('summary[aria-label="Card actions for Everyday Card"]').click();
+    await everydayCard.getByRole("button", { name: "Edit account" }).click();
+    await p.locator("#aa-owed").waitFor();
+    await p.locator("#aa-owed").fill("30000.00");
+    await p.getByRole("button", { name: "Save changes" }).click();
+    await p.waitForFunction(() => document.querySelector("#aa-owed") === null);
+    await p.waitForTimeout(150);
+    everydayFaceText = (await everydayFace.innerText()).replace(/\s+/g, " ");
+    everydayCardText = (await everydayCard.innerText()).replace(/\s+/g, " ");
+    check("a card at its limit shows ₱0.00 available and 100% used", /Available credit ₱0\.00 100% used/i.test(everydayFaceText), everydayFaceText);
+    check("a card at its limit is not called over the limit", !/Over limit/i.test(everydayCardText), everydayCardText);
     await p.context().close();
     p = await open(1280, { query: "?demo=negative" }); f = await read(p);
     check("negative: GCash shows −₱879.25 with a 'Below zero' flag", /^GCash E-wallet Below zero −₱879\.25$/.test(f.rows[2]), f.rows[2]);
@@ -225,6 +447,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     }
   });
 
+  check("no request for any card image other than the MoniKey default", artRequests.every(path => path === "/card-art/monikey-default.svg") && artRequests.length > 0, [...new Set(artRequests)].join(", "));
   check("no request left the page's own origin", external.length === 0, external.length ? external.slice(0, 3).join(", ") : "all requests same-origin");
   check("no console errors or warnings, no uncaught exceptions", errors.length === 0, errors.slice(0, 3).join(" || ") || "none");
 

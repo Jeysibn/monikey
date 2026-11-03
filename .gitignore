@@ -8,6 +8,8 @@ test-results/
 blob-report/
 /.impeccable/
 /.taste-skill/
+/frontend/.taste-skill/
+/.artwork-research-downloads/
 
 # TypeScript and frontend tool output
 *.tsbuildinfo

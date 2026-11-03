@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { AccountForm } from '@/components/AccountForm'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import type { AccountValues } from '@/lib/accountForm'
+import type { CardChoice } from '@/components/AccountForm'
 import type { LedgerSnapshot } from '@/types'
 
 /*
@@ -19,7 +20,7 @@ export function AddAccountDialog({
 }: {
   initial: AccountValues | null // what the form starts with; null while the dialog is closed
   snapshot: LedgerSnapshot
-  onSubmit: (values: AccountValues) => Promise<void>
+  onSubmit: (values: AccountValues, card: CardChoice) => Promise<void>
   onOpenChange: (open: boolean) => void
   onClosed: (event: Event) => void
 }) {

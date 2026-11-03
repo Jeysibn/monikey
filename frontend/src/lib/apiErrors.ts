@@ -7,7 +7,7 @@ import { formatClock } from './time.ts'
  * if any, the problem belongs to. Whatever the status, a 5xx or a request that never got an answer says the
  * same thing: nothing about the server's insides reaches the screen.
  */
-export type WriteContext = 'add-entry' | 'edit-entry' | 'delete-entry' | 'add-account' | 'edit-account'
+export type WriteContext = 'add-entry' | 'edit-entry' | 'delete-entry' | 'add-account' | 'edit-account' | 'save-plan' | 'save-reflection'
 
 export const NO_LONGER_EXISTS = 'That account or category no longer exists. Reload and try again.'
 export const ALREADY_DELETED = 'It was already deleted.'
@@ -31,6 +31,8 @@ const generic = (context: WriteContext): string => {
   if (context === 'delete-entry') return FAILED_DELETE
   if (context === 'add-account') return "Couldn't save. Check your connection and try again. Your account details are still here."
   if (context === 'edit-account') return "Couldn't save. Check your connection and try again. Your changes are still here."
+  if (context === 'save-plan') return "Couldn't save. Check your connection and try again. Your plan is still here."
+  if (context === 'save-reflection') return "Couldn't save. Check your connection and try again. What you wrote is still here."
   return FAILED_SAVE
 }
 
@@ -42,6 +44,8 @@ export function describeWriteError(err: unknown, context: WriteContext): WriteEr
     case 404:
       if (context === 'delete-entry') return new WriteError(ALREADY_DELETED, { gone: true })
       if (context === 'edit-account') return new WriteError('This account no longer exists. Reload and try again.')
+      if (context === 'save-plan') return new WriteError("Kakeibo plans can't be saved on this server yet. Your plan is still here.")
+      if (context === 'save-reflection') return new WriteError("Reflections can't be saved on this server yet. What you wrote is still here.")
       return new WriteError(context === 'edit-entry' ? GONE_ON_EDIT : NO_LONGER_EXISTS)
     case 409:
       return new WriteError(err.message, { field: err.field, inline: err.field !== undefined })

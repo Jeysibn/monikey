@@ -2,9 +2,25 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery,
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
 import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
 import { amountText } from './lib/money.ts'
-import { activityPage, buildSnapshot, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
+import { activityPage, buildSnapshot, kakeiboMonth, kakeiboMonthSnapshot, kakeiboWeek, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
+import { isMonday, parsePlanAmount, parseSavedDeclared, validatePlan, validateReview, validateWeekNotes } from './lib/kakeibo.ts'
 import { getMockData, type DemoScenario } from './mockData.ts'
-import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary, MockData } from './types.ts'
+import type {
+  AccountsSnapshot,
+  ActivityPage,
+  Category,
+  EntryTarget,
+  EntryValues,
+  FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboMonth,
+  KakeiboPlan,
+  KakeiboPlanValues,
+  KakeiboReviewValues,
+  KakeiboWeek,
+  KakeiboWeekNotes,
+  MockData,
+} from './types.ts'
 
 /*
  * The mock behind the DataSource seam. It keeps the fictional ledger in memory, applies writes with the same
@@ -24,13 +40,21 @@ export interface MockOptions {
   failNextWrite?: boolean // the first save, delete or new account fails once (?demo=save-error)
   invalidNextWrite?: boolean // the first save or new account is refused with a 422 and a field (?demo=invalid)
   readFailures?: ReadFailures | null // ?demo=load-error (once), ?demo=flaky (second), ?demo=offline (always)
-  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, summary, activity); all if omitted (?failing=summary)
+  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, summary, activity, kakeibo, kakeibo-plan); all if omitted (?failing=summary)
   writeFailures?: 'always' | null // ?demo=offline: no write goes through
   readDelayMs?: number // ?demo=slow: every read takes this long
   writeDelayMs?: number // ?demo=slow: every write takes this long (long enough to show the "taking longer" notice)
+  failClassifyEvery?: number // ?demo=partial: every n-th expense classification fails, to show a partly failed batch
 }
 
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** The API's ADR-020 checks on a card choice: a catalog-shaped ID, and never on a cash account. */
+function checkCard(type: AccountValues['type'], card: string | null | undefined) {
+  if (card === undefined || card === null) return
+  if (card.length > 64 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(card)) throw new ApiError(422, 'invalid_field', 'Choose a card from the list.', 'card_product_id')
+  if (type === 'cash') throw new ApiError(422, 'invalid_field', "Cash accounts don't have a card.", 'card_product_id')
+}
 
 export function createMockSource({
   scenario = null,
@@ -41,7 +65,9 @@ export function createMockSource({
   writeFailures = null,
   readDelayMs = 0,
   writeDelayMs = 0,
+  failClassifyEvery = 0,
 }: MockOptions = {}): DataSource {
+  let classifications = 0
   let data: MockData = getMockData(scenario)
   let failing = failNextWrite
   let invalid = invalidNextWrite
@@ -113,6 +139,9 @@ export function createMockSource({
     saveEntry: async (values: EntryValues, target?: EntryTarget): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'amount')
       if (target && !entryExists(data, target)) throw new ApiError(404, 'not_found', GONE_ON_EDIT)
+      // The API's ADR-021 check: only an expense may carry an envelope.
+      const category = data.categories.find((c) => c.id === values.categoryId)
+      if (values.envelope && category?.type !== 'expense') throw new ApiError(422, 'invalid_field', 'Income transactions cannot have a Kakeibo envelope.', 'envelope')
       data = ledgerReducer(data, target ? toUpdateAction(values, target) : toAction(values, nowIso()))
     },
 
@@ -122,15 +151,20 @@ export function createMockSource({
       data = ledgerReducer(data, toDeleteAction(target))
     },
 
-    addAccount: async (values: AccountValues): Promise<void> => {
+    addAccount: async (values: AccountValues, card?: string | null): Promise<number | null> => {
       await beginWrite(FAILED_SAVE, 'name')
       // The API answers 409 for a duplicate name; the mock re-checks so a second tab could not slip one through.
       const taken = validateAccount(values, buildSnapshot(data)).name
       if (taken) throw new ApiError(409, 'duplicate_account_name', taken, 'name')
+      checkCard(values.type, card)
       data = ledgerReducer(data, toAccountAction(values))
+      const created = data.accounts.at(-1)!
+      // Like the API (ADR-020): the card choice is stored with the account.
+      data = { ...data, accounts: data.accounts.map((account) => account.id === created.id ? { ...account, cardProductId: card ?? null } : account) }
+      return created.id
     },
 
-    updateAccount: async (id: number, values: AccountValues): Promise<void> => {
+    updateAccount: async (id: number, values: AccountValues, card?: string | null): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'name')
       const existing = data.accounts.find((account) => account.id === id)
       if (!existing) throw new ApiError(404, 'not_found', 'Account not found.')
@@ -149,11 +183,99 @@ export function createMockSource({
         openingBalance: balance?.ok ? existing.openingBalance + balance.centavos - liquidBalance(existing, data) : 0,
         openingDebt: owed?.ok ? existing.openingDebt + owed.centavos - cardStatus(existing, data).signedDebt : 0,
         creditLimit: limit?.ok ? limit.centavos : null,
+        cardProductId: card === undefined ? existing.cardProductId ?? null : card, // omitted keeps the stored card
       }
+      checkCard(values.type, updated.cardProductId)
       if (Math.max(Math.abs(updated.openingBalance), Math.abs(updated.openingDebt)) > 999_999_999_999) {
         throw new ApiError(422, 'invalid_field', 'This correction exceeds the supported account range.', values.type === 'credit_card' ? 'owed' : 'balance')
       }
       data = { ...data, accounts: data.accounts.map((account) => account.id === id ? updated : account) }
+    },
+
+    loadKakeiboMonth: (month: string, signal: AbortSignal): Promise<KakeiboMonth> =>
+      read('kakeibo', `kakeibo:${month}`, signal, () => kakeiboMonth(data, month)),
+
+    loadKakeiboPlan: (month: string, signal: AbortSignal): Promise<KakeiboPlan | null> =>
+      read('kakeibo-plan', `kakeibo-plan:${month}`, signal, () => kakeiboMonth(data, month).plan),
+
+    saveKakeiboPlan: async (month: string, values: KakeiboPlanValues): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'plannedIncome')
+      // The API refuses a negative amount or more than two decimal places with a 422 on that field.
+      const invalid = Object.keys(validatePlan(values))[0]
+      if (invalid) throw new ApiError(422, 'invalid_field', 'The request could not be validated.', invalid)
+      const money = (text: string) => {
+        const parsed = parsePlanAmount(text)
+        return parsed.ok ? parsed.centavos : 0
+      }
+      const plan: KakeiboPlan = {
+        month,
+        plannedIncome: money(values.plannedIncome),
+        allocatedStartingFunds: money(values.allocatedStartingFunds),
+        savingsTarget: money(values.savingsTarget),
+        priorPeriodDebtReserve: money(values.priorPeriodDebtReserve),
+        limits: { needs: money(values.needsLimit), wants: money(values.wantsLimit), culture: money(values.cultureLimit), unexpected: money(values.unexpectedLimit) },
+        monthlyIntention: values.monthlyIntention.trim() || null,
+      }
+      data = { ...data, kakeiboPlans: [...(data.kakeiboPlans ?? []).filter((p) => p.month !== month), plan] }
+    },
+
+    saveKakeiboReview: async (month: string, values: KakeiboReviewValues): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'savedDeclared')
+      const invalid = Object.keys(validateReview(values))[0]
+      if (invalid) throw new ApiError(422, 'invalid_field', 'The request could not be validated.', invalid)
+      const saved = parseSavedDeclared(values.savedDeclared)
+      const text = (value: string) => value.trim() || null
+      const review = {
+        month,
+        savedDeclared: saved.ok ? saved.centavos : null,
+        available: text(values.available),
+        savings: text(values.savings),
+        change: text(values.change),
+        appreciated: text(values.appreciated),
+        surprise: text(values.surprise),
+        lesson: text(values.lesson),
+        reviewedAt: nowIso(),
+        snapshot: kakeiboMonthSnapshot(data, month), // taken by the "server", never sent by the screen
+      }
+      data = { ...data, kakeiboReviews: [...(data.kakeiboReviews ?? []).filter((r) => r.month !== month), review] }
+    },
+
+    loadKakeiboWeek: (weekStart: string, signal: AbortSignal): Promise<KakeiboWeek> =>
+      read('kakeibo-week', `kakeibo-week:${weekStart}`, signal, () => {
+        if (!isMonday(weekStart)) throw new ApiError(422, 'invalid_field', 'Week start must be a Monday.', 'weekStart')
+        return kakeiboWeek(data, weekStart)
+      }),
+
+    saveKakeiboWeek: async (weekStart: string, notes: KakeiboWeekNotes): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'surprise')
+      if (!isMonday(weekStart)) throw new ApiError(422, 'invalid_field', 'Week start must be a Monday.', 'weekStart')
+      const invalid = Object.keys(validateWeekNotes(notes))[0]
+      if (invalid) throw new ApiError(422, 'invalid_field', 'The request could not be validated.', invalid)
+      // Like the API, the whole set is replaced: a note left blank is cleared.
+      const stored = { weekStart, surprise: notes.surprise.trim(), worthwhile: notes.worthwhile.trim(), nextWeek: notes.nextWeek.trim(), updatedAt: nowIso() }
+      data = { ...data, kakeiboWeekReviews: [...(data.kakeiboWeekReviews ?? []).filter((r) => r.weekStart !== weekStart), stored] }
+    },
+
+    classifyExpense: async (transactionId: number, envelope: KakeiboEnvelope | null): Promise<void> => {
+      await beginWrite(FAILED_SAVE, '')
+      classifications += 1
+      if (failClassifyEvery > 0 && classifications % failClassifyEvery === 0) throw new ApiError(500, 'internal_error', 'The mock was told to fail this classification.')
+      const row = data.transactions.find((t) => t.id === transactionId)
+      if (!row) throw new ApiError(404, 'not_found', 'Transaction not found.')
+      if (data.categories.find((c) => c.id === row.categoryId)?.type !== 'expense') {
+        throw new ApiError(422, 'invalid_field', 'Only expense transactions can use this endpoint.', 'envelope')
+      }
+      // Only the envelope changes: amount, account, category, date and note stay exactly as they were.
+      data = { ...data, transactions: data.transactions.map((t) => (t.id === transactionId ? { ...t, envelope } : t)) }
+    },
+
+    setCategoryEnvelope: async (categoryId: number, envelope: KakeiboEnvelope | null): Promise<void> => {
+      await beginWrite(FAILED_SAVE, '')
+      const category = data.categories.find((c) => c.id === categoryId)
+      if (!category) throw new ApiError(404, 'not_found', 'Category not found.')
+      if (category.type !== 'expense' && envelope !== null) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'envelope')
+      // A suggestion only: saved expenses keep their envelopes.
+      data = { ...data, categories: data.categories.map((c) => (c.id === categoryId ? { ...c, defaultEnvelope: envelope } : c)) }
     },
   }
 }

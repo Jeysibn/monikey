@@ -8,6 +8,10 @@ import type {
   Category,
   CategoryType,
   FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboMonth,
+  KakeiboSnapshot,
+  KakeiboWeek,
   LedgerSnapshot,
   MockData,
 } from '../types.ts'
@@ -101,7 +105,7 @@ export function cardStatus(card: Account, data: MockData): CardStatus {
   const signedDebt = signedCardDebt(card, data)
   const creditLimit = card.creditLimit ?? 0
   return {
-    account: { id: card.id, name: card.name, type: card.type }, // no opening values: the API will not send them
+    account: { id: card.id, name: card.name, type: card.type, cardProductId: card.cardProductId ?? null }, // no opening values: the API will not send them
     signedDebt,
     owed: Math.max(signedDebt, 0),
     credit: Math.max(-signedDebt, 0),
@@ -118,7 +122,7 @@ export function liquidAccounts(data: MockData): AccountBalance[] {
     .filter((a) => !isCard(a))
     .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.id - b.id)
     .map((a) => ({
-      account: { id: a.id, name: a.name, type: a.type as AccountBalance['account']['type'] },
+      account: { id: a.id, name: a.name, type: a.type as AccountBalance['account']['type'], cardProductId: a.cardProductId ?? null },
       balance: liquidBalance(a, data),
     }))
 }
@@ -141,6 +145,89 @@ export function summarize(data: MockData, month: string): FinancialSummary {
     netPosition: liquid - sum(cards.map((c) => c.signedDebt)),
     monthIncome: total('income'),
     monthExpenses: total('expense'),
+  }
+}
+
+/**
+ * Kakeibo actuals between two dates (`from` inclusive, `until` exclusive), as the server's kakeibo_actuals works
+ * them out: only expense transactions count, so a card purchase counts once and card payments and transfers
+ * never do; an expense with no envelope is "unclassified" and still part of total expenses.
+ */
+function kakeiboActuals(data: MockData, from: string, until: string): KakeiboSnapshot {
+  const inRange = data.transactions.filter((t) => t.date >= from && t.date < until)
+  const ofType = (type: CategoryType) => inRange.filter((t) => typeOfCategory(data.categories, t.categoryId) === type)
+  const expenses = ofType('expense')
+  const spentOn = (envelope: KakeiboEnvelope | null) => sum(expenses.filter((t) => (t.envelope ?? null) === envelope).map((t) => t.amount))
+  return {
+    actualIncome: sum(ofType('income').map((t) => t.amount)),
+    totalExpenses: sum(expenses.map((t) => t.amount)),
+    unclassified: spentOn(null),
+    envelopes: { needs: spentOn('needs'), wants: spentOn('wants'), culture: spentOn('culture'), unexpected: spentOn('unexpected') },
+  }
+}
+
+const nextMonthStart = (month: string): string => {
+  const [y, m] = month.split('-').map(Number)
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+}
+
+/** The month's actuals in the shape a review snapshot stores. */
+export const kakeiboMonthSnapshot = (data: MockData, month: string): KakeiboSnapshot => kakeiboActuals(data, `${month}-01`, nextMonthStart(month))
+
+const sameSnapshot = (a: KakeiboSnapshot, b: KakeiboSnapshot): boolean =>
+  a.actualIncome === b.actualIncome && a.totalExpenses === b.totalExpenses && a.unclassified === b.unclassified &&
+  (['needs', 'wants', 'culture', 'unexpected'] as const).every((e) => a.envelopes[e] === b.envelopes[e])
+
+/**
+ * The month's Kakeibo report (ADR-021), the mock's stand-in for GET /api/kakeibo/months/{month}/report.
+ * remaining = limit − spent and may be negative; with no plan, limits and remainders are null. A saved review
+ * keeps the snapshot taken when it was saved; `actualsChangedSinceReview` says whether today's totals differ.
+ */
+export function kakeiboMonth(data: MockData, month: string): KakeiboMonth {
+  const actuals = kakeiboMonthSnapshot(data, month)
+  const plan = data.kakeiboPlans?.find((p) => p.month === month) ?? null
+  const envelopes = Object.fromEntries(
+    (['needs', 'wants', 'culture', 'unexpected'] as const).map((envelope) => {
+      const spent = actuals.envelopes[envelope]
+      const limit = plan ? plan.limits[envelope] : null
+      return [envelope, { limit, spent, remaining: limit === null ? null : limit - spent }]
+    }),
+  ) as KakeiboMonth['envelopes']
+  const available = plan ? plan.plannedIncome + plan.allocatedStartingFunds - plan.savingsTarget - plan.priorPeriodDebtReserve : null
+  const limits = plan ? sum(Object.values(plan.limits)) : 0
+  const stored = data.kakeiboReviews?.find((r) => r.month === month) ?? null
+  const review = stored ? (({ month: _month, ...rest }) => rest)(stored) : null
+  return {
+    month,
+    planStatus: plan ? 'saved' : 'not_saved',
+    plan,
+    actualIncome: actuals.actualIncome,
+    availableToAllocate: available,
+    unallocated: available === null ? null : available - limits,
+    envelopes,
+    unclassifiedExpenses: actuals.unclassified,
+    totalExpenses: actuals.totalExpenses,
+    review,
+    actualsChangedSinceReview: stored !== null && !sameSnapshot(stored.snapshot, actuals),
+  }
+}
+
+/** One Monday-to-Sunday week, the mock's stand-in for GET /api/kakeibo/weeks/{monday}. It ignores month edges. */
+export function kakeiboWeek(data: MockData, weekStart: string): KakeiboWeek {
+  const until = new Date(`${weekStart}T00:00:00Z`)
+  until.setUTCDate(until.getUTCDate() + 7)
+  const untilDate = until.toISOString().slice(0, 10)
+  const end = new Date(until)
+  end.setUTCDate(end.getUTCDate() - 1)
+  const actuals = kakeiboActuals(data, weekStart, untilDate)
+  const stored = data.kakeiboWeekReviews?.find((r) => r.weekStart === weekStart)
+  return {
+    weekStart,
+    weekEnd: end.toISOString().slice(0, 10),
+    spending: actuals.envelopes,
+    unclassifiedExpenses: actuals.unclassified,
+    totalExpenses: actuals.totalExpenses,
+    review: stored ? { surprise: stored.surprise, worthwhile: stored.worthwhile, nextWeek: stored.nextWeek, updatedAt: stored.updatedAt } : null,
   }
 }
 
@@ -183,6 +270,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
         categoryId: t.categoryId,
         date: t.date,
         note: t.note ?? '',
+        envelope: t.envelope ?? null,
       },
     })
   }
@@ -304,7 +392,7 @@ export function groupByDate(items: ActivityItem[]): { date: string; items: Activ
  */
 export function buildSnapshot(data: MockData): LedgerSnapshot {
   return {
-    accounts: data.accounts.map(({ id, name, type }) => ({ id, name, type })),
+    accounts: data.accounts.map(({ id, name, type, cardProductId }) => ({ id, name, type, cardProductId: cardProductId ?? null })),
     liquid: liquidAccounts(data),
     cards: cardStatuses(data),
     categories: data.categories,

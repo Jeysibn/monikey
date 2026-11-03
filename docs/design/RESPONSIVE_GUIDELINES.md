@@ -13,7 +13,7 @@ Related: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [
 | base (phone) | 0 | bottom bar | 1 column |
 | `md` (tablet) | 768 | 80px rail | 1 column (blocks full width) |
 | `lg` (desktop) | 1024 | 224px sidebar | 12 columns |
-| `xl` | 1280 | same | content width grows to its 1032 cap |
+| `xl` | 1280 | same | content width grows to its 1440 cap |
 
 No other breakpoints. Write styles for the phone first and add `md:` / `lg:` overrides.
 
@@ -27,7 +27,8 @@ No other breakpoints. Write styles for the phone first and add `md:` / `lg:` ove
 | 768 | rail 80 | 688 | 24 | **640** |
 | 1024 | sidebar 224 | 800 | 24 | **752** |
 | 1280 | sidebar 224 | 1056 | 24 | **1008** |
-| 1440 | sidebar 224 | 1216 | centred | **1032** (cap) |
+| 1440 | sidebar 224 | 1216 | 24 | **1168** |
+| 1920 | sidebar 224 | 1696 | centred | **1440** (cap) |
 
 Gaps: 16 on the phone, 24 from 768 up. Card padding: 20 on the phone, 24 from 768 up. **One gap value** per breakpoint, used horizontally and vertically.
 
@@ -37,7 +38,8 @@ Desktop 12-column arithmetic (gap 24):
 |---|---|---|---|---|---|---|
 | 1024 | 40.67 | 170 | 299.3 | 364 | 428.7 | 7 + 5 = 428.7 + 24 + 299.3 = **752** ✓ ; 6 + 6 = 364 + 24 + 364 = **752** ✓ |
 | 1280 | 62 | 234 | 406 | 492 | 578 | 7 + 5 = 578 + 24 + 406 = **1008** ✓ ; 6 + 6 = 492 + 24 + 492 = **1008** ✓ |
-| 1440 | 64 | 240 | 416 | 504 | 592 | 7 + 5 = 592 + 24 + 416 = **1032** ✓ ; 6 + 6 = 504 + 24 + 504 = **1032** ✓ |
+| 1440 | 75.3 | 274 | 472.7 | 572 | 671.3 | 7 + 5 = 671.3 + 24 + 472.7 = **1168** ✓ ; 6 + 6 = 572 + 24 + 572 = **1168** ✓ |
+| 1920 (cap) | 98 | 342 | 586 | 708 | 830 | 7 + 5 = 830 + 24 + 586 = **1440** ✓ ; 6 + 6 = 708 + 24 + 708 = **1440** ✓ |
 
 (Column = (content − 11 × 24) ÷ 12; span *n* = *n* × column + (*n* − 1) × 24. Verified with a script.)
 
@@ -47,11 +49,11 @@ Desktop 12-column arithmetic (gap 24):
 
 | Viewport | Component | Details |
 |---|---|---|
-| <768 | **Bottom bar** | 68px + `env(safe-area-inset-bottom)`; four equal items (Overview, Activity, Accounts, **+ Add**); icon over label; items ≥44px tall and wide; labels 12px, never hidden. Main content gets matching bottom padding so nothing sits under it. The bar is part of the page, not a floating button. |
-| 768–1023 | **Rail** | 80px; three items, icon over label; the active item's icon sits in a soft-blue pill (`primary-soft`). No Add in the rail — the page header carries it. |
-| ≥1024 | **Sidebar** | 224px; mark + wordmark; three labelled items on a 44px pitch; active = soft-blue pill with `primary-ink` text. |
+| <768 | **Bottom bar** | 68px + `env(safe-area-inset-bottom)`; five equal items (Overview, Activity, Accounts, Kakeibo, **+ Add**); icon over label; items ≥44px tall and ≥57px wide at 320px; labels 12px, never hidden. Main content gets matching bottom padding so nothing sits under it. The bar is part of the page, not a floating button. |
+| 768–1023 | **Rail** | 80px; four items, icon over label; the active item's icon sits in a soft-blue pill (`primary-soft`). No Add in the rail — the page header carries it. |
+| ≥1024 | **Sidebar** | 224px; mark + wordmark; four labelled items on a 44px pitch; active = soft-blue pill with `primary-ink` text. |
 
-Landscape phones (height <500px): the bottom bar stays (4 items need only 64px), dialogs scroll internally, and the page header scrolls away with the content — it is never sticky.
+Landscape phones (height <500px): the bottom bar stays (5 items need only 64px), dialogs scroll internally, and the page header scrolls away with the content — it is never sticky.
 
 ---
 
@@ -60,10 +62,11 @@ Landscape phones (height <500px): the bottom bar stays (4 items need only 64px),
 ### Overview
 | | 375 / 360 | 768 | 1024 | 1280 |
 |---|---|---|---|---|
-| Order | Position → This month → Credit cards → Recent activity | same | Position (12) / Recent activity (7) beside a right column (5) of This month + Credit cards | same; at 1280 the split is 578 / 406 (see §2) |
+| Order | Position → This month → Credit cards → Your accounts → Recent activity | same | Position (12), then Your accounts (7) beside Recent activity (5), then This month (6) beside Credit cards (6) | same; at 1280 the splits are 578 / 406 and 492 / 492; at 1440 they are 592 / 416 and 504 / 504 (§2) |
 | Position card (hero) | label, hero amount (36), sentence, then the inline equation `Money you have − Card debt` in two columns | hero 40; same layout | hero 44; sentence left, equation right | same |
-| Recent rows | 5 | 5 | 6 | 6–7 (balance to the right column; verify in browser) |
-| Credit cards | stacked | two side by side (one if only one card) | stacked in right column | stacked in right column |
+| Recent rows | 5 | 5 | 6 | 6–7 (visual balance with the wallet row; verify in browser) |
+| Credit cards | stacked | two side by side (one if only one card) | below the wallet row, half width | below the wallet row, half width |
+| Your accounts | Horizontal scroll-snap wallet cards with visible account actions | same phone rail; no desktop stack | Selected card with previous/next controls and adjacent decorative previews; 7 columns beside Recent activity | Selected stack layout; 7 columns beside Recent activity; previews remain decorative |
 
 ### Activity
 | | Phone | 768+ |
@@ -76,9 +79,12 @@ Landscape phones (height <500px): the bottom bar stays (4 items need only 64px),
 ### Accounts
 | | Phone & tablet | ≥1024 |
 |---|---|---|
-| Layout | One column: *Money you have* then *Money you owe* | Two equal columns (6 + 6), each top-aligned and **not** stretched |
-| Add account | Own row under the h1, right-aligned | In the page header, left of *Add transaction* |
-| Credit cards | Stacked; **Pay card** full width | Stacked; **Pay card** auto width |
+| Layout | One full-width section after the other: *Money you have* then *Money you owe* | Same stacked sections, using the full content width for larger account cards |
+| Presentation | Cards gallery by default; one column below 640px, two columns from 640px. **List** toggle restores the readable account rows and credit-card summaries. | Two columns from 1024px; three columns at 1280px and wider. **List** toggle restores the readable account rows and credit-card summaries. |
+| Details and actions | Activate a card face to open its details dialog. Account name/type appear in that dialog; each card has a 44px top-right three-dot menu for Edit and (credit cards) Pay card. | Same behavior; the selected card is visually indicated. |
+| Credit cards | Show owed-versus-available progress below the card face, plus a text over-limit warning when applicable. | Same behavior. |
+
+The Accounts wallet grid uses two columns at `sm` widths and three at `xl`; both account sections use the same full content width so all card faces have matching dimensions at a given viewport. Every card face, including fallback artwork, shows only the current balance or amount owed at bottom-left with no filled label background. Account name and type appear in the card details dialog; credit cards also show owed-versus-available progress below the face. The Overview wallet stack uses a horizontal scroll-snap rail below `md`. At `md` and wider it presents a selected card with explicit Previous/Next controls; adjacent card images are decorative previews. No drag-and-drop or persistent ordering is implemented.
 
 ### Dialogs (Quick Add, Add account, Delete)
 | | Phone | 768+ |

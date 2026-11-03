@@ -2,5 +2,6 @@
   "id": 1,
   "name": "Test Bank",
   "type": "bank",
+  "card_product_id": null,
   "balance": "1250.00"
 }

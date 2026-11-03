@@ -40,6 +40,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     hero: 'section[aria-labelledby="net-position-label"]',
     month: '[aria-labelledby="this-month-title"]',
     cards: '[aria-labelledby="credit-cards-title"]',
+    wallets: '[aria-labelledby="wallet-stack-title"]',
     recent: '[aria-labelledby="recent-activity-title"]',
   };
   const texts = (p, sel) => p.locator(sel).evaluateAll(els => els.map(e => e.textContent.trim().replace(/\s+/g, " ")));
@@ -81,6 +82,47 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     await q.context().close();
   });
 
+  /* ---------------------------------------------------------------- wallet stack */
+  group = "Overview wallets deck";
+  await safe(async () => {
+    for (const W of [375, 1280]) {
+      const p = await open(W);
+      const deck = p.locator(R.wallets);
+      const text = async () => (await deck.innerText()).replace(/\s+/g, " ");
+      check(`${W}px: header shows the position and an All link`, /Wallets 1 of 5/.test(await text()) && await deck.getByRole("button", { name: "View all 5 accounts" }).isVisible(), (await text()).slice(0, 80));
+      eq(`${W}px: one front card with its figure`, await deck.locator('button[aria-label^="View details for"]').count(), 1);
+      eq(`${W}px: up to two later cards peek out (none earlier at the start)`, await deck.getByRole("button", { name: /^Show / }).count(), 2);
+      await deck.getByRole("button", { name: "Show Main Savings" }).focus();
+      await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+      check(`${W}px: choosing a peeking card brings it to the front`, /Wallets 2 of 5/.test(await text()) && /02 Selected · Main Savings/.test(await text()), (await text()).slice(0, 120));
+      await p.keyboard.press("ArrowRight"); await p.waitForTimeout(300);
+      check(`${W}px: the right arrow key moves to the next card`, /03 Selected · GCash/.test(await text()), (await text()).slice(0, 120));
+      check(`${W}px: a liquid account offers Open, Expense and Transfer`, await deck.getByRole("button", { name: "Transfer from GCash" }).isVisible() && await deck.getByRole("button", { name: "Add an expense on GCash" }).isVisible() && await deck.getByRole("button", { name: "Open GCash" }).isVisible());
+      check(`${W}px: no horizontal overflow`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await p.context().close();
+    }
+
+    const desktop = await open(1280);
+    const deck = desktop.locator(R.wallets);
+    for (let i = 0; i < 3; i++) { await deck.getByRole("button", { name: /^Show / }).last().focus(); await desktop.keyboard.press("Enter"); await desktop.waitForTimeout(250); }
+    check("a credit card offers Pay card instead of Transfer", await deck.getByRole("button", { name: /^Pay card, / }).isVisible() && await deck.getByRole("button", { name: /^Transfer from/ }).count() === 0, (await deck.innerText()).replace(/\s+/g, " ").slice(0, 120));
+    await deck.getByRole("button", { name: /^Add an expense on / }).click();
+    const selectedAccount = await desktop.locator("#qa-account").evaluate(e => e.options[e.selectedIndex].text);
+    check("Expense opens Quick Add on the selected account", /Everyday Card|Blue Card/.test(selectedAccount), selectedAccount);
+    await desktop.keyboard.press("Escape"); await desktop.waitForTimeout(300);
+    await deck.getByRole("button", { name: /^Open / }).click();
+    check("Open shows the selected account's details", await desktop.getByRole("dialog").isVisible() && /Credit card/.test(await desktop.getByRole("dialog").innerText()));
+    await desktop.keyboard.press("Escape");
+    await deck.getByRole("button", { name: /^View all/ }).click();
+    eq("All opens Accounts", (await desktop.locator("h1").innerText()).trim(), "Accounts");
+    await desktop.context().close();
+
+    const firstRun = await open(375, { query: "?demo=no-accounts" });
+    eq("zero accounts keep the existing onboarding CTA without an empty wallet deck", await firstRun.locator(R.wallets).count(), 0);
+    check("first-run Add account action remains visible", await firstRun.getByRole("button", { name: "Add account" }).isVisible());
+    await firstRun.context().close();
+  });
+
   /* ---------------------------------------------------------------- layout */
   for (const W of [360, 375, 768, 1280]) {
     group = `Layout ${W}px`;
@@ -93,7 +135,10 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         document.querySelectorAll("main span.block, main dd span, main li button span:last-child, main .whitespace-nowrap").forEach(e => {
           if (!vis(e)) return; const cs = getComputedStyle(e), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3, r = e.getBoundingClientRect();
           if (/₱/.test(e.textContent) && e.children.length === 0) {
-            const box = e.closest("section, [role=region]").getBoundingClientRect();
+            // In the Overview account rail, later cards intentionally sit beyond the region's visible
+            // viewport and are reached by horizontal scrolling. Check each amount against its own card.
+            const card = e.closest("article");
+            const box = (card || e.closest("section, [role=region]")).getBoundingClientRect();
             if (r.height > lh * 1.5) bad.push("wraps: " + e.textContent.trim());
             if (r.right > box.right + 0.5 || r.left < box.left - 0.5) bad.push("overflows: " + e.textContent.trim());
           }
@@ -102,7 +147,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         const navs = [...document.querySelectorAll('nav[aria-label="Main"]')].filter(vis).length;
         const aside = document.querySelector("aside"); const asideW = vis(aside) ? Math.round(aside.getBoundingClientRect().width) : 0;
         return { sw: document.documentElement.scrollWidth, iw: innerWidth, bad, small, navs, asideW, bottomBar: vis(document.querySelector("nav.fixed")), h1s: document.querySelectorAll("h1").length,
-          hero: rect(R.hero), recent: rect(R.recent), month: rect(R.month), cards: rect(R.cards), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width) };
+          hero: rect(R.hero), recent: rect(R.recent), month: rect(R.month), cards: rect(R.cards), wallets: rect(R.wallets), mainW: Math.round(document.querySelector("main > div").getBoundingClientRect().width) };
       }, { R });
       check("no horizontal overflow", m.sw <= m.iw, `scrollWidth ${m.sw} / viewport ${m.iw}`);
       eq("exactly one h1", m.h1s, 1);
@@ -111,14 +156,20 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       else { check(`${W >= 1024 ? "224px sidebar" : "80px rail"} shown, bottom bar hidden`, !m.bottomBar && m.asideW === (W >= 1024 ? 224 : 80), `aside ${m.asideW}px`); eq("exactly one Add transaction button (page header)", await addTransactionButtons(p), 1); }
       eq("one filled primary action visible", await p.evaluate(() => [...document.querySelectorAll("button")].filter(b => b.getBoundingClientRect().width > 0 && getComputedStyle(b).backgroundColor === "rgb(29, 95, 214)").length), 1);
       check("every peso amount is on one line and inside its card", m.bad.length === 0, m.bad.join("; ") || "ok");
+      const traversalOrder = await p.evaluate(() => [...document.querySelectorAll("#net-position-label, #this-month-title, #credit-cards-title, #wallet-stack-title, #recent-activity-title")].map(element => element.id));
+      const expectedTraversalOrder = W >= 1024
+        ? ["net-position-label", "wallet-stack-title", "recent-activity-title", "this-month-title", "credit-cards-title"]
+        : ["net-position-label", "this-month-title", "credit-cards-title", "wallet-stack-title", "recent-activity-title"];
+      check("keyboard and screen-reader section order matches the visible layout", traversalOrder.join() === expectedTraversalOrder.join(), traversalOrder.join(" → "));
       check("touch targets ≥44px high (buttons, selects, nav) below 768px", W >= 768 || m.small.length === 0, m.small.join(", ") || "ok");
       if (W >= 1024) {
-        check("hero spans the top; recent activity left of the right column", m.hero.y < m.recent.y && m.recent.y === m.month.y && m.recent.x < m.month.x, JSON.stringify({ hero: m.hero, recent: m.recent, month: m.month }));
+        check("hero spans the top; wallet and recent activity share the next row", m.hero.y < m.wallets.y && m.wallets.y === m.recent.y && m.wallets.x < m.recent.x, JSON.stringify({ hero: m.hero, wallets: m.wallets, recent: m.recent }));
         const cols = (m.mainW - 24 * 11) / 12; const span = n => Math.round(n * cols + (n - 1) * 24);
-        check(`12-column grid: recent activity = 7 columns (${span(7)}px), right column = 5 (${span(5)}px)`, Math.abs(m.recent.w - span(7)) <= 1 && Math.abs(m.month.w - span(5)) <= 1, `recent ${m.recent.w}, month ${m.month.w}, content ${m.mainW}`);
+        check(`wallet/recent split is 7 + 5 columns (${span(7)}px / ${span(5)}px)`, Math.abs(m.wallets.w - span(7)) <= 1 && Math.abs(m.recent.w - span(5)) <= 1, `wallet ${m.wallets.w}, recent ${m.recent.w}, content ${m.mainW}`);
+        check("This month and Credit cards share the row below the wallet", m.month.y === m.cards.y && m.month.y > m.wallets.y && m.month.w === m.cards.w && m.month.x < m.cards.x, JSON.stringify({ month: m.month, cards: m.cards }));
       } else {
-        check("stacked in the approved order: hero, this month, credit cards, recent activity", m.hero.y < m.month.y && m.month.y < m.cards.y && m.cards.y < m.recent.y, `y: ${m.hero.y} < ${m.month.y} < ${m.cards.y} < ${m.recent.y}`);
-        check("every block uses the full content width", [m.hero, m.month, m.cards, m.recent].every(r => Math.abs(r.w - m.mainW) <= 1), `content ${m.mainW}; ${[m.hero, m.month, m.cards, m.recent].map(r => r.w).join("/")}`);
+        check("stacked order: hero, this month, credit cards, wallet stack, recent activity", m.hero.y < m.month.y && m.month.y < m.cards.y && m.cards.y < m.wallets.y && m.wallets.y < m.recent.y, `y: ${m.hero.y} < ${m.month.y} < ${m.cards.y} < ${m.wallets.y} < ${m.recent.y}`);
+        check("every block uses the full content width", [m.hero, m.month, m.cards, m.wallets, m.recent].every(r => Math.abs(r.w - m.mainW) <= 1), `content ${m.mainW}; ${[m.hero, m.month, m.cards, m.wallets, m.recent].map(r => r.w).join("/")}`);
       }
       if (W >= 768 && W < 1024) { const cc = await p.locator(`${R.cards} .md\\:grid > div`).evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().left))); check("credit cards sit side by side on tablet", cc.length === 2 && cc[0] !== cc[1], cc.join(",")); }
       if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `overview-${W}.png`), fullPage: true });
@@ -291,7 +342,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       hasMain: !!document.querySelector("main"), lang: document.documentElement.lang, title: document.title,
     }));
     eq("every visible button and select has an accessible name", sem.unnamed, 0);
-    check("each card is a labelled region", sem.regions.join() === "Recent activity,This month,Credit cards", sem.regions.join());
+    check("each card is a labelled region", sem.regions.join() === "Wallets,Recent activity,This month,Credit cards", sem.regions.join());
     check("credit-limit tracks have text equivalents", sem.tracks.join() === "₱14,250.00 of ₱50,000.00 limit used,₱6,800.00 of ₱30,000.00 limit used", sem.tracks.join(" | "));
     check("no gradients or backdrop blur anywhere", sem.bad === 0);
     check("main landmark, lang and title present", sem.hasMain && sem.lang === "en" && sem.title === "MoniKey", `${sem.lang} / ${sem.title}`);

@@ -92,12 +92,17 @@ BEGIN
   VALUES ('Correction baseline card', 'credit_card', -10.00, 100.00);
   DELETE FROM accounts WHERE name IN ('Correction baseline bank', 'Correction baseline card');
 
+  -- The account card choice is presentation-only and database-validated by shape.
+  INSERT INTO accounts (name, type, card_product_id)
+  VALUES ('Unknown Catalog Choice', 'bank', 'unknown-but-valid-id');
+  DELETE FROM accounts WHERE name = 'Unknown Catalog Choice';
+
   IF (
     SELECT COUNT(*)
     FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-  ) <> 5 THEN
-    RAISE EXCEPTION 'Expected exactly five core tables';
+  ) <> 7 THEN
+    RAISE EXCEPTION 'Expected five financial tables and two Kakeibo metadata tables';
   END IF;
 
   IF (SELECT COUNT(*) FROM categories) <> 9 THEN
@@ -113,6 +118,22 @@ BEGIN
     INSERT INTO accounts (name, type, opening_debt)
     VALUES ('Invalid Cash Debt', 'cash', 1.00);
     RAISE EXCEPTION 'Expected cash opening debt to be rejected';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO accounts (name, type, card_product_id)
+    VALUES ('Cash Card Choice Rejected', 'cash', 'bdo-visa-classic');
+    RAISE EXCEPTION 'Expected cash card choice to be rejected';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO accounts (name, type, card_product_id)
+    VALUES ('Malformed Card Choice', 'bank', 'BDO Visa');
+    RAISE EXCEPTION 'Expected malformed card product ID to be rejected';
   EXCEPTION WHEN check_violation THEN
     NULL;
   END;

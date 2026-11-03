@@ -1,8 +1,8 @@
 # MoniKey v1 — Technical-Level Design (TLD)
 
-**Version:** 1.3 (v1.2 stack retained; Obsidian second-brain workflow added)  
-**Date:** 2026-10-24  
-**Status:** Requirements and technical direction agreed. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. M9 local Compose behavior and M11 health, persistence, ingress, logical restore, and image rollback were checked; see [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for current evidence and limits. This design does not claim off-cluster backup recovery or public deployment readiness.
+**Version:** 1.5 (ADR-021 plan-presence amendment and release integration)
+**Date:** 2026-11-03
+**Status:** ADR-021's Kakeibo API and frontend are implemented on the integration branch. PR E adds explicit plan-presence tracking, local integration and recovery rehearsal, and a release runbook; it does not authorize deployment. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. Prior full React/API browser acceptance and screen-reader checks remain limited. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current PR E evidence and limitations. This design does not claim production backup verification or off-cluster recovery.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -18,13 +18,13 @@ A successful v1 allows one user to:
 - Retain records after API/DB/container/pod restarts, and recover from a tested backup.
 - Explain frontend-to-API-to-database requests and code-to-cluster GitOps delivery in an interview.
 
-**Explicitly out of scope:** authentication, multi-user accounts, bank sync, transfers to or from credit cards (use the separate card-payment flow), budgets, recurring bills, statement cycles, card interest, installment tracking, rewards, investments, notifications, production-grade high availability, and complex analytics.
+**Explicitly out of scope:** authentication, multi-user accounts, bank sync, transfers to or from credit cards (use the separate card-payment flow), recurring bills, statement cycles, card interest, installment tracking, rewards, investments, notifications, production-grade high availability, and complex analytics. Kakeibo planning and reflection are accepted by ADR-021 as metadata, not as a second ledger.
 
 ## 2. Assumptions and boundaries
 
 - **Frontend:** React functional components + TypeScript + Vite + **Tailwind CSS v4**, selected **shadcn/ui** component source files and **Lucide React** icons, initially backed by typed mock data. Production static assets from Vite `dist/` are served by Nginx; no Node or Vite server runs in production.
 - **Backend:** Python + FastAPI + Pydantic + a PostgreSQL driver (e.g. psycopg); direct readable SQL rather than an ORM.
-- **Database:** one PostgreSQL instance; five core tables; money represented by PostgreSQL `NUMERIC(12,2)` and JSON decimal strings.
+- **Database:** one PostgreSQL instance; five financial tables plus two Kakeibo metadata tables; money represented by PostgreSQL `NUMERIC(12,2)` and JSON decimal strings.
 - **Local:** Docker Compose for frontend, API, and DB.
 - **Cluster:** existing k3s/Kubernetes, Traefik ingress, Argo CD, and an operational StorageClass (Longhorn *if verified*). No new cluster is needed.
 - **Source layout:** new MoniKey v1 application repository; separate existing `homelab-gitops` repository for Kubernetes manifests.
@@ -63,7 +63,7 @@ flowchart TD
 
 ## 4. React application structure, navigation and data loading
 
-**Navigation:** Three React views (`Overview`, `Activity`, `Accounts`) plus a reusable `QuickAddForm` overlay/sheet. `App.tsx` holds a simple selected-view state. No React Router in v1: views are tabs of a single application at `/` with no required deep links. Use semantic navigation buttons and accessible focus handling. The design must support mobile-first layout.
+**Navigation:** Four React views (`Overview`, `Activity`, `Accounts`, and Kakeibo) plus a reusable `QuickAddForm` overlay/sheet. Kakeibo is a dedicated view; Overview may show a compact link/status card. `App.tsx` holds a simple selected-view state. No React Router in v1: views are tabs of a single application at `/` with no required deep links. Use semantic navigation buttons and accessible focus handling. The design must support mobile-first layout.
 
 **Styling responsibilities:** Tailwind CSS v4 utility classes handle layout, spacing, typography and responsive behavior. A single `src/index.css` entry imports `tailwindcss` and stores the small theme/token set managed by shadcn's initializer and the approved `DESIGN.md`. **shadcn/ui is a collection of copied React component source files, not a hosted service or a second application tier.** Only add `button`, `card`, `input`, `label` and `dialog` initially; use native `<select>` for straightforward account/category dropdowns. Import Lucide icons **by name** from `lucide-react`; buttons that use an icon alone need an accessible label. No React dashboard starter template.
 
@@ -168,7 +168,7 @@ export default defineConfig({
 
 **References:** https://tailwindcss.com/docs/installation/using-vite · https://ui.shadcn.com/docs/installation/vite · https://lucide.dev/guide/react/
 
-## 5. Data model (five tables)
+## 5. Data model (five financial tables plus two metadata tables)
 
 ```mermaid
 erDiagram
@@ -190,6 +190,7 @@ erDiagram
       int id PK
       varchar name
       varchar type
+      varchar default_kakeibo_envelope
     }
     TRANSACTIONS {
       int id PK
@@ -198,6 +199,7 @@ erDiagram
       numeric amount
       date transaction_date
       text note
+      varchar kakeibo_envelope
     }
     CREDIT_CARD_PAYMENTS {
       int id PK
@@ -215,7 +217,26 @@ erDiagram
       date transfer_date
       text note
     }
+    KAKEIBO_MONTH_PLANS {
+      date month PK
+      varchar plan_presence
+      numeric planned_income
+      numeric allocated_starting_funds
+      numeric savings_target
+      numeric prior_period_debt_reserve
+      numeric envelope_limits
+      text reflection_answers
+      jsonb review_actuals_snapshot
+    }
+    KAKEIBO_WEEKLY_REVIEWS {
+      date week_start PK
+      text reflection_notes
+    }
 ```
+
+Kakeibo adds no financial accounts or ledger entries. The five financial
+tables remain the only source of balances and income/expense totals. The two
+Kakeibo tables hold plans and reflections only; see [ADR-021](ADR.md#adr-021--integrate-kakeibo-as-planning-and-reflection-metadata) and the [migration guide](../../database/README.md#kakeibo-data-and-arithmetic).
 
 **Concrete schema baseline** (`database/001_init.sql`):
 
@@ -321,6 +342,36 @@ Transfers move equal amounts between liquid accounts, so they change each accoun
 **Monthly income / expenses** = transaction sums of income / expense categories with `transaction_date` in the selected calendar month. A credit-card payment is **never** counted as monthly income or expense.  
 **Monthly net spending movement** = income − expense (not necessarily equal to the change in liquid balance because card purchases and repayments have different cash timing).
 
+### Kakeibo planning and actuals (ADR-021)
+
+Plans are optional and keyed by the first day of a calendar month. The four
+expense envelopes are `needs`, `wants`, `culture`, and `unexpected`. Planning
+uses `planned_income + allocated_starting_funds - savings_target -
+prior_period_debt_reserve` as `available_to_allocate`; `unallocated` is that
+amount minus the four envelope limits. A negative result is preserved and
+shown as over-allocated. These are planning values, not account balances.
+
+Monthly actuals sum expense transactions by envelope and calendar month. A card
+purchase counts once as an expense transaction; card payments and transfers
+are excluded. Unclassified historical expenses remain `NULL`, appear in a
+separate unclassified total, and remain included in total expenses. Category
+defaults are suggestions and changing one never rewrites transaction history.
+
+`actual_saved_declared` is optional user-entered information, not a verified
+ledger calculation. A monthly review snapshots decimal-string actual income,
+total expenses, each envelope and unclassified expenses. Later ledger edits
+must flag changed actuals without replacing the saved reflection snapshot.
+Neither planning nor review endpoints may mutate financial tables.
+
+Migration 006 adds nullable `plan_presence`: `saved` means a plan was explicitly
+submitted, and `not_saved` means a reflection-only row has no plan. A deliberate
+all-zero plan is still `saved`. Pre-006 rows remain `NULL` and are reported as
+`legacy_unknown`; zero values are never used to guess intent. The monthly API
+returns reflections in a separate top-level `review`, so a reflection can be
+read while `plan` is `null`. Legacy review fields remain within a non-null plan
+object for compatibility. Plan PUT preserves the existing review and snapshot;
+review PUT refreshes the snapshot only when explicitly saved.
+
 **Example:** Bank starts ₱5,000; card starts ₱0 debt; ₱1,000 grocery card purchase; ₱600 bank card payment → bank ₱4,400, card debt ₱400, net tracked position ₱4,000, monthly expenses ₱1,000. No double count.
 
 **Edge cases to test:** editing/deleting a purchase after a card payment, negative liquid balances (display as negative, not silently clamp), overpayment/card credit, dates across month boundaries, zero transaction history, same category name under income/expense.
@@ -336,9 +387,11 @@ Transfers move equal amounts between liquid accounts, so they change each accoun
 | GET | `/api/accounts/{id}` | Read current_balance/current_debt and credit_limit for the account edit form (ADR-018) |
 | PUT | `/api/accounts/{id}` | Set name/current_balance/current_debt/credit_limit; account type is immutable (ADR-018) |
 | GET | `/api/categories?type=expense` | Seeded categories; optional type filter |
+| PATCH | `/api/categories/{id}/default-kakeibo-envelope` | Set or clear a suggested envelope on an expense category only |
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
-| POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note |
-| PUT | `/api/transactions/{id}` | Replace transaction's editable fields |
+| POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note, optional nullable `kakeibo_envelope` |
+| PUT | `/api/transactions/{id}` | Replace editable fields; omitted envelope preserves it for old clients, explicit `null` clears it |
+| PATCH | `/api/transactions/{id}/kakeibo-envelope` | Set or clear only an expense transaction's nullable envelope; other financial fields remain unchanged |
 | DELETE | `/api/transactions/{id}` | Delete transaction; 204 on success |
 | GET | `/api/credit-card-payments?month=2026-10&limit=50` | Card payment history |
 | POST | `/api/credit-card-payments` | Create payment from liquid account to card |
@@ -349,6 +402,23 @@ Transfers move equal amounts between liquid accounts, so they change each accoun
 | PUT | `/api/account-transfers/{id}` | Edit a transfer |
 | DELETE | `/api/account-transfers/{id}` | Delete a transfer; 204 on success |
 | GET | `/api/summary?month=2026-10` | Liquid balance, card debt, net position, month income/expense |
+| GET/PUT | `/api/kakeibo/months/{YYYY-MM}` | Read/upsert an optional plan; returns `plan_status` (`saved`, `not_saved`, `legacy_unknown`) and keeps review available when `plan` is `null` |
+| GET | `/api/kakeibo/months/{YYYY-MM}/report` | Ledger-derived income and expense actuals, envelope totals, unclassified amount and plan variance |
+| PUT | `/api/kakeibo/months/{YYYY-MM}/review` | Save bounded reflection, optional declared savings and server-generated closeout snapshot |
+| GET/PUT | `/api/kakeibo/weeks/{YYYY-MM-DD}` | Monday-based ledger summary and one weekly reflection per Monday; PUT replaces all three note fields, so omitted fields clear |
+
+Transaction create/update shapes include optional nullable `kakeibo_envelope`.
+Old create requests may omit it and save unclassified; old updates that omit it
+preserve the stored value, while explicit `null` clears it. The dedicated
+`PATCH /api/transactions/{id}/kakeibo-envelope` requires the nullable field and
+updates only that transaction column; it validates that the record exists and
+is an expense. Income must always have `NULL`. Category reads include
+`default_kakeibo_envelope`; only expense categories may set one. Money request values are decimal strings, validated as
+nonnegative where planning fields require it; money response values are decimal
+strings computed by PostgreSQL/Python `Decimal`. Weekly path dates must be
+Mondays. Review snapshots are computed from the server's current ledger report;
+clients cannot submit snapshot totals. Planning and review writes affect only
+Kakeibo metadata tables.
 
 Example input:
 
@@ -635,3 +705,4 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 
 - **v1.3 (2026-10-24):** Added Obsidian as a personal, separate second-brain workflow. No change to frontend stack, business scope, database, runtime tiers or GitOps topology.
 - **v1.4 (2026-10-26):** Added owner-approved liquid-account transfers in ADR-017, including the fifth table and activity/API contract.
+- **v1.5 (2026-11-02):** ADR-021 adds Kakeibo planning/reflection metadata, four expense envelopes, migration 005, and forward API contracts without changing financial arithmetic or wallet behavior.

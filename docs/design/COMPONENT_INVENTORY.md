@@ -1,12 +1,16 @@
 # MoniKey Component Inventory
 
-**Status: APPROVED by the owner; mock-backed frontend implemented through Milestone 4.9.** This inventory describes the React pieces for the three views and v1 entry flows. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md). See the current implementation summary below and the [Milestone 4.9 report](FRONTEND_STATES_4_9.md).
+**Status: The baseline through Milestone 4.9 is owner-approved; wallet PRs 1–4 are implemented on the feature branch, with visual/device acceptance still open.** This inventory describes the React pieces for the three views, v1 entry flows, and wallet presentation. Visual rules: [`DESIGN.md`](../../DESIGN.md). Behavior: [`UI_UX_SPEC.md`](UI_UX_SPEC.md). See the current implementation summary below and the [wallet implementation record](AUTHENTIC_WALLET_UI_SPEC.md).
 
 **Rule of thumb for an entry-level developer:** a component exists only if it is used in at least two places *or* it hides a tricky accessibility detail. Everything else stays inline in the view.
 
 ---
 
-## Current status after Milestone 4.9
+## Current status after wallet PR4
+
+Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `CardProductPicker` (which replaced the Edit-time `WalletDesignPicker`), and `WalletStack`. The card catalog lives in `wallet/cardProducts.ts`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. Since 2026-11-03 (ADR-019 amendment) every card, including each picker tile, is drawn with the original MoniKey artwork and the chosen product appears only as a text name; the generated issuer-style images were removed and Atome is not selectable (a stored Atome id shows the neutral card). PR5 ordering/synchronization remains deferred.
+
+## Historical status through Milestone 4.9
 
 Milestone 4.3 ([`FRONTEND_ACCOUNTS_4_3.md`](FRONTEND_ACCOUNTS_4_3.md)) added `AccountRow` and `AccountsView`. Milestones 4.4–4.9 added Activity, entry flows, responsive refinements, the data-source seam, and resilient resource states. The inventory below describes the current frontend:
 
@@ -40,7 +44,7 @@ Milestone 4.3 ([`FRONTEND_ACCOUNTS_4_3.md`](FRONTEND_ACCOUNTS_4_3.md)) added `Ac
 | `<input type="radio">` | The segmented type switch (visually restyled; real radios inside a `<fieldset><legend>`). |
 | `<nav>`, `<main>`, `<h1>` | Landmarks and page title. |
 
-## 3. Custom components (15)
+## 3. Existing custom components (15 before wallet PRs)
 
 Each is small and has one job. File names are proposals; folder layout in §5.
 
@@ -63,6 +67,37 @@ Each is small and has one job. File names are proposals; folder layout in §5.
 | 15 | `SkeletonValue` | Flat grey bar at an amount's or row's real size for loading. | `width`, `height` | all views | — |
 
 Not separate components (kept inline to avoid wrapper layers): the limit track (inside `CreditCardSummary`), the equation inside the hero card (in the Overview view), the date-group heading (inside Activity), month and account selects (a `FormField` or plain `<select>` in the view).
+
+### Wallet components added in PRs 1–4
+
+| Component/module | Job | Main inputs / behavior |
+|---|---|---|
+| `WalletCard` | Render one account's selected state, local artwork/fallback, balance or debt, and supported actions. | `WalletCardVM`, selection callback, edit/pay callbacks |
+| `WalletGrid` | Lay out wallet cards in the Accounts Cards view. | Account card models and selection/actions |
+| `WalletViewToggle` | Switch the Accounts page between Cards and List. | `cards \| list`, `onChange` |
+| `CardProductPicker` | In Add and Edit account, pick the bank or provider, then the exact card with its design. | Account type, chosen issuer/product, change callbacks |
+| `WalletStack` | Overview "Wallets" card deck: the front card with figure and menu, two peeking cards on each side (click, swipe or arrow keys), and Open / Expense / Transfer or Pay card for the selected account. | Accounts resource, preferences, edit/pay/transfer/expense callbacks, Accounts navigation callback |
+| `wallet/artworkCatalog.ts` | Define artwork metadata, allowlisted local paths and safe account-type-aware selection; resolve to fallback when unavailable/unapproved. | Static catalog and resolver functions |
+| `wallet/walletModel.ts` | Project existing snapshot values and saved appearance into wallet card view models; does not calculate money. | `AccountsSnapshot`, local preferences |
+| `wallet/walletPreferences.ts` | Parse, validate and persist versioned browser-local artwork selections. | Local storage adapter; safe defaults on invalid or denied storage |
+
+### Kakeibo components added in PR C (ADR-021)
+
+| Component/module | Job | Main inputs / behavior |
+|---|---|---|
+| `views/KakeiboView` | The Kakeibo view: month select, Create/Edit plan, the plan summary, four envelopes and the not-yet-classified total. Loading, error (with Retry) and "server too old" states. | `Resource<KakeiboMonth>`, month, plan/activity callbacks |
+| `kakeibo/PlanSummary` | Plan figures ("Your plan") kept apart from ledger figures ("Recorded so far"); server's available-to-allocate and unallocated/over-allocated with a warning. Empty state when there is no plan. | `KakeiboMonth` |
+| `kakeibo/EnvelopeCard` | One envelope: spent, remaining (negative kept), a bar of the share spent; no bar for a zero limit or no plan. | envelope, `KakeiboEnvelopeReport` |
+| `kakeibo/KakeiboPlanDialog` + `KakeiboPlanForm` | Create/edit a plan: reads the stored plan fresh, validates (zero allowed, no negatives, ≤2 decimals), shows a display-only planning check, keeps values on failure. | month, `DataSource`, `onSubmit` |
+| `kakeibo/EnvelopePicker` | Quick Add's envelope chips (Needs, Wants, Culture, Unexpected, Not sure yet) and the category's suggestion as a "Use …" link. | value, suggestion, `onChange` |
+| `lib/kakeibo.ts` | Envelope names, plan validation, planning estimate, progress share, suggestion lookup; Monday-week date helpers and reflection validation (PR D). No saved figure is computed here. | pure functions |
+| `kakeibo/WeeklyReview` | Weekly check-in card (week select, the server's week totals, saved notes) and its three-question form; always sends all three notes. | weeks, week resource, `onSave` |
+| `kakeibo/MonthlyReview` | Month-end reflection card (saved time, server snapshot, changed-since warning, self-reported savings, answers) and its form; warns that saving again replaces the snapshot. | `KakeiboMonth`, `onSave` |
+| `kakeibo/ClassifyDialog` | Tick loaded expenses, choose an envelope or clear, confirm; one PATCH each with saved/failed counts; says when the list may be incomplete. | month, `DataSource`, `onClassified` |
+| `kakeibo/CategorySuggestions` | Card listing category suggestions and a dialog to set/clear them for expense categories only. | categories, `onSave` |
+| `kakeibo/useSaveForm`, `NoteField` | Shared save habits for the reflection forms; a labelled textarea field. | — |
+
+These wallet and Kakeibo components are additive to the historical 15-component inventory above. The current implementation paths are in `frontend/src/components/wallet/` and `frontend/src/wallet/`.
 
 **Why `FormField` and `SegmentedControl` exist even though ADR-015 warns against wrappers:** both fix repeated accessibility wiring that is easy to get wrong six times in two forms; neither wraps a shadcn component's behaviour. Revisit if they grow beyond ~40 lines.
 

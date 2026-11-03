@@ -3,3 +3,8 @@ export function formatClock(date: Date): string {
   const two = (n: number) => String(n).padStart(2, '0')
   return `${two(date.getHours())}:${two(date.getMinutes())}`
 }
+
+/** "Oct 24, 2026, 9:00 PM" in Manila time, for when a reflection was saved. */
+export function formatTimestamp(iso: string): string {
+  return new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
+}

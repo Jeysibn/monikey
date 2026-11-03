@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { House, List, Plus, Wallet, type LucideIcon } from 'lucide-react'
+import { House, List, NotebookPen, Plus, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 
 import { addBlocked } from '@/components/addState'
@@ -7,20 +7,22 @@ import { Button } from '@/components/ui/button'
 import type { AddState } from '@/types'
 
 /*
- * The frame around every screen (DESIGN.md section D). One set of three destinations, shown three ways:
- *   < 768px      bottom bar (Overview, Activity, Accounts and a filled Add item)
+ * The frame around every screen (DESIGN.md section D). One set of four destinations, shown three ways:
+ *   < 768px      bottom bar: Overview, Activity, Accounts, Kakeibo and a filled Add item, five equal columns
+ *                (icon over label, at least 57px wide on a 320px phone, 52px tall)
  *   768-1023px   80px left rail (icon over label); Add transaction is in each page header
  *   >= 1024px    224px sidebar (mark, wordmark, labelled items); Add transaction is in the page header
  * Navigation is plain React state in App.tsx: no router. The active item has aria-current="page".
  * The phone and the sidebar navs are both landmarks named "Main"; CSS hides whichever does not apply,
  * and hidden elements are removed from the accessibility tree, so only one is ever announced.
  */
-export type View = 'overview' | 'activity' | 'accounts'
+export type View = 'overview' | 'activity' | 'accounts' | 'kakeibo'
 
 const destinations: { view: View; label: string; Icon: LucideIcon }[] = [
   { view: 'overview', label: 'Overview', Icon: House },
   { view: 'activity', label: 'Activity', Icon: List },
   { view: 'accounts', label: 'Accounts', Icon: Wallet },
+  { view: 'kakeibo', label: 'Kakeibo', Icon: NotebookPen },
 ]
 
 /* Key-and-coin mark: a ring holding the peso sign, with a short key shaft and two teeth. */
@@ -92,7 +94,7 @@ export function AppShell({
       </aside>
 
       <main className="px-4 pt-3.5 pb-[calc(96px+env(safe-area-inset-bottom))] md:ml-20 md:px-6 md:pt-7 md:pb-8 lg:ml-56 lg:pt-9 lg:pb-12">
-        <div className="mx-auto max-w-[1032px]">
+        <div className="mx-auto max-w-[1440px]">
           {/* The sidebar names the product from 768px up; phones get it here. */}
           <div className="mb-3.5 flex items-center gap-2 text-lg font-bold tracking-[-0.015em] md:hidden">
             <BrandMark className="size-[30px] text-primary" />
@@ -105,16 +107,17 @@ export function AppShell({
       {/* Phone bottom bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.3fr)] gap-1.5 border-t border-border bg-card px-2.5 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-border bg-card px-2 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {items}
+        {/* Add is a filled tile shaped like the items beside it, so five fit on a 320px phone. */}
         <Button
-          className="h-[52px] min-w-0 self-center rounded-[14px] px-2 text-[length:min(0.9375rem,18px)]"
+          className="h-[52px] min-w-0 flex-col gap-[3px] self-center rounded-[14px] px-1 text-[length:min(0.75rem,14px)]"
           onClick={onAdd}
           disabled={addBlocked(addState)}
           aria-label={addState === 'no-accounts' ? 'Add transaction (add an account first)' : 'Add transaction'}
         >
-          <Plus aria-hidden="true" className="size-[min(1.25rem,24px)]" />
+          <Plus aria-hidden="true" className="size-5" />
           Add
         </Button>
       </nav>

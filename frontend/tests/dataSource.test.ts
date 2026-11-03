@@ -47,7 +47,7 @@ describe('reads', () => {
     assert.deepEqual(snapshot.liquid.map((l) => l.balance), [235_000, 4_872_550, 312_075])
     const blue = snapshot.cards.find((c) => c.account.name === 'Blue Card')!
     assert.deepEqual([blue.signedDebt, blue.owed, blue.credit, blue.availableCredit], [1_425_000, 1_425_000, 0, 3_575_000])
-    for (const a of snapshot.accounts) assert.deepEqual(Object.keys(a).sort(), ['id', 'name', 'type'])
+    for (const a of snapshot.accounts) assert.deepEqual(Object.keys(a).sort(), ['cardProductId', 'id', 'name', 'type']) // like the API since ADR-020
     assert.equal(JSON.stringify(snapshot).includes('opening'), false)
   })
   it('summary and categories match the engine', async () => {
@@ -115,9 +115,10 @@ describe('writes', () => {
   })
   it('a new account appears in the snapshot', async () => {
     const source = createMockSource()
-    await source.addAccount(wallet)
+    const id = await source.addAccount(wallet)
     const snapshot = await source.loadAccounts(signal)
     assert.equal(snapshot.accounts.at(-1)!.name, 'Wallet')
+    assert.equal(id, snapshot.accounts.at(-1)!.id) // the new ID, so the chosen card design can be saved for it
     assert.equal(snapshot.liquid.find((l) => l.account.name === 'Wallet')!.balance, 10_000)
   })
 })
@@ -269,5 +270,28 @@ describe('current account amount corrections', () => {
       await source.updateAccount(card.account.id, { ...values, owed: target })
       assert.equal((await source.loadAccountForEdit(card.account.id, signal)).owed, target)
     }
+  })
+})
+
+describe('mock card choices (ADR-020)', () => {
+  const signal = new AbortController().signal
+  const bank = { type: 'bank' as const, name: 'Card Bank', balance: '100.00', limit: '', owed: '' }
+  it('stores a card on create, keeps it when an update leaves it out, and clears it with null', async () => {
+    const source = createMockSource()
+    const id = (await source.addAccount(bank, 'maribank-debit'))!
+    const card = async () => (await source.loadAccounts(signal)).accounts.find((a) => a.id === id)!.cardProductId
+    assert.equal(await card(), 'maribank-debit')
+    await source.updateAccount(id, await source.loadAccountForEdit(id, signal))
+    assert.equal(await card(), 'maribank-debit')
+    await source.updateAccount(id, await source.loadAccountForEdit(id, signal), 'gotyme-visa-debit')
+    assert.equal(await card(), 'gotyme-visa-debit')
+    await source.updateAccount(id, await source.loadAccountForEdit(id, signal), null)
+    assert.equal(await card(), null)
+    assert.equal((await source.loadAccounts(signal)).liquid.find((l) => l.account.id === id)!.balance, 10_000)
+  })
+  it('refuses a card on a cash account and a malformed ID, like the API', async () => {
+    const source = createMockSource()
+    await assert.rejects(source.addAccount({ ...bank, type: 'cash', name: 'Pocket' }, 'maribank-debit'), (e: unknown) => e instanceof ApiError && e.status === 422 && e.field === 'card_product_id')
+    await assert.rejects(source.addAccount(bank, 'Mari Bank'), (e: unknown) => e instanceof ApiError && e.status === 422)
   })
 })

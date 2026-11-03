@@ -1,4 +1,18 @@
-import type { AccountsSnapshot, ActivityPage, Category, EntryTarget, EntryValues, FinancialSummary } from './types.ts'
+import type {
+  AccountsSnapshot,
+  ActivityPage,
+  Category,
+  EntryTarget,
+  EntryValues,
+  FinancialSummary,
+  KakeiboEnvelope,
+  KakeiboMonth,
+  KakeiboPlan,
+  KakeiboPlanValues,
+  KakeiboReviewValues,
+  KakeiboWeek,
+  KakeiboWeekNotes,
+} from './types.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 
 /*
@@ -26,8 +40,35 @@ export interface DataSource {
   /** Create (no target) or replace (target) an expense, income, card payment or account transfer. */
   saveEntry(values: EntryValues, target?: EntryTarget): Promise<void>
   deleteEntry(target: EntryTarget): Promise<void>
-  addAccount(values: AccountValues): Promise<void>
-  updateAccount(id: number, values: AccountValues): Promise<void>
+  /**
+   * Resolves with the new account's ID when the server reports one (null otherwise). `card` (ADR-020) is sent
+   * only when given; pass it only to a server whose accounts carry `cardProductId`.
+   */
+  addAccount(values: AccountValues, card?: string | null): Promise<number | null>
+  /** `card` undefined keeps the stored card; null clears it. */
+  updateAccount(id: number, values: AccountValues, card?: string | null): Promise<void>
+
+  /* Kakeibo (ADR-021). Months are "YYYY-MM". Plans are planning figures: saving one never changes the ledger. */
+  /** The month's plan and its ledger actuals, every total worked out by the server (the dashboard). */
+  loadKakeiboMonth(month: string, signal: AbortSignal): Promise<KakeiboMonth>
+  /** The month's stored plan, read fresh for the plan form; null when the month has none. */
+  loadKakeiboPlan(month: string, signal: AbortSignal): Promise<KakeiboPlan | null>
+  /** Create or replace the month's plan. */
+  saveKakeiboPlan(month: string, values: KakeiboPlanValues): Promise<void>
+  /**
+   * Save the month-end reflection. The server replaces every answer and takes a fresh snapshot of the month's
+   * ledger totals; the browser never sends totals. On a month with no plan the server also stores the plan
+   * amounts at ₱0.00.
+   */
+  saveKakeiboReview(month: string, values: KakeiboReviewValues): Promise<void>
+  /** One Monday-to-Sunday week ("YYYY-MM-DD", a Monday): its totals and notes. */
+  loadKakeiboWeek(weekStart: string, signal: AbortSignal): Promise<KakeiboWeek>
+  /** Replace the week's three notes (all three are always sent; a blank note is saved as empty). */
+  saveKakeiboWeek(weekStart: string, notes: KakeiboWeekNotes): Promise<void>
+  /** Set or clear (null) one expense's envelope, and nothing else about it. Refused for income. */
+  classifyExpense(transactionId: number, envelope: KakeiboEnvelope | null): Promise<void>
+  /** Set or clear an expense category's suggested envelope. Saved expenses keep their envelopes. */
+  setCategoryEnvelope(categoryId: number, envelope: KakeiboEnvelope | null): Promise<void>
 }
 
 /**

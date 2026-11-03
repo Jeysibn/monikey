@@ -64,12 +64,15 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
       await shot(p, `kakeibo-${w}-quickadd.png`);
       await p.context().close();
     }
-    for (const w of [768, 1440]) {
+    for (const w of [768, 1024, 1280, 1440]) {
       const p = await open(w, { view: "Overview" });
       check(`${w}px: the ${w >= 1024 ? "sidebar" : "rail"} lists Kakeibo`, await p.locator('aside nav[aria-label="Main"] button:has-text("Kakeibo")').isVisible());
       await nav(p, "Kakeibo");
       eq(`${w}px: no horizontal scroll`, await overflow(p), 0);
       eq(`${w}px: one Add transaction button (page header)`, await p.locator('button:has-text("Add transaction"):visible').count(), 1);
+      // Regression (browser acceptance): from 1024 to 1279px two envelope cards side by side broke amounts mid-number.
+      const broken = await p.evaluate(() => [...document.querySelectorAll("main article[aria-labelledby^=envelope-] *")].filter(e => e.children.length <= 1 && /^[−+]?₱[\d,]+\.\d{2}$/.test(e.textContent.trim())).filter(e => { const r = document.createRange(); r.selectNodeContents(e); const rs = [...r.getClientRects()].filter(x => x.width > 0); return rs.some(a => rs.some(b => b.top >= a.bottom - 1)); }).map(e => e.textContent.trim()));
+      eq(`${w}px: every envelope amount stays on one line`, broken.join(", "), "");
       await shot(p, `kakeibo-${w}.png`);
       await p.context().close();
     }

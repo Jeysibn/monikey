@@ -37,7 +37,7 @@ const MONTH_ID: Record<keyof KakeiboReviewValues, string> = {
 const SAVED_HELP = "What you set aside, in your own words. MoniKey doesn't check it against your accounts or move any money."
 
 function Totals({ income, expenses, envelopes, unclassified }: { income: Centavos; expenses: Centavos; envelopes: Record<KakeiboEnvelope, Centavos>; unclassified: Centavos }) {
-  const row = 'flex items-baseline justify-between gap-3'
+  const row = 'flex flex-wrap items-baseline justify-between gap-x-3'
   return (
     <dl className="grid gap-1 text-[0.9375rem]">
       <div className={row}><dt className="text-muted-foreground">Income</dt><dd><MoneyText centavos={income} kind="income" /></dd></div>
@@ -202,7 +202,7 @@ export function MonthlyReviewCard({
       )}
       <Button
         variant="secondary"
-        className="mt-4"
+        className="mt-4 h-auto min-h-11 max-w-full whitespace-normal py-2"
         onClick={() => {
           onOpen()
           guard.current = { saving: false, dirty: false }

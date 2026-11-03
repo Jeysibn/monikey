@@ -28,7 +28,11 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     if (view !== "Overview") await nav(page, view);
     return page;
   }
-  const nav = async (p, name) => { await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100); };
+  const nav = async (p, name) => {
+    await p.locator(`nav[aria-label="Main"] >> visible=true >> button:has-text("${name}")`).first().click(); await p.waitForTimeout(100);
+    // Accounts opens on the wallet card deck (since the wallet gallery); these checks read the List layout.
+    if (name === "Accounts") { await p.locator('[role=group][aria-label="Account display"] button:has-text("List")').click(); await p.waitForTimeout(100); }
+  };
   const T = s => s.replace(/\s+/g, " ").trim();
   const mainText = p => p.evaluate(() => document.querySelector("main").innerText.replace(/\s+/g, " ").trim());
   const dlg = p => p.locator('[role="dialog"]');

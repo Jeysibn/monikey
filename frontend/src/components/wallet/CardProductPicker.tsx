@@ -1,10 +1,11 @@
 import { Check } from 'lucide-react'
 import { cn } from 'cn'
 
-import { cardIssuers, cardProductImage, cardProductsFor, type CardAccountType, type CardProduct } from '@/wallet/cardProducts'
+import { MONIKEY_DEFAULT_ARTWORK_PATH } from '@/wallet/artworkCatalog'
+import { cardIssuers, cardProductsFor, type CardAccountType, type CardProduct } from '@/wallet/cardProducts'
 
 /*
- * Add account, step two: pick the bank or provider, then the exact card. Each card shows its own design.
+ * Add account, step two: pick the bank or provider, then the exact card. Every card is drawn with the neutral MoniKey design; the name is only a label.
  * "Other" keeps the neutral MoniKey card. Used by Add account and Edit account; the card can be changed anytime.
  * Both steps are native radio groups: arrow keys move between options, Tab leaves the group.
  */
@@ -93,7 +94,7 @@ export function CardProductPicker({
                       checked ? 'border-primary bg-primary-soft' : 'border-input bg-card',
                     )}
                   >
-                    <img src={cardProductImage(product)} alt="" className="block aspect-[1.586/1] w-full rounded-[8px] object-cover" />
+                    <img src={MONIKEY_DEFAULT_ARTWORK_PATH} alt="" className="block aspect-[1.586/1] w-full rounded-[8px] object-cover" />
                     <span className="flex min-w-0 items-start gap-1">
                       {checked && <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary-ink" />}
                       <span className="grid min-w-0">
@@ -105,7 +106,7 @@ export function CardProductPicker({
               )
             })}
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Card designs are demo images, not official issuer artwork.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Cards use MoniKey&rsquo;s own design. The name is a label; it isn&rsquo;t the issuer&rsquo;s official card design.</p>
         </fieldset>
       )}
 

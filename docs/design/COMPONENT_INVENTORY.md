@@ -8,7 +8,7 @@
 
 ## Current status after wallet PR4
 
-Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `CardProductPicker` (which replaced the Edit-time `WalletDesignPicker`), and `WalletStack`. The card catalog lives in `wallet/cardProducts.ts`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. The artwork catalog defaults to the bundled MoniKey fallback. PR5 ordering/synchronization remains deferred.
+Wallet PRs 1–4 add `WalletCard`, `WalletGrid`, `WalletViewToggle`, `CardProductPicker` (which replaced the Edit-time `WalletDesignPicker`), and `WalletStack`. The card catalog lives in `wallet/cardProducts.ts`. Their presentation model and safe artwork catalog live in `wallet/walletModel.ts` and `wallet/artworkCatalog.ts`; browser-local appearance persistence and validation live in `wallet/walletPreferences.ts`. These are presentation-only: financial values continue to come from the existing snapshot, the picker does not add fields to account API payloads, and no issuer artwork is approved for distribution yet. Since 2026-11-03 (ADR-019 amendment) every card, including each picker tile, is drawn with the original MoniKey artwork and the chosen product appears only as a text name; the generated issuer-style images were removed and Atome is not selectable (a stored Atome id shows the neutral card). PR5 ordering/synchronization remains deferred.
 
 ## Historical status through Milestone 4.9
 

@@ -16,7 +16,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
 
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox", "--disable-gpu"] });
-  const errors = [], external = [];
+  const errors = [], external = [], artRequests = [];
   const safe = async fn => { try { await fn(); } catch (e) { check("section aborted: " + String(e.message).split("\n")[0].slice(0, 220), false); } };
   /* Opens the app and goes to Accounts through the real navigation. */
   async function open(width, { query = "", height = 900, stay = false, walletView = "list", maribankConcept = false, mayaConcept = false, generatedConcepts = false, bdoConcept = false, bdoDebitConcept = false } = {}) {
@@ -34,7 +34,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const page = await ctx.newPage();
     page.on("pageerror", e => errors.push(`pageerror@${width}${query}: ${e.message}`));
     page.on("console", m => { if (m.type() === "error" || m.type() === "warning") errors.push(`console.${m.type()}@${width}${query}: ${m.text().slice(0, 140)}`); });
-    page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); });
+    page.on("request", r => { const u = r.url(); if (!u.startsWith(new URL(BASE).origin) && !u.startsWith("data:")) external.push(u); if (new URL(u).pathname.startsWith("/card-art/")) artRequests.push(new URL(u).pathname); });
     await page.goto(BASE + query); await page.evaluate(() => document.fonts.ready);
     page.W = width; page.big = width >= 768;
     if (!stay) {
@@ -118,10 +118,11 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const blueCard = p.locator(`${R.grid} ul > li`).nth(3);
     const face = blueCard.getByRole("button", { name: /View details for Blue Card/ });
     const faceText = (await face.innerText()).replace(/\s+/g, " ");
-    check("Maya card face shows available credit and share used, not the account name", /Available credit ₱35,750\.00 29% used/i.test(faceText) && !/Blue Card/.test(faceText), faceText);
+    check("a card with a saved Maya choice shows available credit, share used and the account name on the neutral card", /Available credit ₱35,750\.00 29% used/i.test(faceText) && /Blue Card/.test(faceText), faceText);
     const dimensions = await face.locator("xpath=..").locator("img").evaluate(img => ({ complete: img.complete, width: img.naturalWidth, height: img.naturalHeight }));
-    check("generated Maya asset loads without cropping the card frame", dimensions.complete && dimensions.width >= 1000 && dimensions.height >= 600, JSON.stringify(dimensions));
-    check("a card with artwork shows no name caption (the name is in its details)", !/Blue Card/.test(await blueCard.innerText()));
+    check("the neutral MoniKey artwork loads (no issuer image)", dimensions.complete && dimensions.width > 0, JSON.stringify(dimensions));
+    eq("the card image is the MoniKey default", await face.locator("xpath=..").locator("img").evaluate(img => new URL(img.src).pathname), "/card-art/monikey-default.svg");
+    check("the neutral card carries the account name and no issuer name", /Blue Card/.test(await blueCard.innerText()) && !/Maya|Visa/.test(await blueCard.innerText()));
     await face.click();
     const dialog = p.getByRole("dialog");
     check("Maya card details show name, type, available credit and limit", /Blue Card/.test(await dialog.innerText()) && /Credit card/.test(await dialog.innerText()) && /₱35,750\.00/.test(await dialog.innerText()) && /₱50,000\.00/.test(await dialog.innerText()));
@@ -136,8 +137,8 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const mainSavings = p.locator(`${R.grid} ul > li`).nth(1);
     const face = mainSavings.getByRole("button", { name: /View details for Main Savings/ });
     const faceText = (await face.innerText()).replace(/\s+/g, " ");
-    check("MariBank card face shows the balance at bottom-left without the account name", /Balance ₱48,725\.50/i.test(faceText) && !/Main Savings/.test(faceText), faceText);
-    check("a card with artwork shows no name or type caption", !/Main Savings|Bank account/.test(await mainSavings.innerText()));
+    check("a saved MariBank choice shows the balance on the neutral card, with the account name", /Balance ₱48,725\.50/i.test(faceText) && /Main Savings/.test(faceText) && !/MariBank/.test(faceText), faceText);
+    check("no issuer name is claimed on the card", !/MariBank/.test(await mainSavings.innerText()));
     await face.click();
     check("MariBank details appear in the popup", /Main Savings/.test(await p.getByRole("dialog").innerText()) && /Bank account/.test(await p.getByRole("dialog").innerText()) && /₱48,725\.50/.test(await p.getByRole("dialog").innerText()));
     await p.keyboard.press("Escape");
@@ -145,24 +146,24 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.context().close();
   });
 
-  group = "Generated bank and credit-card concepts";
+  group = "Saved card choices (including the retired Atome ID) draw the neutral card";
   await safe(async () => {
     const p = await open(1280, { walletView: "cards", generatedConcepts: true });
     const checks = [
-      { index: 1, name: "Main Savings", amount: "₱48,725.50", src: "/card-art/generated/gotyme-visa-debit.webp" },
-      { index: 2, name: "GCash", amount: "₱3,120.75", src: "/card-art/generated/gcash-visa.webp" },
-      { index: 3, name: "Blue Card", amount: "₱35,750.00", src: "/card-art/generated/unionbank-rewards-visa-platinum.webp" },
-      { index: 4, name: "Everyday Card", amount: "₱23,200.00", src: "/card-art/generated/atome-credit-black.webp" },
+      { index: 1, name: "Main Savings", amount: "₱48,725.50", src: "/card-art/monikey-default.svg" },
+      { index: 2, name: "GCash", amount: "₱3,120.75", src: "/card-art/monikey-default.svg" },
+      { index: 3, name: "Blue Card", amount: "₱35,750.00", src: "/card-art/monikey-default.svg" },
+      { index: 4, name: "Everyday Card", amount: "₱23,200.00", src: "/card-art/monikey-default.svg" },
     ];
     for (const item of checks) {
       const account = p.locator(`${R.grid} ul > li`).nth(item.index);
       const face = account.getByRole("button", { name: new RegExp(`View details for ${item.name}`) });
       const img = face.locator("xpath=..").locator("img");
       const dimensions = await img.evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
-      check(`${item.name} uses its local generated concept`, dimensions.src === item.src && dimensions.complete && dimensions.width >= 1000 && dimensions.height >= 600, JSON.stringify(dimensions));
+      check(`${item.name} uses the neutral MoniKey artwork`, dimensions.src === item.src && dimensions.complete && dimensions.width > 0, JSON.stringify(dimensions));
       const faceText = (await face.innerText()).replace(/\s+/g, " ");
-      check(`${item.name} face keeps the current amount visible without its account name`, faceText.includes(item.amount) && !faceText.includes(item.name), faceText);
-      check(`${item.name} shows no name caption under its artwork`, !new RegExp(item.name).test(await account.innerText()));
+      check(`${item.name} face keeps the current amount visible and names the account`, faceText.includes(item.amount) && faceText.includes(item.name), faceText);
+      check(`${item.name} claims no issuer or product name`, !/GoTyme|GCash Visa|UnionBank|Atome|Rewards/.test((await account.innerText()).replace(item.name, "")));
     }
     const values = await p.evaluate(() => [...document.querySelectorAll('[aria-labelledby="all-accounts-title"] li')].map(item => item.innerText.replace(/\s+/g, " ")));
     check("concept selection preserves account amounts and credit details", /₱48,725\.50/.test(values[1]) && /₱3,120\.75/.test(values[2]) && /₱35,750\.00 29% used/i.test(values[3]) && /₱23,200\.00 23% used/i.test(values[4]), values.join(" | "));
@@ -172,14 +173,14 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     const bdo = await open(1280, { walletView: "cards", bdoConcept: true });
     const everyday = bdo.locator(`${R.grid} ul > li`).nth(4);
     const bdoImage = await everyday.getByRole("button", { name: /View details for Everyday Card/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
-    check("Everyday Card can use the local BDO concept and preserves its balance", bdoImage.src === "/card-art/generated/bdo-visa-classic.webp" && bdoImage.complete && bdoImage.width >= 1000 && /₱23,200\.00/.test(await everyday.innerText()), JSON.stringify(bdoImage));
+    check("Everyday Card with a saved BDO choice uses the neutral artwork and preserves its balance", bdoImage.src === "/card-art/monikey-default.svg" && bdoImage.complete && bdoImage.width > 0 && /₱23,200\.00/.test(await everyday.innerText()), JSON.stringify(bdoImage));
     if (SHOTS) await bdo.screenshot({ path: path.join(SHOTS, "accounts-bdo-concept.png"), fullPage: true });
     await bdo.context().close();
 
     const debit = await open(1280, { walletView: "cards", bdoDebitConcept: true });
     const main = debit.locator(`${R.grid} ul > li`).nth(1);
     const debitImage = await main.getByRole("button", { name: /View details for Main Savings/ }).locator("xpath=..").locator("img").evaluate(image => ({ src: new URL(image.src).pathname, complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }));
-    check("Main Savings can use the local BDO debit concept and preserves its balance", debitImage.src === "/card-art/generated/bdo-debit-mastercard.webp" && debitImage.complete && debitImage.width >= 1000 && /₱48,725\.50/.test(await main.innerText()), JSON.stringify(debitImage));
+    check("Main Savings with a saved BDO debit choice uses the neutral artwork and preserves its balance", debitImage.src === "/card-art/monikey-default.svg" && debitImage.complete && debitImage.width > 0 && /₱48,725\.50/.test(await main.innerText()), JSON.stringify(debitImage));
     if (SHOTS) await debit.screenshot({ path: path.join(SHOTS, "accounts-bdo-debit-concept.png"), fullPage: true });
     await debit.context().close();
   });
@@ -242,12 +243,14 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.getByRole("button", { name: "Add account" }).first().click();
     const dialog = p.getByRole("dialog");
     await dialog.locator("label", { hasText: /^Card$/ }).click();
-    eq("credit cards offer each issuer plus Other", await dialog.locator('input[name="aa-issuer"]').count(), 6);
+    eq("credit cards offer each issuer plus Other", await dialog.locator('input[name="aa-issuer"]').count(), 5);
+    check("Atome is not offered", !/Atome/.test(await dialog.innerText()));
     await dialog.locator("label", { hasText: /^BDO$/ }).click();
     eq("BDO lists all four of its credit cards", await dialog.locator('input[name="aa-card-product"]').count(), 4);
     await dialog.locator("label", { hasText: "BDO Visa Classic" }).click();
     eq("picking a card fills an empty name", await p.locator("#aa-name").inputValue(), "BDO Visa Classic");
-    check("card designs are labeled as demo images", /demo images, not official issuer artwork/.test(await dialog.innerText()));
+    check("the picker says the cards use MoniKey's design and the name is only a label", /Cards use MoniKey.s own design\. The name is a label; it isn.t the issuer.s official card design\./.test(await dialog.innerText()));
+    eq("every product tile shows the neutral artwork", await dialog.locator('input[name="aa-card-product"] + span img').evaluateAll(imgs => [...new Set(imgs.map(i => new URL(i.src).pathname))].join(",")), "/card-art/monikey-default.svg");
     await dialog.locator("label", { hasText: /^Bank$/ }).first().click();
     eq("changing type clears the filled-in name", await p.locator("#aa-name").inputValue(), "");
     await dialog.locator("label", { hasText: /^MariBank$/ }).click();
@@ -257,7 +260,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.waitForFunction(() => document.querySelector("#aa-balance") === null);
     const added = p.locator(`${R.grid} ul > li`, { has: p.locator('summary[aria-label="Card actions for MariBank Debit Card"]') });
     const src = await added.locator("img").first().evaluate(img => new URL(img.src).pathname);
-    eq("the new account shows the chosen card design", src, "/card-art/generated/maribank-debit.webp");
+    eq("the new account shows the neutral card (the choice is stored as a label)", src, "/card-art/monikey-default.svg");
     await added.locator('summary[aria-label^="Card actions for"]').click();
     await added.getByRole("button", { name: "Edit account" }).click();
     await p.locator("#aa-name").waitFor();
@@ -268,7 +271,12 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     await p.getByRole("button", { name: "Save changes" }).click();
     await p.waitForFunction(() => document.querySelector("#aa-name") === null);
     const changed = await added.locator("img").first().evaluate(img => new URL(img.src).pathname);
-    eq("an existing account's card can be changed in Edit", changed, "/card-art/generated/gotyme-visa-debit.webp");
+    eq("an existing account's card can be changed in Edit, still on the neutral card", changed, "/card-art/monikey-default.svg");
+    await added.locator('summary[aria-label^="Card actions for"]').click();
+    await added.getByRole("button", { name: "Edit account" }).click();
+    await p.locator("#aa-name").waitFor();
+    eq("the changed choice persists when Edit is reopened", await p.locator('input[name="aa-card-product"]:checked').getAttribute("value"), "gotyme-visa-debit");
+    await p.keyboard.press("Escape");
     if (SHOTS) await p.screenshot({ path: path.join(SHOTS, "accounts-add-card-picker.png"), fullPage: true });
     await p.context().close();
   });
@@ -439,6 +447,7 @@ const eq = (name, a, e) => check(name, a === e, `got ${JSON.stringify(a)}${a ===
     }
   });
 
+  check("no request for any card image other than the MoniKey default", artRequests.every(path => path === "/card-art/monikey-default.svg") && artRequests.length > 0, [...new Set(artRequests)].join(", "));
   check("no request left the page's own origin", external.length === 0, external.length ? external.slice(0, 3).join(", ") : "all requests same-origin");
   check("no console errors or warnings, no uncaught exceptions", errors.length === 0, errors.slice(0, 3).join(" || ") || "none");
 

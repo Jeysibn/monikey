@@ -1,8 +1,8 @@
 # MoniKey v1 — Technical-Level Design (TLD)
 
-**Version:** 1.5 (ADR-021 plan-presence amendment and release integration)
-**Date:** 2026-11-03
-**Status:** ADR-021's Kakeibo API and frontend are implemented on the integration branch. PR E adds explicit plan-presence tracking, local integration and recovery rehearsal, and a release runbook; it does not authorize deployment. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. Prior full React/API browser acceptance and screen-reader checks remain limited. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current PR E evidence and limitations. This design does not claim production backup verification or off-cluster recovery.
+**Version:** 1.6 (ADR-022 automated release and migration integration)
+**Date:** 2026-11-07
+**Status:** ADR-022 implementation is prepared in separate MoniKey and `homelab-gitops` pull requests. It has not been merged or run against the live cluster; one-time schema adoption remains required before automatic migration. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. Prior full React/API browser acceptance and screen-reader checks remain limited. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for evidence and limitations. This design does not claim production backup verification or off-cluster recovery.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -555,7 +555,7 @@ The personal Obsidian vault is **outside** `monikey-v2/` and `homelab-gitops/` b
 
 **Local environments:** Fastest feedback = Vite on host with mock JSON, then Vite + local FastAPI with `/api` proxy, then production-like Compose using Nginx. Use `.env.example` for placeholders; ignore real `.env` secrets. Do not expose the Postgres port on the network unless required for temporary local debugging.
 
-## 10. CI: source code → tested GHCR images
+## 10. CI: source code → tested GHCR images → GitOps release
 
 ```mermaid
 flowchart LR
@@ -563,22 +563,24 @@ flowchart LR
   T --> M{Merged to main?}
   M -->|Yes| B[Build 2 Docker images]
   B --> P[Push to GHCR with immutable SHA tags]
-  P --> G[Human updates GitOps image references]
-  G --> AR[Argo CD observes Git and syncs]
-  AR --> K[Kubernetes rolling update]
+  P --> B[GitOps Actions backup + restore check]
+  B --> G[Promote paired SHA refs in homelab-gitops]
+  G --> AR[Argo CD syncs migration Job]
+  AR -->|success| K[Kubernetes rolling update]
+  AR -->|failure| S[Application rollout blocked]
 ```
 
 - Pull requests run `cd frontend && npm ci && npm run build` (TypeScript check + Vite bundle), the generated template linter, focused React tests if introduced, Playwright smoke checks for UI milestones, Python/API tests, and Docker build validation. The lockfile makes CI dependency resolution repeatable.
 - After merge to `main`, the frontend Docker multi-stage build creates production Vite `dist/` and serves it from Nginx; separately build the FastAPI image. Publish images such as `ghcr.io/<owner>/monikey-v2-frontend:sha-<full-git-sha>` and `ghcr.io/<owner>/monikey-v2-api:sha-<full-git-sha>`.
-- GHCR publish uses appropriately scoped GitHub Actions `GITHUB_TOKEN`; avoid storing PATs if not needed.
-- **Do not rely on `:latest`**. A new push to the registry does not change a GitOps manifest; the manifest must reference the new image version.
-- Keep application CI separate from cluster credentials. Initial promotion is manual: review/push a manifest image-tag change to `homelab-gitops`.
+- GHCR publish uses appropriately scoped GitHub Actions `GITHUB_TOKEN`. MoniKey Actions uses a repository-scoped token only to dispatch and observe the GitOps release workflow; cluster access stays in `homelab-gitops`.
+- **Do not rely on `:latest`**. Frontend and API are promoted with the same full commit SHA after the existing backup workflow has restored its encrypted dump into a disposable PostgreSQL instance.
+- The GitOps release workflow commits the two image refs and the versioned migration Job. Argo CD runs the Job before application Deployments and Actions reports deployed SHA, migration version, rollouts, and the private readiness check.
 
 ## 11. CD: GitOps repository → Kubernetes
 
 **Application manifests** (minimum): Namespace, frontend Deployment + Service, API Deployment + Service, PostgreSQL **single-replica StatefulSet** + Service + PVC via `volumeClaimTemplates`, Traefik Ingress, nonsecret ConfigMap; Secret created securely outside Git in v1. Use one app namespace (e.g. `monikey-v2`).
 
-**Argo CD Application:** watches a known path in `homelab-gitops` and may auto-sync **only when Git changes**. A manual sync is fine during learning. Change detection depends on the Argo CD application's configured sync policy.
+**Argo CD Application:** watches a known path in `homelab-gitops` and auto-syncs Git changes. PostgreSQL resources use earlier sync waves, then the migration Job runs as a Sync hook before the API/frontend Deployments. A failed migration blocks those later waves.
 
 **Ingress paths:** `/api` (Prefix) routes to API Service; `/` (Prefix) routes to the Nginx frontend Service, which serves Vite built assets. No separate Vite/Node Service and no SSR. Use a trusted private hostname; TLS and private access are required before external exposure.
 
@@ -592,7 +594,7 @@ flowchart LR
 - Kubernetes Service networking keeps PostgreSQL private; NetworkPolicies can be added after checking whether the existing CNI enforces them.
 - Store passwords in Kubernetes Secrets created outside source control; base64 encoding is **not** encryption.
 
-**First-time DB schema:** initialize SQL **only for a brand-new empty database volume**, then seed categories. Subsequent schema changes must be numbered, explicitly reviewed SQL scripts with a backup and a tracked application procedure. PostgreSQL init scripts do **not** rerun automatically on an existing volume. Do not re-run destructive init SQL against existing finance records.
+**Database migrations:** `database/migrate.py` initializes only a truly empty schema. It applies ordered SQL migrations under a PostgreSQL advisory lock and tracks version, filename and SHA-256 checksum. Existing databases without a ledger require the protected, backup-first adoption workflow; adoption recognizes a complete known schema and records checksums without executing migration SQL. Unknown, partial, gapped, or checksum-mismatched states stop safely. The Job image is the same immutable backend SHA as the API.
 
 **Rollback:** revert the frontend/API image tag(s) in the GitOps repo and allow Argo CD to sync. Database schema rollback is **not** automatically guaranteed—forward/backward compatibility, backup, and restore procedure are necessary before DB schema changes.
 
@@ -604,13 +606,13 @@ flowchart LR
 - Least-privilege PostgreSQL application role, parameterized queries, Pydantic validation, bounded input sizes, generic error messages.
 - Limit CORS (or avoid it entirely through same-origin routing). Do not use wildcard cross-origin access casually.
 - Review third-party AI skills before installation; skills can include executable scripts and instructions with filesystem/network access.
-- CI credentials limited to publishing images. Manual GitOps promotion avoids granting workflows cluster-admin privileges.
+- CI credentials are limited to publishing images and dispatching a GitOps workflow. The existing namespace-scoped GitOps identity handles backup and a small set of MoniKey Job/pod reads; no cluster-admin credential is used.
 
 ## 13. Observability, backup, and recovery
 
 **Logging:** FastAPI logs route/method/status/duration/request ID as practical; do not log personal notes, full financial records, or DB credentials. `kubectl logs`, pod events, and Argo CD health are first-line troubleshooting tools. Existing monitoring (if operational) can be reused but isn't required to launch v1.
 
-**Backups:** initially, use a documented, scheduled (manual cadence until scheduling is approved) logical PostgreSQL backup with `pg_dump`, stored outside the cluster; ensure backup access is private/encrypted and **test a restore** in a disposable database. Add a Kubernetes CronJob only after the manual backup/restore process works.
+**Backups:** before each GitOps promotion, the existing workflow creates a logical PostgreSQL backup, restores it into a disposable PostgreSQL instance, encrypts the artifact, and uploads it with seven-day retention. This artifact is temporary transport, not long-term off-cluster retention; keep a separate protected backup and test recovery.
 
 **Recovery checks:** API unavailable → inspect Services/Pods/readiness and logs; DB unavailable → check StatefulSet, PVC, storage health, credentials; wrong UI → check HTML asset cache and the **image digest/tag actually running**; Argo CD OutOfSync → compare desired manifests vs live state before changing anything; data loss → restore last valid backup, document recovery point.
 

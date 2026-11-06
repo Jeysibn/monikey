@@ -43,13 +43,16 @@ jobs:
       - name: Validate container builds
         run: |
           docker build --tag monikey-frontend:ci --build-arg VITE_DATA_SOURCE=http frontend
-          docker build --tag monikey-api:ci backend
+          docker build --tag monikey-api:ci --file backend/Dockerfile .
 
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: monikey-publish-${{ github.sha }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -66,8 +69,67 @@ jobs:
           IMAGE_OWNER: ${{ github.repository_owner }}
           IMAGE_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           owner="${IMAGE_OWNER,,}"
-          docker build --tag "ghcr.io/$owner/monikey-v2-frontend:sha-$IMAGE_SHA" --build-arg VITE_DATA_SOURCE=http frontend
-          docker build --tag "ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA" backend
-          docker push "ghcr.io/$owner/monikey-v2-frontend:sha-$IMAGE_SHA"
-          docker push "ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA"
+          frontend="ghcr.io/$owner/monikey-v2-frontend:sha-$IMAGE_SHA"
+          api="ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA"
+          frontend_exists=false
+          api_exists=false
+          manifest_exists() {
+            local image="$1" output
+            if output="$(docker manifest inspect "$image" 2>&1)"; then
+              return 0
+            fi
+            if grep -Eqi 'manifest unknown|no such manifest|404 Not Found' <<<"$output"; then
+              return 1
+            fi
+            echo "Could not safely determine whether $image exists: $output" >&2
+            exit 1
+          }
+          manifest_exists "$frontend" && frontend_exists=true || test "$?" -eq 1
+          manifest_exists "$api" && api_exists=true || test "$?" -eq 1
+          if [[ "$frontend_exists" == true && "$api_exists" == true ]]; then
+            echo "Both immutable image tags already exist; reusing them for this SHA."
+            exit 0
+          fi
+          if [[ "$frontend_exists" == true || "$api_exists" == true ]]; then
+            echo "Only one image tag exists for this SHA; refusing to overwrite or promote a partial pair." >&2
+            exit 1
+          fi
+          docker build --tag "$frontend" --build-arg VITE_DATA_SOURCE=http frontend
+          docker build --tag "$api" --file backend/Dockerfile .
+          docker push "$frontend"
+          docker push "$api"
+
+  promote:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.MONIKEY_GITOPS_AUTOMATION_ENABLED == 'true'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch paired SHA promotion to homelab GitOps
+        env:
+          GH_TOKEN: ${{ secrets.HOMELAB_GITOPS_DISPATCH_TOKEN }}
+          IMAGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          : "${GH_TOKEN:?Set HOMELAB_GITOPS_DISPATCH_TOKEN with Actions read and Contents write on homelab-gitops}"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          payload="$(printf '{"event_type":"monikey_release","client_payload":{"sha":"%s"}}' "$IMAGE_SHA")"
+          printf '%s' "$payload" | gh api repos/Jeysibn/homelab-gitops/dispatches --method POST --input -
+
+          for attempt in {1..90}; do
+            runs="$(gh api 'repos/Jeysibn/homelab-gitops/actions/workflows/monikey-release.yml/runs?event=repository_dispatch&per_page=10')"
+            run_id="$(jq -r --arg started "$started_at" --arg sha "$IMAGE_SHA" \
+              '.workflow_runs | map(select(.created_at >= $started and .display_title == ("MoniKey release " + $sha))) | first | .id // empty' \
+              <<< "$runs")"
+            if [[ -n "$run_id" ]]; then
+              gh run watch "$run_id" --repo Jeysibn/homelab-gitops --exit-status
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for the GitOps release workflow to start." >&2
+          exit 1

@@ -64,6 +64,11 @@ restart/backup-restore evidence are documented in the
   or mounting persistent storage, applies the schema, simulates the old baseline
   constraints, applies migrations 003–006 in order, seeds categories twice, runs the
   migration-preservation and accounting checks, and removes the container on exit.
+- `migrate.py` is the release migration runner. It applies only an ordered,
+  checksum-verified suffix of these SQL files while holding a PostgreSQL
+  advisory lock. It initializes only a truly empty schema; an existing schema
+  without `schema_migrations` must pass the separate, backup-first adoption
+  workflow before normal migration runs are allowed. It never drops records.
 - `rehearse_recovery.sh` builds an earlier schema with fictional records in a
   disposable PostgreSQL 17.6 container, creates and inspects a custom-format
   backup, restores it to an independent database, applies only migrations 005
@@ -83,7 +88,8 @@ From the repository root:
 bash database/test.sh
 ```
 
-Docker must be running. The default test image is pinned to
+Docker must be running, and `backend/.venv` must contain the development
+requirements. The default test image is pinned to
 `postgres:17.6-alpine`; set `MONIKEY_TEST_POSTGRES_IMAGE` to use another
 PostgreSQL image. The test container is disposable and contains only synthetic
 records.

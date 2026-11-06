@@ -1,6 +1,6 @@
 # Kakeibo release and recovery runbook
 
-This runbook describes a future private-homelab release. It does not authorize or perform a production migration or deployment. MoniKey has no authentication; keep its writable API on a trusted private network and do not publish it to the internet.
+**Release procedure superseded:** use [Automated GitOps release and rollback](AUTOMATED_DEPLOYMENT.md) after ADR-022 setup and schema adoption. The SQL commands below are historical rehearsal/reference material; do not run them against the live database. The automated workflow takes and verifies a backup and executes migrations in Kubernetes. MoniKey has no authentication; keep its writable API on a trusted private network and do not publish it to the internet.
 
 ## Before a release
 

@@ -14,7 +14,7 @@ Build a simple, accessible personal finance tracker that the project owner can *
 - Backend: **FastAPI + parameterized SQL / PostgreSQL driver**, simple REST routes under `/api`.
 - Database: **PostgreSQL**, five tables (`accounts`, `categories`, `transactions`, `credit_card_payments`, `account_transfers`); monetary values in `NUMERIC(12,2)`; private persistent storage and tested backup/restore.
 - Local: **Docker Compose**. Production frontend: Vite `dist/` served by **Nginx**; same-origin `/api` routing.
-- Delivery: **GitHub Actions → GHCR SHA-tagged images → reviewed update in `homelab-gitops` → Argo CD → Kubernetes**, on the existing private homelab. No unauthenticated public deployment with live finance data.
+- Delivery: **GitHub Actions → GHCR SHA-tagged images → verified backup → automated `homelab-gitops` promotion → ordered Kubernetes migrations → Argo CD health check**, on the existing private homelab (ADR-022). No unauthenticated public deployment with live finance data.
 
 Full implementation detail: [TLD](TLD.md). Decisions/trade-offs: [ADRs](ADR.md). Agent assignments: [AI Agent Playbook](AI_AGENT_PLAYBOOK.md).
 

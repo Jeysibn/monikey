@@ -18,11 +18,11 @@ The server adjusts the stored baseline by target minus current position without
 changing ledger rows or monthly income/expenses. Corrections whose resulting
 baseline exceeds NUMERIC(12,2) are rejected with 422.
 
-Existing databases require `database/003_current_account_amounts.sql` after a
-verified backup (and migration 002 if not already applied). Account card choices
-require `database/004_account_card_product.sql` after a verified backup. Apply
-these migrations manually on existing databases; Compose includes migration 004
-when initializing a new empty database. The API validates a card
+Existing databases are migrated by the GitOps migration Job after the one-time
+backup-first schema adoption. Do not apply SQL manually. The job runs the
+versioned files in order and blocks the application rollout on any unknown or
+inconsistent schema. Compose includes migrations 004–006 when initializing a
+new empty database. The API validates a card
 ID's shape and rejects non-null choices for cash accounts, but it does not check
 IDs against the frontend catalog. For ADR-020, apply migration 004, release the
 API, then release the frontend that sends the card choice. Account editing's
@@ -63,16 +63,14 @@ Set `MONIKEY_TEST_POSTGRES_IMAGE` to override the default
 Liquid-account transfers use `/api/account-transfers` and their own database
 table. Transfers affect both account balances but not income, expenses, or card
 debt. Migration `database/002_account_transfers.sql` is included in the current
-private homelab deployment. For another existing database, take and verify a
-backup, apply the migration, then deploy this API version; the API does not run
-migrations automatically.
+private homelab deployment. The automated GitOps release runner applies only
+the missing migration after the existing backup workflow verifies a restore.
 
 ## Kakeibo API (ADR-021)
 
-Kakeibo routes require migration `database/005_kakeibo.sql`; the API does not
-apply it automatically. On existing databases, follow the verified backup and
-restore rehearsal requirements in [`../database/README.md`](../database/README.md)
-before migration or release. Plans and reflections write only to the two
+Kakeibo routes require migrations `database/005_kakeibo.sql` and
+`database/006_kakeibo_plan_presence.sql`. The GitOps migration Job applies them
+after backup verification and ledger validation. Plans and reflections write only to the two
 Kakeibo metadata tables.
 
 - `GET`/`PUT /api/kakeibo/months/{YYYY-MM}` reads or saves a plan. An unsaved

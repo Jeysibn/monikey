@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
 postgres_test_image="${MONIKEY_TEST_POSTGRES_IMAGE:-postgres:17.6-alpine}"
 test_container="monikey-db-test-$$"
 
@@ -52,4 +53,11 @@ run_sql_file "$script_dir/tests/kakeibo_plan_presence_before.sql"
 run_sql_file "$script_dir/006_kakeibo_plan_presence.sql"
 run_sql_file "$script_dir/tests/kakeibo_plan_presence.sql"
 run_sql_file "$script_dir/tests/accounting.sql"
-python3 -m unittest discover -s "$script_dir/tests" -p 'test_*.py'
+python_runner="$repo_root/backend/.venv/bin/python"
+if [[ ! -x "$python_runner" ]]; then
+  echo "Backend test environment is missing. Create it with:" >&2
+  echo "  python3 -m venv backend/.venv" >&2
+  echo "  backend/.venv/bin/pip install -r backend/requirements-dev.txt" >&2
+  exit 1
+fi
+"$python_runner" -m unittest discover -s "$script_dir/tests" -p 'test_*.py'

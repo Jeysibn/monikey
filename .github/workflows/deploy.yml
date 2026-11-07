@@ -32,7 +32,7 @@ jobs:
             "ghcr.io/jeysibn/monikey-v2-frontend:sha-$IMAGE_SHA" \
             "ghcr.io/jeysibn/monikey-v2-api:sha-$IMAGE_SHA"; do
             docker manifest inspect "$image" > /dev/null
-            printf "Verified %s.\\n" "$image" >> "$GITHUB_STEP_SUMMARY"
+            printf 'Verified %s.\n' "$image" >> "$GITHUB_STEP_SUMMARY"
           done
       - name: Request GitOps deployment
         env:

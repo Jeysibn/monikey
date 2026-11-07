@@ -141,7 +141,7 @@ def infer_baseline(connection: psycopg.Connection) -> int:
             raise MigrationError("Migration 006 appears partial; refusing adoption.")
         version = max(version, 6)
 
-    known_tables = set(core) | {"account_transfers"}
+    known_tables = set(core) | {"account_transfers", LEDGER}
     if version >= 5:
         known_tables |= kakeibo_tables
     unexpected_tables = set(tables) - known_tables
@@ -149,6 +149,8 @@ def infer_baseline(connection: psycopg.Connection) -> int:
         raise MigrationError("Existing schema contains unrecognized tables; refusing adoption.")
 
     expected_columns = {name: set(columns) for name, columns in core.items()}
+    if LEDGER in tables:
+        expected_columns[LEDGER] = {"version", "checksum", "applied_at"}
     if version >= 2:
         expected_columns["account_transfers"] = {
             "id", "source_account_id", "destination_account_id", "amount", "transfer_date", "note", "created_at"
@@ -224,6 +226,11 @@ def migrate(connection: psycopg.Connection, *, allow_adoption: bool = False) -> 
             if seen and seen != set(range(1, max(seen) + 1)):
                 raise MigrationError("Migration ledger has a version gap; refusing to continue.")
             baseline = max(seen, default=0)
+            actual_baseline = infer_baseline(connection)
+            if actual_baseline != baseline:
+                raise MigrationError(
+                    f"Migration ledger is at {baseline:03d}, but the live schema matches {actual_baseline:03d}."
+                )
         else:
             if not allow_adoption:
                 raise MigrationError("Migration ledger is absent; run the protected one-time adoption procedure.")
@@ -259,6 +266,11 @@ def migrate(connection: psycopg.Connection, *, allow_adoption: bool = False) -> 
                     f"INSERT INTO {LEDGER} (version, checksum) VALUES (%s, %s)",
                     (version, checksum),
                 )
+                actual_baseline = infer_baseline(connection)
+                if actual_baseline != version:
+                    raise MigrationError(
+                        f"Migration {version:03d} completed, but the resulting schema did not match it."
+                    )
             baseline = version
         return baseline
     finally:

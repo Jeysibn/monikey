@@ -15,7 +15,7 @@ The normal release path needs no homelab shell access. PostgreSQL remains intern
 
 Set these MoniKey repository secrets:
 
-- `HOMELAB_GITOPS_DISPATCH_TOKEN`: fine-grained token limited to `Jeysibn/homelab-gitops`, with permission to send repository dispatch events. Do not grant it Kubernetes, packages, or database access.
+- `HOMELAB_GITOPS_DISPATCH_TOKEN`: fine-grained token limited to `Jeysibn/homelab-gitops`, with `Contents: write` permission for the repository dispatch endpoint. Do not grant it Kubernetes, packages, or database access.
 
 Complete the one-time adoption workflow in `homelab-gitops` before adding this
 secret. That prevents the automatic release trigger from running before the

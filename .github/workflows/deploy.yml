@@ -41,7 +41,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GH_TOKEN:?Set the HOMELAB_GITOPS_DISPATCH_TOKEN secret}"
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::warning::GitOps dispatch is disabled until one-time schema adoption is complete.'
+            echo 'GitOps dispatch skipped: complete protected initial schema adoption, then set HOMELAB_GITOPS_DISPATCH_TOKEN.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]]
           payload="$(python3 -c 'import json,os; print(json.dumps({"event_type":"monikey-release","client_payload":{"image_sha":os.environ["IMAGE_SHA"]}}))')"
           curl --fail --silent --show-error \

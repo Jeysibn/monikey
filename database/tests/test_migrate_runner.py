@@ -92,6 +92,11 @@ class MigrationRunnerTests(unittest.TestCase):
     def test_recognizes_complete_existing_schema_at_migration_003(self):
         self.assertEqual(migrate.infer_baseline(baseline_003()), 3)
 
+    def test_blocks_pending_migrations_without_release_authorization(self):
+        with self.assertRaisesRegex(migrate.MigrationError, "verified release workflow"):
+            migrate.require_migration_permission(3, apply_missing=False)
+        migrate.require_migration_permission(6, apply_missing=False)
+
     def test_rejects_unrecognized_extra_tables_and_columns(self):
         connection = baseline_003()
         connection.tables["financial_backup"] = {"id"}

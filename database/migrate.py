@@ -204,7 +204,20 @@ def _migration_data() -> list[tuple[int, Path, str]]:
     return migrations
 
 
-def migrate(connection: psycopg.Connection, *, allow_adoption: bool = False) -> int:
+def require_migration_permission(baseline: int, *, apply_missing: bool) -> None:
+    """Block an Argo sync from advancing schema without a backup-gated release."""
+    if not apply_missing and baseline < len(MIGRATIONS):
+        raise MigrationError(
+            f"Migration {baseline + 1:03d} is pending; a verified release workflow must authorize schema changes."
+        )
+
+
+def migrate(
+    connection: psycopg.Connection,
+    *,
+    allow_adoption: bool = False,
+    apply_missing: bool = True,
+) -> int:
     """Adopt a known pre-ledger schema if allowed, then apply missing versions."""
     if not connection.execute("SELECT pg_try_advisory_lock(%s)", (LOCK_KEY,)).fetchone()[0]:
         raise MigrationError("Another MoniKey migration is already running.")
@@ -237,6 +250,8 @@ def migrate(connection: psycopg.Connection, *, allow_adoption: bool = False) -> 
             baseline = infer_baseline(connection)
             if baseline == 0:
                 raise MigrationError("No complete known MoniKey schema was found; refusing to run 001 or adopt.")
+            if not apply_missing:
+                raise MigrationError("Schema adoption requires a verified release workflow to authorize migration.")
             connection.execute(
                 f"""CREATE TABLE {LEDGER} (
                     version INTEGER PRIMARY KEY,
@@ -251,6 +266,7 @@ def migrate(connection: psycopg.Connection, *, allow_adoption: bool = False) -> 
                 )
             connection.commit()
 
+        require_migration_permission(baseline, apply_missing=apply_missing)
         for version, path, checksum in migrations:
             if version <= baseline:
                 continue
@@ -282,10 +298,13 @@ def main() -> None:
     if not url:
         raise SystemExit("DATABASE_URL is required")
     adoption = os.environ.get("MONIKEY_MIGRATION_ADOPT", "false").lower() == "true"
+    apply_missing = os.environ.get("MONIKEY_MIGRATION_APPLY", "false").lower() == "true"
+    if adoption and not apply_missing:
+        raise SystemExit("MONIKEY_MIGRATION_ADOPT requires MONIKEY_MIGRATION_APPLY=true")
     if psycopg is None:
         raise SystemExit("psycopg is required to run database migrations")
     with psycopg.connect(url, connect_timeout=5) as connection:
-        version = migrate(connection, allow_adoption=adoption)
+        version = migrate(connection, allow_adoption=adoption, apply_missing=apply_missing)
     print(f"MoniKey schema is at migration {version:03d}.")
 
 

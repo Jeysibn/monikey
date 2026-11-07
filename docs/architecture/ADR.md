@@ -83,6 +83,16 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Alternatives considered:** `latest` image tag and `rollout restart`; CI with cluster admin kubeconfig; automatic image-registry polling from day one.
 - **Consequences:** Reproducible deploys, easy image-level rollback, clear responsibilities. Two intentional steps are required: publish an image, then promote the GitOps manifest to it. Full deployment automation may be added later with a separate approved ADR.
 
+### ADR-008 amendment — Automated, backup-gated GitOps release
+
+- **Status:** Accepted by the owner request on 2026-11-07; implementation is proposed in the deployment-pipeline PRs.
+- **Decision:** A successful `main` CI run publishes the existing frontend/API images with the same immutable `sha-<full-git-sha>` tag, then dispatches the matching SHA to `homelab-gitops`. GitOps verifies a logical backup by restoring it to disposable PostgreSQL before promoting image refs. Argo CD's existing automated sync runs a migration Job as a PreSync hook, then rolls out the synchronized application images. A failed backup or migration prevents promotion or app rollout. GitOps Actions waits for Argo health and the private API readiness endpoint.
+- **Migration safety:** `database/001_init.sql` remains empty-database initialization only and is never run by the migration runner. Forward migrations are applied in numeric order; a PostgreSQL advisory lock prevents concurrent execution. `monikey_schema_migrations` stores version, SHA-256 checksum, and applied time. Unknown versions, checksum drift, gaps, partial schema markers, or an unrecognized schema stop the run. A separate protected one-time adoption operation verifies a backup and recognizes the complete live schema before recording its baseline; routine releases do not need that approval after adoption.
+- **Credentials:** Existing GitOps Tailscale, namespace-scoped kubeconfig, backup-encryption, and Argo CD credentials remain in `homelab-gitops`. MoniKey receives only a fine-grained token that can dispatch the release event to that repository. No Kubernetes or database credential is copied into source control.
+- **Rollback:** Restore prior paired frontend/API SHA tags through a reviewed GitOps change. Schema changes remain forward-only; restoring an image does not roll back the database.
+- **Alternatives considered:** CI-held cluster credentials; a manually edited GitOps commit per release; registry polling; automatic schema reset; running 001 against an existing database.
+- **Consequences:** Releases no longer need a manual manifest edit or homelab command. The first adoption still requires a protected GitHub Environment approval after backup verification. Application images and migrations remain traceable to one MoniKey commit.
+
 ## ADR-009 — Stateful PostgreSQL with backup, not high availability
 
 - **Status:** Accepted with deployment prerequisites.

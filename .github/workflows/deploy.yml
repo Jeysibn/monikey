@@ -1,0 +1,59 @@
+name: Deploy MoniKey
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monikey-production-release
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == 'Jeysibn/monikey'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify both immutable GHCR image tags exist
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in \
+            "ghcr.io/jeysibn/monikey-v2-frontend:sha-$IMAGE_SHA" \
+            "ghcr.io/jeysibn/monikey-v2-api:sha-$IMAGE_SHA"; do
+            docker manifest inspect "$image" > /dev/null
+            printf 'Verified %s.\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Request GitOps deployment
+        env:
+          GH_TOKEN: ${{ secrets.HOMELAB_GITOPS_DISPATCH_TOKEN }}
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::warning::GitOps dispatch is disabled until one-time schema adoption is complete.'
+            echo 'GitOps dispatch skipped: complete protected initial schema adoption, then set HOMELAB_GITOPS_DISPATCH_TOKEN.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          payload="$(python3 -c 'import json,os; print(json.dumps({"event_type":"monikey-release","client_payload":{"image_sha":os.environ["IMAGE_SHA"]}}))')"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            https://api.github.com/repos/Jeysibn/homelab-gitops/dispatches
+          printf 'Deployment requested for `%s`. The GitOps workflow reports backup, migration, and health results.\n' "$IMAGE_SHA" >> "$GITHUB_STEP_SUMMARY"

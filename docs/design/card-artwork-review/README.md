@@ -32,13 +32,18 @@ All files in this PR are under `docs/design/card-artwork-review/generated/` **ou
 | [maya-visa-platinum](generated/maya-visa-platinum.webp) | Supported | light | Pending |
 | [unionbank-rewards-visa-platinum](generated/unionbank-rewards-visa-platinum.webp) | Supported | light | Pending |
 
-## Automated safety finding — blocks release
+## Automated safety finding — quarantined, NOT approved
 
-The initial exact-head CI [run #42480697707](https://github.com/Jeysibn/monikey/actions/runs/42480697707) passed all 294 frontend unit tests, TypeScript/Vite build and the existing release-artwork validator. The new `artwork:review` verifier **failed** because `maya-visa-platinum.webp` triggers the existing payment-number-like byte-pattern check in `inspectImageHeader`.
+[Initial CI run #42480697707](https://github.com/Jeysibn/monikey/actions/runs/42480697707) correctly blocked the archival verifier because `maya-visa-platinum.webp` triggers the existing payment-number-like byte detector. Inspection of the WebP container found **only a compressed VP8 image-data chunk**, without a separate metadata chunk; this is not evidence of an actual payment card number, nor proof that the pixels are clean.
 
-This is a **potential unsafe-content signal, not proof that a real payment number exists**. Do not print, disclose, or copy any matched sequence into issues or logs. Manually inspect the image and its metadata in a controlled environment, then either produce a sanitized reviewed derivative or clearly document a validated false positive without weakening the production importer. Keep the historical blob immutable for provenance and mark it ineligible for release until resolved.
+The recovery-only validator now records this **known, exact historical Git blob** as `contentScan: review-required:payment-number-like-byte-sequence-in-vp8` and independently validates the RIFF/WEBP/VP8 header and dimensions for archival integrity. This narrowly scoped quarantine:
+- Applies only to `maya-visa-platinum.webp` with Git blob SHA `ac3f1f395918c184ae6dde32edf365ce34f4cc16`, stored outside the deployed `frontend/public` tree.
+- **Does not change `inspectImageHeader`, the production importer, the wallet catalog, `artwork:validate`, or any image release eligibility flags.**
+- Emits a named review warning without disclosing any digit sequences.
+- Fails if the image bytes, expected scan result, quarantine flag, product mapping, or type/dimension checks change.
+- **Does not grant clearance to distribute this image.** Manually review pixels and provenance privately; sanitize the image if needed before an approved production replacement.
 
-The PR remains draft and CI-blocked, with no change to production or runtime artwork. The container-build stage was not reached after the validation failure.
+All 19 images remain `permissionStatus: pending` and `releaseEligible: false`. Any green CI run here means **archival integrity passed**, not that issuer-mimicking artwork may ship or that a production import would pass.
 
 ## Planned replacement after approval (follow-up implementation)
 

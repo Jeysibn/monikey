@@ -46,6 +46,17 @@ jobs:
       - name: Validate container builds
         run: |
           docker build --tag monikey-frontend:ci --build-arg VITE_DATA_SOURCE=http frontend
+          # Assert the actual final Nginx image serves recovered artwork, not merely a docs archive.
+          docker run --rm --entrypoint sh monikey-frontend:ci -ec '
+            cd /usr/share/nginx/html/card-art
+            test "$(find . -maxdepth 1 -name "recovered-*.webp" | wc -l)" -eq 17
+            test -s recovered-maya-visa-platinum.svg
+            test -s recovered-bdo-visa-classic.webp
+            test -s recovered-gcash-visa.webp
+            test -s recovered-maya-virtual.webp
+            test ! -e generated/maya-visa-platinum.webp
+            test ! -e generated/atome-credit-black.webp
+          '
           docker build --file backend/Dockerfile --tag monikey-api:ci .
 
   publish:

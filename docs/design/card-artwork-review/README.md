@@ -32,6 +32,14 @@ All files in this PR are under `docs/design/card-artwork-review/generated/` **ou
 | [maya-visa-platinum](generated/maya-visa-platinum.webp) | Supported | light | Pending |
 | [unionbank-rewards-visa-platinum](generated/unionbank-rewards-visa-platinum.webp) | Supported | light | Pending |
 
+## Automated safety finding — blocks release
+
+The initial exact-head CI [run #42480697707](https://github.com/Jeysibn/monikey/actions/runs/42480697707) passed all 294 frontend unit tests, TypeScript/Vite build and the existing release-artwork validator. The new `artwork:review` verifier **failed** because `maya-visa-platinum.webp` triggers the existing payment-number-like byte-pattern check in `inspectImageHeader`.
+
+This is a **potential unsafe-content signal, not proof that a real payment number exists**. Do not print, disclose, or copy any matched sequence into issues or logs. Manually inspect the image and its metadata in a controlled environment, then either produce a sanitized reviewed derivative or clearly document a validated false positive without weakening the production importer. Keep the historical blob immutable for provenance and mark it ineligible for release until resolved.
+
+The PR remains draft and CI-blocked, with no change to production or runtime artwork. The container-build stage was not reached after the validation failure.
+
 ## Planned replacement after approval (follow-up implementation)
 
 1. Review each image for logos, network insignia, bank identity, misleading official appearance, and any payment-number-like markings. Replace or edit designs lacking rights instead of disabling the validator.

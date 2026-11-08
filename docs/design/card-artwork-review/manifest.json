@@ -276,7 +276,8 @@
       "supportedInCurrentWallet": true,
       "permissionStatus": "pending",
       "releaseEligible": false,
-      "notes": ""
+      "notes": "",
+      "contentScan": "review-required:payment-number-like-byte-sequence-in-vp8"
     },
     {
       "id": "unionbank-rewards-visa-platinum",

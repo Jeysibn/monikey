@@ -1,4 +1,4 @@
-import { MONIKEY_DEFAULT_ARTWORK_PATH, originalCardArtworkId, resolveWalletArtwork } from './artworkCatalog.ts'
+import { MONIKEY_DEFAULT_ARTWORK_PATH, recoveredCardArtworkId, recoveredCardFaceInk, resolveWalletArtwork } from './artworkCatalog.ts'
 import { findCardProduct, findLegacyCardProduct } from './cardProducts.ts'
 import { savedWalletArtworkId, savedWalletProductId, type WalletPreferencesV1 } from './walletPreferences.ts'
 import type { AccountInfo, AccountType, AccountsSnapshot } from '../types.ts'
@@ -15,7 +15,7 @@ export interface WalletCardVM {
   artUrl: string
   /** The card picked for the account, such as "BDO Visa Classic"; null for none (the MoniKey card). */
   productLabel: string | null
-  /** Text colour on the card face: ink, because every approved artwork is the light MoniKey card. */
+  /** Text contrast choice for the art face (separate from balances and debt). */
   faceInk: 'light' | 'dark'
   primaryAmountCentavos: number
   primaryLabel: WalletAmountLabel
@@ -61,9 +61,8 @@ function walletCard(
   creditLimitCentavos: number | null = null,
 ): WalletCardVM {
   const product = accountCardProduct(account, preferences)
-  // Selected products use original MoniKey abstract designs, never issuer or network artwork.
-  // Legacy and unsupported choices still use the release-safe fallback.
-  const artwork = resolveWalletArtwork(product ? originalCardArtworkId(product.id) : savedWalletArtworkId(preferences, account.id), account.type)
+  // Same product mapping used in Add/Edit, Accounts and Overview; legacy ids still resolve.
+  const artwork = resolveWalletArtwork(product ? recoveredCardArtworkId(product.id) : savedWalletArtworkId(preferences, account.id), account.type)
 
   return {
     accountId: account.id,
@@ -72,7 +71,7 @@ function walletCard(
     artworkId: artwork.id,
     artUrl: artwork.localAssetPath ?? MONIKEY_DEFAULT_ARTWORK_PATH,
     productLabel: product?.name ?? null,
-    faceInk: 'dark',
+    faceInk: product ? recoveredCardFaceInk(product.id) : 'dark',
     primaryAmountCentavos,
     primaryLabel,
     availableCreditCentavos,

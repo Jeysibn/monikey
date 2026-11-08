@@ -2,7 +2,7 @@ import type { AccountType } from '../types.ts'
 import { CARD_PRODUCTS } from './cardProducts.ts'
 import { APPROVED_ISSUER_ARTWORK } from './approvedArtwork.generated.ts'
 
-export type ArtworkStatus = 'candidate' | 'verified' | 'approved' | 'rejected' | 'retired'
+export type ArtworkStatus = 'candidate' | 'verified' | 'approved' | 'rejected' | 'retired' | 'owner-authorized'
 export type WalletArtworkKind = 'physical' | 'virtual' | 'brand' | 'fallback'
 
 export interface WalletArtwork {
@@ -44,6 +44,48 @@ const MONIKEY_ORIGINAL_CARD_ARTWORK: readonly WalletArtwork[] = CARD_PRODUCTS.ma
   permissionEvidence: 'Original abstract artwork authored for MoniKey; no issuer or network marks.',
 }))
 
+
+// User-curated historical illustrated cards; NOT official issuer-licensed artwork.
+// Only the exact supported product mapping and metadata below can be selected.
+const RECOVERED_FACE_INK: Readonly<Record<string,'light'|'dark'>> = {
+  'bdo-debit-mastercard': 'light',
+  'bpi-debit-mastercard': 'light',
+  'bpi-debit-cirrus-gold': 'dark',
+  'bpi-debit-cirrus-red': 'light',
+  'gotyme-visa-debit': 'light',
+  'maribank-debit': 'light',
+  'gcash-visa': 'light',
+  'gcash-mastercard': 'light',
+  'maya-visa': 'light',
+  'maya-mastercard': 'light',
+  'maya-virtual': 'dark',
+  'bdo-visa-classic': 'light',
+  'bdo-visa-gold': 'dark',
+  'bdo-visa-platinum': 'dark',
+  'bdo-visa-signature': 'light',
+  'bpi-platinum-rewards': 'light',
+  'unionbank-rewards-visa-platinum': 'light',
+  'maya-visa-platinum': 'light',
+}
+export function recoveredCardArtworkId(productId: string): string { return `recovered-${productId}` }
+export function recoveredCardFaceInk(productId: string): 'light'|'dark' { return RECOVERED_FACE_INK[productId] ?? 'dark' }
+export function recoveredCardArtworkPath(productId: string): string {
+  return productId === 'maya-visa-platinum' ? '/card-art/recovered-maya-visa-platinum.svg' : `/card-art/recovered-${productId}.webp`
+}
+const OWNER_CURATED_CARD_ARTWORK: readonly WalletArtwork[] = CARD_PRODUCTS.map(product => ({
+  id: recoveredCardArtworkId(product.id),
+  issuer: 'MoniKey',
+  product: product.name,
+  variant: 'Owner-curated AI-generated illustration (unofficial)',
+  accountTypes: [product.accountType],
+  kind: 'brand',
+  sourcePageUrl: null,
+  localAssetPath: recoveredCardArtworkPath(product.id),
+  status: 'owner-authorized',
+  verifiedOn: null,
+  permissionEvidence: 'Explicit owner request to display historical AI-generated illustration; third-party marks not issuer-approved.',
+}))
+
 const ALL_ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'credit_card'] as const satisfies readonly AccountType[]
 
 const MONIKEY_DEFAULT_ARTWORK: WalletArtwork = {
@@ -82,6 +124,7 @@ const CANDIDATE_ARTWORK: WalletArtwork = {
 export const WALLET_ARTWORK_CATALOG: readonly WalletArtwork[] = [
   MONIKEY_DEFAULT_ARTWORK,
   ...MONIKEY_ORIGINAL_CARD_ARTWORK,
+  ...OWNER_CURATED_CARD_ARTWORK,
   ...APPROVED_ISSUER_ARTWORK,
   CANDIDATE_ARTWORK,
 ]
@@ -140,16 +183,28 @@ export function isSelectableWalletArtwork(
     && artwork.permissionEvidence === originalCard.permissionEvidence
     && artwork.accountTypes.length === 1
     && artwork.accountTypes[0] === originalCard.accountTypes[0]
+  const recovered = OWNER_CURATED_CARD_ARTWORK.find(item => item.id === artwork.id)
+  const ownerConcept = recovered !== undefined
+    && artwork.issuer === recovered.issuer
+    && artwork.product === recovered.product
+    && artwork.variant === recovered.variant
+    && artwork.kind === recovered.kind
+    && artwork.localAssetPath === recovered.localAssetPath
+    && artwork.sourcePageUrl === null
+    && artwork.verifiedOn === null
+    && artwork.permissionEvidence === recovered.permissionEvidence
+    && artwork.accountTypes.length === 1
+    && artwork.accountTypes[0] === recovered.accountTypes[0]
   const issuerApprovalEvidence = artwork.kind !== 'fallback'
     && isHttpsSourcePage(artwork.sourcePageUrl)
     && artwork.verifiedOn !== null
     && isRealVerificationDate(artwork.verifiedOn)
     && hasRedistributionEvidence(artwork.permissionEvidence)
 
-  return artwork.status === 'approved'
+  return (artwork.status === 'approved' || (artwork.status === 'owner-authorized' && ownerConcept))
     && isLocalWalletArtworkPath(artwork.localAssetPath)
     && artwork.accountTypes.includes(accountType)
-    && Boolean(originalFallback || originalConcept || issuerApprovalEvidence)
+    && Boolean(originalFallback || originalConcept || issuerApprovalEvidence || (artwork.status === 'owner-authorized' && ownerConcept))
 }
 
 /** Return only approved local artwork compatible with the account's ledger type. */

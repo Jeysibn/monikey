@@ -82,9 +82,13 @@ describe('release-safe wallet artwork', () => {
     assert.equal(isSelectableWalletArtwork(base, 'credit_card'), false, 'approved without evidence')
     assert.equal(isSelectableWalletArtwork({ ...base, permissionEvidence: 'AI generated, looks fine' }, 'credit_card'), false, 'vague evidence')
     assert.equal(isSelectableWalletArtwork({ ...base, kind: 'fallback', id: 'bdo-fake', issuer: 'BDO', permissionEvidence: 'Original artwork.' }, 'credit_card'), false, 'fake fallback')
-    for (const artwork of WALLET_ARTWORK_CATALOG.filter((entry) => entry.status !== 'approved')) {
+    for (const artwork of WALLET_ARTWORK_CATALOG.filter((entry) => entry.status !== 'approved' && entry.status !== 'owner-authorized')) {
       assert.equal(isSelectableWalletArtwork(artwork, 'credit_card'), false, artwork.id)
     }
+    const ownerArt = WALLET_ARTWORK_CATALOG.find((entry) => entry.id === 'recovered-bdo-visa-classic')!
+    assert.equal(isSelectableWalletArtwork(ownerArt, 'credit_card'), true, 'exact owner artwork is permitted')
+    assert.equal(isSelectableWalletArtwork({ ...ownerArt, localAssetPath: '/card-art/recovered-bdo-visa-gold.webp' }, 'credit_card'), false, 'tampered owner path rejected')
+    assert.equal(isSelectableWalletArtwork({ ...ownerArt, status: 'approved' }, 'credit_card'), false, 'owner artwork cannot masquerade as issuer-approved')
     const original = WALLET_ARTWORK_CATALOG.find((entry) => entry.id === 'monikey-bdo-visa-classic')!
     assert.equal(isSelectableWalletArtwork(original, 'credit_card'), true)
     assert.equal(isSelectableWalletArtwork({ ...original, localAssetPath: '/card-art/monikey-gcash-visa.svg' }, 'credit_card'), false)

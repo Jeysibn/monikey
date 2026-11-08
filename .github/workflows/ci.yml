@@ -32,6 +32,7 @@ jobs:
           npm run lint
           npm test
           npm run build
+          npm run artwork:validate
 
       - name: Check database and API
         run: |

@@ -12,6 +12,7 @@ import {
   WALLET_ARTWORK_CATALOG,
 } from '../src/wallet/artworkCatalog.ts'
 import type { WalletArtwork } from '../src/wallet/artworkCatalog.ts'
+import { CARD_PRODUCTS } from '../src/wallet/cardProducts.ts'
 
 const defaultArtwork = WALLET_ARTWORK_CATALOG.find((artwork) => artwork.id === MONIKEY_DEFAULT_ARTWORK_ID)!
 const candidateArtwork = WALLET_ARTWORK_CATALOG.find((artwork) => artwork.status === 'candidate')!
@@ -97,9 +98,10 @@ describe('wallet artwork catalog safety', () => {
     assert.equal(isSelectableWalletArtwork(canonicalIdWithOtherPath, 'credit_card'), false)
   })
 
-  it('lists only the neutral fallback until issuer identity and rights are approved', () => {
+  it('lists the neutral fallback plus only first-party concept designs for matching account types', () => {
     for (const accountType of ['cash', 'bank', 'ewallet', 'credit_card'] as const) {
-      assert.deepEqual(getSelectableWalletArtworks(accountType).map((artwork) => artwork.id), [MONIKEY_DEFAULT_ARTWORK_ID])
+      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...CARD_PRODUCTS.filter((product) => product.accountType === accountType).map((product) => `monikey-${product.id}`)]
+      assert.deepEqual(getSelectableWalletArtworks(accountType).map((artwork) => artwork.id), expected)
     }
     assert.equal(candidateArtwork.localAssetPath, null)
     assert.equal(candidateArtwork.permissionEvidence, null)

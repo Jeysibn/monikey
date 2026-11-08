@@ -12,6 +12,63 @@
 
 The normal release path needs no homelab shell access. PostgreSQL remains internal-only and the app remains on the private network.
 
+## Dispatch contract and troubleshooting
+
+The MoniKey `Deploy MoniKey` workflow sends a GitHub `repository_dispatch`
+event to `homelab-gitops` with event type `monikey-release` and this payload:
+
+```json
+{
+  "event_type": "monikey-release",
+  "client_payload": {
+    "image_sha": "<full MoniKey commit SHA>",
+    "monikey_run_id": "<successful CI run ID>"
+  }
+}
+```
+
+The GitOps workflow listens for that exact event type and checks that the run
+ID belongs to a successful CI push on MoniKey `main`, that its SHA matches the
+payload, and that the SHA is still the current MoniKey `main`. The sender uses
+the `HOMELAB_GITOPS_DISPATCH_TOKEN` secret; its documented minimum scope is
+`Contents: write` on the `homelab-gitops` repository. Never print or share the
+token value.
+
+### Known dispatch issue on current `main`
+
+The `Request GitOps deployment` step reads `MONIKEY_RUN_ID` while constructing
+the payload, but the workflow currently defines that variable only on the
+preceding image-verification step. GitHub Actions environment values are
+step-scoped, so they do not carry into the dispatch step. If the dispatch token
+is configured, payload construction fails before the HTTP request. If the token
+is empty, the existing default-off path records a successful skip instead.
+
+This needs a separate owner-approved workflow fix. Until then, a successful
+MoniKey deploy job alone does not prove that a GitOps event was sent. No
+production trigger was changed as part of this documentation or test work.
+
+### Read-only triage
+
+- **Deploy job skipped:** confirm the source CI run was successful and came
+  from a push to MoniKey's own `main`. Pull-request CI is intentionally excluded
+  from publication and deployment.
+- **Images not verified:** inspect the CI publish result and verify both
+  frontend and API SHA tags exist. Do not update GitOps to a one-sided image
+  pair.
+- **No GitOps release run:** inspect the `Request GitOps deployment` step
+  logs. The step summary records an explicit disabled-token skip; a
+  payload-construction error appears in the step log. After the approved
+  run-ID handoff fix, check GitOps Actions for the `repository_dispatch`
+  event. Do not paste token values into logs or issue comments.
+- **GitOps verification or backup failed:** inspect the `verify-release` and
+  `backup` jobs. The release is designed to stop before promotion if source
+  provenance, image pairing, or disposable restore verification fails. Do not
+  bypass these gates.
+- **Promotion or sync failed:** inspect the promotion PR checks, freshness
+  recheck, migration Job, and Argo CD health/readiness steps. Do not manually
+  change an image tag or rerun a migration to work around a failed gate; use
+  the runbook and preserve the existing rollback procedure.
+
 ## One-time GitHub setup
 
 After initial adoption succeeds, set this MoniKey repository secret:

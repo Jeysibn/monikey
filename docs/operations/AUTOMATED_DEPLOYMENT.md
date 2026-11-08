@@ -90,7 +90,7 @@ Create a GitHub Environment named `monikey-migration-adoption` in `homelab-gitop
 
 ## Initial safe adoption
 
-The repository does not carry a live schema dump, and deployment remains deliberately unperformed in this work. The project record says the private database has migrations 002 and 003 deployed; it says 004 was not yet applied when documented. Treat that record as a lead, not proof.
+This section preserves the initial adoption procedure for auditability; it is not evidence of current live state. The repository does not carry a live schema dump. An earlier project record noted migrations 002 and 003 deployed and 004 not yet applied at that time; treat that as historical context, not proof. Before any future adoption action, use the current GitOps release evidence and the approved schema-inspection procedure.
 
 Use this first-release order; it keeps Argo CD auto-sync from applying an
 unapproved migration:

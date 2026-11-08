@@ -1,4 +1,4 @@
-import { MONIKEY_DEFAULT_ARTWORK_PATH, resolveWalletArtwork } from './artworkCatalog.ts'
+import { MONIKEY_DEFAULT_ARTWORK_PATH, originalCardArtworkId, resolveWalletArtwork } from './artworkCatalog.ts'
 import { findCardProduct, findLegacyCardProduct } from './cardProducts.ts'
 import { savedWalletArtworkId, savedWalletProductId, type WalletPreferencesV1 } from './walletPreferences.ts'
 import type { AccountInfo, AccountType, AccountsSnapshot } from '../types.ts'
@@ -61,9 +61,9 @@ function walletCard(
   creditLimitCentavos: number | null = null,
 ): WalletCardVM {
   const product = accountCardProduct(account, preferences)
-  // A chosen card is a text label only: it never selects an image (ADR-019). Every card face uses artwork
-  // that passed the approval policy, which today is only the neutral original MoniKey card.
-  const artwork = resolveWalletArtwork(product ? null : savedWalletArtworkId(preferences, account.id), account.type)
+  // Selected products use original MoniKey abstract designs, never issuer or network artwork.
+  // Legacy and unsupported choices still use the release-safe fallback.
+  const artwork = resolveWalletArtwork(product ? originalCardArtworkId(product.id) : savedWalletArtworkId(preferences, account.id), account.type)
 
   return {
     accountId: account.id,

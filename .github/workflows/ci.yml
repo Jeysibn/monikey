@@ -33,6 +33,7 @@ jobs:
           npm test
           npm run build
           npm run artwork:validate
+          npm run artwork:review
 
       - name: Check database and API
         run: |

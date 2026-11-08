@@ -22,7 +22,21 @@ for (const item of inventory.items) {
 // Release gate: only the original MoniKey default and catalog-approved local assets may ship, in the source tree
 // and in a production build (dist) if one exists. Unverified issuer-style images must never come back.
 const DEFAULT_ARTWORK = '/card-art/monikey-default.svg'
-const allowed = new Set([DEFAULT_ARTWORK, ...inventory.items.filter((item) => item.catalog_status === 'approved').map((item) => item.local_asset_path)])
+// Exact first-party concept allowlist is derived from supported product IDs, not from arbitrary files in public/.
+// Unsupported Atome is intentionally absent from CARD_PRODUCTS.
+const productsText = await readFile(resolve(repoRoot, 'frontend/src/wallet/cardProducts.ts'), 'utf8')
+const productIds = [...productsText.matchAll(/^\s*\{\s*id:\s*'([a-z0-9-]+)'\s*,\s*issuer:/gm)].map((match) => match[1])
+if (productIds.length !== 18 || new Set(productIds).size !== 18) errors.push('Expected exactly 18 unique supported card product IDs')
+const originalPaths = productIds.map((id) => `/card-art/monikey-${id}.svg`)
+for (const path of originalPaths) {
+  try {
+    const svg = await readFile(resolve(repoRoot, 'frontend/public', path.slice(1)), 'utf8')
+    if (!/^<svg\\b/.test(svg) || /<(?:text|image|script|foreignObject)\\b|\\b(?:href|src)\\s*=/i.test(svg)) {
+      errors.push(`${path}: original concept must be self-contained, graphical SVG without text, embedded images, scripts or links`)
+    }
+  } catch { errors.push(`${path}: missing original MoniKey card artwork`) }
+}
+const allowed = new Set([DEFAULT_ARTWORK, ...originalPaths, ...inventory.items.filter((item) => item.catalog_status === 'approved').map((item) => item.local_asset_path)])
 async function listFiles(dir, prefix) {
   try {
     const entries = await readdir(dir, { withFileTypes: true })
@@ -53,5 +67,5 @@ if (errors.length) {
   process.exitCode = 1
 } else {
   const approved = inventory.items.filter((item) => item.catalog_status === 'approved').length
-  console.log(`Artwork inventory valid: ${inventory.items.length} unique records, ${approved} approved local assets; ${new Set(shipped).size} card-art file(s) bundled, all approved.`)
+  console.log(`Artwork inventory valid: ${inventory.items.length} unique records, ${approved} approved local assets; ${originalPaths.length} first-party concepts and ${new Set(shipped).size} card-art file(s) bundled, all approved.`)
 }

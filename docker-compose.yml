@@ -23,7 +23,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://monikey_app:${MONIKEY_DB_PASSWORD:?Set MONIKEY_DB_PASSWORD in .env}@db:5432/monikey_dev

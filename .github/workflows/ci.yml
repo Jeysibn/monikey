@@ -37,13 +37,14 @@ jobs:
         run: |
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install -r backend/requirements-dev.txt
+          backend/.venv/bin/python -m unittest discover -s database/tests -p 'test_migrate_runner.py' -v
           bash database/test.sh
           bash backend/test.sh
 
       - name: Validate container builds
         run: |
           docker build --tag monikey-frontend:ci --build-arg VITE_DATA_SOURCE=http frontend
-          docker build --tag monikey-api:ci backend
+          docker build --file backend/Dockerfile --tag monikey-api:ci .
 
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -68,6 +69,6 @@ jobs:
         run: |
           owner="${IMAGE_OWNER,,}"
           docker build --tag "ghcr.io/$owner/monikey-v2-frontend:sha-$IMAGE_SHA" --build-arg VITE_DATA_SOURCE=http frontend
-          docker build --tag "ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA" backend
+          docker build --file backend/Dockerfile --tag "ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA" .
           docker push "ghcr.io/$owner/monikey-v2-frontend:sha-$IMAGE_SHA"
           docker push "ghcr.io/$owner/monikey-v2-api:sha-$IMAGE_SHA"

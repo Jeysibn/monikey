@@ -39,6 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMELAB_GITOPS_DISPATCH_TOKEN }}
           IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+          MONIKEY_RUN_ID: ${{ github.event.workflow_run.id }}
         shell: bash
         run: |
           set -euo pipefail

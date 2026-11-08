@@ -123,11 +123,11 @@ describe('buildWalletGalleryModel', () => {
     assert.deepEqual(
       [2, 3, 4, 5, 6].map((id) => [byId[id]!.productLabel, byId[id]!.artUrl]),
       [
-        ['MariBank Debit Card', '/card-art/monikey-maribank-debit.svg'],
-        ['GCash Visa Card', '/card-art/monikey-gcash-visa.svg'],
-        ['Maya Visa Platinum', '/card-art/monikey-maya-visa-platinum.svg'],
+        ['MariBank Debit Card', '/card-art/recovered-maribank-debit.webp'],
+        ['GCash Visa Card', '/card-art/recovered-gcash-visa.webp'],
+        ['Maya Visa Platinum', '/card-art/recovered-maya-visa-platinum.svg'],
         [null, MONIKEY_DEFAULT_ARTWORK_PATH], // Atome is no longer offered: neutral card, no product claim
-        ['BDO Visa Classic', '/card-art/monikey-bdo-visa-classic.svg'],
+        ['BDO Visa Classic', '/card-art/recovered-bdo-visa-classic.webp'],
       ],
     )
     assert.equal(byId[7]!.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
@@ -145,11 +145,11 @@ describe('buildWalletGalleryModel', () => {
     })
     const savings = model.liquid.find((item) => item.accountId === 2)!
     assert.equal(savings.productLabel, 'MariBank Debit Card')
-    assert.equal(savings.artUrl, '/card-art/monikey-maribank-debit.svg')
+    assert.equal(savings.artUrl, '/card-art/recovered-maribank-debit.webp')
     assert.equal(savings.primaryAmountCentavos, 4_872_550)
     const gold = model.cards.find((item) => item.accountId === 4)!
     assert.equal(gold.productLabel, 'BDO Visa Gold')
-    assert.equal(gold.artUrl, '/card-art/monikey-bdo-visa-gold.svg')
+    assert.equal(gold.artUrl, '/card-art/recovered-bdo-visa-gold.webp')
     const mismatched = model.cards.find((item) => item.accountId === 5)!
     assert.equal(mismatched.productLabel, null)
     assert.equal(mismatched.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
@@ -173,7 +173,7 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(usedShare({ ...card!, primaryLabel: 'Owed', primaryAmountCentavos: 100, creditLimitCentavos: 5_000_000 })!.text, 'Under 1% used')
   })
 
-  it('uses dark ink on every card, because the neutral MoniKey card is light', () => {
+  it('uses per-artwork ink contrast on selected products and keeps dark for fallback', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
@@ -181,7 +181,9 @@ describe('buildWalletGalleryModel', () => {
         '3': { artworkId: null, productId: 'gcash-visa' },
       },
     })
-    for (const item of [...model.liquid, ...model.cards]) assert.equal(item.faceInk, 'dark')
+    assert.equal(model.liquid.find((item) => item.accountId === 2)!.faceInk, 'light')
+    assert.equal(model.liquid.find((item) => item.accountId === 3)!.faceInk, 'light')
+    assert.equal(model.cards.find((item) => item.accountId === 4)!.faceInk, 'dark')
   })
 
   it('prefers the card the server stores over one kept in the browser (ADR-020)', () => {

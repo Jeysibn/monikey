@@ -2,9 +2,9 @@ import type { AccountType } from '../types.ts'
 
 /*
  * The cards a person can pick for an account: first the bank or provider, then the exact card (ADR-019).
- * The name is a text label only. Every card is drawn with the original neutral MoniKey artwork
- * (/card-art/monikey-default.svg); no issuer-specific or issuer-style image ships with MoniKey, and a card
- * face never implies an official design. Choosing a card is presentation only: it never changes the
+ * The name is a text label only. Selected cards use user-curated illustrative concepts,
+ * not issuer-approved card designs; unsupported products keep the neutral fallback.
+ * Choosing a card is presentation only: it never changes the
  * account type, balances or anything else sent to the API.
  */
 export type CardAccountType = Exclude<AccountType, 'cash'>

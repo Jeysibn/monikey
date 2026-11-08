@@ -1,8 +1,9 @@
 import { access, readFile, readdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve as resolvePath } from 'node:path'
-import { findUnapprovedArtwork, isSafeLocalAssetPath, validateInventory } from './artworkResearch.mjs'
+import { findUnapprovedArtwork, isSafeLocalAssetPath, inspectImageHeader, validateInventory } from './artworkResearch.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const inventory = JSON.parse(await readFile(resolvePath(repoRoot, 'docs/design/card-artwork-inventory.json'), 'utf8'))
@@ -36,7 +37,57 @@ for (const path of originalPaths) {
     }
   } catch { errors.push(`${path}: missing original MoniKey card artwork`) }
 }
-const allowed = new Set([DEFAULT_ARTWORK, ...originalPaths, ...inventory.items.filter((item) => item.catalog_status === 'approved').map((item) => item.local_asset_path)])
+
+// Only exact user-supplied historical WebP Git blobs (not arbitrary issuer files) may ship.
+// The historical Maya Visa Platinum WebP and unsupported Atome MUST NOT ship.
+const recoveredBlobShas = {
+  "bdo-debit-mastercard": "7ae05edf14e710d0dac314b2bdf42c78482e1a7e",
+  "bpi-debit-mastercard": "5b1b14894842de06a6ecb7cd8010ceb28f81fe7a",
+  "bpi-debit-cirrus-gold": "a75e01155277c589bda18f598dcfba918766bfad",
+  "bpi-debit-cirrus-red": "0a30e46ae96c48d89b6b22f2bf6520e071bcc128",
+  "gotyme-visa-debit": "e2b6f1261c5719b8477f915730309cfecff40fa9",
+  "maribank-debit": "f5bf74385e5f96911d245aac50569e5bcbd8fcd6",
+  "gcash-visa": "743e6c99142fa4ce246732f3e392e96ac3d0c9fe",
+  "gcash-mastercard": "d894bfc84fa6a1f316fa6ea92626ad4efd53f365",
+  "maya-visa": "5e426497a62760542afdea768dc91e684153c043",
+  "maya-mastercard": "434b946d7d9b5a46a53945b6d5b887320694be46",
+  "maya-virtual": "fc5f4478cad2aef87eb002cbb0bedc39d8cbe13b",
+  "bdo-visa-classic": "c0986103638dbcf4bab2c53ced20aa3b4070aa57",
+  "bdo-visa-gold": "53e459c44209245139edb8194cd8f6dc38d12502",
+  "bdo-visa-platinum": "ce8c378e9f54995c880efa768b4c5db259e52268",
+  "bdo-visa-signature": "486a518d1af33cf5d671e5a04f3ca67e5127e785",
+  "bpi-platinum-rewards": "2ac5e72bbdefdb379b2f85253bbf96a59b1a4146",
+  "unionbank-rewards-visa-platinum": "2e4ba4c6272ee50a82f3b09d53f2fe9e7083d062"
+}
+const recoveredPaths = productIds.map(id => id === 'maya-visa-platinum'
+  ? '/card-art/recovered-maya-visa-platinum.svg'
+  : `/card-art/recovered-${id}.webp`)
+for (const id of productIds) {
+  const file = id === 'maya-visa-platinum'
+    ? '/card-art/recovered-maya-visa-platinum.svg'
+    : `/card-art/recovered-${id}.webp`
+  try {
+    const bytes = await readFile(resolve(repoRoot, 'frontend/public', file.slice(1)))
+    if (id === 'maya-visa-platinum') {
+      const svg = bytes.toString('utf8')
+      if (!/^<svg\b/.test(svg) || /<(?:script|image|foreignObject)\b|\b(?:href|src)\s*=/i.test(svg)
+        || /(?:\d[ -]?){13,19}/.test(svg)
+        || !svg.includes('>maya</text>') || !svg.includes('>VISA</text>')) {
+        errors.push('Regenerated Maya SVG must be local, self-contained and free of card numbers')
+      }
+    } else {
+      const hash = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')
+      if (hash !== recoveredBlobShas[id]) errors.push(`${id}: recovered image changed from verified historical Git blob`)
+      inspectImageHeader(bytes, file)
+    }
+  } catch (error) { errors.push(`${id}: recovered artwork invalid or missing (${error.message})`) }
+}
+for (const file of recoveredPaths) {
+  try { await access(resolve(repoRoot, 'frontend/dist', file.slice(1))) }
+  catch { errors.push(`Production build missing ${file}; art would not deploy with Nginx`) }
+}
+
+const allowed = new Set([DEFAULT_ARTWORK, ...originalPaths, ...recoveredPaths, ...inventory.items.filter((item) => item.catalog_status === 'approved').map((item) => item.local_asset_path)])
 async function listFiles(dir, prefix) {
   try {
     const entries = await readdir(dir, { withFileTypes: true })
@@ -67,5 +118,5 @@ if (errors.length) {
   process.exitCode = 1
 } else {
   const approved = inventory.items.filter((item) => item.catalog_status === 'approved').length
-  console.log(`Artwork inventory valid: ${inventory.items.length} unique records, ${approved} approved local assets; ${originalPaths.length} first-party concepts and ${new Set(shipped).size} card-art file(s) bundled, all approved.`)
+  console.log(`Artwork validated: ${inventory.items.length} candidate records, ${approved} issuer-approved assets; ${recoveredPaths.length} owner-curated visuals and ${originalPaths.length} abstract backups in ${new Set(shipped).size} bundled files.`)
 }

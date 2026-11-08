@@ -197,12 +197,12 @@ export function WalletCard({
                 className="absolute inset-0 z-10 cursor-pointer rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => onSelect?.(item.accountId)}
               >
-                {onLightArt && (
-                  // The MoniKey card has no issuer name, so it carries the account name instead.
-                  <span className="absolute top-[36%] left-[11.75%] z-10 max-w-[76%] truncate text-[max(0.875rem,4.4cqw)] font-semibold text-foreground">
-                    {item.accountName}
-                  </span>
-                )}
+                <span className="absolute top-[29%] left-[11.75%] z-10 grid max-w-[77%] gap-[0.4cqw] text-[#0f1b2d]">
+                  <span className="truncate text-[max(0.875rem,4.4cqw)] font-semibold">{item.accountName}</span>
+                  {!onLightArt && item.productLabel && (
+                    <span className="truncate text-[max(0.625rem,2.8cqw)] font-medium">{item.productLabel}</span>
+                  )}
+                </span>
                 <CardFace item={item} onLightArt={onLightArt} />
                 {fallbackNote && <span className="sr-only">{fallbackNote}</span>}
               </button>

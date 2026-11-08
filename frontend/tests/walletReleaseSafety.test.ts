@@ -46,9 +46,10 @@ const snapshot = (cardProductId: string | null): AccountsSnapshot => ({
 } as unknown as AccountsSnapshot)
 
 describe('release-safe wallet artwork', () => {
-  it('ships only the original MoniKey artwork under public/card-art', () => {
+  it('ships exactly 18 original concept SVGs plus the neutral default under public/card-art', () => {
     const shipped = filesUnder(join(root, 'public/card-art'), '/card-art')
-    assert.deepEqual(shipped, [MONIKEY_DEFAULT_ARTWORK_PATH])
+    const expected = [MONIKEY_DEFAULT_ARTWORK_PATH, ...CARD_PRODUCTS.map((product) => `/card-art/monikey-${product.id}.svg`)]
+    assert.deepEqual(shipped.sort(), expected.sort())
     assert.equal(existsSync(join(root, 'public/card-art/generated')), false)
   })
 
@@ -58,9 +59,10 @@ describe('release-safe wallet artwork', () => {
     for (const path of sources) assert.doesNotMatch(readFileSync(join(root, path), 'utf8'), /card-art\/(generated|concepts)/, path)
   })
 
-  it('only the neutral original artwork is selectable, for every account type', () => {
+  it('permits only first-party originals for the matching account type, and the neutral default', () => {
     for (const type of ACCOUNT_TYPES) {
-      assert.deepEqual(getSelectableWalletArtworks(type).map((artwork) => artwork.id), [MONIKEY_DEFAULT_ARTWORK_ID])
+      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...CARD_PRODUCTS.filter((product) => product.accountType === type).map((product) => `monikey-${product.id}`)]
+      assert.deepEqual(getSelectableWalletArtworks(type).map((artwork) => artwork.id), expected)
     }
   })
 
@@ -73,12 +75,16 @@ describe('release-safe wallet artwork', () => {
     assert.equal(isSelectableWalletArtwork(base, 'credit_card'), false, 'approved without evidence')
     assert.equal(isSelectableWalletArtwork({ ...base, permissionEvidence: 'AI generated, looks fine' }, 'credit_card'), false, 'vague evidence')
     assert.equal(isSelectableWalletArtwork({ ...base, kind: 'fallback', id: 'bdo-fake', issuer: 'BDO', permissionEvidence: 'Original artwork.' }, 'credit_card'), false, 'fake fallback')
-    for (const artwork of WALLET_ARTWORK_CATALOG.filter((entry) => entry.id !== MONIKEY_DEFAULT_ARTWORK_ID)) {
+    for (const artwork of WALLET_ARTWORK_CATALOG.filter((entry) => entry.status !== 'approved')) {
       assert.equal(isSelectableWalletArtwork(artwork, 'credit_card'), false, artwork.id)
     }
+    const original = WALLET_ARTWORK_CATALOG.find((entry) => entry.id === 'monikey-bdo-visa-classic')!
+    assert.equal(isSelectableWalletArtwork(original, 'credit_card'), true)
+    assert.equal(isSelectableWalletArtwork({ ...original, localAssetPath: '/card-art/monikey-gcash-visa.svg' }, 'credit_card'), false)
+    assert.equal(isSelectableWalletArtwork({ ...original, issuer: 'BDO' }, 'credit_card'), false)
   })
 
-  it('draws every supported product with local safe artwork and no per-product image', () => {
+  it('draws every supported product with its own allowlisted original artwork', () => {
     const preferences = { version: 1 as const, byAccountId: {} as Record<string, { artworkId: null; productId: string }> }
     for (const product of CARD_PRODUCTS) {
       const model = buildWalletGalleryModel(
@@ -87,8 +93,8 @@ describe('release-safe wallet artwork', () => {
       )
       const item = product.accountType === 'credit_card' ? model.cards[0]! : model.liquid[0]!
       assert.equal(item.productLabel, product.name)
-      assert.equal(item.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH, product.id)
-      assert.equal(item.artworkId, MONIKEY_DEFAULT_ARTWORK_ID, product.id)
+      assert.equal(item.artUrl, `/card-art/monikey-${product.id}.svg`, product.id)
+      assert.equal(item.artworkId, `monikey-${product.id}`, product.id)
       assert.ok(existsSync(join(root, 'public', item.artUrl)), product.id)
     }
   })
@@ -154,10 +160,10 @@ describe('card selection is presentation only', () => {
 })
 
 describe('artwork release gate', () => {
-  const allowed = new Set([MONIKEY_DEFAULT_ARTWORK_PATH])
+  const allowed = new Set([MONIKEY_DEFAULT_ARTWORK_PATH, ...CARD_PRODUCTS.map((product) => `/card-art/monikey-${product.id}.svg`)])
 
-  it('accepts the original artwork only', () => {
-    assert.deepEqual(findUnapprovedArtwork({ files: [MONIKEY_DEFAULT_ARTWORK_PATH], allowed }), [])
+  it('accepts only MoniKey-owned concept assets and its default', () => {
+    assert.deepEqual(findUnapprovedArtwork({ files: [...allowed], allowed }), [])
   })
 
   it('flags a reintroduced generated image, a new third-party file and a stale source reference', () => {

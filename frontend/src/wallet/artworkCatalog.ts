@@ -1,4 +1,5 @@
 import type { AccountType } from '../types.ts'
+import { CARD_PRODUCTS } from './cardProducts.ts'
 import { APPROVED_ISSUER_ARTWORK } from './approvedArtwork.generated.ts'
 
 export type ArtworkStatus = 'candidate' | 'verified' | 'approved' | 'rejected' | 'retired'
@@ -23,6 +24,25 @@ export interface WalletArtwork {
 
 export const MONIKEY_DEFAULT_ARTWORK_ID = 'monikey-default'
 export const MONIKEY_DEFAULT_ARTWORK_PATH = '/card-art/monikey-default.svg'
+
+/** First-party abstract designs: visual variants, never issuer/network logos. */
+export function originalCardArtworkId(productId: string): string {
+  return `monikey-${productId}`
+}
+
+const MONIKEY_ORIGINAL_CARD_ARTWORK: readonly WalletArtwork[] = CARD_PRODUCTS.map((product) => ({
+  id: originalCardArtworkId(product.id),
+  issuer: 'MoniKey',
+  product: product.name,
+  variant: 'Original MoniKey abstract concept',
+  accountTypes: [product.accountType],
+  kind: 'brand',
+  sourcePageUrl: null,
+  localAssetPath: `/card-art/monikey-${product.id}.svg`,
+  status: 'approved',
+  verifiedOn: null,
+  permissionEvidence: 'Original abstract artwork authored for MoniKey; no issuer or network marks.',
+}))
 
 const ALL_ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'credit_card'] as const satisfies readonly AccountType[]
 
@@ -61,6 +81,7 @@ const CANDIDATE_ARTWORK: WalletArtwork = {
 /** Static metadata catalog. Candidate entries never make external image requests. */
 export const WALLET_ARTWORK_CATALOG: readonly WalletArtwork[] = [
   MONIKEY_DEFAULT_ARTWORK,
+  ...MONIKEY_ORIGINAL_CARD_ARTWORK,
   ...APPROVED_ISSUER_ARTWORK,
   CANDIDATE_ARTWORK,
 ]
@@ -107,6 +128,18 @@ export function isSelectableWalletArtwork(
     && artwork.localAssetPath === MONIKEY_DEFAULT_ARTWORK_PATH
   const originalFallback = canonicalFallback
     && artwork.permissionEvidence?.trim().length
+  const originalCard = MONIKEY_ORIGINAL_CARD_ARTWORK.find((item) => item.id === artwork.id)
+  const originalConcept = originalCard !== undefined
+    && artwork.issuer === 'MoniKey'
+    && artwork.kind === 'brand'
+    && artwork.product === originalCard.product
+    && artwork.variant === originalCard.variant
+    && artwork.localAssetPath === originalCard.localAssetPath
+    && artwork.sourcePageUrl === null
+    && artwork.verifiedOn === null
+    && artwork.permissionEvidence === originalCard.permissionEvidence
+    && artwork.accountTypes.length === 1
+    && artwork.accountTypes[0] === originalCard.accountTypes[0]
   const issuerApprovalEvidence = artwork.kind !== 'fallback'
     && isHttpsSourcePage(artwork.sourcePageUrl)
     && artwork.verifiedOn !== null
@@ -116,7 +149,7 @@ export function isSelectableWalletArtwork(
   return artwork.status === 'approved'
     && isLocalWalletArtworkPath(artwork.localAssetPath)
     && artwork.accountTypes.includes(accountType)
-    && Boolean(originalFallback || issuerApprovalEvidence)
+    && Boolean(originalFallback || originalConcept || issuerApprovalEvidence)
 }
 
 /** Return only approved local artwork compatible with the account's ledger type. */

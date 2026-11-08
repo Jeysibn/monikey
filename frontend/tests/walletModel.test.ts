@@ -107,7 +107,7 @@ describe('buildWalletGalleryModel', () => {
     assert.equal(model.liquid.some((item) => item.accountId === 999), false)
   })
 
-  it('maps a choice saved with an old concept ID to its card name on the neutral artwork, without changing figures', () => {
+  it('maps old concept IDs to their current original designs without changing figures', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
@@ -123,18 +123,18 @@ describe('buildWalletGalleryModel', () => {
     assert.deepEqual(
       [2, 3, 4, 5, 6].map((id) => [byId[id]!.productLabel, byId[id]!.artUrl]),
       [
-        ['MariBank Debit Card', MONIKEY_DEFAULT_ARTWORK_PATH],
-        ['GCash Visa Card', MONIKEY_DEFAULT_ARTWORK_PATH],
-        ['Maya Visa Platinum', MONIKEY_DEFAULT_ARTWORK_PATH],
+        ['MariBank Debit Card', '/card-art/monikey-maribank-debit.svg'],
+        ['GCash Visa Card', '/card-art/monikey-gcash-visa.svg'],
+        ['Maya Visa Platinum', '/card-art/monikey-maya-visa-platinum.svg'],
         [null, MONIKEY_DEFAULT_ARTWORK_PATH], // Atome is no longer offered: neutral card, no product claim
-        ['BDO Visa Classic', MONIKEY_DEFAULT_ARTWORK_PATH],
+        ['BDO Visa Classic', '/card-art/monikey-bdo-visa-classic.svg'],
       ],
     )
     assert.equal(byId[7]!.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
     assert.deepEqual([byId[2]!.primaryAmountCentavos, byId[4]!.primaryAmountCentavos, byId[4]!.availableCreditCentavos], [4_872_550, 1_425_000, 3_575_000])
   })
 
-  it('shows the card chosen when the account was added, with its name, without changing figures', () => {
+  it('shows the selected original concept when the account was added, without changing figures', () => {
     const model = buildWalletGalleryModel(snapshot, {
       version: 1,
       byAccountId: {
@@ -145,11 +145,11 @@ describe('buildWalletGalleryModel', () => {
     })
     const savings = model.liquid.find((item) => item.accountId === 2)!
     assert.equal(savings.productLabel, 'MariBank Debit Card')
-    assert.equal(savings.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
+    assert.equal(savings.artUrl, '/card-art/monikey-maribank-debit.svg')
     assert.equal(savings.primaryAmountCentavos, 4_872_550)
     const gold = model.cards.find((item) => item.accountId === 4)!
     assert.equal(gold.productLabel, 'BDO Visa Gold')
-    assert.equal(gold.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)
+    assert.equal(gold.artUrl, '/card-art/monikey-bdo-visa-gold.svg')
     const mismatched = model.cards.find((item) => item.accountId === 5)!
     assert.equal(mismatched.productLabel, null)
     assert.equal(mismatched.artUrl, MONIKEY_DEFAULT_ARTWORK_PATH)

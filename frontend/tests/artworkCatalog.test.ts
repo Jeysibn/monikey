@@ -98,9 +98,10 @@ describe('wallet artwork catalog safety', () => {
     assert.equal(isSelectableWalletArtwork(canonicalIdWithOtherPath, 'credit_card'), false)
   })
 
-  it('lists the neutral fallback plus only first-party concept designs for matching account types', () => {
+  it('lists fallback, first-party backups and owner-curated replacements by compatible type', () => {
     for (const accountType of ['cash', 'bank', 'ewallet', 'credit_card'] as const) {
-      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...CARD_PRODUCTS.filter((product) => product.accountType === accountType).map((product) => `monikey-${product.id}`)]
+      const byType = CARD_PRODUCTS.filter(product => product.accountType === accountType)
+      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...byType.map(product => `monikey-${product.id}`), ...byType.map(product => `recovered-${product.id}`)]
       assert.deepEqual(getSelectableWalletArtworks(accountType).map((artwork) => artwork.id), expected)
     }
     assert.equal(candidateArtwork.localAssetPath, null)
@@ -115,7 +116,7 @@ describe('wallet artwork catalog safety', () => {
 
   it('has a bundled public asset for every approved local catalog entry', () => {
     const approvedLocalArtwork = WALLET_ARTWORK_CATALOG.filter(
-      (artwork) => artwork.status === 'approved' && artwork.localAssetPath !== null,
+      (artwork) => (artwork.status === 'approved' || artwork.status === 'owner-authorized') && artwork.localAssetPath !== null,
     )
 
     assert.ok(approvedLocalArtwork.length > 0)

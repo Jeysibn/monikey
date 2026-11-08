@@ -70,13 +70,13 @@ for (const id of productIds) {
     const bytes = await readFile(resolve(repoRoot, 'frontend/public', file.slice(1)))
     if (id === 'maya-visa-platinum') {
       const svg = bytes.toString('utf8')
-      if (!/^<svg\\b/.test(svg) || /<(?:script|image|foreignObject)\\b|\\b(?:href|src)\\s*=/i.test(svg)
-        || /(?:\\d[ -]?){13,19}/.test(svg)
+      if (!/^<svg\b/.test(svg) || /<(?:script|image|foreignObject)\b|\b(?:href|src)\s*=/i.test(svg)
+        || /(?:\d[ -]?){13,19}/.test(svg)
         || !svg.includes('>maya</text>') || !svg.includes('>VISA</text>')) {
         errors.push('Regenerated Maya SVG must be local, self-contained and free of card numbers')
       }
     } else {
-      const hash = createHash('sha1').update(`blob ${bytes.length}\\0`).update(bytes).digest('hex')
+      const hash = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')
       if (hash !== recoveredBlobShas[id]) errors.push(`${id}: recovered image changed from verified historical Git blob`)
       inspectImageHeader(bytes, file)
     }
@@ -118,5 +118,5 @@ if (errors.length) {
   process.exitCode = 1
 } else {
   const approved = inventory.items.filter((item) => item.catalog_status === 'approved').length
-  console.log(`Artwork inventory valid: ${inventory.items.length} unique records, ${approved} approved local assets; ${originalPaths.length} first-party concepts and ${new Set(shipped).size} card-art file(s) bundled, all approved.`)
+  console.log(`Artwork validated: ${inventory.items.length} candidate records, ${approved} issuer-approved assets; ${recoveredPaths.length} owner-curated visuals and ${originalPaths.length} abstract backups in ${new Set(shipped).size} bundled files.`)
 }

@@ -46,9 +46,15 @@ const snapshot = (cardProductId: string | null): AccountsSnapshot => ({
 } as unknown as AccountsSnapshot)
 
 describe('release-safe wallet artwork', () => {
-  it('ships exactly 18 original concept SVGs plus the neutral default under public/card-art', () => {
+  it('ships 18 original visual replacements, abstract backups and the neutral fallback', () => {
     const shipped = filesUnder(join(root, 'public/card-art'), '/card-art')
-    const expected = [MONIKEY_DEFAULT_ARTWORK_PATH, ...CARD_PRODUCTS.map((product) => `/card-art/monikey-${product.id}.svg`)]
+    const expected = [
+      MONIKEY_DEFAULT_ARTWORK_PATH,
+      ...CARD_PRODUCTS.map(product => `/card-art/monikey-${product.id}.svg`),
+      ...CARD_PRODUCTS.map(product => product.id === 'maya-visa-platinum'
+        ? '/card-art/recovered-maya-visa-platinum.svg'
+        : `/card-art/recovered-${product.id}.webp`),
+    ]
     assert.deepEqual(shipped.sort(), expected.sort())
     assert.equal(existsSync(join(root, 'public/card-art/generated')), false)
   })
@@ -61,7 +67,8 @@ describe('release-safe wallet artwork', () => {
 
   it('permits only first-party originals for the matching account type, and the neutral default', () => {
     for (const type of ACCOUNT_TYPES) {
-      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...CARD_PRODUCTS.filter((product) => product.accountType === type).map((product) => `monikey-${product.id}`)]
+      const selected = CARD_PRODUCTS.filter(product => product.accountType === type)
+      const expected = [MONIKEY_DEFAULT_ARTWORK_ID, ...selected.map(product => `monikey-${product.id}`), ...selected.map(product => `recovered-${product.id}`)]
       assert.deepEqual(getSelectableWalletArtworks(type).map((artwork) => artwork.id), expected)
     }
   })
@@ -93,8 +100,10 @@ describe('release-safe wallet artwork', () => {
       )
       const item = product.accountType === 'credit_card' ? model.cards[0]! : model.liquid[0]!
       assert.equal(item.productLabel, product.name)
-      assert.equal(item.artUrl, `/card-art/monikey-${product.id}.svg`, product.id)
-      assert.equal(item.artworkId, `monikey-${product.id}`, product.id)
+      assert.equal(item.artUrl, product.id === 'maya-visa-platinum'
+        ? '/card-art/recovered-maya-visa-platinum.svg'
+        : `/card-art/recovered-${product.id}.webp`, product.id)
+      assert.equal(item.artworkId, `recovered-${product.id}`, product.id)
       assert.ok(existsSync(join(root, 'public', item.artUrl)), product.id)
     }
   })

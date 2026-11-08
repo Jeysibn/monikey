@@ -31,7 +31,7 @@ const originalPaths = productIds.map((id) => `/card-art/monikey-${id}.svg`)
 for (const path of originalPaths) {
   try {
     const svg = await readFile(resolve(repoRoot, 'frontend/public', path.slice(1)), 'utf8')
-    if (!/^<svg\\b/.test(svg) || /<(?:text|image|script|foreignObject)\\b|\\b(?:href|src)\\s*=/i.test(svg)) {
+    if (!/^<svg\b/.test(svg) || /<(?:text|image|script|foreignObject)\b|\b(?:href|src)\s*=/i.test(svg)) {
       errors.push(`${path}: original concept must be self-contained, graphical SVG without text, embedded images, scripts or links`)
     }
   } catch { errors.push(`${path}: missing original MoniKey card artwork`) }

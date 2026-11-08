@@ -47,7 +47,7 @@ jobs:
             exit 0
           fi
           [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          payload="$(python3 -c 'import json,os; print(json.dumps({"event_type":"monikey-release","client_payload":{"image_sha":os.environ["IMAGE_SHA"]}}))')"
+          payload="$(python3 -c 'import json,os; print(json.dumps({"event_type":"monikey-release","client_payload":{"image_sha":os.environ["IMAGE_SHA"],"monikey_run_id":os.environ["GITHUB_RUN_ID"]}}))')"
           curl --fail --silent --show-error \
             --request POST \
             --header "Accept: application/vnd.github+json" \

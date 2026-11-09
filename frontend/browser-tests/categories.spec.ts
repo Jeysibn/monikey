@@ -29,7 +29,7 @@ test('income and expense categories validate, save, filter, search and paginate'
 
   await page.getByRole('button', { name: 'Create category' }).click()
   await expect(page.getByRole('alert')).toHaveText('Enter a category name.')
-  await page.getByLabel('Type', { exact: true }).selectOption('income')
+  await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
   await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
   await page.getByRole('button', { name: 'Create category' }).click()
@@ -40,7 +40,7 @@ test('income and expense categories validate, save, filter, search and paginate'
   await page.getByRole('button', { name: 'Create category' }).click()
   await expect(page.getByRole('alert')).toContainText('already exists')
 
-  await page.getByLabel('Type', { exact: true }).selectOption('expense')
+  await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('expense')
   await page.getByLabel('Name', { exact: true }).fill(expenseName)
   await page.getByLabel('Default Kakeibo envelope').selectOption('needs')
   await page.getByRole('button', { name: 'Create category' }).click()

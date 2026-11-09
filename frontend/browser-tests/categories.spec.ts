@@ -20,6 +20,22 @@ test('category management fits supported viewports and has no axe violations', a
   }
 })
 
+test('failed category reads expose a retry and recover', async ({ page }) => {
+  let failedOnce = false
+  await page.route('**/api/categories', async (route) => {
+    if (!failedOnce && route.request().method() === 'GET') {
+      failedOnce = true
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"synthetic QA failure"}' })
+      return
+    }
+    await route.continue()
+  })
+  await openCategories(page)
+  await expect(page.getByRole('button', { name: 'Retry loading categories' })).toBeVisible()
+  await page.getByRole('button', { name: 'Retry loading categories' }).click()
+  await expect(page.getByRole('listitem').first()).toBeVisible()
+})
+
 test('income and expense categories validate, save, filter, search and paginate', async ({ page }) => {
   const suffix = Date.now().toString(36)
   const incomeName = `QA Income ${suffix}`

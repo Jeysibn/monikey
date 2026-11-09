@@ -1,56 +1,62 @@
-# Automated deployment
+# MoniKey delivery and GitOps deployment
 
-## Release flow
+This page explains the repository-defined release path. It does not authorize a
+release or prove what is currently running. The detailed operational source of
+truth is the [homelab-gitops MoniKey runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md).
 
-1. A push to `main` runs the existing frontend, API, and database checks.
-2. CI publishes the frontend and API images as `sha-<40-character-commit>`.
-3. The deploy workflow accepts only a successful CI run for a push to MoniKey's own `main`, verifies both GHCR image tags, then dispatches that exact SHA.
-4. GitOps takes a PostgreSQL custom-format dump and verifies it by restoring it into disposable PostgreSQL. The encrypted artifact is retained by GitHub Actions for seven days.
-5. Only after backup verification does GitOps promote both images together. The migration Job uses the matching API image, which contains the canonical `database/001` through `006` SQL files and migration runner.
-6. The default-off migration gate is enabled only in that backup-gated promotion. Argo CD runs the migration Job before changing either Deployment. A migration error fails the sync. GitOps waits for Argo CD `Synced` and `Healthy`, then checks `/api/health/ready` over the existing Tailscale route.
-7. After success, GitOps turns the migration gate off and verifies one final Argo sync. Releases whose SHA is no longer MoniKey `main` or whose image tags are missing are rejected.
+## What happens after a change
 
-The normal release path needs no homelab shell access. PostgreSQL remains internal-only and the app remains on the private network.
+1. A pull request runs `.github/workflows/ci.yml`: frontend lint, unit tests and
+   build; artwork validation; database and API tests; and frontend/API container
+   builds. The image-publishing job only runs after a successful push to
+   MoniKey `main`.
+2. A successful `main` CI run publishes frontend and API images tagged with the
+   same full commit SHA, for example `sha-<40-character-SHA>`. These tags make
+   the image pair traceable to source; they are not human release numbers.
+3. `.github/workflows/deploy.yml` runs after CI. It accepts only successful CI
+   for a push to MoniKey's own `main`, verifies both images, then completes the
+   `Request GitOps deployment` step. The repository-dispatch request is
+   conditional on `HOMELAB_GITOPS_DISPATCH_TOKEN`; step success alone does not
+   prove GitOps received an event.
+4. The GitOps repository listens for `repository_dispatch` event type
+   `monikey-release` and also supports owner-triggered `workflow_dispatch`
+   releases. One-time schema adoption is an optional gated mode. The GitOps
+   workflow validates run/SHA provenance and image availability before release work.
+5. Before promotion, GitOps creates and restore-verifies a PostgreSQL backup
+   using disposable PostgreSQL. It promotes the matching image pair through a
+   GitOps pull request, runs the controlled migration hook, and checks Argo CD
+   synchronization, health, and API readiness. See the linked runbook for the
+   exact gates and recovery steps.
 
-## One-time GitHub setup
+MoniKey owns application code, tests, image builds and dispatch requests.
+`homelab-gitops` owns Kubernetes desired state, backup/release operations and
+Argo CD reconciliation. Argo CD compares that desired state with the cluster
+and applies the repository's configured synchronization behavior.
 
-After initial adoption succeeds, set this MoniKey repository secret:
+## Current evidence and limits (2026-11-10)
 
-- `HOMELAB_GITOPS_DISPATCH_TOKEN`: fine-grained token limited to `Jeysibn/homelab-gitops`, with `Contents: write` permission for the repository dispatch endpoint. Do not grant it Kubernetes, packages, or database access.
+MoniKey `main` at `1f0408b5fcad91b19f2732e9ca50502b6c995ba1` passed CI in
+[run 42671970066](https://github.com/Jeysibn/monikey/actions/runs/42671970066).
+[Deploy run 42678284875](https://github.com/Jeysibn/monikey/actions/runs/42678284875)
+completed image verification and its dispatch request step. Read-only GitOps
+Actions history contained no corresponding `repository_dispatch` release run.
+The latest GitOps manifest commit inspected was
+`96754c441461fa125f019ecc1678904ce529eae1`, and its frontend/API images still
+pointed to MoniKey SHA `971322b1d6a31c813bbda0c94ecb68ae53afd044`. The owner
+reports the production release is on hold because the homelab location has an
+internet connectivity problem. The currently running image and database schema
+are unknown; do not claim latest `main` or migration 007 is deployed.
 
-Do not add this secret until after one-time adoption succeeds. Before then, the
-MoniKey workflow still builds and publishes images but records that dispatch was
-skipped.
+No secret values were inspected. The source code shows dispatch is conditional
+on the named token, but this page does not infer whether that repository secret
+is configured. A workflow step that exits successfully after intentionally
+skipping dispatch is not proof of delivery.
 
-The GitOps repository retains its existing secrets used by the backup and Argo CD workflows:
+## Safe learning and validation
 
-- `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`
-- `MONIKEY_BACKUP_KUBECONFIG_B64`
-- `MONIKEY_BACKUP_PASSPHRASE`
-- `ARGOCD_SERVER` and `ARGOCD_AUTH_TOKEN`
-
-Create a GitHub Environment named `monikey-migration-adoption` in `homelab-gitops`, require owner approval, and restrict deployments to `main`. Use it only for the initial schema adoption procedure. Protect the `main` branch so the GitHub Actions promotion bot can create its paired image and migration-gate commits.
-
-## Initial safe adoption
-
-The repository does not carry a live schema dump, and deployment remains deliberately unperformed in this work. The project record says the private database has migrations 002 and 003 deployed; it says 004 was not yet applied when documented. Treat that record as a lead, not proof.
-
-Use this first-release order; it keeps Argo CD auto-sync from applying an
-unapproved migration:
-
-1. Configure the existing GitOps backup and Argo CD secrets, then create and protect the `monikey-migration-adoption` Environment.
-2. Merge MoniKey PR #14 while `HOMELAB_GITOPS_DISPATCH_TOKEN` is absent. CI publishes both images; the post-CI workflow explicitly skips dispatch.
-3. Copy the successful MoniKey main commit SHA from that CI run. Set the API image in `kubernetes/platform/monikey/manifests/migration-runner.yaml` on GitOps PR #101 to `ghcr.io/jeysibn/monikey-v2-api:sha-<that-SHA>`, then merge PR #101. Its Argo PreSync check has migration apply disabled; with no ledger it stops before changing schema or financial rows.
-4. In GitHub Actions for `homelab-gitops`, run **MoniKey release and initial adoption** on `main`. Enter the same full MoniKey SHA and set `adopt_existing_schema` to `true`.
-5. Wait for the backup job to restore-verify its dump. Approve the pending `monikey-migration-adoption` Environment job only after that backup job succeeds.
-6. The Kubernetes Job checks known schema landmarks, records checksums for the recognized baseline without executing those migrations, then applies missing migrations in order. It never executes `001_init.sql`. Argo CD cannot roll out the new image if the Job fails.
-7. Confirm the workflow completes both Argo health checks and reports the SHA, migration version, and API readiness. The workflow then disables adoption and migration-apply gates.
-8. Add `HOMELAB_GITOPS_DISPATCH_TOKEN` to MoniKey. Future successful main pushes run without approval or homelab shell access.
-
-If schema recognition fails, the Job stops without changing schema or financial rows. Resolve the mismatch with a reviewed forward-only migration plan; do not drop the database or reset its PVC. A failed migration leaves its gate on only for retrying the same backup-verified release; no later image is promoted until the current release finishes.
-
-## Rollback
-
-To roll back application code, make a reviewed change in `homelab-gitops` that restores the previous matching frontend and API `sha-<commit>` tags, then merge it. Argo CD deploys that pair. Do not edit only one image tag.
-
-Image rollback does not undo database migrations. Keep migrations backward-compatible with the prior API where possible. If an older API cannot read the new schema, stop and use the verified backup/restore recovery procedure; never use `001_init.sql` or reset the PVC as rollback.
+For local work, use the [mock preview](../../README.md#run-a-mock-preview),
+frontend tests, and disposable Compose/database test procedures in the
+[learning guide](../LEARNING_GUIDE.md#stage-3-develop-and-test-locally).
+Do not use a production database, cluster command, manual workflow run, or
+GitOps edit as a learning exercise. A release requires the owner's separate
+approval and the existing backup, migration, promotion, and health gates.

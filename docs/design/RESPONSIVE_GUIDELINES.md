@@ -1,6 +1,6 @@
 # MoniKey Responsive Guidelines
 
-**Status: APPROVED by the owner.** This is the intended responsive behavior. The frontend has been rendered and audited in Chromium at the widths and states documented in [Milestone 4.7](A11Y_RESPONSIVE_4_7.md) and [Milestone 4.9](FRONTEND_STATES_4_9.md). Real-device, Firefox/WebKit, screen-reader, and some focus-ring/icon-contrast checks remain outstanding; see [REAL_DEVICE_CHECKLIST.md](REAL_DEVICE_CHECKLIST.md).
+**Status: APPROVED by the owner.** This records intended responsive behavior. Later React screens have automated Chromium checks; category and Quick Add coverage is in [`frontend/browser-tests/`](../../frontend/browser-tests/README.md). Real-device, Firefox/WebKit, manual screen-reader, and some focus-ring/icon-contrast checks remain separate and are not claimed as complete; see [REAL_DEVICE_CHECKLIST.md](REAL_DEVICE_CHECKLIST.md).
 
 Related: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`COMPONENT_INVENTORY.md`](COMPONENT_INVENTORY.md)
 

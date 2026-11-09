@@ -1,8 +1,8 @@
 # Architecture documents
 
-The architecture baseline originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` (SHA-256 `93da7ad300992e2933970ba208a7748f06a4110533842f970e5932130801f730`) and is maintained in this repository. The approved design describes the target application. The current implementation includes the mock-backed frontend, contract-driven HTTP client, PostgreSQL schema and accounting checks, FastAPI endpoints, Compose stack, CI/GHCR delivery, and private Kubernetes deployment. See the [roadmap](ROADMAP.md#current-progress-and-next-gate) for evidence and remaining checks.
+The v1 design history is retained here, but the source code and current accepted ADRs describe the implementation that exists. The current application has React screens for Overview, Activity, Accounts, Categories, and Kakeibo; a FastAPI API; PostgreSQL ledger and planning tables; and Compose, GitHub Actions, GHCR, and GitOps delivery configuration. See the [learning guide](../LEARNING_GUIDE.md) for a beginner walkthrough and [ROADMAP.md](ROADMAP.md#current-source-and-release-status) for dated source/deployment evidence.
 
-Use [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for the current progress snapshot. Treat milestone reports as dated evidence for their own scope; they may predate later integration and deployment work.
+Milestone reports are historical records. Their old “not built,” “awaiting review,” or deployment status applies only to the date and scope in that report; it is not current status evidence.
 
 ## Architecture diagrams
 
@@ -26,7 +26,7 @@ Shows image checks and publication, the reviewed image promotion in the separate
 
 ### Database schema
 
-Shows the four PostgreSQL tables and their foreign-key relationships. The source of truth is [`database/001_init.sql`](../../database/001_init.sql).
+This ER image is an early schema snapshot and is no longer complete: the source now has five financial tables and two Kakeibo metadata tables, plus category lifecycle fields. Use [`database/README.md`](../../database/README.md) and [`database/001_init.sql`](../../database/001_init.sql) through migrations 007 as the current references. The historical image is retained to preserve the design record.
 
 ![MoniKey PostgreSQL schema](03-monikey-database-erd.png)
 

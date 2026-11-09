@@ -1,5 +1,7 @@
 # Kakeibo release and recovery runbook
 
+> This is a dated plan for the Kakeibo rollout and records the safeguards designed for that release. For current deployment status, use the [MoniKey roadmap](../architecture/ROADMAP.md#current-source-and-release-status) and [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md). It does not prove migration 007 is deployed.
+
 This runbook describes a future private-homelab release. It does not authorize or perform a production migration or deployment. MoniKey has no authentication; keep its writable API on a trusted private network and do not publish it to the internet.
 
 ## Before a release

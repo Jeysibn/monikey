@@ -1,18 +1,18 @@
 # MoniKey v1 — Master Plan (architecture baseline 1.3)
 
-**Status:** Approved plan with owner-approved ADR-017 account transfers (2026-10-26). M6–7 and M9–13 are implemented; M12 portfolio materials are complete. M13 transfers and migration 002 are deployed to the private instance, and the owner confirms they are working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. Off-cluster backup recovery is unverified and authentication remains out of scope. See [current progress](ROADMAP.md#current-progress-and-next-gate) and the [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md).
+**Status:** This is the approved planning baseline, not a live status dashboard. The current source includes Kakeibo and custom categories; dated implementation and deployment evidence is maintained in [ROADMAP.md](ROADMAP.md#current-source-and-release-status). The latest production release is on hold per the owner because of homelab internet connectivity, and the currently running image/schema have not been verified. Off-cluster backup recovery remains unverified; authentication remains out of scope. See the [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for repository-defined operations.
 **Approach:** Frontend-first, small increments, one AI editor at a time, owner verifies and learns.
 **Second brain:** Personal Obsidian vault (ADR-016), **separate** from the code repository and GitOps desired-state repository.
 
 ## North star
 
-Build a simple, accessible personal finance tracker that the project owner can **use, maintain, explain, and deploy** as a beginner-friendly DevOps/Cloud Engineer portfolio project. Features: cash, bank, e-wallet and credit-card accounts; income/expense entries and categories; transaction history CRUD; card purchases/payments and debt/available credit; balances and monthly summaries. **No card-payment double counting.**
+Build a simple, accessible personal finance tracker that the project owner can **use, maintain, explain, and deploy** as a beginner-friendly DevOps/Cloud Engineer portfolio project. Features: cash, bank, e-wallet and credit-card accounts; income/expense entries and custom categories; transaction history CRUD; card purchases/payments and debt/available credit; balances and monthly summaries; four-envelope Kakeibo planning and review. **No card-payment double counting.**
 
 ## Chosen architecture
 
-- Frontend: **React + TypeScript + Vite**, **Tailwind CSS v4**, five selective **shadcn/ui** primitives to start, **Lucide React** icons; three views (Overview, Activity, Accounts) and Quick Add / Pay Card dialogs. Typed mock data first.
+- Frontend: **React + TypeScript + Vite**, **Tailwind CSS v4**, five selective **shadcn/ui** primitives to start, **Lucide React** icons; five in-page views (Overview, Activity, Accounts, Categories, Kakeibo) and Quick Add / Pay Card dialogs. Typed mock data remains available for previews and tests.
 - Backend: **FastAPI + parameterized SQL / PostgreSQL driver**, simple REST routes under `/api`.
-- Database: **PostgreSQL**, five tables (`accounts`, `categories`, `transactions`, `credit_card_payments`, `account_transfers`); monetary values in `NUMERIC(12,2)`; private persistent storage and tested backup/restore.
+- Database: **PostgreSQL**, five ledger tables (`accounts`, `categories`, `transactions`, `credit_card_payments`, `account_transfers`) plus two Kakeibo metadata tables; monetary values in `NUMERIC(12,2)`; private persistent storage and tested synthetic backup/restore.
 - Local: **Docker Compose**. Production frontend: Vite `dist/` served by **Nginx**; same-origin `/api` routing.
 - Delivery: **GitHub Actions → GHCR SHA-tagged images → reviewed update in `homelab-gitops` → Argo CD → Kubernetes**, on the existing private homelab. No unauthenticated public deployment with live finance data.
 
@@ -53,4 +53,4 @@ All milestones and detailed gates: [ROADMAP](ROADMAP.md).
 
 No new feature, table, service, web framework or infrastructure component without a reviewed reason and new ADR. AI skills are development aids, **not** runtime dependencies. Obsidian is a second brain, **not** a hosted database, CI/CD system, documentation auto-sync dependency, or Kubernetes workload. Avoid storing real financial data, secrets, tokens, kubeconfig, database dumps and other sensitive content in notes.
 
-**Current action:** Transfers under ADR-017 are deployed and owner-confirmed working. Keep screenshots sanitized and use sample data; do not publicly expose this unauthenticated writable deployment. The owner reports ADR-018 and migration 003 are deployed and working, and that an automated database backup is configured in `homelab-gitops`; verify off-cluster restore before relying on the homelab instance for long-term records. The owner manually tested desktop and phone; screen-reader and automated browser checks remain unverified.
+**Historical owner-reported status:** Transfers under ADR-017 were reported deployed and owner-confirmed working as of 2026-10-31. Keep screenshots sanitized and use sample data; do not publicly expose this unauthenticated writable deployment. The owner reports ADR-018 and migration 003 are deployed and working, and that an automated database backup is configured in `homelab-gitops`; verify off-cluster restore before relying on the homelab instance for long-term records. The owner manually tested desktop and phone; screen-reader and automated browser checks remain unverified.

@@ -2,7 +2,7 @@
 
 **Status: APPROVED by the owner (Milestone 3), after Codex's read-only review (§5a) and an independent Chromium review (§0). Corrections were applied and verified (see [`VERIFICATION.md`](VERIFICATION.md)).** Findings, concerns, tradeoffs and recommendations from the UI/UX design milestone, written by Claude Code (design owner).
 
-> The recommendations below are the original design-review record. Design approval, Manrope verification, owner choices Q1–Q10, and API contract answers B1–B4/N1–N8 are now recorded. The frontend is implemented through mock-backed Milestone 4.9; use [ROADMAP.md](../architecture/ROADMAP.md#current-progress-and-next-gate) for current gates. Real-device/browser/screen-reader review and backend implementation remain outstanding.
+> The recommendations below are the original design-review record. Design approval, Manrope verification, owner choices Q1–Q10, and API contract answers B1–B4/N1–N8 are recorded. Implementation has since advanced beyond this review; use [ROADMAP.md](../architecture/ROADMAP.md#current-source-and-release-status) for current source and deployment evidence. Manual real-device and screen-reader review remains separate from automated Chromium checks.
 
 Documents reviewed: [`DESIGN.md`](../../DESIGN.md) · [`UI_UX_SPEC.md`](UI_UX_SPEC.md) · [`COMPONENT_INVENTORY.md`](COMPONENT_INVENTORY.md) · [`RESPONSIVE_GUIDELINES.md`](RESPONSIVE_GUIDELINES.md)
 

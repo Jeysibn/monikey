@@ -1,8 +1,8 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.8 draft
-**Date:** 2026-11-09
-**Status:** The v1.7 baseline remains adopted. ADR-022 proposes installation-wide custom categories, archive-safe history, and migration 007 for owner review; its implementation is in a stacked Draft PR series and does not authorize merging or deployment. Previous Kakeibo, wallet, and homelab status statements remain unchanged.
+**Version:** 1.8
+**Last reviewed:** 2026-11-10
+**Status:** ADR-022's installation-wide category model and archive-safe history are implemented in merged PRs #20–#22. This records accepted source architecture; it does not claim migration 007 or the latest images are deployed. Current deployment evidence is summarized in [ROADMAP.md](ROADMAP.md#current-source-and-release-status).
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.
@@ -19,7 +19,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 - **Status:** Accepted (revised 2026-10-24; **supersedes the original ADR-002 decision to use vanilla JavaScript**).
 - **Context:** The user wants a polished, maintainable mobile-first UI and explicitly selected React + TypeScript + Vite after considering Vue, Svelte and plain JavaScript. The previous MoniKey became overly complicated; choosing a framework must not reintroduce complexity.
-- **Decision:** Build three functional React views (Overview, Activity, Accounts) and one Quick Add overlay/sheet, using Vite's official `react-ts` scaffold, basic hooks, typed API contracts and mock data until UX approval. **Styling is now governed by ADR-015 (Tailwind CSS v4, selective shadcn/ui, Lucide).** The earlier *plain CSS only* constraint in ADR-002 is superseded. No Next.js, SSR, Redux, React Query or frontend microservices. No router library while navigation needs only three in-page views.
+- **Decision:** The original implementation began with Overview, Activity, and Accounts plus a Quick Add overlay, using Vite's `react-ts` scaffold, basic hooks, typed API contracts, and mock data. The current app has five in-page views (Overview, Activity, Accounts, Categories, Kakeibo) and still uses local view state rather than a router. **Styling is governed by ADR-015 (Tailwind CSS v4, selective shadcn/ui, Lucide).** The earlier *plain CSS only* constraint is superseded. No Next.js, SSR, Redux, React Query, or frontend microservices.
 - **Alternatives considered:** Vanilla HTML/CSS/JS (original decision), React with JavaScript, Vue 3, Svelte, Next.js.
 - **Consequences:** Increased initial learning surface (JSX, props, hooks, TypeScript), plus npm build dependencies; in return, clearer reusable UI parts and compile-time checks. The production artifact remains static files. All edits require plain-language explanations and working browser review. TypeScript does not provide runtime validation of JSON responses. ADR-015 adds styling build-time dependencies and selectively copied UI component code, but no additional deployed tier.
 
@@ -128,7 +128,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 ## ADR-013 — Small, typed frontend data boundary without state libraries
 
 - **Status:** Accepted (2026-10-24).
-- **Context:** React has many third-party ecosystem choices; adding state managers, form frameworks, routers and HTTP caches is easy but not necessary for three views.
+- **Context:** React has many third-party ecosystem choices; adding state managers, form frameworks, routers and HTTP caches is easy but not necessary for MoniKey's small set of in-page views.
 - **Decision:** Use `useState` / `useEffect` with cancellation/cleanup for API reads, `fetch` from one `src/api.ts`, TypeScript interfaces/unions in `src/types.ts`, and a swap from typed mock data to real API implementations. Refresh backend-derived totals after successful writes. Keep one page `/` with view state; use component props instead of Redux, Zustand, TanStack Query, Axios or React Router.
 - **Alternatives considered:** Redux/Zustand, React Query, React Router, Axios, generated API clients, client-side caching and offline mode.
 - **Consequences:** Minimal dependencies and transparent data flow; some refetching and manual loading/error state code. If those become proven pain points, write another ADR with evidence, not speculative abstractions.
@@ -212,7 +212,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ## ADR-022 — Manage categories without rewriting ledger history
 
-- **Status:** Proposed for owner review with the custom-category Draft PR stack; implementation is limited to the scope authorized in the category-management mission.
+- **Status:** Accepted; implemented in MoniKey PRs #20–#22. Deployment remains a separate release decision.
 - **Context:** The category catalog currently contains seeded income/expense rows only. Transactions reference `categories.id`, and Kakeibo stores a nullable envelope on each transaction plus a separate suggested envelope on expense categories. Renaming, changing a suggestion, or removing a category must not recategorize past activity or change balances.
 - **Decision:** Continue using `categories` as the only category table. Existing seeded rows remain in place with their current integer IDs; custom categories are rows in the same table. Because v1 has one private installation and no authentication or user table, the catalog is installation-wide, like accounts and transactions. Do not add a user/owner column or claim per-user authorization. A category's `type` is immutable. Names are trimmed and whitespace-collapsed by the API and unique case-insensitively per type, including archived rows.
 - **History and lifecycle:** Add `is_archived` with a false default. Archiving hides a category from new-transaction choices but does not change transactions or their stored envelopes. Historical reads continue to resolve the category ID and current name, and an existing transaction may be edited while retaining an archived category ID. Restore re-enables future selection. A database trigger rejects assigning an archived category to a new transaction, including from an older API build after rollback; updates that retain an existing archived category are allowed. Permanent deletion is allowed only when no transaction references the category; the API locks the category before checking references, and the foreign key remains the final concurrency guard. All transaction references count, including any retained rows.
@@ -223,7 +223,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ### ADR-021 amendment — Track explicit plan presence
 
-- **Status:** Accepted for PR E release readiness.
+- **Status:** Accepted and implemented in the merged Kakeibo source. Its dated deployment and recovery notes remain evidence for the PR E rehearsal only.
 - **Context:** Monthly plans and reflections share one metadata row. In PR B, saving a reflection without a plan created that row, and its numeric defaults made it look like a deliberately saved all-zero budget.
 - **Decision:** Migration 006 adds nullable `plan_presence` with `saved` and `not_saved` values. A plan PUT sets `saved`; a reflection-only insert sets `not_saved`. The API returns `plan_status` and puts a saved reflection in a separate top-level `review` field. A deliberate all-zero plan remains a plan.
 - **Legacy compatibility:** Existing rows retain `plan_presence = NULL`, reported as `legacy_unknown`. The migration does not infer intent from zero values, dates, or review fields. The existing plan values and reflection remain readable. A later explicit plan PUT confirms the plan as saved; unresolved rows require owner review before any manual backfill.
@@ -272,4 +272,4 @@ Use this for future changes:
 - **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no official issuer art is approved by this decision. Labeled AI-generated concept artwork is allowed and included.
 - **v1.6 (2026-11-02):** ADR-020 stores each account's chosen card (`accounts.card_product_id`) in the database; Codex implements migration 004 and the API.
 - **v1.7 (2026-11-02):** ADR-021 accepts Kakeibo planning/reflection metadata, nullable transaction envelopes and category suggestions, and two metadata tables; migration 005 and API/UI follow-up are staged separately.
-- **v1.8 draft (2026-11-09):** ADR-022 proposes custom category CRUD, archive-safe transaction references, and forward-only migration 007. Owner review is pending.
+- **v1.8 (2026-11-10):** ADR-022 records the merged installation-wide category model, archive-safe transaction references, immutable type, and migration 007. This is a source/design record, not deployment evidence.

@@ -1,6 +1,6 @@
 # MoniKey UI/UX Specification
 
-**Status: APPROVED by the owner.** This document specifies *what the screens do and contain*. Visual rules (colour, type, spacing) are in [`DESIGN.md`](../../DESIGN.md). The mock-backed v1 flows, FastAPI, and PostgreSQL are implemented; account editing was added as an owner-requested follow-up on 2026-10-25. See [frontend status](FRONTEND_STATES_4_9.md), [API client plan](API_CLIENT_PLAN.md), and [frontend README](../../frontend/README.md) for current verification evidence.
+**Status: APPROVED by the owner.** This document is the original screen-behavior baseline; visual rules are in [`DESIGN.md`](../../DESIGN.md). Kakeibo and category-management flows were added later and are described in the [current TLD](../architecture/TLD.md), [frontend guide](../../frontend/README.md), and [learning guide](../LEARNING_GUIDE.md). Older milestone links below are dated evidence, not the current test/status summary.
 
 All people, accounts and amounts are **fictional**. The wireframes are low-fidelity ASCII layouts, not pixel designs; no hi-fi preview tool was available or installed.
 

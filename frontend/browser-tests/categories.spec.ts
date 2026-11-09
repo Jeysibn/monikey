@@ -21,21 +21,10 @@ test('category management fits supported viewports and has no axe violations', a
 })
 
 test('failed category reads expose a retry and recover', async ({ page }) => {
-  let failedOnce = false
-  await page.route('**/api/categories', async (route) => {
-    if (!failedOnce && route.request().method() === 'GET') {
-      failedOnce = true
-      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"synthetic QA failure"}' })
-      return
-    }
-    await route.continue()
-  })
-  await page.goto('/')
-  await expect.poll(() => failedOnce).toBe(true)
+  await page.goto('/?demo=load-error&failing=categories')
   await page.getByRole('button', { name: 'Categories', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Categories', level: 1 })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Retry loading the categories' })).toBeVisible()
-  await page.unroute('**/api/categories')
   await page.getByRole('button', { name: 'Retry loading the categories' }).click()
   await expect(page.getByRole('listitem').first()).toBeVisible()
 })

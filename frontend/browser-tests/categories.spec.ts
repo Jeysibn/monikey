@@ -30,8 +30,12 @@ test('failed category reads expose a retry and recover', async ({ page }) => {
     }
     await route.continue()
   })
-  await openCategories(page)
+  await page.goto('/')
+  await expect.poll(() => failedOnce).toBe(true)
+  await page.getByRole('button', { name: 'Categories', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Categories', level: 1 })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Retry loading the categories' })).toBeVisible()
+  await page.unroute('**/api/categories')
   await page.getByRole('button', { name: 'Retry loading the categories' }).click()
   await expect(page.getByRole('listitem').first()).toBeVisible()
 })

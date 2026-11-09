@@ -14,6 +14,7 @@ const PAGE_SIZE = 50
 
 export function CategoriesView({ categories: resource, source, onChanged }: { categories: Resource<Category[]>; source: DataSource; onChanged: () => void }) {
   const [type, setType] = useState<CategoryType | 'all'>('all')
+  const [formType, setFormType] = useState<CategoryType>('expense')
   const [status, setStatus] = useState<CategoryStatus>('active')
   const [envelope, setEnvelope] = useState<KakeiboEnvelope | 'all'>('all')
   const [query, setQuery] = useState('')
@@ -31,6 +32,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
 
   const beginEdit = (category?: Category) => {
     setEditing(category ?? null)
+    if (category) setFormType(category.type)
     setName(category?.name ?? '')
     setEditEnvelope(category?.defaultEnvelope ?? '')
     setFormError('')
@@ -56,7 +58,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
     event.preventDefault()
     const normalized = name.trim().replace(/\s+/g, ' ')
     if (!normalized) { setFormError('Enter a category name.'); return }
-    const chosen = editing ? editing.type : type === 'income' ? 'income' : 'expense'
+    const chosen = editing ? editing.type : formType
     const defaultEnvelope = chosen === 'expense' ? editEnvelope || null : null
     if (!editing) { setType(chosen); setStatus('active'); setEnvelope('all'); setPageIndex(0) }
     if (editing) void run(() => source.updateCategory(editing.id, { name: normalized, defaultEnvelope }), 'Category updated.')
@@ -72,7 +74,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
       <CardContent>
         <form onSubmit={submit} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_auto] md:items-end">
           <label className="grid gap-1.5 text-sm font-medium">Name<input autoComplete="off" maxLength={60} value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
-          {!editing && <label className="grid gap-1.5 text-sm font-medium">Type<select value={type === 'income' ? 'income' : 'expense'} onChange={(event) => setType(event.target.value as CategoryType)} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="expense">Expense</option><option value="income">Income</option></select></label>}
+          {!editing && <label className="grid gap-1.5 text-sm font-medium">Type<select value={formType} onChange={(event) => setFormType(event.target.value as CategoryType)} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="expense">Expense</option><option value="income">Income</option></select></label>}
           {(editing ? editing.type === 'expense' : type !== 'income') && <label className="grid gap-1.5 text-sm font-medium">Default Kakeibo envelope<select value={editEnvelope} onChange={(event) => setEditEnvelope(event.target.value as KakeiboEnvelope | '')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="">No default</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>}
           {formError && <p role="alert" className="text-sm text-destructive md:col-span-full">{formError}</p>}
           <div className="flex gap-2 md:col-start-3 md:row-start-1">{editing && <Button type="button" variant="secondary" onClick={() => beginEdit()}>Cancel</Button>}<Button disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create category'}</Button></div>

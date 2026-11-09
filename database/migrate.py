@@ -24,6 +24,7 @@ MIGRATIONS = tuple(MIGRATION_DIR / f"{version:03d}_{name}.sql" for version, name
     (4, "account_card_product"),
     (5, "kakeibo"),
     (6, "kakeibo_plan_presence"),
+    (7, "custom_categories"),
 ))
 LEDGER = "monikey_schema_migrations"
 LOCK_KEY = 741_309_221
@@ -62,11 +63,23 @@ def _indexes(connection: psycopg.Connection) -> set[str]:
     }
 
 
+def _triggers(connection: psycopg.Connection) -> set[str]:
+    return {
+        row[0]
+        for row in connection.execute(
+            """SELECT tgname FROM pg_trigger
+                WHERE tgrelid IN (to_regclass('categories'), to_regclass('transactions'))
+                  AND NOT tgisinternal"""
+        ).fetchall()
+    }
+
+
 def infer_baseline(connection: psycopg.Connection) -> int:
     """Return the highest fully recognizable schema version or stop safely."""
     tables = _catalog(connection)
     constraints = _constraints(connection)
     indexes = _indexes(connection)
+    triggers = _triggers(connection)
     core = {
         "accounts": {"id", "name", "type", "opening_balance", "opening_debt", "credit_limit"},
         "categories": {"id", "name", "type"},
@@ -141,6 +154,24 @@ def infer_baseline(connection: psycopg.Connection) -> int:
             raise MigrationError("Migration 006 appears partial; refusing adoption.")
         version = max(version, 6)
 
+    category_007_constraints = {
+        "categories_name_not_blank",
+        "categories_name_trimmed",
+    }
+    category_007_markers = (
+        "is_archived" in tables["categories"],
+        "idx_categories_normalized_name_type" in indexes,
+        category_007_constraints.issubset(constraints),
+        "categories_type_immutable" in triggers,
+        "transactions_archived_category_guard" in triggers,
+    )
+    if any(category_007_markers) and not all(category_007_markers):
+        raise MigrationError("Migration 007 appears partial; refusing adoption.")
+    if all(category_007_markers):
+        if version < 6:
+            raise MigrationError("Migration 007 is present without a complete migration 006 schema.")
+        version = 7
+
     known_tables = set(core) | {"account_transfers", LEDGER}
     if version >= 5:
         known_tables |= kakeibo_tables
@@ -172,6 +203,8 @@ def infer_baseline(connection: psycopg.Connection) -> int:
         }
     if version >= 6:
         expected_columns["kakeibo_month_plans"].add("plan_presence")
+    if version >= 7:
+        expected_columns["categories"].add("is_archived")
     for table, columns in expected_columns.items():
         if tables.get(table) != columns:
             raise MigrationError(f"Existing table {table} has an unrecognized column set; refusing adoption.")
@@ -181,6 +214,8 @@ def infer_baseline(connection: psycopg.Connection) -> int:
         expected_custom_indexes |= {"idx_account_transfers_source_date", "idx_account_transfers_destination_date"}
     if version >= 5:
         expected_custom_indexes.add("idx_transactions_kakeibo_date_envelope")
+    if version >= 7:
+        expected_custom_indexes.add("idx_categories_normalized_name_type")
     actual_custom_indexes = {name for name in indexes if name.startswith("idx_")}
     if actual_custom_indexes != expected_custom_indexes:
         raise MigrationError("Existing schema has missing or unrecognized MoniKey indexes; refusing adoption.")

@@ -98,6 +98,7 @@ docker exec "$test_container" createdb --username=postgres "$migration_db"
 docker exec "$test_container" pg_restore --username=postgres --dbname="$migration_db" /tmp/monikey-prior-schema.dump
 run_sql_file "$migration_db" "$script_dir/005_kakeibo.sql"
 run_sql_file "$migration_db" "$script_dir/006_kakeibo_plan_presence.sql"
+run_sql_file "$migration_db" "$script_dir/007_custom_categories.sql"
 migrated_snapshot="$(financial_snapshot "$migration_db")"
 if [[ "$migrated_snapshot" != "$before_snapshot" ]]; then
   echo "Migration changed the financial snapshot." >&2
@@ -108,7 +109,7 @@ if [[ "$unclassified" != "0" ]]; then
   echo "Migration assigned a historical Kakeibo classification." >&2
   exit 1
 fi
-echo "Migrations 005 and 006 preserve synthetic records, balances, totals, and historical NULL classifications."
+echo "Migrations 005–007 preserve synthetic records, balances, totals, and historical NULL classifications."
 
 port_mapping="$(docker port "$test_container" 5432/tcp | head -n 1)"
 test_port="${port_mapping##*:}"

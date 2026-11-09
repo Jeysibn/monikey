@@ -22,6 +22,7 @@ logger = logging.getLogger("monikey.api")
 
 AccountType = Literal["cash", "bank", "ewallet", "credit_card"]
 CategoryType = Literal["income", "expense"]
+CategoryStatus = Literal["active", "archived", "all"]
 KakeiboEnvelope = Literal["needs", "wants", "culture", "unexpected"]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
@@ -72,6 +73,24 @@ SignedMoney = Annotated[Decimal, BeforeValidator(parse_signed_money), Field(max_
 PositiveMoney = Annotated[Money, Field(gt=0)]
 CalendarDate = Annotated[date, BeforeValidator(parse_calendar_date)]
 AccountName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+
+
+def normalize_category_name(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Category name must be text.")
+    name = " ".join(value.split())
+    if not name:
+        raise ValueError("Enter a category name.")
+    if len(name) > 60:
+        raise ValueError("Category name must be 60 characters or fewer.")
+    return name
+
+
+CategoryName = Annotated[
+    str,
+    BeforeValidator(normalize_category_name),
+    StringConstraints(min_length=1, max_length=60),
+]
 Note = Annotated[str | None, BeforeValidator(normalize_note)]
 NonnegativeMoney = Annotated[Money, Field(ge=0)]
 MonthIntention = Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=240)]
@@ -138,6 +157,21 @@ class TransferInput(InputModel):
 
 class CategoryEnvelopeInput(InputModel):
     default_kakeibo_envelope: KakeiboEnvelope | None
+
+
+class CategoryInput(InputModel):
+    name: CategoryName
+    type: CategoryType
+    default_kakeibo_envelope: KakeiboEnvelope | None = None
+
+
+class CategoryUpdateInput(InputModel):
+    name: CategoryName | None = None
+    default_kakeibo_envelope: KakeiboEnvelope | None = None
+
+
+class CategoryArchiveInput(InputModel):
+    is_archived: bool
 
 
 class TransactionEnvelopeInput(InputModel):
@@ -568,25 +602,33 @@ def validate_transaction_references(
     values: TransactionInput,
     expected_category_type: str | None = None,
     kakeibo_envelope: KakeiboEnvelope | None = None,
+    allow_archived_category_id: int | None = None,
 ) -> None:
-    row = connection.execute(
-        """
-        SELECT a.type AS account_type, c.type AS category_type
-        FROM accounts AS a
-        LEFT JOIN categories AS c ON c.id = %s
-        WHERE a.id = %s
-        """,
-        (values.category_id, values.account_id),
+    category = connection.execute(
+        "SELECT type, is_archived FROM categories WHERE id = %s FOR SHARE",
+        (values.category_id,),
     ).fetchone()
-    if row is None:
-        raise ApiProblem(400, "invalid_field", "Choose an existing account.", "account_id")
-    if row["category_type"] is None:
+    if category is None:
         raise ApiProblem(400, "invalid_field", "Choose an existing category.", "category_id")
-    if expected_category_type is not None and row["category_type"] != expected_category_type:
+    if category["is_archived"] and values.category_id != allow_archived_category_id:
+        raise ApiProblem(
+            409,
+            "category_archived",
+            "Restore this category before using it for a transaction.",
+            "category_id",
+        )
+
+    account = connection.execute(
+        "SELECT type FROM accounts WHERE id = %s",
+        (values.account_id,),
+    ).fetchone()
+    if account is None:
+        raise ApiProblem(400, "invalid_field", "Choose an existing account.", "account_id")
+    if expected_category_type is not None and category["type"] != expected_category_type:
         raise ApiProblem(400, "invalid_account_type_combination", "Keep the transaction's income or expense category type when editing.", "category_id")
-    if kakeibo_envelope is not None and row["category_type"] != "expense":
+    if kakeibo_envelope is not None and category["type"] != "expense":
         raise ApiProblem(422, "invalid_field", "Income transactions cannot have a Kakeibo envelope.", "kakeibo_envelope")
-    if row["account_type"] == "credit_card" and row["category_type"] != "expense":
+    if account["type"] == "credit_card" and category["type"] != "expense":
         raise ApiProblem(400, "invalid_account_type_combination", "Credit-card accounts can only be used for expenses.", "category_id")
 
 
@@ -815,16 +857,154 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
 
 
 @app.get("/api/categories")
-def list_categories(category_type: CategoryType | None = Query(default=None, alias="type")) -> list[dict[str, object]]:
-    query = "SELECT id, name, type, default_kakeibo_envelope FROM categories"
-    parameters: tuple[object, ...] = ()
+def list_categories(
+    category_type: CategoryType | None = Query(default=None, alias="type"),
+    status: CategoryStatus = Query(default="all"),
+) -> list[dict[str, object]]:
+    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories"
+    clauses: list[str] = []
+    parameters: list[object] = []
     if category_type is not None:
-        query += " WHERE type = %s"
-        parameters = (category_type,)
-    query += " ORDER BY type, name, id"
+        clauses.append("type = %s")
+        parameters.append(category_type)
+    if status == "active":
+        clauses.append("is_archived = FALSE")
+    elif status == "archived":
+        clauses.append("is_archived = TRUE")
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY type, lower(name), id"
     with open_connection() as connection:
         rows = connection.execute(query, parameters).fetchall()
     return rows
+
+
+@app.get("/api/categories/{category_id}")
+def get_category(category_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
+    with open_connection() as connection:
+        row = connection.execute(
+            "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories WHERE id = %s",
+            (category_id,),
+        ).fetchone()
+    if row is None:
+        raise ApiProblem(404, "not_found", "Category not found.")
+    return row
+
+
+@app.post("/api/categories", status_code=201)
+def create_category(values: CategoryInput) -> dict[str, object]:
+    if values.type == "income" and values.default_kakeibo_envelope is not None:
+        raise ApiProblem(
+            422,
+            "invalid_field",
+            "Only expense categories can have a Kakeibo default.",
+            "default_kakeibo_envelope",
+        )
+    try:
+        with open_connection() as connection:
+            row = connection.execute(
+                """INSERT INTO categories (name, type, default_kakeibo_envelope)
+                   VALUES (%s, %s, %s)
+                   RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+                (values.name, values.type, values.default_kakeibo_envelope),
+            ).fetchone()
+    except psycopg.errors.UniqueViolation:
+        raise ApiProblem(
+            409,
+            "duplicate_category_name",
+            "A category with this name and type already exists.",
+            "name",
+        ) from None
+    return row
+
+
+@app.patch("/api/categories/{category_id}")
+def update_category(
+    values: CategoryUpdateInput,
+    category_id: Annotated[int, Path(gt=0)],
+) -> dict[str, object]:
+    supplied = values.model_fields_set
+    if not supplied:
+        raise ApiProblem(422, "invalid_field", "Provide a category name or default envelope to update.")
+    if "name" in supplied and values.name is None:
+        raise ApiProblem(422, "invalid_field", "Category name cannot be empty.", "name")
+
+    try:
+        with open_connection() as connection:
+            category = connection.execute(
+                """SELECT id, name, type, default_kakeibo_envelope, is_archived
+                     FROM categories WHERE id = %s FOR UPDATE""",
+                (category_id,),
+            ).fetchone()
+            if category is None:
+                raise ApiProblem(404, "not_found", "Category not found.")
+            if (
+                "default_kakeibo_envelope" in supplied
+                and category["type"] != "expense"
+                and values.default_kakeibo_envelope is not None
+            ):
+                raise ApiProblem(
+                    422,
+                    "invalid_field",
+                    "Only expense categories can have a Kakeibo default.",
+                    "default_kakeibo_envelope",
+                )
+            row = connection.execute(
+                """UPDATE categories
+                      SET name = %s, default_kakeibo_envelope = %s
+                    WHERE id = %s
+                    RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+                (
+                    values.name if "name" in supplied else category["name"],
+                    values.default_kakeibo_envelope
+                    if "default_kakeibo_envelope" in supplied
+                    else category["default_kakeibo_envelope"],
+                    category_id,
+                ),
+            ).fetchone()
+    except psycopg.errors.UniqueViolation:
+        raise ApiProblem(
+            409,
+            "duplicate_category_name",
+            "A category with this name and type already exists.",
+            "name",
+        ) from None
+    return row
+
+
+@app.patch("/api/categories/{category_id}/archive")
+def set_category_archived(
+    values: CategoryArchiveInput,
+    category_id: Annotated[int, Path(gt=0)],
+) -> dict[str, object]:
+    with open_connection() as connection:
+        row = connection.execute(
+            """UPDATE categories SET is_archived = %s WHERE id = %s
+               RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+            (values.is_archived, category_id),
+        ).fetchone()
+    if row is None:
+        raise ApiProblem(404, "not_found", "Category not found.")
+    return row
+
+
+@app.delete("/api/categories/{category_id}", status_code=204)
+def delete_category(category_id: Annotated[int, Path(gt=0)]) -> Response:
+    with open_connection() as connection:
+        category = connection.execute(
+            "SELECT id FROM categories WHERE id = %s FOR UPDATE",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise ApiProblem(404, "not_found", "Category not found.")
+        referenced = connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM transactions WHERE category_id = %s) AS referenced",
+            (category_id,),
+        ).fetchone()["referenced"]
+        if referenced:
+            raise ApiProblem(409, "category_in_use", "This category has transactions. Archive it instead.")
+        connection.execute("DELETE FROM categories WHERE id = %s", (category_id,))
+    return Response(status_code=204)
 
 
 @app.patch("/api/categories/{category_id}/default-kakeibo-envelope")
@@ -899,7 +1079,7 @@ def replace_transaction(
     with open_connection() as connection:
         existing = connection.execute(
             """
-            SELECT c.type AS category_type, t.kakeibo_envelope
+            SELECT c.type AS category_type, t.category_id, t.kakeibo_envelope
             FROM transactions AS t
             JOIN categories AS c ON c.id = t.category_id
             WHERE t.id = %s
@@ -916,8 +1096,9 @@ def replace_transaction(
         validate_transaction_references(
             connection,
             values,
-            existing["category_type"],
-            envelope,
+            expected_category_type=existing["category_type"],
+            kakeibo_envelope=envelope,
+            allow_archived_category_id=existing["category_id"],
         )
         row = connection.execute(
             """

@@ -1,8 +1,8 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.7
-**Date:** 2026-11-02
-**Status:** Adopted as the design baseline. ADR-021 accepts staged Kakeibo metadata integration; PR A supplies architecture and database foundation only. M5 mock UI approval is recorded; M6–7 and M9–13 are implemented, including the private Kubernetes deployment. M13 liquid-account transfers and migration 002 are deployed, and the owner confirms the feature is working properly. M8 API routes were exercised, but the full React/API browser journey and owner acceptance remain pending. CI/GHCR delivery and local Compose behavior passed their recorded checks; M11 rollout, HTTPS ingress, PVC persistence, logical restore, and image rollback were verified on the homelab. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) and the [GitOps deployment runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md) for evidence and limits. Off-cluster disaster recovery remains unverified.
+**Version:** 1.8 draft
+**Date:** 2026-11-09
+**Status:** The v1.7 baseline remains adopted. ADR-022 proposes installation-wide custom categories, archive-safe history, and migration 007 for owner review; its implementation is in a stacked Draft PR series and does not authorize merging or deployment. Previous Kakeibo, wallet, and homelab status statements remain unchanged.
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)
 
 ADRs explain **why** MoniKey uses each technology or pattern. Changing an accepted decision requires a new ADR or a clearly recorded superseding amendment—not quiet expansion of the scope by a coding agent.
@@ -210,6 +210,17 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Consequences:** The schema grows to seven total tables: five financial tables and two Kakeibo metadata tables. Cross-table validation of transaction category type remains an API responsibility; the category-default expense-only rule is enforced as a row constraint. Off-cluster disaster recovery remains a release risk.
 - **Boundaries:** No banking integration, automatic expense labeling, notifications, new payment methods, automatic savings transfers, authentication, multiuser support, or public writable access. Wallet/card artwork remains unchanged.
 
+## ADR-022 — Manage categories without rewriting ledger history
+
+- **Status:** Proposed for owner review with the custom-category Draft PR stack; implementation is limited to the scope authorized in the category-management mission.
+- **Context:** The category catalog currently contains seeded income/expense rows only. Transactions reference `categories.id`, and Kakeibo stores a nullable envelope on each transaction plus a separate suggested envelope on expense categories. Renaming, changing a suggestion, or removing a category must not recategorize past activity or change balances.
+- **Decision:** Continue using `categories` as the only category table. Existing seeded rows remain in place with their current integer IDs; custom categories are rows in the same table. Because v1 has one private installation and no authentication or user table, the catalog is installation-wide, like accounts and transactions. Do not add a user/owner column or claim per-user authorization. A category's `type` is immutable. Names are trimmed and whitespace-collapsed by the API and unique case-insensitively per type, including archived rows.
+- **History and lifecycle:** Add `is_archived` with a false default. Archiving hides a category from new-transaction choices but does not change transactions or their stored envelopes. Historical reads continue to resolve the category ID and current name, and an existing transaction may be edited while retaining an archived category ID. Restore re-enables future selection. A database trigger rejects assigning an archived category to a new transaction, including from an older API build after rollback; updates that retain an existing archived category are allowed. Permanent deletion is allowed only when no transaction references the category; the API locks the category before checking references, and the foreign key remains the final concurrency guard. All transaction references count, including any retained rows.
+- **Kakeibo:** `default_kakeibo_envelope` remains a suggestion for future entry only. The four fixed values are unchanged. Updating a default never updates transaction envelopes. Income categories cannot carry a default.
+- **Migration and rollout:** Migration 007 is additive, leaves category IDs, defaults, transaction rows, amounts, and envelope classifications unchanged, and runs through the existing checksum and backup-gated migration runner. Older API code can ignore the added column; the new API requires migration 007. The feature PRs are stacked so the category screen and transaction-form support can be reviewed before the UI exposes archive actions. No GitOps workflow or deployment trigger changes are part of this ADR.
+- **Alternatives:** Add a separate custom-category table (rejected: it splits lookups and requires transactions to distinguish two category sources); add owner IDs (rejected: multiuser/authentication is explicitly out of scope); rewrite past envelopes when defaults change (rejected: it would alter financial history); delete referenced rows (rejected: it breaks stable references).
+- **Consequences:** Renaming a category changes its displayed label in historical activity because transactions store the stable category ID, not a category-name snapshot. Amounts, income/expense type, balances, and stored Kakeibo envelopes remain unchanged. The unauthenticated single-user boundary remains the trusted private network.
+
 ### ADR-021 amendment — Track explicit plan presence
 
 - **Status:** Accepted for PR E release readiness.
@@ -261,3 +272,4 @@ Use this for future changes:
 - **v1.5 (2026-11-02):** ADR-019 accepts a gated, visual-only wallet-artwork exception; no official issuer art is approved by this decision. Labeled AI-generated concept artwork is allowed and included.
 - **v1.6 (2026-11-02):** ADR-020 stores each account's chosen card (`accounts.card_product_id`) in the database; Codex implements migration 004 and the API.
 - **v1.7 (2026-11-02):** ADR-021 accepts Kakeibo planning/reflection metadata, nullable transaction envelopes and category suggestions, and two metadata tables; migration 005 and API/UI follow-up are staged separately.
+- **v1.8 draft (2026-11-09):** ADR-022 proposes custom category CRUD, archive-safe transaction references, and forward-only migration 007. Owner review is pending.

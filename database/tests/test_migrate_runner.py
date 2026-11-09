@@ -15,10 +15,17 @@ SPEC.loader.exec_module(migrate)
 
 
 class CatalogConnection:
-    def __init__(self, tables: dict[str, set[str]], constraints: set[str], indexes: set[str]):
+    def __init__(
+        self,
+        tables: dict[str, set[str]],
+        constraints: set[str],
+        indexes: set[str],
+        triggers: set[str] | None = None,
+    ):
         self.tables = tables
         self.constraints = constraints
         self.indexes = indexes
+        self.triggers = triggers or set()
 
     def execute(self, query: str):
         if "information_schema.columns" in query:
@@ -27,6 +34,8 @@ class CatalogConnection:
             return Rows([(name,) for name in self.constraints])
         if "pg_indexes" in query:
             return Rows([(name,) for name in self.indexes])
+        if "pg_trigger" in query:
+            return Rows([(name,) for name in self.triggers])
         raise AssertionError(f"Unexpected query: {query}")
 
 
@@ -61,6 +70,43 @@ def baseline_003() -> CatalogConnection:
     return connection
 
 
+def baseline_006() -> CatalogConnection:
+    connection = baseline_003()
+    connection.tables["accounts"].add("card_product_id")
+    connection.tables["categories"].add("default_kakeibo_envelope")
+    connection.tables["transactions"].add("kakeibo_envelope")
+    connection.tables["kakeibo_month_plans"] = {
+        "month", "planned_income", "allocated_starting_funds", "savings_target",
+        "prior_period_debt_reserve", "needs_limit", "wants_limit", "culture_limit",
+        "unexpected_limit", "monthly_intention", "actual_saved_declared", "review_available",
+        "review_savings", "review_change", "review_appreciated", "review_surprise",
+        "review_lesson", "reviewed_at", "review_actuals_snapshot", "created_at", "updated_at",
+        "plan_presence",
+    }
+    connection.tables["kakeibo_weekly_reviews"] = {
+        "week_start", "surprise_note", "worthwhile_note", "next_week_intention", "created_at", "updated_at",
+    }
+    connection.constraints.update({
+        "accounts_card_product_id_format",
+        "accounts_card_product_id_not_cash",
+        "categories_default_kakeibo_envelope_allowed",
+        "categories_default_kakeibo_envelope_expense_only",
+        "transactions_kakeibo_envelope_allowed",
+        "kakeibo_month_plans_plan_presence_check",
+    })
+    connection.indexes.update({"idx_transactions_kakeibo_date_envelope"})
+    return connection
+
+
+def baseline_007() -> CatalogConnection:
+    connection = baseline_006()
+    connection.tables["categories"].add("is_archived")
+    connection.constraints.update({"categories_name_not_blank", "categories_name_trimmed"})
+    connection.indexes.add("idx_categories_normalized_name_type")
+    connection.triggers.update({"categories_type_immutable", "transactions_archived_category_guard"})
+    return connection
+
+
 class MigrationRunnerTests(unittest.TestCase):
     def test_refuses_to_adopt_partial_core_schema(self):
         connection = baseline_001()
@@ -92,10 +138,22 @@ class MigrationRunnerTests(unittest.TestCase):
     def test_recognizes_complete_existing_schema_at_migration_003(self):
         self.assertEqual(migrate.infer_baseline(baseline_003()), 3)
 
+    def test_migration_007_is_the_next_version_after_006(self):
+        self.assertEqual(len(migrate.MIGRATIONS), 7)
+        self.assertEqual(migrate.infer_baseline(baseline_006()), 6)
+        self.assertEqual(migrate.infer_baseline(baseline_007()), 7)
+
+    def test_refuses_partial_migration_007_state(self):
+        connection = baseline_007()
+        connection.triggers.remove("transactions_archived_category_guard")
+        with self.assertRaisesRegex(migrate.MigrationError, "007 appears partial"):
+            migrate.infer_baseline(connection)
+
     def test_blocks_pending_migrations_without_release_authorization(self):
         with self.assertRaisesRegex(migrate.MigrationError, "verified release workflow"):
             migrate.require_migration_permission(3, apply_missing=False)
-        migrate.require_migration_permission(6, apply_missing=False)
+            migrate.require_migration_permission(6, apply_missing=False)
+        migrate.require_migration_permission(7, apply_missing=False)
 
     def test_rejects_unrecognized_extra_tables_and_columns(self):
         connection = baseline_003()

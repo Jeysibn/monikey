@@ -13,6 +13,7 @@ import { EnvelopePicker } from '@/components/kakeibo/EnvelopePicker'
 import {
   accountOptionLabel,
   accountsFor,
+  categoriesForTransaction,
   notices,
   parseAmount,
   previewFor,
@@ -192,7 +193,7 @@ export function TransactionForm({
     ? 'Add another cash, bank, or e-wallet account first.'
     : 'Transfers between your accounts do not count as income or expenses.'
   const categories = values.kind === 'income' || values.kind === 'expense'
-    ? snapshot.categories.filter((c) => c.type === values.kind)
+    ? categoriesForTransaction(values.kind, snapshot, editing ? values.categoryId : null)
     : []
   // Previews and warnings compare against figures that already include the entry being edited, so edit mode has none.
   const preview = editing ? null : previewFor(values, snapshot)

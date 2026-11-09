@@ -175,6 +175,8 @@ export function createMockSource({
       if (target && !entryExists(data, target)) throw new ApiError(404, 'not_found', GONE_ON_EDIT)
       // The API's ADR-021 check: only an expense may carry an envelope.
       const category = data.categories.find((c) => c.id === values.categoryId)
+      const original = target?.table === 'transaction' ? data.transactions.find((t) => t.id === target.id) : undefined
+      if (category?.archived && original?.categoryId !== category.id) throw new ApiError(422, 'invalid_field', 'Archived categories cannot be used for new transactions.', 'categoryId')
       if (values.envelope && category?.type !== 'expense') throw new ApiError(422, 'invalid_field', 'Income transactions cannot have a Kakeibo envelope.', 'envelope')
       data = ledgerReducer(data, target ? toUpdateAction(values, target) : toAction(values, nowIso()))
     },

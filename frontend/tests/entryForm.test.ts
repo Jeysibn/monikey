@@ -9,6 +9,7 @@ import { describe, it } from 'node:test'
 import {
   accountOptionLabel,
   accountsFor,
+  categoriesForTransaction,
   isValidDate,
   notices,
   parseAmount,
@@ -38,6 +39,13 @@ const FOOD = 4, SHOPPING = 8, SALARY = 1
 
 const data = getMockData()
 const snap = buildSnapshot(data)
+
+it('category choices hide archived entries for new transactions but preserve them for edits', () => {
+  const archiveSnapshot = { ...snap, categories: snap.categories.map((category) => category.id === FOOD ? { ...category, archived: true } : category) }
+  assert.equal(categoriesForTransaction('expense', archiveSnapshot, null).some((category) => category.id === FOOD), false)
+  assert.equal(categoriesForTransaction('expense', archiveSnapshot, FOOD).some((category) => category.id === FOOD), true)
+  assert.ok(categoriesForTransaction('income', archiveSnapshot, null).every((category) => category.type === 'income' && !category.archived))
+})
 const base: EntryValues = { kind: 'expense', amount: '385', accountId: GCASH, cardId: null, destinationAccountId: null, categoryId: FOOD, date: '2026-10-25', note: '' }
 const pay: EntryValues = { kind: 'payment', amount: '5000', accountId: MAIN, cardId: BLUE, destinationAccountId: null, categoryId: null, date: '2026-10-25', note: '' }
 const amountError = (text: string) => {

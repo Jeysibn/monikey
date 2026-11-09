@@ -45,6 +45,8 @@ test('summary and categories are strictly mapped', () => {
   })
   assert.throws(() => fromWireSummary({ month: '2026-09' }, '2026-10'), ApiError)
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense' }]), categories)
+  assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', is_archived: true }]), [{ ...categories[0], archived: true }])
+  assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'expense', is_archived: 'true' }]), ApiError)
   assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'transfer' }]), ApiError)
 })
 

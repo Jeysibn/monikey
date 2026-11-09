@@ -235,6 +235,7 @@ function parseCategory(value: unknown): Category {
   if (!name.trim()) throw contractError('category')
   const defaultEnvelope = envelopeField(row, 'default_kakeibo_envelope', 'category envelope')
   if (type === 'income' && defaultEnvelope) throw contractError('category envelope') // only expense categories may suggest one
+  if (row.is_archived !== undefined && typeof row.is_archived !== 'boolean') throw contractError('category archive status')
   return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }) }
 }
 

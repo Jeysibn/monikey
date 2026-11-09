@@ -25,6 +25,7 @@ import type { CardChoice } from '@/components/AccountForm'
 import { pendingCardUploads, serverStoresCards } from '@/wallet/walletModel'
 import type { ActivityItem, AddState, EntryTarget, KakeiboEnvelope, KakeiboPlanValues, KakeiboReviewValues, KakeiboWeekNotes, LedgerSnapshot } from '@/types'
 import { AccountsView } from '@/views/AccountsView'
+import { CategoriesView } from '@/views/CategoriesView'
 import { ActivityView } from '@/views/ActivityView'
 import { KakeiboView } from '@/views/KakeiboView'
 import { OverviewView } from '@/views/OverviewView'
@@ -415,7 +416,7 @@ function App() {
     <>
       <AppShell view={view} onNavigate={setView} onAdd={openAdd} addState={addState}>
         <StatusMessage note={status} onDismiss={() => setStatus(null)} />
-        {categories.error && (
+        {categories.error && view !== 'categories' && (
           <ErrorBlock
             what="the categories"
             updatedAt={categories.updatedAt}
@@ -500,6 +501,14 @@ function App() {
             onSaveSuggestions={saveSuggestions}
             onDialogOpen={() => rememberOpener()}
             onDialogClosed={restoreFocus}
+          />
+        )}
+        {view === 'categories' && (
+          <CategoriesView
+            categories={categories}
+            source={source}
+            onAdd={openAdd}
+            onChanged={() => { setCategoriesVersion((v) => v + 1); setVersion((v) => v + 1) }}
           />
         )}
       </AppShell>

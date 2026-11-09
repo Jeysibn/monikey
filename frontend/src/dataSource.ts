@@ -28,11 +28,21 @@ export interface ActivityQuery {
   limit: number // rows to show; the source works out whether there are more
 }
 
+export interface CategoryValues {
+  name: string
+  type: 'income' | 'expense'
+  defaultEnvelope: KakeiboEnvelope | null
+}
+
 export interface DataSource {
   /** Today's calendar date, "YYYY-MM-DD", in the person's own time zone (the mock uses a fixed day). */
   readonly today: string
   loadAccounts(signal: AbortSignal): Promise<AccountsSnapshot>
   loadCategories(signal: AbortSignal): Promise<Category[]>
+  createCategory(values: CategoryValues): Promise<void>
+  updateCategory(id: number, values: Pick<CategoryValues, 'name' | 'defaultEnvelope'>): Promise<void>
+  setCategoryArchived(id: number, archived: boolean): Promise<void>
+  deleteCategory(id: number): Promise<void>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
   loadActivity(query: ActivityQuery, signal: AbortSignal): Promise<ActivityPage>
   /** Current balance or signed card debt, never the original opening amount. */

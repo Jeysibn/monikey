@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { House, List, NotebookPen, Plus, Wallet, type LucideIcon } from 'lucide-react'
+import { House, List, NotebookPen, Plus, Tags, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 
 import { addBlocked } from '@/components/addState'
@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import type { AddState } from '@/types'
 
 /*
- * The frame around every screen (DESIGN.md section D). One set of four destinations, shown three ways:
- *   < 768px      bottom bar: Overview, Activity, Accounts, Kakeibo and a filled Add item, five equal columns
+ * The frame around every screen (DESIGN.md section D). Five destinations, shown in the existing responsive shell:
+ *   < 768px      bottom bar: Overview, Activity, Accounts, Kakeibo, Categories and a filled Add item, six equal columns
  *                (icon over label, at least 57px wide on a 320px phone, 52px tall)
  *   768-1023px   80px left rail (icon over label); Add transaction is in each page header
  *   >= 1024px    224px sidebar (mark, wordmark, labelled items); Add transaction is in the page header
@@ -16,13 +16,14 @@ import type { AddState } from '@/types'
  * The phone and the sidebar navs are both landmarks named "Main"; CSS hides whichever does not apply,
  * and hidden elements are removed from the accessibility tree, so only one is ever announced.
  */
-export type View = 'overview' | 'activity' | 'accounts' | 'kakeibo'
+export type View = 'overview' | 'activity' | 'accounts' | 'kakeibo' | 'categories'
 
 const destinations: { view: View; label: string; Icon: LucideIcon }[] = [
   { view: 'overview', label: 'Overview', Icon: House },
   { view: 'activity', label: 'Activity', Icon: List },
   { view: 'accounts', label: 'Accounts', Icon: Wallet },
   { view: 'kakeibo', label: 'Kakeibo', Icon: NotebookPen },
+  { view: 'categories', label: 'Categories', Icon: Tags },
 ]
 
 /* Key-and-coin mark: a ring holding the peso sign, with a short key shaft and two teeth. */
@@ -107,10 +108,10 @@ export function AppShell({
       {/* Phone bottom bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-border bg-card px-2 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(6,minmax(0,1fr))] gap-1 border-t border-border bg-card px-1 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {items}
-        {/* Add is a filled tile shaped like the items beside it, so five fit on a 320px phone. */}
+        {/* Six 44px+ controls fit at 320px; labels truncate before touch targets shrink. */}
         <Button
           className="h-[52px] min-w-0 flex-col gap-[3px] self-center rounded-[14px] px-1 text-[length:min(0.75rem,14px)]"
           onClick={onAdd}

@@ -1,5 +1,7 @@
 # Kakeibo browser acceptance
 
+> Historical Kakeibo acceptance record (2026-11-03). It documents only the flows and code tested at that time. Current category and Quick Add acceptance lives in [`frontend/browser-tests/`](../../frontend/browser-tests/README.md); latest release status is in the [roadmap](../architecture/ROADMAP.md#current-source-and-release-status).
+
 Interactive browser acceptance for the integrated MoniKey frontend, including Kakeibo (PRs A–E and #7). This is a
 test record, not a deployment approval. No live database, homelab service, Kubernetes resource, Argo CD application
 or GitOps file was read or changed. Every record shown or written was fictional.

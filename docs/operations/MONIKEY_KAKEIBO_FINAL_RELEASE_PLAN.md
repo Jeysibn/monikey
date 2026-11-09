@@ -1,6 +1,6 @@
 # MoniKey Kakeibo final release plan
 
-**Status:** planning only. No backup, cluster, database, migration, image, GitOps, or application operation is authorized by this document.
+**Status:** historical planning snapshot from 2026-11-03. No operation was authorized or performed by that document. Its SHAs and PR states are stale; use the [current roadmap](../architecture/ROADMAP.md#current-source-and-release-status) and GitOps main before any future release decision.
 
 **Reviewed:** 2026-11-03
 

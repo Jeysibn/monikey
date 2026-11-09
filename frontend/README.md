@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-**Status:** the mock-backed UI and contract-driven HTTP data source are implemented. `src/dataSource.ts` is the seam; `src/mockSource.ts` supports the demo; `src/httpSource.ts` calls same-origin `/api` routes; `src/wire.ts` validates JSON and converts exact decimal strings to bounded centavos. Account editing is implemented: type stays fixed while name, opening values, and card limit can change. The production build passes, and a local Compose API smoke check verified opening-debt recalculation and restoration. The interactive React/API browser journey still needs owner review because local browser access was declined by the origin gate. Compose evidence is in [Milestone 8–9 integration](../docs/design/MILESTONE_8_9_INTEGRATION.md); account behavior is in the [UI/UX spec](../docs/design/UI_UX_SPEC.md#9-add-account).
+**Current implementation:** `src/dataSource.ts` defines the screen-to-data boundary; `src/mockSource.ts` supplies fictional previews; `src/httpSource.ts` calls same-origin `/api` routes; and `src/wire.ts` validates and maps JSON. The app has Overview, Activity, Accounts, Categories, and Kakeibo views. Quick Add handles income, expenses, card payments, and liquid-account transfers. Category defaults suggest expense envelopes; saved transaction classifications remain independent. The repository includes unit and Playwright browser tests. Browser automation does not replace real-device or manual screen-reader review. Deployment status is tracked separately; a successful local build does not prove production deployment.
 
 ## Commands
 
@@ -29,12 +29,13 @@ For the production-like local stack, copy `.env.example` to `.env`, replace the 
 | `src/lib/money.ts`, `src/lib/finance.ts` | Peso formatting; balances, debt, available credit, net position, monthly totals, activity list |
 | `src/components/` | `AppShell`, `PageHeader`, `MonthSelect`, `MoneyText`, `EmptyState`, `TransactionItem`, `CreditCardSummary`, `AccountRow` |
 | `src/components/ui/` | The five vendored shadcn/ui components (restyled to DESIGN.md) |
-| `src/views/` | `OverviewView`, `AccountsView`, `ActivityView` |
+| `src/views/` | Overview, Accounts, Activity, Categories, and Kakeibo screens |
 | `src/App.tsx` | View/month/filter/dialog state, data-source selection, resource loads and refresh after writes |
 | `src/dataSource.ts`, `src/mockSource.ts`, `src/httpSource.ts` | Shared read/write boundary, fictional mock, and real HTTP implementation |
 | `src/wire.ts` | Runtime checks and exact decimal-string/domain mapping for API payloads |
 | `src/index.css` | Design tokens, self-hosted Manrope `@font-face`, `@theme inline` |
-| `tests/` | Accounting, forms, resource behavior, HTTP routes, and wire-mapping unit tests (`npm test`) |
+| `tests/` | Accounting, forms, resource behavior, category filtering, HTTP routes, and wire-mapping unit tests (`npm test`) |
+| `browser-tests/` | Playwright Chromium acceptance tests for categories and Quick Add (`npm run test:browser`) |
 | `scripts/browser-runtime.cjs` | Shared Playwright Core and Chromium lookup for the browser verification scripts |
 | `scripts/verify-overview.cjs`, `scripts/verify-accounts.cjs` | Browser checks; resolve a project-local or cached Playwright Core and matching Chromium. Set `PW_CORE` or `CHROME_BIN` to override either path. |
 | `public/fonts/` | Manrope WOFF2 and its OFL licence; no CDN |

@@ -1,4 +1,4 @@
-# Database milestone 6
+# MoniKey PostgreSQL database
 
 This directory contains the initial PostgreSQL schema, repeatable sample
 category seed, and isolated accounting checks. The financial model has five
@@ -167,48 +167,31 @@ returns their reflection separately. The UI asks the owner to confirm these
 values; an explicit plan save marks them `saved`. Do not batch-mark legacy rows
 as saved or unsaved without reviewing their history.
 
-API contracts implemented in PR B (migration 005 itself does not implement endpoints):
+## API and financial data boundaries
 
-- Extend transaction read/create/update JSON with optional
-  `kakeibo_envelope` (`needs`, `wants`, `culture`, `unexpected`, or `null`). An
-  old create payload may omit it and saves as NULL. On update, omission from an
-  old client preserves the stored value; explicit `null` clears it. Income must
-  have NULL. `PATCH /api/transactions/{id}/kakeibo-envelope` requires the
-  nullable `kakeibo_envelope` property, validates an existing expense
-  transaction, and updates only that field. Include `default_kakeibo_envelope` in category reads; a category
-  default can be set or cleared only for an expense category. Proposed
-  `PATCH /api/categories/{id}/default-kakeibo-envelope` body:
-  `{"default_kakeibo_envelope":"needs"}` or `null` to clear it.
-- `GET /api/kakeibo/months/{YYYY-MM}` returns the saved plan or explicit
-  `plan: null` plus the dashboard. `PUT` upserts `planned_income`,
-  `allocated_starting_funds`, `savings_target`, `prior_period_debt_reserve`,
-  the four `*_limit` values, and `monthly_intention`.
-- `GET /api/kakeibo/months/{YYYY-MM}/report` returns planned/actual income,
-  per-envelope actuals and remaining limits, unclassified and total expenses,
-  and savings target/declaration fields.
-  `PUT /api/kakeibo/months/{YYYY-MM}/review` accepts bounded review answers
-  and optional `actual_saved_declared`; the server computes and stores the
-  snapshot from its current report rather than accepting client totals. The
-  report flags when current actuals differ from the closeout snapshot.
-- `GET`/`PUT /api/kakeibo/weeks/{YYYY-MM-DD}` returns the ledger summary and
-  replaces `surprise_note`, `worthwhile_note`, and `next_week_intention`; the
-  path date must be Monday. Each PUT is a complete replacement: omitted note
-  fields are cleared to NULL.
-- Keep all money values as decimal strings. Invalid month/week/envelope fields
-  use the existing `{ "error": { "code", "message", "field"? } }` envelope.
-  Planning and review endpoints may mutate only Kakeibo metadata, never
-  accounts or financial ledger rows.
+The API contract is implemented in `backend/main.py` and summarized in
+[`backend/README.md`](../backend/README.md) and the [TLD](../docs/architecture/TLD.md).
+Database migration files change schema; they do not create API routes. The API
+uses decimal strings for money and PostgreSQL/Python `Decimal` for saved
+financial calculations.
+
+Kakeibo has four fixed envelope values: `needs`, `wants`, `culture`, and
+`unexpected`. A transaction stores its own nullable envelope. A category's
+`default_kakeibo_envelope` is only a suggestion for future entries. Income has
+no envelope. Card purchases count once as expenses; card payments and liquid
+transfers do not count as expenses.
+
+Migration 007 and the category API preserve stable category IDs and historical
+transaction references. Archived categories remain readable and may be retained
+when editing an existing transaction, but cannot be assigned to a new one. A
+category may be permanently deleted only when no transaction references it.
+The API locks and checks references, while the foreign key remains the final
+database guard.
 
 ## Backup and recovery prerequisite
 
-Before applying migration 005 to an existing database, take and verify a
-database backup and rehearse migration plus restore against a copy of the prior
-schema with synthetic data. Application rollback alone does not roll back the
-schema; use a tested forward-compatible rollback plan or restore the verified
-backup. Project notes record a manual backup artifact with seven-day retention,
-but off-cluster long-term retention and recovery after node/storage failure
-remain unverified. Do not treat that workflow as a complete disaster-recovery
-plan.
+Before applying any pending migration to an existing database, follow the
+current [GitOps release runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md): create a backup, restore it into disposable PostgreSQL, and pass the existing release gates. The repository's local rehearsal uses synthetic data; it does not prove a production backup is recoverable. Application image rollback alone does not roll back schema changes. Off-cluster retention and recovery after node/storage failure remain unverified. Never reset the production volume as a rollback method.
 
 The schema enforces local row constraints and foreign keys. Rules that depend
 on more than one row—such as requiring a card payment to come from a liquid

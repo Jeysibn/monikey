@@ -1,9 +1,9 @@
 # MoniKey v1 — Technical-Level Design (TLD)
 
-**Version:** 1.6 draft (proposed ADR-022 category-management amendment)
-**Date:** 2026-11-09
-**Status:** The previously approved v1.5 baseline remains intact. The category-management amendment is proposed in ADR-022 and implemented in three stacked Draft PRs for owner review; it does not authorize merging or deployment. Kakeibo transaction envelopes remain transaction-level values. Existing limitations on full React/API browser acceptance, screen-reader checks, production backup verification, and off-cluster recovery remain.
-**Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
+**Version:** 1.6
+**Last reviewed:** 2026-11-10
+**Status:** Current source architecture, including accepted ADR-022 category management implemented by merged PRs #20–#22. Transaction envelopes remain transaction-level values; category defaults are suggestions. This document does not claim the latest source or migration 007 is deployed. Current deployment uncertainty is recorded in [ROADMAP.md](ROADMAP.md#current-source-and-release-status). Browser tests exist; real-device and manual screen-reader checks remain separate.
+**Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](../../AGENTS.md)
 
 ## 1. Purpose and success criteria
 
@@ -427,7 +427,7 @@ Mondays. Review snapshots are computed from the server's current ledger report;
 clients cannot submit snapshot totals. Planning and review writes affect only
 Kakeibo metadata tables.
 
-### Category management (proposed ADR-022)
+### Category management (ADR-022; implemented)
 
 Migration 007 adds `categories.is_archived NOT NULL DEFAULT FALSE`, normalized
 case-insensitive uniqueness per category type, nonblank-name checks, and a
@@ -735,4 +735,4 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 - **v1.3 (2026-10-24):** Added Obsidian as a personal, separate second-brain workflow. No change to frontend stack, business scope, database, runtime tiers or GitOps topology.
 - **v1.4 (2026-10-26):** Added owner-approved liquid-account transfers in ADR-017, including the fifth table and activity/API contract.
 - **v1.5 (2026-11-02):** ADR-021 adds Kakeibo planning/reflection metadata, four expense envelopes, migration 005, and forward API contracts without changing financial arithmetic or wallet behavior.
-- **v1.6 draft (2026-11-09):** Proposed ADR-022 documents installation-wide custom categories, archive-safe historical references, immutable income/expense type, and additive migration 007. Pending owner review; no deployment authorization.
+- **v1.6 (2026-11-10):** Updated for accepted ADR-022 and merged category implementation. The latest deployment remains unverified; see ROADMAP current status.

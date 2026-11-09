@@ -11,14 +11,29 @@ MoniKey uses three numbers, `MAJOR.MINOR.PATCH` (for example `1.2.0`):
 - **MINOR** (`1.3.0`): a new feature that still works with existing data.
 - **MAJOR** (`2.0.0`): a change that breaks something, such as removing a feature.
 
-Each release is a git tag named `v` plus the version (for example `v1.2.0`). The same
-number is set in `frontend/package.json` and in the API in `backend/main.py`.
-Container images are still tagged by commit (`sha-...`); a release tag tells you
-which commit that is.
+The app version is repeated in `frontend/package.json` and the FastAPI metadata
+in `backend/main.py`; the current repository values are both `1.2.0`. Git tags
+use `v` plus that version (for example `v1.2.0`). No version-bump or release-tag
+automation exists. The documented convention is to keep those values, the
+changelog section, and the reviewed commit tag aligned; the owner should confirm
+that this remains the intended release checklist. Container images use full
+commit-SHA tags, which identify source exactly but are not the human-facing app
+version. GitHub Release objects are separate metadata; none existed at the
+2026-11-10 audit.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- Kakeibo monthly plans and reports, weekly reflections, and expense classification using the four fixed envelopes (PRs #1–#8).
+- Wallet account presentation and reviewed card artwork, including recovered and regenerated artwork (PRs #10–#17).
+- Backup-gated GitOps release automation and source-run provenance in the dispatch payload (PRs #14 and #19). The workflow skips dispatch when its repository token is absent; configuring it is an owner-controlled prerequisite after initial schema adoption. This entry does not claim a production release.
+- Installation-wide custom income and expense categories with rename, archive, restore, and safe deletion. Expense categories suggest a default envelope; saved transaction envelopes remain independent (PRs #20–#22, migration 007).
+
+### Fixed
+- Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
+
+### Database
+- Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules. The source contains these migrations, but the latest production migration state is unverified.
 
 ## [1.2.0] - 2026-10-30
 

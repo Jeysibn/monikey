@@ -1,5 +1,7 @@
 # MoniKey Kakeibo Homelab Readiness Assessment
 
+> Historical assessment dated 2026-11-03. It is not current readiness evidence for migration 007 or the latest MoniKey SHA. Check the [current roadmap status](../architecture/ROADMAP.md#current-source-and-release-status) before any release decision.
+
 **Assessment date:** 2026-11-03
 **Assessment type:** Read-only; no live cluster or database operations were performed.
 **Verdict:** **BLOCKED** for release approval. The reviewed source and a recent backup workflow are visible, but live cluster state, the live schema, durable recovery, and candidate image availability are not verified.

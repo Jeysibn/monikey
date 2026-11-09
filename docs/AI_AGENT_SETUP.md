@@ -14,7 +14,7 @@ Read the relevant project documents before work:
 - [Frontend setup](architecture/FRONTEND_SETUP.md) and [Obsidian guide](architecture/OBSIDIAN_GUIDE.md) as relevant
 - Root [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md), and approved [DESIGN.md](../DESIGN.md)
 
-The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The design remains the approved baseline. Current repository state: the frontend prototype and contract-driven HTTP client are implemented through API-plan S3; the owner approved Milestone 5 after personally reviewing the mock frontend in a browser; Milestone 6 database schema/seed/accounting checks and Milestone 7 FastAPI endpoints/shared fixtures are implemented. Automated browser tests and physical-device/screen-reader checks were not performed. Live frontend/API integration, persistent database setup, CI/CD, and cluster state are not implemented or verified. See [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
+The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The approved v1 design remains a constraint, while implementation is verified from current source. As of 2026-11-10, the repository contains React/Vite screens, FastAPI routes, PostgreSQL migrations through 007, Playwright browser tests, CI image publishing, and a gated GitOps release workflow. The latest production rollout is on hold per the owner and its running image/schema are unverified. See [ROADMAP.md](architecture/ROADMAP.md#current-source-and-release-status) and the [learning guide](LEARNING_GUIDE.md).
 
 ## Agent roles
 
@@ -81,4 +81,4 @@ The application repository is authoritative for application architecture and cod
 
 ## Current readiness state
 
-The approved design system, mock-backed finance frontend, and contract-driven HTTP client are implemented through API-plan S3. The database schema and FastAPI API are implemented through Milestone 7 and tested against disposable PostgreSQL. Milestone 8 live frontend/API integration and persistent local setup remain. The [AI agent verification](AI_AGENT_VERIFICATION.md) is a historical onboarding record, not current application test evidence. Current gates and evidence are linked from [ROADMAP.md](architecture/ROADMAP.md#current-progress-and-next-gate).
+The current application includes the mock and HTTP data sources, categories, Quick Add, and Kakeibo integration. Run local checks using the guides linked from [docs/README.md](README.md). The [AI agent verification](AI_AGENT_VERIFICATION.md) is a historical onboarding record, not current application test evidence. Current source and release evidence is in [ROADMAP.md](architecture/ROADMAP.md#current-source-and-release-status).

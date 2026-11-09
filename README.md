@@ -23,7 +23,9 @@ These existing design-review screenshots show the mock ledger, not the live home
 ## What it does
 
 - Tracks cash, bank, e-wallet, and credit-card accounts.
-- Records income and expenses with categories and notes.
+- Records income and expenses with installation-wide categories that can be created, renamed, archived, restored, and safely deleted when unused.
+- Uses four fixed Kakeibo envelopes (Needs, Wants, Culture, Unexpected); expense-category defaults suggest a classification for new entries, while each saved expense keeps its own choice.
+- Supports monthly Kakeibo plans/reports and weekly reflections.
 - Tracks card purchases as expenses and card payments separately, so a payment does not count as a second expense.
 - Transfers money between liquid accounts without changing income or expense totals.
 - Calculates balances, card debt, available credit, and monthly totals from the ledger.
@@ -35,7 +37,7 @@ For a short feature walkthrough and the system diagram, see [Portfolio overview]
 
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, selected shadcn/ui components, and Lucide React.
 - **API:** Python, FastAPI, REST endpoints, and parameterized SQL.
-- **Database:** PostgreSQL with five core tables: `accounts`, `categories`, `transactions`, `credit_card_payments`, and `account_transfers`.
+- **Database:** PostgreSQL with five ledger tables (`accounts`, `categories`, `transactions`, `credit_card_payments`, `account_transfers`) plus two Kakeibo planning/reflection tables.
 - **Local development:** Docker Compose.
 - **Delivery and deployment:** GitHub Actions builds and checks SHA-tagged images, GHCR stores them, and Argo CD deploys reviewed image updates from the separate `homelab-gitops` repository.
 
@@ -59,15 +61,17 @@ Open the local Vite URL shown in the terminal. To run the full local stack, use 
 - The homelab deployment uses one Kubernetes node and one PostgreSQL replica. It is not highly available.
 - The owner reports an automated database backup is configured in `homelab-gitops`. Off-cluster retention and recovery after node or storage failure have not been verified.
 - TLS uses the homelab self-signed issuer, which may show a browser trust warning.
-- API routes were exercised with synthetic data, but the owner has manually tested the deployed app on desktop and phone. Automated browser and screen-reader checks are still outstanding.
+- The repository includes frontend unit tests and Playwright Chromium acceptance tests, including category and Quick Add journeys. These tests do not replace manual assistive-technology or real-device review.
 - Banking integrations, recurring bills, and investments are out of scope for v1. Credit cards are not transfer destinations; use Pay card for those payments.
 
 ## Project status
 
-Milestones 11–12 are complete: the private homelab deployment is healthy, and this README plus the portfolio page document the app using fictional sample data. The deployment, storage, HTTPS ingress, database restore, and image rollback checks are in the [roadmap](docs/architecture/ROADMAP.md) and [GitOps runbook](https://github.com/Jeysibn/homelab-gitops/blob/main/docs/MoniKey-Runbook.md). No public writable demo is provided.
+As of 2026-11-10, `main` is `1f0408b5fcad91b19f2732e9ca50502b6c995ba1`. The owner reports the latest production release is on hold because of homelab internet connectivity. The latest GitOps desired manifest still points to MoniKey SHA `971322b…`; repository history does not establish the running image or live migration state. Do not assume custom categories or migration 007 are deployed. The app has no public writable demo. See the [learning guide](docs/LEARNING_GUIDE.md) for verified source and workflow details.
 
 ## Documentation
 
+- [Documentation index](docs/README.md)
+- [Start here: beginner learning guide](docs/LEARNING_GUIDE.md) — five stages from app basics to operations.
 - [Architecture and roadmap](docs/architecture/README.md)
 - [Feature walkthrough and architecture diagram](docs/portfolio/README.md)
 - [Design and frontend status](docs/design/README.md)

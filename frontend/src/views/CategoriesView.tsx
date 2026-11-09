@@ -10,11 +10,14 @@ import { PageHeader } from '@/components/PageHeader'
 import type { Category, CategoryType, KakeiboEnvelope } from '@/types'
 import type { Resource } from '@/useResource'
 
+const PAGE_SIZE = 50
+
 export function CategoriesView({ categories: resource, source, onChanged }: { categories: Resource<Category[]>; source: DataSource; onChanged: () => void }) {
   const [type, setType] = useState<CategoryType | 'all'>('all')
   const [status, setStatus] = useState<CategoryStatus>('active')
   const [envelope, setEnvelope] = useState<KakeiboEnvelope | 'all'>('all')
   const [query, setQuery] = useState('')
+  const [pageIndex, setPageIndex] = useState(0)
   const [editing, setEditing] = useState<Category | null>(null)
   const [name, setName] = useState('')
   const [editEnvelope, setEditEnvelope] = useState<KakeiboEnvelope | ''>('')
@@ -22,6 +25,9 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
   const rows = useMemo(() => filterCategories(resource.data ?? [], { type, status, envelope, query }), [resource.data, type, status, envelope, query])
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const page = Math.min(pageIndex, pageCount - 1)
+  const visibleRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const beginEdit = (category?: Category) => {
     setEditing(category ?? null)
@@ -52,7 +58,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
     if (!normalized) { setFormError('Enter a category name.'); return }
     const chosen = editing ? editing.type : type === 'income' ? 'income' : 'expense'
     const defaultEnvelope = chosen === 'expense' ? editEnvelope || null : null
-    if (!editing) { setType(chosen); setStatus('active'); setEnvelope('all') }
+    if (!editing) { setType(chosen); setStatus('active'); setEnvelope('all'); setPageIndex(0) }
     if (editing) void run(() => source.updateCategory(editing.id, { name: normalized, defaultEnvelope }), 'Category updated.')
     else void run(() => source.createCategory({ name: normalized, type: chosen, defaultEnvelope }), 'Category created.')
   }
@@ -74,7 +80,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
       </CardContent>
     </Card>
     <Card>
-      <CardHeader><CardTitle>Category list</CardTitle><CardDescription>{rows.length} {rows.length === 1 ? 'category' : 'categories'}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>Category list</CardTitle><CardDescription>{rows.length} {rows.length === 1 ? 'category' : 'categories'}{rows.length > PAGE_SIZE ? ` · Page ${page + 1} of ${pageCount}` : ''}</CardDescription></CardHeader>
       <CardContent>
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1 text-sm">Type<select aria-label="Filter category type" value={type} onChange={(event) => setType(event.target.value as CategoryType | 'all')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="all">Income and expense</option><option value="income">Income</option><option value="expense">Expense</option></select></label>
@@ -82,7 +88,8 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
           <label className="grid gap-1 text-sm">Kakeibo envelope<select aria-label="Filter Kakeibo envelope" value={envelope} onChange={(event) => setEnvelope(event.target.value as KakeiboEnvelope | 'all')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="all">All envelopes</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>
         </div>
         <label className="mb-3 grid gap-1 text-sm">Search categories<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name" className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
-        {resource.loading && !resource.data ? <p role="status" className="py-6 text-center text-muted-foreground">Loading categories…</p> : resource.error ? <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} /> : rows.length === 0 ? <p className="py-6 text-center text-muted-foreground">No categories match these filters.</p> : <ul className="divide-y divide-border">{rows.map((category) => <li key={category.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="font-medium">{category.name} <span className="ml-1 text-xs font-normal text-muted-foreground">{category.type}{category.archived ? ' · archived' : ''}</span></p>{category.type === 'expense' && <p className="text-sm text-muted-foreground">Default: {envelopeLabel(category.defaultEnvelope)}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`Edit ${category.name}`} variant="secondary" size="sm" onClick={() => beginEdit(category)}>Edit</Button>{category.archived ? <Button aria-label={`Restore ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => void run(() => source.setCategoryArchived(category.id, false), 'Category restored.')}>Restore</Button> : <Button aria-label={`Archive ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Archive “${category.name}”? Historical transactions will keep this category.`)) void run(() => source.setCategoryArchived(category.id, true), 'Category archived.') }}>Archive</Button>}<Button aria-label={`Delete ${category.name}`} variant="ghost" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Permanently delete “${category.name}”? This only works when no transactions refer to it.`)) void run(() => source.deleteCategory(category.id), 'Category deleted.') }}>Delete</Button></div></li>)}</ul>}
+        {resource.loading && !resource.data ? <p role="status" className="py-6 text-center text-muted-foreground">Loading categories…</p> : resource.error ? <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} /> : rows.length === 0 ? <p className="py-6 text-center text-muted-foreground">No categories match these filters.</p> : <ul className="divide-y divide-border">{visibleRows.map((category) => <li key={category.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="font-medium">{category.name} <span className="ml-1 text-xs font-normal text-muted-foreground">{category.type}{category.archived ? ' · archived' : ''}</span></p>{category.type === 'expense' && <p className="text-sm text-muted-foreground">Default: {envelopeLabel(category.defaultEnvelope)}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`Edit ${category.name}`} variant="secondary" size="sm" onClick={() => beginEdit(category)}>Edit</Button>{category.archived ? <Button aria-label={`Restore ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => void run(() => source.setCategoryArchived(category.id, false), 'Category restored.')}>Restore</Button> : <Button aria-label={`Archive ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Archive “${category.name}”? Historical transactions will keep this category.`)) void run(() => source.setCategoryArchived(category.id, true), 'Category archived.') }}>Archive</Button>}<Button aria-label={`Delete ${category.name}`} variant="ghost" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Permanently delete “${category.name}”? This only works when no transactions refer to it.`)) void run(() => source.deleteCategory(category.id), 'Category deleted.') }}>Delete</Button></div></li>)}</ul>}
+        {rows.length > PAGE_SIZE && <div className="mt-4 flex items-center justify-between gap-3"><Button variant="secondary" disabled={page === 0} onClick={() => setPageIndex(page - 1)}>Previous</Button><span className="text-sm text-muted-foreground">Page {page + 1} of {pageCount}</span><Button variant="secondary" disabled={page >= pageCount - 1} onClick={() => setPageIndex(page + 1)}>Next</Button></div>}
       </CardContent>
     </Card>
   </div>

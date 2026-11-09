@@ -21,12 +21,26 @@ test('category management fits supported viewports and has no axe violations', a
 })
 
 test('failed category reads expose a retry and recover', async ({ page }) => {
-  await page.goto('/?demo=load-error&failing=categories')
-  await page.getByRole('button', { name: 'Categories', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Categories', level: 1 })).toBeFocused()
+  await openCategories(page)
+  const categoryName = `QA Retry ${Date.now().toString(36)}`
+  let failedOnce = false
+  await page.route('**/api/categories', async (route) => {
+    if (!failedOnce && route.request().method() === 'GET') {
+      failedOnce = true
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"synthetic QA failure"}' })
+      return
+    }
+    await route.continue()
+  })
+  await page.getByLabel('Name', { exact: true }).fill(categoryName)
+  await page.getByRole('button', { name: 'Create category' }).click()
+  await expect(page.getByText('Category created.', { exact: true })).toBeVisible()
+  await expect.poll(() => failedOnce).toBe(true)
   await expect(page.getByRole('button', { name: 'Retry loading the categories' })).toBeVisible()
+  await page.unroute('**/api/categories')
   await page.getByRole('button', { name: 'Retry loading the categories' }).click()
-  await expect(page.getByRole('listitem').first()).toBeVisible()
+  await page.getByLabel('Search categories').fill(categoryName)
+  await expect(page.getByRole('button', { name: `Edit ${categoryName}` })).toBeVisible()
 })
 
 test('income and expense categories validate, save, filter, search and paginate', async ({ page }) => {

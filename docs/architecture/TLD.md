@@ -1,8 +1,8 @@
 # MoniKey v1 — Technical-Level Design (TLD)
 
-**Version:** 1.5 (ADR-021 plan-presence amendment and release integration)
-**Date:** 2026-11-03
-**Status:** ADR-021's Kakeibo API and frontend are implemented on the integration branch. PR E adds explicit plan-presence tracking, local integration and recovery rehearsal, and a release runbook; it does not authorize deployment. The M5 mock UI was approved; M6–7 and M9–13 are implemented, including the private Kubernetes deployment through `homelab-gitops`. M13 transfers and migration 002 are deployed; the owner confirms transfers are working properly. Prior full React/API browser acceptance and screen-reader checks remain limited. See [ROADMAP.md](ROADMAP.md#current-progress-and-next-gate) for current PR E evidence and limitations. This design does not claim production backup verification or off-cluster recovery.
+**Version:** 1.6 draft (proposed ADR-022 category-management amendment)
+**Date:** 2026-11-09
+**Status:** The previously approved v1.5 baseline remains intact. The category-management amendment is proposed in ADR-022 and implemented in three stacked Draft PRs for owner review; it does not authorize merging or deployment. Kakeibo transaction envelopes remain transaction-level values. Existing limitations on full React/API browser acceptance, screen-reader checks, production backup verification, and off-cluster recovery remain.
 **Related:** [MASTER_PLAN.md](MASTER_PLAN.md) · [ADR.md](ADR.md) · [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md) · [ROADMAP.md](ROADMAP.md) · [OBSIDIAN_GUIDE.md](OBSIDIAN_GUIDE.md) · [AGENTS.md](AGENTS.md)
 
 ## 1. Purpose and success criteria
@@ -191,6 +191,7 @@ erDiagram
       varchar name
       varchar type
       varchar default_kakeibo_envelope
+      boolean is_archived
     }
     TRANSACTIONS {
       int id PK
@@ -321,7 +322,7 @@ This initial schema is implemented in [`database/001_init.sql`](../../database/0
 - Transfer source and destination must both be Cash, Bank, or E-wallet, and must differ. Transfers do not affect income/expense totals.
 - Require known account/category IDs, valid `YYYY-MM-DD` calendar dates, positive amounts with max two fractional digits, and a reasonable maximum note length.
 - Keep the account type fixed when updating. Set a requested current liquid balance or signed card debt by adjusting the baseline, preserving ledger rows and monthly income/expenses (ADR-018). Signed baselines are allowed after migration 003; creation still validates nonnegative opening values. Reject corrections whose resulting baseline exceeds NUMERIC(12,2). Negative balance, card credit, and over-limit debt remain supported.
-- Prevent deleting an account/category if it is still referenced; v1 has no account or category delete endpoint.
+- Prevent account deletion. A category with transaction references cannot be permanently deleted; archive it instead. The category foreign key remains restrictive, including for references retained in any future soft-delete flow.
 - All writes must use parameterized SQL; use DB transactions for multi-statement mutations.
 
 ### Financial calculation definitions
@@ -387,6 +388,12 @@ review PUT refreshes the snapshot only when explicitly saved.
 | GET | `/api/accounts/{id}` | Read current_balance/current_debt and credit_limit for the account edit form (ADR-018) |
 | PUT | `/api/accounts/{id}` | Set name/current_balance/current_debt/credit_limit; account type is immutable (ADR-018) |
 | GET | `/api/categories?type=expense` | Seeded categories; optional type filter |
+| GET | `/api/categories/{id}` | Read one category, including archived categories for historical editing |
+| POST | `/api/categories` | Create an installation-wide income or expense category; expense defaults may use one of the four existing envelopes |
+| PATCH | `/api/categories/{id}` | Rename a category and/or change its expense-envelope suggestion; type is immutable |
+| PATCH | `/api/categories/{id}/archive` | Archive or restore a category without changing transaction references |
+| DELETE | `/api/categories/{id}` | Permanently delete only when no transaction references the category; otherwise return 409 |
+| GET | `/api/categories?type=expense&status=active\|archived\|all` | Optional type and lifecycle filters; `status=all` is the compatibility default |
 | PATCH | `/api/categories/{id}/default-kakeibo-envelope` | Set or clear a suggested envelope on an expense category only |
 | GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
 | POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note, optional nullable `kakeibo_envelope` |
@@ -419,6 +426,28 @@ strings computed by PostgreSQL/Python `Decimal`. Weekly path dates must be
 Mondays. Review snapshots are computed from the server's current ledger report;
 clients cannot submit snapshot totals. Planning and review writes affect only
 Kakeibo metadata tables.
+
+### Category management (proposed ADR-022)
+
+Migration 007 adds `categories.is_archived NOT NULL DEFAULT FALSE`, normalized
+case-insensitive uniqueness per category type, nonblank-name checks, and a
+database trigger enforcing immutable category type. It changes no existing
+category ID, transaction, amount, stored envelope, or account balance. Custom
+and seeded categories share the existing table and installation-wide scope;
+v1 has no authentication or user ownership model. The API returns archived
+categories by default so activity and existing clients can still resolve
+historical IDs; new transaction writes reject archived categories, while an
+existing transaction may retain its archived category during an edit. The
+frontend must filter archived categories from new-entry choices and include a
+currently referenced archived category when editing historical activity. The
+database also rejects new archived-category references, so an older API build
+fails closed after an application rollback; retaining an existing archived
+reference during an edit remains allowed.
+
+Migration 007 is applied by the existing migration runner only after the
+release workflow authorizes migration following its backup/restore gate. It is
+additive and compatible with the previous API schema. The new API requires
+007, so release sequencing must apply the migration before the new API starts.
 
 Example input:
 
@@ -706,3 +735,4 @@ The binding roadmap, owner, reviewer and acceptance checklist are in [ROADMAP.md
 - **v1.3 (2026-10-24):** Added Obsidian as a personal, separate second-brain workflow. No change to frontend stack, business scope, database, runtime tiers or GitOps topology.
 - **v1.4 (2026-10-26):** Added owner-approved liquid-account transfers in ADR-017, including the fifth table and activity/API contract.
 - **v1.5 (2026-11-02):** ADR-021 adds Kakeibo planning/reflection metadata, four expense envelopes, migration 005, and forward API contracts without changing financial arithmetic or wallet behavior.
+- **v1.6 draft (2026-11-09):** Proposed ADR-022 documents installation-wide custom categories, archive-safe historical references, immutable income/expense type, and additive migration 007. Pending owner review; no deployment authorization.

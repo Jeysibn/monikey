@@ -13,10 +13,16 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def empty_financial_records() -> None:
-    """Keep each test independent while preserving the seeded categories."""
+def empty_financial_records():
+    """Give each test the same fictional ledger and default category catalog."""
     with open_connection() as connection:
         connection.execute(
-            "TRUNCATE kakeibo_weekly_reviews, kakeibo_month_plans, credit_card_payments, transactions, accounts RESTART IDENTITY CASCADE"
+            "TRUNCATE kakeibo_weekly_reviews, kakeibo_month_plans, credit_card_payments, transactions, accounts, categories RESTART IDENTITY CASCADE"
         )
-        connection.execute("UPDATE categories SET default_kakeibo_envelope = NULL")
+        connection.execute(
+            """INSERT INTO categories (name, type) VALUES
+                 ('Salary', 'income'), ('Freelance', 'income'), ('Other', 'income'),
+                 ('Food', 'expense'), ('Transportation', 'expense'), ('Groceries', 'expense'),
+                 ('Bills', 'expense'), ('Shopping', 'expense'), ('Other', 'expense')"""
+        )
+    yield

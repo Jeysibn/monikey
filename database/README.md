@@ -47,6 +47,15 @@ restart/backup-restore evidence are documented in the
   `saved` and `not_saved` are explicit states; pre-006 rows remain NULL and
   therefore `legacy_unknown`. It never infers intent from zero-valued columns.
   Compose and both disposable test runners apply it after 005.
+- `007_custom_categories.sql` adds an archive flag, checks for nonblank trimmed
+  names, normalized case-insensitive uniqueness, and a trigger that keeps a
+  category's income/expense type immutable. A transaction trigger blocks new
+  references to archived categories, including from an older API after an
+  application rollback, while allowing an existing transaction to retain its
+  archived ID. It preserves existing category IDs and financial rows. It is
+  additive, but a verified backup is required before applying it to an existing
+  database. The migration runner still requires authorization from the existing
+  backup-gated release flow.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
@@ -60,14 +69,21 @@ restart/backup-restore evidence are documented in the
 - `tests/kakeibo_plan_presence_before.sql` creates a fictional ambiguous legacy
   reflection before migration 006; `tests/kakeibo_plan_presence.sql` verifies
   its values remain unchanged, stays unknown, and accepts only the new states.
+- `tests/custom_categories_before.sql` creates synthetic ledger rows before
+  migration 007; `tests/custom_categories_migration.sql` checks that category
+  identity, envelope defaults, amounts, classifications, row counts, and the
+  computed account balance remain unchanged. `tests/custom_categories.sql`
+  exercises the database constraints and triggers for immutable type and
+  fail-closed archive behavior.
 - `test.sh` starts a temporary PostgreSQL container without publishing a port
   or mounting persistent storage, applies the schema, simulates the old baseline
-  constraints, applies migrations 003–006 in order, seeds categories twice, runs the
-  migration-preservation and accounting checks, and removes the container on exit.
+  constraints, applies migrations 003–007 in order, seeds categories twice,
+  runs migration-preservation and accounting checks, and removes the container
+  on exit.
 - `rehearse_recovery.sh` builds an earlier schema with fictional records in a
   disposable PostgreSQL 17.6 container, creates and inspects a custom-format
-  backup, restores it to an independent database, applies only migrations 005
-  and 006 to a second restored copy, and calls the API against that copy. It
+  backup, restores it to an independent database, applies migrations 005–007
+  to a second restored copy, and calls the API against that copy. It
   compares account positions, financial row counts and totals before and after.
 - `rehearse_http_integration.py` exercises a fresh Compose stack through the
   frontend's same-origin `/api` proxy with synthetic data. Start the isolated

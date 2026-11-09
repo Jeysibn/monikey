@@ -51,6 +51,7 @@ run_sql_file "$repo_root/database/seed.sql"
 run_sql_file "$repo_root/database/004_account_card_product.sql"
 run_sql_file "$repo_root/database/005_kakeibo.sql"
 run_sql_file "$repo_root/database/006_kakeibo_plan_presence.sql"
+run_sql_file "$repo_root/database/007_custom_categories.sql"
 
 port_mapping="$(docker port "$test_container" 5432/tcp | head -n 1)"
 test_port="${port_mapping##*:}"

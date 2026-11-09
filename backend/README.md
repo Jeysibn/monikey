@@ -101,3 +101,35 @@ liquid-account transfers do not count. Historical NULL classifications remain
 visible as unclassified and included in total expenses.
 
 The routes and response shapes are described in the [TLD API contract](../docs/architecture/TLD.md#6-api-contract-version-1-api-prefix).
+
+## Category management
+
+Migration `database/007_custom_categories.sql` adds `is_archived` and database
+constraints/triggers for category names, immutable income/expense type, and
+rejecting new transaction references to archived categories. It does not
+rewrite category IDs, transaction references, category defaults, transaction
+envelopes, balances, or totals. The API does not run migrations; existing
+databases need the existing backup-gated migration process before this API is
+released. Older application code ignores the additive column, while this API
+expects migration 007 to be present.
+
+The current application has no authentication or user table. Categories
+therefore belong to the one private MoniKey installation, just like the
+existing accounts and ledger. The API does not claim cross-user authorization;
+adding multiple user scopes requires a separately approved authentication and
+ownership design.
+
+- `GET /api/categories?type=expense&status=active|archived|all` filters the
+  catalog. `status=all` is the default to keep archived names available for
+  historical transactions and existing clients.
+- `GET /api/categories/{id}` reads one category; `POST /api/categories`
+  creates one; `PATCH /api/categories/{id}` renames it and/or changes an
+  expense's suggested envelope; `PATCH /api/categories/{id}/archive` archives
+  or restores it; `DELETE /api/categories/{id}` permanently removes it only
+  when no transaction references it.
+- Names are trimmed, internal whitespace is collapsed, and duplicate names are
+  rejected case-insensitively within income or expense. Archived names remain
+  reserved so a restore cannot collide with a newer category.
+- New transactions cannot use an archived category. An existing transaction
+  may still be edited while keeping its archived category ID; its stored
+  transaction envelope remains independent of the category default.

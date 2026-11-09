@@ -8,6 +8,8 @@ import { describe, it } from 'node:test'
 
 import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, isNotFound } from '../src/dataSource.ts'
 import { entryValues } from '../src/lib/ledger.ts'
+import { categoriesForTransaction } from '../src/lib/entryForm.ts'
+import { suggestedEnvelope } from '../src/lib/kakeibo.ts'
 import { buildSnapshot } from '../src/lib/finance.ts'
 import { saveMessage } from '../src/lib/entryText.ts'
 import { getMockData } from '../src/mockData.ts'
@@ -84,6 +86,47 @@ describe('reads', () => {
 })
 
 describe('writes', () => {
+  it('custom expense categories suggest new envelopes while preserving historical classification, labels and totals through archive/restore', async () => {
+    const source = createMockSource()
+    const before = await source.loadSummary(OCT, signal)
+    await source.createCategory({ name: 'Learning', type: 'expense', defaultEnvelope: 'culture' })
+    let categories = await source.loadCategories(signal)
+    const category = categories.find((item) => item.name === 'Learning')!
+    const oldExpense: EntryValues = { ...expense, amount: '10', categoryId: category.id, note: 'Custom category expense', envelope: 'wants' }
+    await source.saveEntry(oldExpense)
+    const afterExpense = await source.loadSummary(OCT, signal)
+    assert.equal(afterExpense.monthExpenses, before.monthExpenses + 1_000)
+    const afterExpenseKakeibo = await source.loadKakeiboMonth(OCT, signal)
+    const wantsAfterOld = afterExpenseKakeibo.envelopes.wants.spent
+    const needsBeforeFuture = afterExpenseKakeibo.envelopes.needs.spent
+
+    await source.updateCategory(category.id, { name: 'Reading', defaultEnvelope: 'needs' })
+    const renamed = await source.loadCategories(signal)
+    assert.equal(renamed.find((item) => item.id === category.id)?.name, 'Reading')
+    assert.equal(renamed.find((item) => item.id === category.id)?.defaultEnvelope, 'needs')
+    assert.equal((await source.loadKakeiboMonth(OCT, signal)).envelopes.wants.spent, wantsAfterOld)
+
+    const suggestion = suggestedEnvelope(renamed, category.id)
+    assert.equal(suggestion, 'needs')
+    await source.saveEntry({ ...oldExpense, note: 'Future expense', envelope: suggestion })
+    const bothExpenses = await source.loadKakeiboMonth(OCT, signal)
+    assert.equal(bothExpenses.envelopes.wants.spent, wantsAfterOld)
+    assert.equal(bothExpenses.envelopes.needs.spent, needsBeforeFuture + 1_000)
+
+    await source.setCategoryArchived(category.id, true)
+    categories = await source.loadCategories(signal)
+    assert.equal(categories.find((item) => item.id === category.id)?.archived, true)
+    assert.equal(categoriesForTransaction('expense', { ...(await source.loadAccounts(signal)), categories }, null).some((item) => item.id === category.id), false)
+    assert.equal(categoriesForTransaction('expense', { ...(await source.loadAccounts(signal)), categories }, category.id).some((item) => item.id === category.id), true)
+    const activity = await source.loadActivity({ month: OCT, accountId: null, limit: 100 }, signal)
+    assert.equal(activity.items.find((item) => item.title === 'Custom category expense')?.categoryName, 'Reading')
+    assert.equal((await source.loadSummary(OCT, signal)).monthExpenses, afterExpense.monthExpenses + 1_000)
+    const totalsBeforeLifecycleChange = await source.loadSummary(OCT, signal)
+    await source.setCategoryArchived(category.id, false)
+    assert.equal((await source.loadSummary(OCT, signal)).monthExpenses, totalsBeforeLifecycleChange.monthExpenses)
+    assert.equal((await source.loadCategories(signal)).find((item) => item.id === category.id)?.archived, false)
+  })
+
   it('a saved expense shows in the next reads; the confirmation reads the fresh figures', async () => {
     const source = createMockSource()
     await source.saveEntry({ ...expense, accountId: 4 })

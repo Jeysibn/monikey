@@ -1,4 +1,4 @@
-import type { AccountInfo, Centavos, EntryKind, EntryValues, LedgerSnapshot } from '../types.ts'
+import type { AccountInfo, Category, Centavos, EntryKind, EntryValues, LedgerSnapshot } from '../types.ts'
 import { isCard } from './finance.ts'
 import { formatPeso } from './money.ts'
 import { accountById, cardOf, liquidBalanceOf } from './snapshot.ts'
@@ -58,6 +58,13 @@ export function isValidDate(date: string): boolean {
 export function accountsFor(kind: EntryKind, field: 'account' | 'card', snapshot: LedgerSnapshot): AccountInfo[] {
   if (field === 'card') return snapshot.accounts.filter(isCard)
   return kind === 'expense' ? snapshot.accounts : snapshot.accounts.filter((a) => !isCard(a))
+}
+
+/** New entries see only active categories; an edit may keep its currently archived category selected. */
+export function categoriesForTransaction(kind: 'income' | 'expense', snapshot: LedgerSnapshot, editingCategoryId: number | null): Category[] {
+  return snapshot.categories.filter((category) =>
+    category.type === kind && (!category.archived || category.id === editingCategoryId),
+  )
 }
 
 const accountAllowed = (kind: EntryKind, field: 'account' | 'card', id: number | null, snapshot: LedgerSnapshot) =>

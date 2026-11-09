@@ -195,6 +195,44 @@ def test_month_plan_report_snapshot_and_ledger_invariance(client: TestClient) ->
     assert unclassified["kakeibo_envelope"] is None
 
 
+def test_each_fixed_envelope_counts_custom_expenses_once(client: TestClient) -> None:
+    bank = create_account(client, "All-envelope test bank", "bank", opening_balance="100.00")
+    month = "2026-04"
+    actuals: dict[str, str] = {}
+
+    for envelope in ("needs", "wants", "culture", "unexpected"):
+        category_response = client.post(
+            "/api/categories",
+            json={
+                "name": f"Custom {envelope.title()}",
+                "type": "expense",
+                "default_kakeibo_envelope": envelope,
+            },
+        )
+        assert category_response.status_code == 201, category_response.text
+        category = category_response.json()
+        assert category["default_kakeibo_envelope"] == envelope
+
+        transaction = create_transaction(
+            client,
+            bank["id"],
+            category["id"],
+            "12.34",
+            f"{month}-02",
+            envelope,
+        )
+        assert transaction["kakeibo_envelope"] == envelope
+        actuals[envelope] = "12.34"
+
+    report = client.get(f"/api/kakeibo/months/{month}/report")
+    assert report.status_code == 200, report.text
+    data = report.json()
+    assert set(data["envelopes"]) == {"needs", "wants", "culture", "unexpected"}
+    assert {key: value["actual_spent"] for key, value in data["envelopes"].items()} == actuals
+    assert data["total_expenses"] == "49.36"
+    assert client.get("/api/accounts").json()[0]["balance"] == "50.64"
+
+
 def test_month_review_without_plan_stays_separate_from_zero_plan(client: TestClient) -> None:
     review_body = {
         "actual_saved_declared": "0.00",

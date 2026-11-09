@@ -27,7 +27,7 @@ function Body({
   onClose: () => void
   onBusyChange: (busy: boolean) => void
 }) {
-  const expense = categories.filter((c) => c.type === 'expense')
+  const expense = categories.filter((c) => c.type === 'expense' && !c.archived)
   const [choices, setChoices] = useState<Record<number, Choice>>(() => Object.fromEntries(expense.map((c) => [c.id, c.defaultEnvelope ?? ''])))
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -101,7 +101,7 @@ export function CategorySuggestionsCard({
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const expense = categories?.filter((c) => c.type === 'expense') ?? []
+  const expense = categories?.filter((c) => c.type === 'expense' && !c.archived) ?? []
   const set = expense.filter((c) => c.defaultEnvelope)
 
   return (

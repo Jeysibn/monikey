@@ -12,7 +12,7 @@ import type { Resource } from '@/useResource'
 
 const PAGE_SIZE = 50
 
-export function CategoriesView({ categories: resource, source, onChanged }: { categories: Resource<Category[]>; source: DataSource; onChanged: () => void }) {
+export function CategoriesView({ categories: resource, source, onChanged, onAdd }: { categories: Resource<Category[]>; source: DataSource; onChanged: () => void; onAdd: () => void }) {
   const [type, setType] = useState<CategoryType | 'all'>('all')
   const [formType, setFormType] = useState<CategoryType>('expense')
   const [status, setStatus] = useState<CategoryStatus>('active')
@@ -66,7 +66,7 @@ export function CategoriesView({ categories: resource, source, onChanged }: { ca
   }
 
   return <div>
-    <PageHeader title="Categories" onAdd={() => beginEdit()} />
+    <PageHeader title="Categories" onAdd={onAdd} />
     <p className="mb-4 text-sm text-muted-foreground">Organize income and expenses. Expense defaults suggest a Kakeibo envelope for new transactions; saved expenses keep their own classification.</p>
     {message && <p role="status" className="mb-4 rounded-control bg-success-soft px-4 py-3 text-sm text-income-ink">{message}</p>}
     <Card className="mb-4">

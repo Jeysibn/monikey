@@ -507,6 +507,7 @@ function App() {
           <CategoriesView
             categories={categories}
             source={source}
+            onAdd={openAdd}
             onChanged={() => { setCategoriesVersion((v) => v + 1); setVersion((v) => v + 1) }}
           />
         )}

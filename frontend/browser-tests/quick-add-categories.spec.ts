@@ -17,6 +17,8 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   const suffix = Date.now().toString(36)
   const initialName = `QA Quick Add ${suffix}`
   const renamedName = `QA Quick Add Renamed ${suffix}`
+  const incomeName = `QA Income Quick Add ${suffix}`
+  const incomeNote = `QA income ${suffix}`
   const unusedName = `QA Unused ${suffix}`
   const accountCreate = await page.request.post('/api/accounts', {
     data: { name: `QA Browser Account ${suffix}`, type: 'cash', opening_balance: '1000.00' },
@@ -40,6 +42,11 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: `Delete ${unusedName}` }).click()
   await expect(page.getByRole('button', { name: `Edit ${unusedName}` })).toHaveCount(0)
+
+  await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
+  await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
+  await page.getByLabel('Name', { exact: true }).fill(incomeName)
+  await page.getByRole('button', { name: 'Create category' }).click()
 
   const addButton = page.getByRole('button', { name: 'Add transaction' })
   await addButton.click()
@@ -69,6 +76,29 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await expect(addButton).toBeFocused()
   await addButton.click()
 
+  const incomeType = page.getByRole('radio', { name: 'Income', exact: true })
+  await incomeType.focus()
+  await page.keyboard.press('Space')
+  await expect(incomeType).toBeChecked()
+  const incomeCategory = page.getByRole('radio', { name: incomeName, exact: true })
+  await expect(incomeCategory).toBeVisible()
+  await expect(dialog.getByRole('group', { name: 'Kakeibo envelope' })).toHaveCount(0)
+  await page.getByLabel('Amount').fill('2.00')
+  await page.getByLabel('Deposit to').selectOption({ index: 1 })
+  await incomeCategory.focus()
+  await page.keyboard.press('Space')
+  await expect(incomeCategory).toBeChecked()
+  await page.getByLabel('Note (optional)').fill(incomeNote)
+  const incomeMonth = (await page.getByLabel('Date').inputValue()).slice(0, 7)
+  await page.getByRole('button', { name: 'Save income' }).click()
+  await expect(dialog).toHaveCount(0)
+  const incomeRows = await page.request.get(`/api/transactions?month=${incomeMonth}`)
+  const income = (await incomeRows.json() as Record<string, any>[]).find((row) => row.note === incomeNote)
+  expect(income?.category_id).toBeGreaterThan(0)
+  expect(income?.kakeibo_envelope).toBeNull()
+
+  await addButton.click()
+
   const amount = page.getByLabel('Amount')
   const account = page.getByLabel('Account')
   await amount.fill('12.34')
@@ -79,8 +109,11 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await expect(chosenCategory).toBeFocused()
   await expect(chosenCategory).toBeChecked()
   await expect(page.getByRole('radio', { name: 'Needs', exact: true })).toBeChecked()
+  const needsEnvelope = page.getByRole('radio', { name: 'Needs', exact: true })
+  await needsEnvelope.focus()
+  await page.keyboard.press('ArrowRight')
   const wantsEnvelope = page.getByRole('radio', { name: 'Wants', exact: true })
-  await wantsEnvelope.focus()
+  await expect(wantsEnvelope).toBeFocused()
   await page.keyboard.press('Space')
   await expect(wantsEnvelope).toBeChecked()
   await page.getByLabel('Note (optional)').fill(`QA purchase ${suffix}`)
@@ -103,6 +136,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
 
   // Category Management is reachable from navigation; rename and change only the default for future entries.
   await page.getByRole('button', { name: 'Categories' }).click()
+  await page.getByLabel('Filter category type').selectOption('expense')
   await page.getByLabel('Search categories').fill(initialName)
   await page.getByRole('button', { name: `Edit ${initialName}` }).click()
   await page.getByLabel('Name', { exact: true }).fill(renamedName)

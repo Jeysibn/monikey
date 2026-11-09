@@ -42,6 +42,8 @@ export interface Category {
    * only: it never changes saved expenses. Absent when the server predates Kakeibo.
    */
   defaultEnvelope?: KakeiboEnvelope | null
+  /** Archived categories remain available for historical transaction labels. */
+  archived?: boolean
 }
 
 /** Income or expense. Which one it is comes from the category, never from the sign of the amount. */

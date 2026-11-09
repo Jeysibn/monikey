@@ -1,4 +1,4 @@
-import { ApiError, type ActivityQuery, type DataSource } from './dataSource.ts'
+import { ApiError, type ActivityQuery, type CategoryValues, type DataSource } from './dataSource.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
 import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './types.ts'
@@ -183,6 +183,26 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
 
     async loadCategories(signal) {
       return readCategories(signal)
+    },
+
+    async createCategory(values: CategoryValues) {
+      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope })
+      categoriesRead = null
+    },
+
+    async updateCategory(id, values) {
+      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope })
+      categoriesRead = null
+    },
+
+    async setCategoryArchived(id, archived) {
+      await write(`/api/categories/${positiveId(id)}/archive`, 'PATCH', fetcher, { is_archived: archived })
+      categoriesRead = null
+    },
+
+    async deleteCategory(id) {
+      await write(`/api/categories/${positiveId(id)}`, 'DELETE', fetcher)
+      categoriesRead = null
     },
 
     async loadSummary(month, signal) {

@@ -97,6 +97,30 @@ test('writes send the agreed request bodies, routes, and HTTP verbs', async () =
   assert.deepEqual(JSON.parse(String(requests[4].init?.body)), { name: 'New Card', type: 'credit_card', opening_balance: '0.00', opening_debt: '0.00', credit_limit: '2000.00' })
 })
 
+test('category management writes use the PR 1 contract and invalidate cached categories', async () => {
+  const requests: { url: string; init?: RequestInit }[] = []
+  const fetcher: typeof fetch = async (input, init) => {
+    requests.push({ url: String(input), init })
+    if (init?.method === 'GET') return json([{ id: 7, name: 'Books', type: 'expense', default_kakeibo_envelope: 'culture', is_archived: false }])
+    return new Response(null, { status: 204 })
+  }
+  const source = createHttpSource(fetcher)
+  assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])
+  await source.createCategory({ name: 'Courses', type: 'expense', defaultEnvelope: 'culture' })
+  await source.updateCategory(7, { name: 'Reading', defaultEnvelope: 'needs' })
+  await source.setCategoryArchived(7, true)
+  await source.deleteCategory(8)
+  assert.deepEqual(requests.map(({ url, init }) => [url, init?.method]), [
+    ['/api/categories', 'GET'], ['/api/categories', 'POST'], ['/api/categories/7', 'PATCH'],
+    ['/api/categories/7/archive', 'PATCH'], ['/api/categories/8', 'DELETE'],
+  ])
+  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Courses', type: 'expense', default_kakeibo_envelope: 'culture' })
+  assert.deepEqual(JSON.parse(String(requests[2].init?.body)), { name: 'Reading', default_kakeibo_envelope: 'needs' })
+  assert.deepEqual(JSON.parse(String(requests[3].init?.body)), { is_archived: true })
+  assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])
+  assert.equal(requests.filter(({ url, init }) => url === '/api/categories' && init?.method === 'GET').length, 2)
+})
+
 test('adding an account resolves with the ID the server created, or null without one', async () => {
   const created = createHttpSource(async () => new Response(JSON.stringify({ id: 42, name: 'Wallet', type: 'cash' }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
   assert.equal(await created.addAccount({ type: 'cash', name: 'Wallet', balance: '0.00', limit: '', owed: '' }), 42)

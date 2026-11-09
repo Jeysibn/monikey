@@ -1,4 +1,4 @@
-import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery, type DataSource } from './dataSource.ts'
+import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery, type CategoryValues, type DataSource } from './dataSource.ts'
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
 import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
 import { amountText } from './lib/money.ts'
@@ -117,6 +117,40 @@ export function createMockSource({
       }),
 
     loadCategories: (signal): Promise<Category[]> => read('categories', 'categories', signal, () => data.categories),
+
+    createCategory: async (values: CategoryValues): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'name')
+      const name = values.name.trim().replace(/\s+/g, ' ')
+      if (!name) throw new ApiError(422, 'invalid_field', 'Category name cannot be empty.', 'name')
+      if (data.categories.some((c) => c.type === values.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
+      if (values.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
+      const id = Math.max(0, ...data.categories.map((c) => c.id)) + 1
+      data = { ...data, categories: [...data.categories, { id, name, type: values.type, defaultEnvelope: values.defaultEnvelope, archived: false }] }
+    },
+
+    updateCategory: async (id, values): Promise<void> => {
+      await beginWrite(FAILED_SAVE, 'name')
+      const current = data.categories.find((c) => c.id === id)
+      if (!current) throw new ApiError(404, 'not_found', 'Category not found.')
+      const name = values.name.trim().replace(/\s+/g, ' ')
+      if (!name) throw new ApiError(422, 'invalid_field', 'Category name cannot be empty.', 'name')
+      if (data.categories.some((c) => c.id !== id && c.type === current.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
+      if (current.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
+      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, name, defaultEnvelope: values.defaultEnvelope } : c) }
+    },
+
+    setCategoryArchived: async (id, archived): Promise<void> => {
+      await beginWrite(FAILED_SAVE, '')
+      if (!data.categories.some((c) => c.id === id)) throw new ApiError(404, 'not_found', 'Category not found.')
+      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, archived } : c) }
+    },
+
+    deleteCategory: async (id): Promise<void> => {
+      await beginWrite(FAILED_DELETE, '')
+      if (data.transactions.some((t) => t.categoryId === id)) throw new ApiError(409, 'category_in_use', 'This category has transactions. Archive it instead.')
+      if (!data.categories.some((c) => c.id === id)) throw new ApiError(404, 'not_found', 'Category not found.')
+      data = { ...data, categories: data.categories.filter((c) => c.id !== id) }
+    },
 
     loadSummary: (month: string, signal): Promise<FinancialSummary> => read('summary', `summary:${month}`, signal, () => summarize(data, month)),
 

@@ -53,6 +53,7 @@ export interface WireCategory {
   type: Category['type']
   /** ADR-021. Absent from a server that predates Kakeibo. */
   default_kakeibo_envelope?: KakeiboEnvelope | null
+  is_archived?: boolean
 }
 
 export interface WireTransaction {
@@ -234,7 +235,7 @@ function parseCategory(value: unknown): Category {
   if (!name.trim()) throw contractError('category')
   const defaultEnvelope = envelopeField(row, 'default_kakeibo_envelope', 'category envelope')
   if (type === 'income' && defaultEnvelope) throw contractError('category envelope') // only expense categories may suggest one
-  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }) }
+  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }) }
 }
 
 const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/

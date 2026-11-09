@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright'
 
 async function openCategories(page: import('@playwright/test').Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await page.getByRole('button', { name: 'Categories', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Categories', level: 1 })).toBeFocused()
 }
 
@@ -31,8 +31,8 @@ test('failed category reads expose a retry and recover', async ({ page }) => {
     await route.continue()
   })
   await openCategories(page)
-  await expect(page.getByRole('button', { name: 'Retry loading categories' })).toBeVisible()
-  await page.getByRole('button', { name: 'Retry loading categories' }).click()
+  await expect(page.getByRole('button', { name: 'Retry loading the categories' })).toBeVisible()
+  await page.getByRole('button', { name: 'Retry loading the categories' }).click()
   await expect(page.getByRole('listitem').first()).toBeVisible()
 })
 

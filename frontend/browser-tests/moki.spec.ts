@@ -1,5 +1,17 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+
+/** Opens a view the way a person would: directly from the main navigation where it is shown, otherwise through More (phones). */
+async function openView(page: Page, name: string) {
+  const main = page.getByRole('navigation', { name: 'Main' })
+  const direct = main.getByRole('button', { name, exact: true })
+  if (await direct.count()) {
+    await direct.first().click()
+    return
+  }
+  await main.getByRole('button', { name: 'More', exact: true }).first().click()
+  await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name, exact: true }).click()
+}
 
 test('populated Overview welcomes returning users and keeps financial information visible after reload', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -19,10 +31,10 @@ test('populated Overview welcomes returning users and keeps financial informatio
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Accounts', exact: true }).click()
+  await openView(page, 'Accounts')
   await expect(page.locator('img[src="/moki/moki-empty-wallet.webp"]')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'All accounts' }).getByRole('button', { name: /View details for Cash on hand/ })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'All accounts' }).getByRole('button', { name: /Cash on hand.*View details/ })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeVisible()
   await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-accounts-mobile.png' })
   await page.setViewportSize({ width: 1440, height: 960 })
@@ -97,7 +109,7 @@ test('Activity separates an empty history from filtered no-results', async ({ pa
 test('Kakeibo planning pose appears only while the selected month has no plan', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?demo=no-plan')
-  await page.getByRole('button', { name: 'Kakeibo', exact: true }).click()
+  await openView(page, 'Kakeibo')
   await expect(page.locator('img[src="/moki/moki-checklist-thinking.webp"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No plan for October 2026 yet' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Create the October 2026 plan' })).toBeVisible()
@@ -106,7 +118,7 @@ test('Kakeibo planning pose appears only while the selected month has no plan', 
   await page.screenshot({ path: 'test-results/browser/moki-kakeibo-desktop.png', fullPage: true })
 
   await page.goto('/?demo=overpaid')
-  await page.getByRole('button', { name: 'Kakeibo', exact: true }).click()
+  await openView(page, 'Kakeibo')
   await expect(page.locator('img[src="/moki/moki-checklist-thinking.webp"]')).toHaveCount(0)
 })
 
@@ -163,7 +175,7 @@ test('only the pose for the current state is requested', async ({ page }) => {
 
   await page.goto('/?demo=no-accounts')
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
-  await page.getByRole('button', { name: 'Accounts', exact: true }).click()
+  await openView(page, 'Accounts')
   await expect(page.locator('img[src="/moki/moki-empty-wallet.webp"]')).toBeVisible()
   expect(requests).toEqual(['/moki/moki-wave.webp', '/moki/moki-wave.webp', '/moki/moki-empty-wallet.webp'])
 })
@@ -196,7 +208,7 @@ test('Moki states fit supported widths without cropping or horizontal overflow',
       ['Activity', 'img[src="/moki/moki-sleeping.webp"]'],
       ['Kakeibo', 'img[src="/moki/moki-checklist-thinking.webp"]'],
     ]) {
-      await page.getByRole('button', { name: view, exact: true }).click()
+      await openView(page, view)
       const image = page.locator(selector)
       await expect(image).toBeVisible()
       const bounds = await page.locator(selector).boundingBox()

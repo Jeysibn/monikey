@@ -77,8 +77,9 @@ test('Dashboard uses synthetic ledger records, supports date and account filters
   await page.getByLabel('Start date').fill('2026-10-01')
   await page.getByLabel('End date').fill('2026-10-25')
   const summary = page.getByRole('region', { name: 'Financial summary' })
-  await expect(summary.getByText('₱36,500.00')).toBeVisible()
-  await expect(summary.getByText('₱27,127.40')).toBeVisible()
+  // With nothing in the previous period the "Up ₱X vs previous period" line repeats the figure, so match the headline (first) one.
+  await expect(summary.getByText('₱36,500.00').first()).toBeVisible()
+  await expect(summary.getByText('₱27,127.40').first()).toBeVisible()
   await expect(page.getByText('Cash flow excludes transfers and card repayments. Card purchases count once.')).toBeVisible()
   await page.getByLabel('Filter analytics by account').selectOption('2')
   await expect(page.getByText('Kakeibo limits cover all accounts. Clear the account filter to compare saved plans with actual spending.')).toBeVisible()
@@ -117,4 +118,17 @@ test('Dashboard has no automated WCAG A/AA violations at phone and desktop width
     const results = await new AxeBuilder({ page }).include('main').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
     expect(results.violations.map(({ id, impact, description }) => ({ id, impact, description })), `axe violations at ${width}px`).toEqual([])
   }
+})
+
+test('Dashboard account filter stays inside a 320px screen when account names are long', async ({ page, request, baseURL }) => {
+  test.skip(process.env.MONIKEY_DASHBOARD_API_FIXTURE !== '1', 'Needs the API-backed stack; the mock ledger has short account names.')
+  const name = `Long wallet name for narrow screens ${Date.now() % 1_000_000}`
+  const created = await request.post(`${baseURL}/api/accounts`, { data: { name, type: 'cash', opening_balance: '0.00', opening_debt: '0.00', credit_limit: null } })
+  expect(created.status(), await created.text()).toBe(201)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await openDashboard(page)
+  const dimensions = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
+  expect(dimensions.scroll, 'horizontal overflow at 320px with a long account name').toBeLessThanOrEqual(dimensions.width)
+  const filter = await page.getByRole('combobox', { name: 'Filter analytics by account' }).boundingBox()
+  expect((filter?.x ?? 0) + (filter?.width ?? 999)).toBeLessThanOrEqual(dimensions.width)
 })

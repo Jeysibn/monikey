@@ -89,9 +89,10 @@ describe('writes', () => {
   it('custom expense categories suggest new envelopes while preserving historical classification, labels and totals through archive/restore', async () => {
     const source = createMockSource()
     const before = await source.loadSummary(OCT, signal)
-    await source.createCategory({ name: 'Learning', type: 'expense', defaultEnvelope: 'culture' })
+    await source.createCategory({ name: 'Learning', type: 'expense', defaultEnvelope: 'culture', iconKey: 'book-open' })
     let categories = await source.loadCategories(signal)
     const category = categories.find((item) => item.name === 'Learning')!
+    assert.equal(category.iconKey, 'book-open')
     const oldExpense: EntryValues = { ...expense, amount: '10', categoryId: category.id, note: 'Custom category expense', envelope: 'wants' }
     await source.saveEntry(oldExpense)
     const afterExpense = await source.loadSummary(OCT, signal)
@@ -100,10 +101,13 @@ describe('writes', () => {
     const wantsAfterOld = afterExpenseKakeibo.envelopes.wants.spent
     const needsBeforeFuture = afterExpenseKakeibo.envelopes.needs.spent
 
-    await source.updateCategory(category.id, { name: 'Reading', defaultEnvelope: 'needs' })
+    await source.updateCategory(category.id, { name: 'Learning renamed', defaultEnvelope: 'needs' })
+    assert.equal((await source.loadCategories(signal)).find((item) => item.id === category.id)?.iconKey, 'book-open')
+    await source.updateCategory(category.id, { name: 'Reading', defaultEnvelope: 'needs', iconKey: null })
     const renamed = await source.loadCategories(signal)
     assert.equal(renamed.find((item) => item.id === category.id)?.name, 'Reading')
     assert.equal(renamed.find((item) => item.id === category.id)?.defaultEnvelope, 'needs')
+    assert.equal(renamed.find((item) => item.id === category.id)?.iconKey, null)
     assert.equal((await source.loadKakeiboMonth(OCT, signal)).envelopes.wants.spent, wantsAfterOld)
 
     const suggestion = suggestedEnvelope(renamed, category.id)

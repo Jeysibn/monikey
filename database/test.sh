@@ -56,5 +56,8 @@ run_sql_file "$script_dir/007_custom_categories.sql"
 run_sql_file "$script_dir/tests/custom_categories_migration.sql"
 run_sql_file "$script_dir/seed.sql"
 run_sql_file "$script_dir/tests/custom_categories.sql"
+run_sql_file "$script_dir/tests/category_icons_before.sql"
+run_sql_file "$script_dir/008_category_icons.sql"
+run_sql_file "$script_dir/tests/category_icons_migration.sql"
 run_sql_file "$script_dir/tests/accounting.sql"
 python3 -m unittest discover -s "$script_dir/tests" -p 'test_*.py'

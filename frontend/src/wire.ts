@@ -23,6 +23,7 @@ import type {
   LiquidAccountType,
 } from './types.ts'
 import { ENVELOPES, PLAN_MONEY_FIELDS, isMonday, parsePlanAmount, parseSavedDeclared } from './lib/kakeibo.ts'
+import { isCategoryIconKey } from './lib/categoryIconRegistry.ts'
 
 export type WireMoney = string
 export type WireAccountType = AccountInfo['type']
@@ -54,6 +55,8 @@ export interface WireCategory {
   /** ADR-021. Absent from a server that predates Kakeibo. */
   default_kakeibo_envelope?: KakeiboEnvelope | null
   is_archived?: boolean
+  /** Nullable and absent from older servers. Unknown values safely resolve to no icon. */
+  icon_key?: string | null
 }
 
 export interface WireTransaction {
@@ -236,7 +239,9 @@ function parseCategory(value: unknown): Category {
   const defaultEnvelope = envelopeField(row, 'default_kakeibo_envelope', 'category envelope')
   if (type === 'income' && defaultEnvelope) throw contractError('category envelope') // only expense categories may suggest one
   if (row.is_archived !== undefined && typeof row.is_archived !== 'boolean') throw contractError('category archive status')
-  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }) }
+  if (row.icon_key !== undefined && row.icon_key !== null && typeof row.icon_key !== 'string') throw contractError('category icon')
+  const iconKey = isCategoryIconKey(row.icon_key) ? row.icon_key : null
+  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }), ...(row.icon_key === undefined ? {} : { iconKey }) }
 }
 
 const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -357,6 +362,7 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
     amount,
     title: note ?? category.name,
     categoryName: category.name,
+    categoryIconKey: category.iconKey ?? null,
     accountName: account.name,
     accountType: account.type,
     cardName: null,

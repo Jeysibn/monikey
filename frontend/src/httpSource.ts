@@ -1,7 +1,7 @@
 import { ApiError, type ActivityQuery, type CategoryValues, type DataSource } from './dataSource.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
-import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './types.ts'
+import type { AccountInfo, ActivityItem, Category, EntryTarget, EntryValues } from './types.ts'
 import { compareTimestamps } from './lib/timestamp.ts'
 import { isMonday } from './lib/kakeibo.ts'
 import {
@@ -22,7 +22,6 @@ import {
   toWireKakeiboPlan,
   toWireKakeiboReview,
   toWireWeekNotes,
-  type WireCategory,
   type WirePayment,
   type WireTransaction,
   type WireTransfer,
@@ -128,7 +127,7 @@ function mergeActivity(
   payments: WirePayment[],
   transfers: WireTransfer[],
   accounts: AccountInfo[],
-  categories: WireCategory[],
+  categories: Category[],
   limit: number,
 ): { items: ActivityItem[]; hasMore: boolean } {
   const items: ActivityItem[] = [
@@ -186,12 +185,12 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     },
 
     async createCategory(values: CategoryValues) {
-      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope })
+      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey })
       categoriesRead = null
     },
 
     async updateCategory(id, values) {
-      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope })
+      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey })
       categoriesRead = null
     },
 

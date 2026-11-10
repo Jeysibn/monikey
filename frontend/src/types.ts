@@ -42,6 +42,8 @@ export interface Category {
    * only: it never changes saved expenses. Absent when the server predates Kakeibo.
    */
   defaultEnvelope?: KakeiboEnvelope | null
+  /** Optional presentation metadata; unknown legacy values resolve to the default icon. */
+  iconKey?: string | null
   /** Archived categories remain available for historical transaction labels. */
   archived?: boolean
 }
@@ -118,6 +120,7 @@ export interface ActivityItem {
   amount: Centavos
   title: string // note, or the category name when there is no note
   categoryName: string | null // null for payments
+  categoryIconKey?: string | null
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid

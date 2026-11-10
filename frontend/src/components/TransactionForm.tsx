@@ -4,6 +4,7 @@ import { cn } from 'cn'
 
 import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { CategoryIcon } from '@/lib/categoryIcons'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/MoneyInput'
 import { FieldError, FormField } from '@/components/FormField'
@@ -379,6 +380,7 @@ export function TransactionForm({
                       )}
                     >
                       {values.categoryId === c.id && <Check aria-hidden="true" className="size-4" />}
+                      <CategoryIcon iconKey={c.iconKey} className="size-4" />
                       {c.name}
                     </span>
                   </label>

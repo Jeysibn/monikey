@@ -256,6 +256,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       amount: t.amount,
       title: t.note ?? category.name,
       categoryName: category.name,
+      categoryIconKey: category.iconKey ?? null,
       accountName: acct.name,
       accountType: acct.type,
       cardName: null,

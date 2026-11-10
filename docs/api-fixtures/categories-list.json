@@ -1,11 +1,11 @@
 [
-  { "id": 7, "name": "Bills", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 4, "name": "Food", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 6, "name": "Groceries", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 9, "name": "Other", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 8, "name": "Shopping", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 5, "name": "Transportation", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 2, "name": "Freelance", "type": "income", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 3, "name": "Other", "type": "income", "default_kakeibo_envelope": null, "is_archived": false },
-  { "id": 1, "name": "Salary", "type": "income", "default_kakeibo_envelope": null, "is_archived": false }
+  { "id": 7, "name": "Bills", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 4, "name": "Food", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 6, "name": "Groceries", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 9, "name": "Other", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 8, "name": "Shopping", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 5, "name": "Transportation", "type": "expense", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 2, "name": "Freelance", "type": "income", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 3, "name": "Other", "type": "income", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null },
+  { "id": 1, "name": "Salary", "type": "income", "default_kakeibo_envelope": null, "is_archived": false, "icon_key": null }
 ]

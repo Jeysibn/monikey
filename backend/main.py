@@ -24,6 +24,10 @@ AccountType = Literal["cash", "bank", "ewallet", "credit_card"]
 CategoryType = Literal["income", "expense"]
 CategoryStatus = Literal["active", "archived", "all"]
 KakeiboEnvelope = Literal["needs", "wants", "culture", "unexpected"]
+CategoryIconKey = Literal[
+    "shopping-basket", "utensils", "car-front", "house", "briefcase-business", "graduation-cap",
+    "heart-pulse", "gamepad-2", "book-open", "shopping-bag", "gift", "piggy-bank",
+]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
@@ -163,11 +167,13 @@ class CategoryInput(InputModel):
     name: CategoryName
     type: CategoryType
     default_kakeibo_envelope: KakeiboEnvelope | None = None
+    icon_key: CategoryIconKey | None = None
 
 
 class CategoryUpdateInput(InputModel):
     name: CategoryName | None = None
     default_kakeibo_envelope: KakeiboEnvelope | None = None
+    icon_key: CategoryIconKey | None = None
 
 
 class CategoryArchiveInput(InputModel):
@@ -861,7 +867,7 @@ def list_categories(
     category_type: CategoryType | None = Query(default=None, alias="type"),
     status: CategoryStatus = Query(default="all"),
 ) -> list[dict[str, object]]:
-    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories"
+    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories"
     clauses: list[str] = []
     parameters: list[object] = []
     if category_type is not None:
@@ -883,7 +889,7 @@ def list_categories(
 def get_category(category_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
     with open_connection() as connection:
         row = connection.execute(
-            "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories WHERE id = %s",
+            "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories WHERE id = %s",
             (category_id,),
         ).fetchone()
     if row is None:
@@ -903,10 +909,10 @@ def create_category(values: CategoryInput) -> dict[str, object]:
     try:
         with open_connection() as connection:
             row = connection.execute(
-                """INSERT INTO categories (name, type, default_kakeibo_envelope)
-                   VALUES (%s, %s, %s)
-                   RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
-                (values.name, values.type, values.default_kakeibo_envelope),
+                """INSERT INTO categories (name, type, default_kakeibo_envelope, icon_key)
+                   VALUES (%s, %s, %s, %s)
+                   RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
+                (values.name, values.type, values.default_kakeibo_envelope, values.icon_key),
             ).fetchone()
     except psycopg.errors.UniqueViolation:
         raise ApiProblem(
@@ -925,14 +931,14 @@ def update_category(
 ) -> dict[str, object]:
     supplied = values.model_fields_set
     if not supplied:
-        raise ApiProblem(422, "invalid_field", "Provide a category name or default envelope to update.")
+        raise ApiProblem(422, "invalid_field", "Provide a category name, default envelope, or icon to update.")
     if "name" in supplied and values.name is None:
         raise ApiProblem(422, "invalid_field", "Category name cannot be empty.", "name")
 
     try:
         with open_connection() as connection:
             category = connection.execute(
-                """SELECT id, name, type, default_kakeibo_envelope, is_archived
+                """SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key
                      FROM categories WHERE id = %s FOR UPDATE""",
                 (category_id,),
             ).fetchone()
@@ -951,14 +957,15 @@ def update_category(
                 )
             row = connection.execute(
                 """UPDATE categories
-                      SET name = %s, default_kakeibo_envelope = %s
+                      SET name = %s, default_kakeibo_envelope = %s, icon_key = %s
                     WHERE id = %s
-                    RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+                    RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
                 (
                     values.name if "name" in supplied else category["name"],
                     values.default_kakeibo_envelope
                     if "default_kakeibo_envelope" in supplied
                     else category["default_kakeibo_envelope"],
+                    values.icon_key if "icon_key" in supplied else category["icon_key"],
                     category_id,
                 ),
             ).fetchone()
@@ -980,7 +987,7 @@ def set_category_archived(
     with open_connection() as connection:
         row = connection.execute(
             """UPDATE categories SET is_archived = %s WHERE id = %s
-               RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+               RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
             (values.is_archived, category_id),
         ).fetchone()
     if row is None:
@@ -1014,7 +1021,7 @@ def update_category_envelope_default(
 ) -> dict[str, object]:
     with open_connection() as connection:
         category = connection.execute(
-            "SELECT id, name, type FROM categories WHERE id = %s",
+            "SELECT id, name, type, icon_key, is_archived FROM categories WHERE id = %s",
             (category_id,),
         ).fetchone()
         if category is None:
@@ -1026,7 +1033,7 @@ def update_category_envelope_default(
             UPDATE categories
             SET default_kakeibo_envelope = %s
             WHERE id = %s
-            RETURNING id, name, type, default_kakeibo_envelope
+            RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key
             """,
             (values.default_kakeibo_envelope, category_id),
         ).fetchone()

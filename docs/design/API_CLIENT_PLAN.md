@@ -9,7 +9,7 @@ Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DE
 | Need | Request | Used by | Re-fetch after a write? |
 |---|---|---|---|
 | Accounts with computed figures | `GET /api/accounts` | every screen, every form (balances, owed, available credit) | yes: after any write |
-| Categories (seeded, fixed) | `GET /api/categories` | Quick Add, Edit, Activity rows | no: load once |
+| Categories (install-wide, user-managed) | `GET /api/categories` | Quick Add, Edit, Activity rows, Dashboard | after category create/edit/archive |
 | Month totals | `GET /api/summary?month=YYYY-MM` | Overview; Accounts subtotals | yes |
 | Activity list (expenses and income) | `GET /api/transactions?month=&account_id=&limit=` | Activity, Overview recent | yes: the visible list |
 | Activity list (card payments) | `GET /api/credit-card-payments?month=&account_id=&limit=` (**account_id is new: B1**) | Activity, Overview recent | yes: the visible list |
@@ -41,7 +41,11 @@ export interface WireCardAccount {
 }
 export type WireAccount = WireLiquidAccount | WireCardAccount
 
-export interface WireCategory { id: number; name: string; type: 'income' | 'expense' }
+export interface WireCategory {
+  id: number; name: string; type: 'income' | 'expense'
+  default_kakeibo_envelope?: string | null; is_archived?: boolean
+  icon_key?: string | null // absent/unknown values resolve to the default category icon
+}
 export interface WireTransaction {
   id: number; account_id: number; category_id: number
   amount: Money; transaction_date: string /* YYYY-MM-DD */; note: string | null

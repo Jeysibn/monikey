@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { PageHeader } from '@/components/PageHeader'
+import { CategoryIconPicker } from '@/components/CategoryIconPicker'
+import { CategoryIcon } from '@/lib/categoryIcons'
+import { isCategoryIconKey, type CategoryIconKey } from '@/lib/categoryIconRegistry'
 import type { Category, CategoryType, KakeiboEnvelope } from '@/types'
 import type { Resource } from '@/useResource'
 
@@ -22,6 +25,7 @@ export function CategoriesView({ categories: resource, source, onChanged, onAdd 
   const [editing, setEditing] = useState<Category | null>(null)
   const [name, setName] = useState('')
   const [editEnvelope, setEditEnvelope] = useState<KakeiboEnvelope | ''>('')
+  const [iconKey, setIconKey] = useState<CategoryIconKey | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
@@ -35,6 +39,7 @@ export function CategoriesView({ categories: resource, source, onChanged, onAdd 
     if (category) setFormType(category.type)
     setName(category?.name ?? '')
     setEditEnvelope(category?.defaultEnvelope ?? '')
+    setIconKey(isCategoryIconKey(category?.iconKey) ? category.iconKey : null)
     setFormError('')
     setMessage('')
   }
@@ -61,8 +66,8 @@ export function CategoriesView({ categories: resource, source, onChanged, onAdd 
     const chosen = editing ? editing.type : formType
     const defaultEnvelope = chosen === 'expense' ? editEnvelope || null : null
     if (!editing) { setType(chosen); setStatus('active'); setEnvelope('all'); setPageIndex(0) }
-    if (editing) void run(() => source.updateCategory(editing.id, { name: normalized, defaultEnvelope }), 'Category updated.')
-    else void run(() => source.createCategory({ name: normalized, type: chosen, defaultEnvelope }), 'Category created.')
+    if (editing) void run(() => source.updateCategory(editing.id, { name: normalized, defaultEnvelope, iconKey }), 'Category updated.')
+    else void run(() => source.createCategory({ name: normalized, type: chosen, defaultEnvelope, iconKey }), 'Category created.')
   }
 
   return <div>
@@ -76,6 +81,7 @@ export function CategoriesView({ categories: resource, source, onChanged, onAdd 
           <label className="grid gap-1.5 text-sm font-medium">Name<input autoComplete="off" maxLength={60} value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
           {!editing && <label className="grid gap-1.5 text-sm font-medium">Type<select value={formType} onChange={(event) => setFormType(event.target.value as CategoryType)} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="expense">Expense</option><option value="income">Income</option></select></label>}
           {(editing ? editing.type === 'expense' : formType !== 'income') && <label className="grid gap-1.5 text-sm font-medium">Default Kakeibo envelope<select value={editEnvelope} onChange={(event) => setEditEnvelope(event.target.value as KakeiboEnvelope | '')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="">No default</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>}
+          <div className="md:col-span-full"><CategoryIconPicker value={iconKey} onChange={setIconKey} /></div>
           {formError && <p role="alert" className="text-sm text-destructive md:col-span-full">{formError}</p>}
           <div className="flex gap-2 md:col-start-3 md:row-start-1">{editing && <Button type="button" variant="secondary" onClick={() => beginEdit()}>Cancel</Button>}<Button disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create category'}</Button></div>
         </form>
@@ -90,7 +96,7 @@ export function CategoriesView({ categories: resource, source, onChanged, onAdd 
           <label className="grid gap-1 text-sm">Kakeibo envelope<select aria-label="Filter Kakeibo envelope" value={envelope} onChange={(event) => setEnvelope(event.target.value as KakeiboEnvelope | 'all')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="all">All envelopes</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>
         </div>
         <label className="mb-3 grid gap-1 text-sm">Search categories<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name" className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
-        {resource.loading && !resource.data ? <p role="status" className="py-6 text-center text-muted-foreground">Loading categories…</p> : resource.error ? <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} /> : rows.length === 0 ? <p className="py-6 text-center text-muted-foreground">No categories match these filters.</p> : <ul className="divide-y divide-border">{visibleRows.map((category) => <li key={category.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="font-medium">{category.name} <span className="ml-1 text-xs font-normal text-muted-foreground">{category.type}{category.archived ? ' · archived' : ''}</span></p>{category.type === 'expense' && <p className="text-sm text-muted-foreground">Default: {envelopeLabel(category.defaultEnvelope)}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`Edit ${category.name}`} variant="secondary" size="sm" onClick={() => beginEdit(category)}>Edit</Button>{category.archived ? <Button aria-label={`Restore ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => void run(() => source.setCategoryArchived(category.id, false), 'Category restored.')}>Restore</Button> : <Button aria-label={`Archive ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Archive “${category.name}”? Historical transactions will keep this category.`)) void run(() => source.setCategoryArchived(category.id, true), 'Category archived.') }}>Archive</Button>}<Button aria-label={`Delete ${category.name}`} variant="ghost" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Permanently delete “${category.name}”? This only works when no transactions refer to it.`)) void run(() => source.deleteCategory(category.id), 'Category deleted.') }}>Delete</Button></div></li>)}</ul>}
+        {resource.loading && !resource.data ? <p role="status" className="py-6 text-center text-muted-foreground">Loading categories…</p> : resource.error ? <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} /> : rows.length === 0 ? <p className="py-6 text-center text-muted-foreground">No categories match these filters.</p> : <ul className="divide-y divide-border">{visibleRows.map((category) => <li key={category.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="flex items-center gap-2 font-medium"><CategoryIcon iconKey={category.iconKey} />{category.name} <span className="ml-1 text-xs font-normal text-muted-foreground">{category.type}{category.archived ? ' · archived' : ''}</span></p>{category.type === 'expense' && <p className="text-sm text-muted-foreground">Default: {envelopeLabel(category.defaultEnvelope)}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`Edit ${category.name}`} variant="secondary" size="sm" onClick={() => beginEdit(category)}>Edit</Button>{category.archived ? <Button aria-label={`Restore ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => void run(() => source.setCategoryArchived(category.id, false), 'Category restored.')}>Restore</Button> : <Button aria-label={`Archive ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Archive “${category.name}”? Historical transactions will keep this category.`)) void run(() => source.setCategoryArchived(category.id, true), 'Category archived.') }}>Archive</Button>}<Button aria-label={`Delete ${category.name}`} variant="ghost" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Permanently delete “${category.name}”? This only works when no transactions refer to it.`)) void run(() => source.deleteCategory(category.id), 'Category deleted.') }}>Delete</Button></div></li>)}</ul>}
         {rows.length > PAGE_SIZE && <div className="mt-4 flex items-center justify-between gap-3"><Button variant="secondary" disabled={page === 0} onClick={() => setPageIndex(page - 1)}>Previous</Button><span className="text-sm text-muted-foreground">Page {page + 1} of {pageCount}</span><Button variant="secondary" disabled={page >= pageCount - 1} onClick={() => setPageIndex(page + 1)}>Next</Button></div>}
       </CardContent>
     </Card>

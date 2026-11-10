@@ -233,7 +233,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ### ADR-023 — Optional persistent category icons
 
-- **Status:** Accepted by the owner's UI modernization mission; implementation is staged in Draft PR #27 and is not a deployment record.
+- **Status:** Accepted by the owner's UI modernization mission; implementation originated in PR #27, is consolidated into Draft PR #25, and is not a deployment record.
 - **Context:** Category names appear in management, transaction entry and historical Activity. Optional visuals can make scanning easier, but arbitrary uploads or executable component names create asset, safety and maintenance costs.
 - **Decision:** Store an optional nullable `categories.icon_key` string from one curated Lucide registry. The frontend uses stable keys and a safe generic category fallback; the API validates keys against a closed allowlist, and migration 008 adds a matching database check. Users can set, edit and clear the selection. Category names remain visible everywhere.
 - **Compatibility and history:** Existing categories remain `NULL`. Omitted icon fields continue to work for old clients; a missing or unknown response key resolves to the fallback. Icon changes never alter category IDs/types, transactions, amounts, account positions, archive state, defaults or saved Kakeibo envelopes. Do not backfill or infer icons as data migration behavior.
@@ -242,7 +242,7 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 
 ### ADR-024 — Separate analytics Dashboard from Overview
 
-- **Status:** Accepted by the owner's UI modernization mission; implementation is staged after category icons in Draft PR #28 and is not a deployment record.
+- **Status:** Accepted by the owner's UI modernization mission; implementation originated in PR #28 after category icons, is consolidated into Draft PR #25, and is not a deployment record.
 - **Context:** Overview is the daily position and action-oriented home, while users also need trend and category analysis. A large chart page would bury balances and recent activity.
 - **Decision:** Keep Overview as the default landing view and add a separate Dashboard for period-based analysis. The Dashboard must use server-aggregated decimal-string data from bounded date/account filters; the browser does not sum paginated transactions as authoritative financial data. Transfers and credit-card repayments are excluded from income/expense cashflow; card purchases remain expenses exactly once. Kakeibo planned-versus-actual uses saved plans and stored transaction envelopes. No historical balance/net-worth chart is shown without a reliable ledger reconstruction model.
 - **Consequences:** A bounded analytics API and explicit metric definitions require backend queries/tests. The interface will show data periods and no-plan/no-data states, and provide text alternatives for charts. No production deployment or migration is authorized by this ADR.

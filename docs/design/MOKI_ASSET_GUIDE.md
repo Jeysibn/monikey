@@ -29,7 +29,7 @@ All 23 files are 8-bit RGBA PNGs with transparency. The poses were visually chec
 | `full-server-error.png` | 1254 × 1254 | 1,165,686 | Holding a device with an error symbol | Consistent character; not used because current retryable errors already explain recovery clearly |
 | `full-sleeping.png` | 1254 × 1254 | 868,668 | Resting on a notebook | Approved; used when the selected month has no activity |
 | `full-success-card.png` | 1254 × 1254 | 976,593 | Showing a completed card with a check | Consistent character; no dedicated success placement added |
-| `full-thumbs-up.png` | 1254 × 1254 | 1,007,750 | Thumbs-up | Approved; used only after the first account is saved successfully |
+| `full-thumbs-up.png` | 1254 × 1254 | 1,007,750 | Thumbs-up | Approved; currently unused (the first-account success mascot was removed; the app shows a normal text confirmation) |
 | `full-wave.png` | 1254 × 1254 | 1,008,898 | Waving hello | Approved; used for first-use Overview guidance |
 | `head-calm.png` | 1254 × 1254 | 1,157,071 | Calm hoodie portrait | Consistent head artwork; no full-body tail in frame, so not used |
 | `head-determined.png` | 1254 × 1254 | 1,134,400 | Determined hoodie portrait | Consistent head artwork; no full-body tail in frame, so not used |
@@ -52,9 +52,9 @@ The app serves only six optimized, transparent WebP files from `frontend/public/
 | Resting | 868,668 | `moki-sleeping.webp` | 39,574 | Activity when the month has no entries |
 | Searching | 1,057,524 | `moki-search.webp` | 47,316 | Activity filter returns no matches |
 | Planning | 978,193 | `moki-checklist-thinking.webp` | 44,176 | Kakeibo month has no plan |
-| Thumbs-up | 1,007,750 | `moki-thumbs-up.webp` | 42,382 | Only after the first account save succeeds |
+| Thumbs-up | 1,007,750 | `moki-thumbs-up.webp` | 42,382 | Currently unused; kept as an approved pose |
 
-The six variants total 261,750 bytes, 95.6% smaller than their 5,931,802 source bytes. WebP preserves alpha. `width` and `height` are set to 480 in the shared component to reserve a square before loading. The images load lazily by default; the first-use Overview pose uses eager loading because it is in the initial viewport. Browser coverage confirms a populated screen requests no Moki image and the no-account Overview-to-Accounts sequence requests only the welcome and empty-wallet poses. The thumbs-up loads only after the first account save succeeds. There is no preload for other poses and no runtime image dependency.
+The six variants total 261,750 bytes, 95.6% smaller than their 5,931,802 source bytes. WebP preserves alpha. `width` and `height` are set to 480 in the shared component to reserve a square before loading. The images load lazily by default; the first-use Overview pose uses eager loading because it is in the initial viewport. Browser coverage confirms a populated screen requests no Moki image and the no-account Overview-to-Accounts sequence requests only the welcome and empty-wallet poses. The thumbs-up is currently unused and is never requested. There is no preload for other poses and no runtime image dependency.
 
 MoniKey currently uses its approved light theme only; dark mode is deferred in `DESIGN.md`. Transparent-alpha images were checked against the actual light surfaces, with no white box or halo.
 

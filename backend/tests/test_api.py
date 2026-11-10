@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from database import open_connection
 from main import ApiProblem, MAX_API_MONEY, format_money
 
 
@@ -106,6 +107,73 @@ def test_health_categories_and_empty_summary(client: TestClient) -> None:
         "month_income": "0.00",
         "month_expenses": "0.00",
     }
+
+
+def test_bounded_analytics_uses_only_transactions_and_preserves_archived_category_history(client: TestClient) -> None:
+    bank = create_account(client, "Analytics Bank", "bank")
+    cash = create_account(client, "Analytics Cash", "cash")
+    card = create_account(client, "Analytics Card", "credit_card", credit_limit="5000.00")
+    salary = category_id(client, "Salary", "income")
+    food = category_id(client, "Food", "expense")
+    groceries = category_id(client, "Groceries", "expense")
+    create_transaction(client, bank["id"], salary, "100.00", "2020-10-02")
+    create_transaction(client, cash["id"], salary, "25.00", "2020-09-30")
+    create_transaction(client, card["id"], food, "20.00", "2020-10-10")
+    create_transaction(client, bank["id"], groceries, "10.00", "2020-10-31")
+    classified = client.post("/api/transactions", json={
+        "account_id": cash["id"], "category_id": food, "amount": "5.00", "transaction_date": "2020-10-15", "kakeibo_envelope": "needs",
+    })
+    assert classified.status_code == 201, classified.text
+    assert client.patch(f"/api/categories/{food}/archive", json={"is_archived": True}).status_code == 200
+    create_payment(client, bank["id"], card["id"], "15.00", "2020-10-12")
+    transfer = client.post("/api/account-transfers", json={
+        "source_account_id": bank["id"], "destination_account_id": cash["id"], "amount": "12.00", "transfer_date": "2020-10-12",
+    })
+    assert transfer.status_code == 201, transfer.text
+    plan = client.put("/api/kakeibo/months/2020-10", json={
+        "planned_income": "100.00", "allocated_starting_funds": "0.00", "savings_target": "0.00",
+        "prior_period_debt_reserve": "0.00", "needs_limit": "25.00", "wants_limit": "30.00",
+        "culture_limit": "0.00", "unexpected_limit": "0.00", "monthly_intention": None,
+    })
+    assert plan.status_code == 200, plan.text
+    report = client.get("/api/analytics", params={"start_date": "2020-10-01", "end_date": "2020-10-31"})
+    assert report.status_code == 200, report.text
+    body = report.json()
+    assert body["totals"] == {"income": "100.00", "expenses": "35.00", "net_cash_flow": "65.00"}
+    assert body["previous_totals"] == {"income": "25.00", "expenses": "0.00", "net_cash_flow": "25.00"}
+    assert body["months"] == [{"month": "2020-10", "income": "100.00", "expenses": "35.00"}]
+    assert body["categories"] == [
+        {"id": food, "name": "Food", "icon_key": None, "archived": True, "expenses": "25.00"},
+        {"id": groceries, "name": "Groceries", "icon_key": None, "archived": False, "expenses": "10.00"},
+    ]
+    october = next(row for row in body["kakeibo"] if row["month"] == "2020-10")
+    assert october["plan_status"] == "saved"
+    assert october["limits"]["needs"] == "25.00"
+    assert october["actuals"]["needs"] == "5.00"
+
+    filtered = client.get("/api/analytics", params={"start_date": "2020-10-01", "end_date": "2020-10-31", "account_id": card["id"]})
+    assert filtered.status_code == 200
+    assert filtered.json()["totals"] == {"income": "0.00", "expenses": "20.00", "net_cash_flow": "-20.00"}
+    assert client.get("/api/analytics", params={"start_date": "2020-10-01", "end_date": "2020-10-31", "account_id": 999}).status_code == 400
+
+
+@pytest.mark.parametrize("params", [
+    {"start_date": "2026-11-02", "end_date": "2026-11-01"},
+    {"start_date": "2025-01-01", "end_date": "2026-01-02"},
+    {"start_date": "2026-02-30", "end_date": "2026-03-01"},
+])
+def test_analytics_rejects_invalid_or_unbounded_date_ranges(client: TestClient, params: dict[str, str]) -> None:
+    assert client.get("/api/analytics", params=params).status_code == 422
+
+
+def test_analytics_distinguishes_missing_saved_plan_from_legacy_unknown(client: TestClient) -> None:
+    with open_connection() as connection:
+        connection.execute("INSERT INTO kakeibo_month_plans (month) VALUES ('2020-10-01')")
+    response = client.get("/api/analytics", params={"start_date": "2020-10-01", "end_date": "2020-10-31"})
+    assert response.status_code == 200
+    month = response.json()["kakeibo"][0]
+    assert month["plan_status"] == "legacy_unknown"
+    assert month["limits"] is None
 
 
 def test_accounts_are_computed_and_duplicate_names_conflict(client: TestClient) -> None:

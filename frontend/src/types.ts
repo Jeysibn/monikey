@@ -91,6 +91,25 @@ export interface FinancialSummary {
   monthExpenses: Centavos // card payments are never included
 }
 
+/** Server-aggregated analytics for a bounded inclusive range of Manila calendar dates. */
+export interface AnalyticsReport {
+  startDate: string
+  endDate: string
+  accountId: number | null
+  totals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos }
+  previousTotals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos } | null
+  months: { month: string; income: Centavos; expenses: Centavos }[]
+  categories: { id: number; name: string; iconKey: string | null; archived: boolean; expenses: Centavos }[]
+  kakeiboTotals: Record<KakeiboEnvelope | 'unclassified', Centavos>
+  kakeibo: {
+    month: string
+    planStatus: KakeiboPlanStatus
+    limits: Record<KakeiboEnvelope, Centavos> | null
+    actuals: Record<KakeiboEnvelope, Centavos>
+    unclassified: Centavos
+  }[]
+}
+
 /** A cash, bank or e-wallet account with its current balance (negative when below zero). */
 export type LiquidAccountType = Exclude<AccountType, 'credit_card'>
 

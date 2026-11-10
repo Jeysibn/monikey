@@ -6,7 +6,7 @@ test('mobile navigation keeps primary destinations legible and exposes secondary
     await page.goto('/')
 
     const mainNavigation = page.getByRole('navigation', { name: 'Main' }).last()
-    for (const label of ['Overview', 'Activity', 'Accounts', 'More']) {
+    for (const label of ['Overview', 'Dashboard', 'Activity', 'More']) {
       const control = mainNavigation.getByRole('button', { name: label, exact: true })
       await expect(control).toBeVisible()
       const bounds = await control.boundingBox()
@@ -29,6 +29,7 @@ test('mobile navigation keeps primary destinations legible and exposes secondary
     const sheet = page.getByRole('dialog', { name: 'More' })
     await expect(sheet.getByRole('button', { name: 'Kakeibo', exact: true })).toBeVisible()
     await expect(sheet.getByRole('button', { name: 'Categories', exact: true })).toBeVisible()
+    await expect(sheet.getByRole('button', { name: 'Accounts', exact: true })).toBeVisible()
     await sheet.getByRole('button', { name: 'Kakeibo', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Kakeibo', level: 1 })).toBeFocused()
     await expect(sheet).toHaveCount(0)

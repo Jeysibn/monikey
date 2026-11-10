@@ -43,6 +43,28 @@ test('loadActivity requests both filtered lists with one spare row and merges ex
   assert.equal(paymentUrl.searchParams.get('limit'), '3')
 })
 
+test('loadAnalytics sends bounded date and account filters and parses exact totals', async () => {
+  const requests: string[] = []
+  const source = createHttpSource(async (input) => {
+    const url = String(input)
+    requests.push(url)
+    return json({
+      start_date: '2026-10-01', end_date: '2026-10-31', account_id: 2,
+      totals: { income: '0.00', expenses: '20.50', net_cash_flow: '-20.50' }, previous_totals: null,
+      months: [{ month: '2026-10', income: '0.00', expenses: '20.50' }], categories: [],
+      kakeibo_totals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: '20.50' },
+      kakeibo: [{ month: '2026-10', plan_status: 'not_saved', limits: null, actuals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00' }, unclassified: '20.50' }],
+    })
+  })
+  const report = await source.loadAnalytics({ startDate: '2026-10-01', endDate: '2026-10-31', accountId: 2 }, signal())
+  assert.equal(report.totals.expenses, 2050)
+  const url = new URL(requests[0], 'http://localhost')
+  assert.equal(url.pathname, '/api/analytics')
+  assert.equal(url.searchParams.get('start_date'), '2026-10-01')
+  assert.equal(url.searchParams.get('end_date'), '2026-10-31')
+  assert.equal(url.searchParams.get('account_id'), '2')
+})
+
 test('loadActivity leaves empty months empty and caps the wire limit at 1001', async () => {
   const urls: string[] = []
   const source = createHttpSource(async (input) => {

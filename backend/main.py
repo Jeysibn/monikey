@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -1341,6 +1342,140 @@ def get_summary(month: str) -> dict[str, str]:
         "net_position": format_money(totals["liquid_balance"] - totals["signed_card_debt"]),
         "month_income": format_money(totals["month_income"]),
         "month_expenses": format_money(totals["month_expenses"]),
+    }
+
+
+@app.get("/api/analytics")
+def get_analytics(
+    start_date: CalendarDate,
+    end_date: CalendarDate,
+    account_id: Annotated[int | None, Query(ge=1)] = None,
+) -> dict[str, object]:
+    """Bounded server-side analytics. Date values are Manila calendar dates, end_date is inclusive."""
+    if end_date < start_date:
+        raise ApiProblem(422, "invalid_field", "End date must be on or after start date.", "end_date")
+    days = (end_date - start_date).days + 1
+    if days > 366:
+        raise ApiProblem(422, "invalid_field", "Choose a date range of 366 days or fewer.", "end_date")
+    try:
+        end_exclusive = end_date + timedelta(days=1)
+    except OverflowError:
+        raise ApiProblem(422, "invalid_field", "End date is outside the supported range.", "end_date") from None
+    parameters: tuple[object, ...]
+    account_clause = "" if account_id is None else " AND t.account_id = %s"
+    account_parameter: tuple[object, ...] = () if account_id is None else (account_id,)
+    with open_connection() as connection:
+        if account_id is not None and not connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM accounts WHERE id = %s)", (account_id,),
+        ).fetchone()["exists"]:
+            raise ApiProblem(400, "invalid_field", "Choose an existing account.", "account_id")
+
+        def totals_between(start: date, end: date) -> dict[str, str]:
+            row = connection.execute(
+                f"""SELECT
+                      COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'income'), 0) AS income,
+                      COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense'), 0) AS expenses
+                    FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                    WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}""",
+                (start, end, *account_parameter),
+            ).fetchone()
+            income = Decimal(row["income"])
+            expenses = Decimal(row["expenses"])
+            return {"income": format_money(income), "expenses": format_money(expenses), "net_cash_flow": format_money(income - expenses)}
+
+        totals = totals_between(start_date, end_exclusive)
+        manila_today = datetime.now(ZoneInfo("Asia/Manila")).date()
+        comparison = None
+        if end_date < manila_today:
+            try:
+                previous_start = start_date - timedelta(days=days)
+            except OverflowError:
+                previous_start = None
+            if previous_start is not None:
+                comparison = totals_between(previous_start, start_date)
+
+        parameters = (start_date, end_exclusive, *account_parameter)
+        monthly_rows = connection.execute(
+            f"""WITH months AS (
+                  SELECT generate_series(date_trunc('month', %s::date), date_trunc('month', %s::date), interval '1 month')::date AS month
+                ), actuals AS (
+                  SELECT date_trunc('month', t.transaction_date)::date AS month,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'income'), 0) AS income,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense'), 0) AS expenses
+                  FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                  WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                  GROUP BY 1
+                )
+                SELECT months.month, COALESCE(actuals.income, 0) AS income, COALESCE(actuals.expenses, 0) AS expenses
+                FROM months LEFT JOIN actuals ON actuals.month = months.month ORDER BY months.month""",
+            (start_date, end_date, *parameters),
+        ).fetchall()
+        category_rows = connection.execute(
+            f"""SELECT c.id, c.name, c.icon_key, c.is_archived, SUM(t.amount) AS expenses
+                FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                WHERE c.type = 'expense' AND t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                GROUP BY c.id, c.name, c.icon_key, c.is_archived ORDER BY SUM(t.amount) DESC, c.name""",
+            parameters,
+        ).fetchall()
+        envelope_rows = connection.execute(
+            f"""WITH months AS (
+                  SELECT generate_series(date_trunc('month', %s::date), date_trunc('month', %s::date), interval '1 month')::date AS month
+                ), actuals AS (
+                  SELECT date_trunc('month', t.transaction_date)::date AS month,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'needs'), 0) AS needs,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'wants'), 0) AS wants,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'culture'), 0) AS culture,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope IS NULL), 0) AS unclassified
+                  FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                  WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                  GROUP BY 1
+                )
+                SELECT months.month, (p.month IS NOT NULL) AS has_plan, p.plan_presence,
+                  p.needs_limit, p.wants_limit, p.culture_limit, p.unexpected_limit,
+                  COALESCE(actuals.needs, 0) AS needs, COALESCE(actuals.wants, 0) AS wants,
+                  COALESCE(actuals.culture, 0) AS culture, COALESCE(actuals.unexpected, 0) AS unexpected,
+                  COALESCE(actuals.unclassified, 0) AS unclassified
+                FROM months LEFT JOIN kakeibo_month_plans AS p ON p.month = months.month
+                LEFT JOIN actuals ON actuals.month = months.month ORDER BY months.month""",
+            (start_date, end_date, start_date, end_exclusive, *account_parameter),
+        ).fetchall()
+        envelope_totals = connection.execute(
+            f"""SELECT
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'needs'), 0) AS needs,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'wants'), 0) AS wants,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'culture'), 0) AS culture,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope IS NULL), 0) AS unclassified
+              FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+              WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}""",
+            parameters,
+        ).fetchone()
+
+    envelopes = ("needs", "wants", "culture", "unexpected")
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "account_id": account_id,
+        "totals": totals,
+        "previous_totals": comparison,
+        "months": [{
+            "month": row["month"].isoformat()[:7],
+            "income": format_money(row["income"]),
+            "expenses": format_money(row["expenses"]),
+        } for row in monthly_rows],
+        "categories": [{
+            "id": row["id"], "name": row["name"], "icon_key": row["icon_key"],
+            "archived": row["is_archived"], "expenses": format_money(row["expenses"]),
+        } for row in category_rows],
+        "kakeibo_totals": {key: format_money(envelope_totals[key]) for key in (*envelopes, "unclassified")},
+        "kakeibo": [{
+            "month": row["month"].isoformat()[:7],
+            "plan_status": "not_saved" if not row["has_plan"] or row["plan_presence"] == "not_saved" else "saved" if row["plan_presence"] == "saved" else "legacy_unknown",
+            "limits": None if row["plan_presence"] != "saved" else {key: format_money(row[f"{key}_limit"]) for key in envelopes},
+            "actuals": {key: format_money(row[key]) for key in envelopes},
+            "unclassified": format_money(row["unclassified"]),
+        } for row in envelope_rows],
     }
 
 

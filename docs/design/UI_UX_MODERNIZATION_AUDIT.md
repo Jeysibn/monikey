@@ -39,7 +39,7 @@ Overview remains the default home and answers the current-position and recent-ac
 | Viewport | Primary navigation | Secondary destinations |
 |---|---|---|
 | Phone (<768px), current screens | Overview, Activity, Accounts, More, Add | More opens Kakeibo and Categories with full labels and active-page indication. |
-| Phone after Dashboard ships | Overview, Dashboard, Activity, Add, More | More opens Accounts, Kakeibo, and Categories. This gives Dashboard a primary slot without overcrowding the bar. |
+| Phone after Dashboard ships | Overview, Dashboard, Activity, More, Add | More opens Accounts, Kakeibo, and Categories. This gives Dashboard a primary slot without overcrowding the bar. |
 | Tablet (768–1023px) | Icon-and-label rail for all current destinations | Dashboard joins the rail when its view ships; Add transaction remains in the page header. |
 | Desktop (>=1024px) | Sidebar for all current destinations | Dashboard joins the sidebar when its view ships; Add transaction remains in the page header. |
 

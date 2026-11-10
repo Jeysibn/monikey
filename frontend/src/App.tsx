@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
@@ -30,6 +30,8 @@ import { ActivityView } from '@/views/ActivityView'
 import { KakeiboView } from '@/views/KakeiboView'
 import { OverviewView } from '@/views/OverviewView'
 
+const DashboardView = lazy(() => import('@/views/DashboardView').then((module) => ({ default: module.DashboardView })))
+
 /*
  * App state is deliberately small (TLD section 4): the data source and what it has reported, which view is
  * showing, the month and account filters, the open dialog and one status message. No router, no store
@@ -40,7 +42,7 @@ import { OverviewView } from '@/views/OverviewView'
  * Preview hook for design review and tests: open the app with
  * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan | reviewed
  *       | save-error | invalid | load-error | flaky | offline | slow | partial
- * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity, kakeibo,
+ * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, analytics, activity, kakeibo,
  * kakeibo-plan, kakeibo-week; comma-separated)
  * to make only those reads fail.
  * to see a loading state, a rare state, a failed save, a refused save, a failed first load, a failed reload,
@@ -48,7 +50,7 @@ import { OverviewView } from '@/views/OverviewView'
  */
 const params = new URLSearchParams(window.location.search)
 const demo = params.get('demo')
-const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
+const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, analytics, summary, activity)
 const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan', 'reviewed']
 
 /** The mock's behaviour for the demos that are about failing or being slow (not about what the ledger holds). */
@@ -123,7 +125,7 @@ function App() {
   // What the screens read. Each is fetched when its screen needs it and again after a write.
   const accounts = useResource('accounts', (signal) => source.loadAccounts(signal), version)
   const categories = useResource('categories', (signal) => source.loadCategories(signal), categoriesVersion)
-  const summary = useResource(view === 'activity' ? null : `summary:${month}`, (signal) => source.loadSummary(month, signal), version)
+  const summary = useResource(view === 'overview' || view === 'accounts' ? `summary:${month}` : null, (signal) => source.loadSummary(month, signal), version)
   const recent = useResource(
     view === 'overview' ? `recent:${month}` : null,
     (signal) => source.loadActivity({ month, accountId: null, limit: RECENT_COUNT }, signal),
@@ -448,6 +450,18 @@ function App() {
               setView('activity')
             }}
           />
+        )}
+        {view === 'dashboard' && (
+          <Suspense fallback={<div className="space-y-4" role="status" aria-label="Loading Dashboard"><div className="h-8 w-44 animate-pulse rounded bg-secondary motion-reduce:animate-none" /><div className="h-28 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /><div className="h-64 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /></div>}>
+            <DashboardView
+              today={source.today}
+              source={source}
+              accounts={accounts}
+              version={version}
+              onAdd={openAdd}
+              addState={addState}
+            />
+          </Suspense>
         )}
         {view === 'activity' && (
           <ActivityView

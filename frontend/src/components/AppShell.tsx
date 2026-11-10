@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, House, List, NotebookPen, Plus, Tags, Wallet, type LucideIcon } from 'lucide-react'
+import { ChartNoAxesCombined, Ellipsis, House, List, NotebookPen, Plus, Tags, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 
 import { addBlocked } from '@/components/addState'
@@ -9,18 +9,19 @@ import type { AddState } from '@/types'
 
 /*
  * The frame around every screen (DESIGN.md section D). Current views stay in the existing responsive shell:
- *   < 768px      bottom bar: Overview, Activity, Accounts, More and a filled Add item, five equal columns;
- *                More contains Kakeibo and Categories
+ *   < 768px      bottom bar: Overview, Dashboard, Activity, More and a filled Add item, five equal columns;
+ *                More contains Accounts, Kakeibo and Categories
  *   768-1023px   80px left rail (icon over label); Add transaction is in each page header
  *   >= 1024px    224px sidebar (mark, wordmark, labelled items); Add transaction is in the page header
  * Navigation is plain React state in App.tsx: no router. The active item has aria-current="page".
  * The phone and the sidebar navs are both landmarks named "Main"; CSS hides whichever does not apply,
  * and hidden elements are removed from the accessibility tree, so only one is ever announced.
  */
-export type View = 'overview' | 'activity' | 'accounts' | 'kakeibo' | 'categories'
+export type View = 'overview' | 'dashboard' | 'activity' | 'accounts' | 'kakeibo' | 'categories'
 
 const destinations: { view: View; label: string; Icon: LucideIcon }[] = [
   { view: 'overview', label: 'Overview', Icon: House },
+  { view: 'dashboard', label: 'Dashboard', Icon: ChartNoAxesCombined },
   { view: 'activity', label: 'Activity', Icon: List },
   { view: 'accounts', label: 'Accounts', Icon: Wallet },
   { view: 'kakeibo', label: 'Kakeibo', Icon: NotebookPen },
@@ -82,8 +83,8 @@ export function AppShell({
   const items = destinations.map((d) => (
     <NavButton key={d.view} {...d} active={view === d.view} onNavigate={onNavigate} />
   ))
-  const phoneItems = destinations.filter(({ view: destination }) => destination !== 'kakeibo' && destination !== 'categories')
-  const moreActive = view === 'kakeibo' || view === 'categories'
+  const phoneItems = destinations.filter(({ view: destination }) => destination !== 'accounts' && destination !== 'kakeibo' && destination !== 'categories')
+  const moreActive = view === 'accounts' || view === 'kakeibo' || view === 'categories'
   const navigatingFromMore = useRef(false)
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -144,11 +145,11 @@ export function AppShell({
           >
             <DialogHeader>
               <DialogTitle>More</DialogTitle>
-              <DialogDescription>Budget and category tools</DialogDescription>
+              <DialogDescription>Account, budget and category tools</DialogDescription>
             </DialogHeader>
             <DialogBody>
               <nav aria-label="More destinations" className="grid gap-2">
-                {destinations.filter(({ view: destination }) => destination === 'kakeibo' || destination === 'categories').map((d) => (
+                {destinations.filter(({ view: destination }) => destination === 'accounts' || destination === 'kakeibo' || destination === 'categories').map((d) => (
                   <NavButton
                     key={d.view}
                     {...d}

@@ -6,6 +6,7 @@ import { compareTimestamps } from './lib/timestamp.ts'
 import { isMonday } from './lib/kakeibo.ts'
 import {
   fromWireAccounts,
+  fromWireAnalytics,
   fromWireEditableAccount,
   fromWireCategories,
   fromWireField,
@@ -207,6 +208,13 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     async loadSummary(month, signal) {
       const query = new URLSearchParams({ month })
       return fromWireSummary(await getJson(urlWithQuery('/api/summary', query), signal, fetcher), month)
+    },
+
+    async loadAnalytics({ startDate, endDate, accountId }, signal) {
+      const query = new URLSearchParams({ start_date: startDate, end_date: endDate })
+      if (accountId !== null) query.set('account_id', String(positiveId(accountId)))
+      const expected = { startDate, endDate, accountId }
+      return fromWireAnalytics(await getJson(urlWithQuery('/api/analytics', query), signal, fetcher), expected)
     },
 
     async loadActivity({ month, accountId, limit }: ActivityQuery, signal) {

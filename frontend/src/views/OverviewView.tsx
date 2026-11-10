@@ -4,6 +4,7 @@ import { cn } from 'cn'
 
 import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { EmptyState } from '@/components/EmptyState'
+import { Moki } from '@/components/Moki'
 import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
@@ -109,14 +110,19 @@ export function OverviewView({
       <ErrorBlock what="your summary" updatedAt={summaryRes.updatedAt} onRetry={summaryRes.retry} focusAfter="main h1" />
     </div>
   ) : !hasAccounts && !positionLoading ? (
-    <Card key="position" className="order-1 text-center lg:order-none lg:col-span-12">
-      <p className="text-lg font-semibold">
-        Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.
-      </p>
-      <Button className="mt-4" onClick={onAddAccount}>
-        <Plus aria-hidden="true" />
-        Add account
-      </Button>
+    <Card key="position" className="order-1 lg:order-none lg:col-span-12">
+      <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[112px_minmax(0,1fr)] sm:text-left">
+        <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" />
+        <div>
+          <p className="text-lg font-semibold">
+            Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.
+          </p>
+          <Button className="mt-4" onClick={onAddAccount}>
+            <Plus aria-hidden="true" />
+            Add account
+          </Button>
+        </div>
+      </div>
     </Card>
   ) : (
     <section

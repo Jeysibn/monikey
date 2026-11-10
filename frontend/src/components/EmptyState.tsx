@@ -5,10 +5,12 @@ import { cn } from 'cn'
 export function EmptyState({
   message,
   action,
+  illustration,
   className,
 }: {
   message: string
   action?: ReactNode
+  illustration?: ReactNode
   className?: string
 }) {
   return (
@@ -18,6 +20,7 @@ export function EmptyState({
         className,
       )}
     >
+      {illustration && <div className="mb-2 flex justify-center">{illustration}</div>}
       <p>{message}</p>
       {action && <div className="mt-3">{action}</div>}
     </div>

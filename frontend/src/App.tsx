@@ -40,6 +40,7 @@ import { OverviewView } from '@/views/OverviewView'
  * Preview hook for design review and tests: open the app with
  * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan | reviewed
  *       | save-error | invalid | load-error | flaky | offline | slow | partial
+ * Use `?demo=no-accounts&behavior=save-error` to combine a first-run ledger with a failed write.
  * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity, kakeibo,
  * kakeibo-plan, kakeibo-week; comma-separated)
  * to make only those reads fail.
@@ -48,6 +49,7 @@ import { OverviewView } from '@/views/OverviewView'
  */
 const params = new URLSearchParams(window.location.search)
 const demo = params.get('demo')
+const behavior = params.get('behavior') ?? demo
 const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
 const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan', 'reviewed']
 
@@ -89,7 +91,7 @@ function App() {
   const [source] = useState<DataSource>(() =>
     import.meta.env.VITE_DATA_SOURCE === 'http'
       ? createHttpSource()
-      : createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(demo), readFailureKinds: failing }),
+      : createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(behavior), readFailureKinds: failing }),
   )
   const [version, setVersion] = useState(0) // bumped after a write so every screen fetches again
   const [view, setView] = useState<View>('overview')
@@ -319,6 +321,7 @@ function App() {
     if (result.ok) setWalletPreferences(result.preferences)
   }
   const saveAccount = async (values: AccountValues, card: CardChoice) => {
+    const firstAccount = accounts.data?.accounts.length === 0
     let accountId: number | null
     try {
       accountId = storesCards ? await source.addAccount(values, card?.productId ?? null) : await source.addAccount(values)
@@ -327,7 +330,7 @@ function App() {
     }
     if (accountId !== null && !storesCards) keepCardInBrowser(accountId, values.type, card)
     setVersion((v) => v + 1)
-    setStatus({ text: accountSavedMessage(values) })
+    setStatus({ text: accountSavedMessage(values), ...(firstAccount ? { moki: 'firstAccountSaved' as const } : {}) })
     setAccountForm(null)
   }
   const editAccount = (id: number, from: HTMLElement) => {

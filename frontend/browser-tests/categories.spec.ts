@@ -27,6 +27,34 @@ test('category management fits supported viewports and has no axe violations', a
   }
 })
 
+test('category editor dialog fits supported viewports, focuses the name field and restores focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openCategories(page)
+  const trigger = page.getByRole('button', { name: 'Add category' })
+
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 844 })
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Add a category' })
+    await expect(page.getByLabel('Name', { exact: true })).toBeFocused()
+    const layout = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
+    const bounds = await dialog.boundingBox()
+    expect(layout.scroll, `document overflow at ${width}px`).toBeLessThanOrEqual(layout.width)
+    expect(bounds?.x, `dialog starts offscreen at ${width}px`).toBeGreaterThanOrEqual(0)
+    expect((bounds?.x ?? 0) + (bounds?.width ?? width), `dialog ends offscreen at ${width}px`).toBeLessThanOrEqual(width)
+    const axe = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+    expect(axe.violations.map(({ id, impact, description }) => ({ id, impact, description })), `axe violations at ${width}px`).toEqual([])
+    if (width === 390 && process.env.MONIKEY_CAPTURE_PHASE_D_SCREENSHOTS === '1') {
+      const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
+      await mkdir(screenshots, { recursive: true })
+      await page.screenshot({ path: `${screenshots}/category-editor-390.png` })
+    }
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+  }
+})
+
 test('category search explains when filters have no matches', async ({ page }) => {
   const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
   const captureScreenshots = process.env.MONIKEY_CAPTURE_PHASE_D_SCREENSHOTS === '1'
@@ -42,6 +70,20 @@ test('category search explains when filters have no matches', async ({ page }) =
   }
 })
 
+test('empty category collection points to the supported create action', async ({ page }) => {
+  await page.route('**/api/categories', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+      return
+    }
+    await route.continue()
+  })
+  await openCategories(page)
+  await expect(page.getByText('No categories yet. Select Add category to create one.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Add category' }).click()
+  await expect(page.getByRole('dialog', { name: 'Add a category' })).toBeVisible()
+})
+
 test('failed category reads expose a retry and recover', async ({ page }) => {
   await openCategories(page)
   const categoryName = `QA Retry ${Date.now().toString(36)}`
@@ -54,6 +96,7 @@ test('failed category reads expose a retry and recover', async ({ page }) => {
     }
     await route.continue()
   })
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(categoryName)
   await page.getByRole('button', { name: 'Create category' }).click()
   await expect(page.getByText('Category created.', { exact: true })).toBeVisible()
@@ -68,9 +111,11 @@ test('income and expense categories validate, save, filter, search and paginate'
   const suffix = Date.now().toString(36)
   const incomeName = `QA Income ${suffix}`
   const expenseName = `QA Expense ${suffix}`
+  const renamedExpenseName = `QA Renamed ${suffix}`
   await page.setViewportSize({ width: 1440, height: 1000 })
   await openCategories(page)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('button', { name: 'Create category' }).click()
   await expect(page.getByRole('alert')).toHaveText('Enter a category name.')
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
@@ -81,10 +126,13 @@ test('income and expense categories validate, save, filter, search and paginate'
   await page.getByLabel('Search categories').fill(incomeName)
   await expect(page.getByRole('button', { name: `Edit ${incomeName}` })).toBeVisible()
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
   await page.getByRole('button', { name: 'Create category' }).click()
   await expect(page.getByRole('alert')).toContainText('already exists')
 
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('expense')
   await page.getByLabel('Name', { exact: true }).fill(expenseName)
   await page.getByLabel('Default Kakeibo envelope').selectOption('needs')
@@ -98,11 +146,13 @@ test('income and expense categories validate, save, filter, search and paginate'
   await expect(page.getByRole('listitem')).toHaveCount(1)
   await expect(page.getByText('Default: Needs')).toBeVisible()
   await page.getByRole('button', { name: `Edit ${expenseName}` }).click()
-  await page.getByLabel('Name', { exact: true }).fill(`${expenseName} Renamed`)
+  await page.getByLabel('Name', { exact: true }).fill(renamedExpenseName)
   await page.getByLabel('Default Kakeibo envelope').selectOption('culture')
   await page.getByRole('button', { name: 'Save changes' }).click()
-  await page.getByLabel('Search categories').fill(`${expenseName} Renamed`)
-  await expect(page.getByRole('button', { name: `Edit ${expenseName} Renamed` })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add category' })).toBeFocused()
+  await page.getByLabel('Search categories').fill(renamedExpenseName)
+  await expect(page.getByRole('button', { name: `Edit ${renamedExpenseName}` })).toBeVisible()
   await expect(page.getByText('Default: Culture')).toBeVisible()
 
   const manyPrefix = `QA Page ${suffix}`
@@ -131,6 +181,7 @@ test('category icon picker supports search, keyboard selection, edit and persist
   expect(account.status()).toBe(201)
   await openCategories(page)
   const name = `QA Icon ${Date.now().toString(36)}`
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(name)
 
   const search = page.getByLabel('Search category icons')
@@ -155,8 +206,11 @@ test('category icon picker supports search, keyboard selection, edit and persist
   await page.reload()
   await openCategories(page)
   await page.getByLabel('Search categories').fill(name)
-  await page.getByRole('button', { name: `Edit ${name}` }).click()
+  const editTrigger = page.getByRole('button', { name: `Edit ${name}` })
+  await editTrigger.click()
   await expect(page.getByRole('button', { name: 'Work icon' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(editTrigger).toBeFocused()
 
   const addTransaction = page.getByRole('button', { name: /Add transaction/ })
   await addTransaction.click()
@@ -184,6 +238,7 @@ test('category icon picker supports search, keyboard selection, edit and persist
   await page.getByRole('button', { name: 'Clear icon' }).click()
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Category updated.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Edit ${name}` })).toBeFocused()
   await page.reload()
   await openCategories(page)
   await page.getByLabel('Search categories').fill(name)

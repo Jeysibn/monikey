@@ -3,7 +3,7 @@ import type { Category, CategoryType, KakeiboEnvelope } from '../types.ts'
 export type CategoryStatus = 'active' | 'archived' | 'all'
 
 export function categoryEmptyMessage(hasCategories: boolean): string {
-  return hasCategories ? 'No categories match these filters.' : 'No categories yet. Create one using the form above.'
+  return hasCategories ? 'No categories match these filters.' : 'No categories yet. Select Add category to create one.'
 }
 
 export function filterCategories(

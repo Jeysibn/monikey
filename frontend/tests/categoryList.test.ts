@@ -20,6 +20,6 @@ test('category filters compose type, lifecycle, envelope and case-insensitive na
 })
 
 test('category empty copy distinguishes an empty collection from filtered no matches', () => {
-  assert.equal(categoryEmptyMessage(false), 'No categories yet. Create one using the form above.')
+  assert.equal(categoryEmptyMessage(false), 'No categories yet. Select Add category to create one.')
   assert.equal(categoryEmptyMessage(true), 'No categories match these filters.')
 })

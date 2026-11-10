@@ -37,6 +37,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.goto('/')
   await openCategories(page)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(initialName)
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('expense')
   await page.getByLabel('Default Kakeibo envelope').selectOption('needs')
@@ -44,6 +45,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.getByLabel('Search categories').fill(initialName)
   await expect(page.getByRole('button', { name: `Edit ${initialName}` })).toBeVisible()
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(unusedName)
   await page.getByRole('button', { name: 'Create category' }).click()
   await page.getByLabel('Search categories').fill(unusedName)
@@ -52,6 +54,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.getByRole('button', { name: `Delete ${unusedName}` }).click()
   await expect(page.getByRole('button', { name: `Edit ${unusedName}` })).toHaveCount(0)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
   await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
   await page.getByLabel('Name', { exact: true }).fill(incomeName)

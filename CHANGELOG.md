@@ -36,6 +36,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 - Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
 - Added Dashboard to direct navigation and placed Accounts with Kakeibo and Categories in the phone More menu to retain five clear bottom-bar targets.
 - Added a compact Overview link to Dashboard and clarified empty Categories versus filtered no-results messaging (Draft PR #29).
+- Moved category create/edit into the shared accessible dialog so the category list stays visible on mobile; verified focus, viewport bounds, and dialog accessibility.
 - Aligned account-card accessible names with their visible names and balances, while retaining a screen-reader hint for opening details (Draft PR #29).
 
 ### Database

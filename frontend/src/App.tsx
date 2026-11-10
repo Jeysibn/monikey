@@ -449,6 +449,7 @@ function App() {
               setMonth(m)
               setView('activity')
             }}
+            onOpenDashboard={() => setView('dashboard')}
           />
         )}
         {view === 'dashboard' && (

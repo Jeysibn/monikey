@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { Plus, TriangleAlert } from 'lucide-react'
+import { ChartNoAxesCombined, Plus, TriangleAlert } from 'lucide-react'
 import { cn } from 'cn'
 
 import { CreditCardSummary } from '@/components/CreditCardSummary'
@@ -64,6 +64,7 @@ export function OverviewView({
   onOpenAccounts,
   walletPreferences,
   onOpenActivity,
+  onOpenDashboard,
 }: {
   today: string
   accounts: Resource<AccountsSnapshot> // the accounts' figures (not the categories, which only the forms need)
@@ -82,6 +83,7 @@ export function OverviewView({
   onOpenAccounts: () => void
   walletPreferences: WalletPreferencesV1
   onOpenActivity: (month: string) => void
+  onOpenDashboard: () => void
 }) {
   const summary = summaryRes.data ?? NO_SUMMARY
   const snapshot = accountsRes.data
@@ -336,6 +338,10 @@ export function OverviewView({
         {anyLoading ? 'Loading your overview' : ''}
       </p>
       <PageHeader title="Overview" onAdd={onAdd} addState={addState}>
+        <Button variant="secondary" size="sm" onClick={onOpenDashboard}>
+          <ChartNoAxesCombined aria-hidden="true" />
+          View analytics
+        </Button>
         <UpdatingStamp show={updating} />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>

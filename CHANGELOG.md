@@ -35,6 +35,8 @@ version. GitHub Release objects are separate metadata; none existed at the
 - Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
 - Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
 - Added Dashboard to direct navigation and placed Accounts with Kakeibo and Categories in the phone More menu to retain five clear bottom-bar targets.
+- Added a compact Overview link to Dashboard and clarified empty Categories versus filtered no-results messaging (Draft PR #29).
+- Aligned account-card accessible names with their visible names and balances, while retaining a screen-reader hint for opening details (Draft PR #29).
 
 ### Database
 - Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules. The source contains these migrations, but the latest production migration state is unverified.

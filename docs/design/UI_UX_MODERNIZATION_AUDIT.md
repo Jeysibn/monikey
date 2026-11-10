@@ -95,3 +95,9 @@ All PRs will be Draft and remain unmerged. No PR depends on PR #25. Production d
 ## Phase A implemented change
 
 The current phone bar has been changed to Overview, Activity, Accounts, More, and Add. Kakeibo and Categories are reachable through a focus-managed More dialog. Selecting a destination moves focus to its heading; Escape restores focus to More. Playwright checks verify targets and overflow at 320px and 390px. Rendered evidence is in [`screenshots/ui-modernization/phase-a/`](screenshots/ui-modernization/phase-a/).
+
+## Phase D implemented change
+
+Overview now offers a compact **View analytics** action beside its existing period controls; this opens the separate Dashboard without adding charts to the home page or changing its balance hierarchy. Categories now distinguishes an actually empty collection from filters that return no matches. The category form remains the action for creating a first category. Mobile and desktop Overview screenshots are in [`screenshots/ui-modernization/phase-d-polish/`](screenshots/ui-modernization/phase-d-polish/), with the earlier Overview captures serving as the before comparison.
+
+The Overview accessibility pass also found that the account-card button's custom accessible label could omit or reorder visible card text. It now derives its name from the visible account and balance content and appends a concise “View details” action hint; no wallet or balance behavior changed.

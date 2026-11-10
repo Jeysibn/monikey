@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { mkdir } from 'node:fs/promises'
 
 async function openCategories(page: import('@playwright/test').Page) {
   await page.goto('/')
@@ -24,6 +25,18 @@ test('category management fits supported viewports and has no axe violations', a
     if (width === 320) await page.screenshot({ path: 'test-results/browser/categories-320.png', fullPage: true })
     if (width === 1440) await page.screenshot({ path: 'test-results/browser/categories-1440.png', fullPage: true })
   }
+})
+
+test('category search explains when filters have no matches', async ({ page }) => {
+  const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openCategories(page)
+  await page.getByLabel('Search categories').fill('no category has this exact name')
+  const noResults = page.getByText('No categories match these filters.', { exact: true })
+  await expect(noResults).toBeVisible()
+  await noResults.scrollIntoViewIfNeeded()
+  await mkdir(screenshots, { recursive: true })
+  await page.screenshot({ path: `${screenshots}/categories-filtered-empty-390.png` })
 })
 
 test('failed category reads expose a retry and recover', async ({ page }) => {

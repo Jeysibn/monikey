@@ -31,6 +31,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 
 ### Fixed
 - Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
+- Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
 
 ### Database
 - Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules. The source contains these migrations, but the latest production migration state is unverified.

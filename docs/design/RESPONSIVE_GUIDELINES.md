@@ -49,11 +49,11 @@ Desktop 12-column arithmetic (gap 24):
 
 | Viewport | Component | Details |
 |---|---|---|
-| <768 | **Bottom bar** | 68px + `env(safe-area-inset-bottom)`; five equal items (Overview, Activity, Accounts, Kakeibo, **+ Add**); icon over label; items ≥44px tall and ≥57px wide at 320px; labels 12px, never hidden. Main content gets matching bottom padding so nothing sits under it. The bar is part of the page, not a floating button. |
-| 768–1023 | **Rail** | 80px; four items, icon over label; the active item's icon sits in a soft-blue pill (`primary-soft`). No Add in the rail — the page header carries it. |
-| ≥1024 | **Sidebar** | 224px; mark + wordmark; four labelled items on a 44px pitch; active = soft-blue pill with `primary-ink` text. |
+| <768 | **Bottom bar** | 68px + `env(safe-area-inset-bottom)`; Overview, Activity, Accounts, More, and **+ Add** use five equal targets. More opens a keyboard-accessible dialog with Kakeibo and Categories. Main content gets matching bottom padding so nothing sits under it. The bar is part of the page, not a floating button. |
+| 768–1023 | **Rail** | 80px; all five current views, icon over label; the active item's icon sits in a soft-blue pill (`primary-soft`). No Add in the rail — the page header carries it. |
+| ≥1024 | **Sidebar** | 224px; mark + wordmark; all five current views are labelled; active = soft-blue pill with `primary-ink` text. |
 
-Landscape phones (height <500px): the bottom bar stays (5 items need only 64px), dialogs scroll internally, and the page header scrolls away with the content — it is never sticky.
+Landscape phones (height <500px): the bottom bar stays, dialogs scroll internally, and the page header scrolls away with the content — it is never sticky.
 
 ---
 

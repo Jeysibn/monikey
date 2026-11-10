@@ -1,15 +1,16 @@
-import type { ReactNode } from 'react'
-import { House, List, NotebookPen, Plus, Tags, Wallet, type LucideIcon } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Ellipsis, House, List, NotebookPen, Plus, Tags, Wallet, type LucideIcon } from 'lucide-react'
 import { cn } from 'cn'
 
 import { addBlocked } from '@/components/addState'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import type { AddState } from '@/types'
 
 /*
- * The frame around every screen (DESIGN.md section D). Five destinations, shown in the existing responsive shell:
- *   < 768px      bottom bar: Overview, Activity, Accounts, Kakeibo, Categories and a filled Add item, six equal columns
- *                (icon over label, at least 57px wide on a 320px phone, 52px tall)
+ * The frame around every screen (DESIGN.md section D). Current views stay in the existing responsive shell:
+ *   < 768px      bottom bar: Overview, Activity, Accounts, More and a filled Add item, five equal columns;
+ *                More contains Kakeibo and Categories
  *   768-1023px   80px left rail (icon over label); Add transaction is in each page header
  *   >= 1024px    224px sidebar (mark, wordmark, labelled items); Add transaction is in the page header
  * Navigation is plain React state in App.tsx: no router. The active item has aria-current="page".
@@ -37,7 +38,7 @@ function BrandMark({ className }: { className?: string }) {
   )
 }
 
-function NavButton({ view, label, Icon, active, onNavigate }: { view: View; label: string; Icon: LucideIcon; active: boolean; onNavigate: (view: View) => void }) {
+function NavButton({ view, label, Icon, active, onNavigate, className }: { view: View; label: string; Icon: LucideIcon; active: boolean; onNavigate: (view: View) => void; className?: string }) {
   return (
     <button
       type="button"
@@ -48,6 +49,7 @@ function NavButton({ view, label, Icon, active, onNavigate }: { view: View; labe
         'md:min-h-[60px] md:gap-1',
         'lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-2.5 lg:text-[0.9375rem] lg:hover:bg-secondary',
         active && 'text-foreground lg:bg-primary-soft lg:text-primary-ink lg:hover:bg-primary-soft',
+        className,
       )}
     >
       <span
@@ -80,6 +82,10 @@ export function AppShell({
   const items = destinations.map((d) => (
     <NavButton key={d.view} {...d} active={view === d.view} onNavigate={onNavigate} />
   ))
+  const phoneItems = destinations.filter(({ view: destination }) => destination !== 'kakeibo' && destination !== 'categories')
+  const moreActive = view === 'kakeibo' || view === 'categories'
+  const navigatingFromMore = useRef(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   return (
     <div className="min-h-dvh">
@@ -108,10 +114,58 @@ export function AppShell({
       {/* Phone bottom bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(6,minmax(0,1fr))] gap-1 border-t border-border bg-card px-1 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-border bg-card px-1 pt-2 pb-[env(safe-area-inset-bottom)] md:hidden"
       >
-        {items}
-        {/* Six 44px+ controls fit at 320px; labels truncate before touch targets shrink. */}
+        {phoneItems.map((d) => (
+          <NavButton key={d.view} {...d} active={view === d.view} onNavigate={onNavigate} />
+        ))}
+        <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              aria-current={moreActive ? 'page' : undefined}
+              className={cn(
+                'flex min-h-[52px] min-w-0 cursor-pointer flex-col items-center justify-center gap-[3px] rounded-[14px] text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                moreActive && 'bg-primary-soft text-primary-ink',
+              )}
+            >
+              <Ellipsis aria-hidden="true" className="size-5" />
+              <span className="max-w-full truncate">More</span>
+            </button>
+          </DialogTrigger>
+          <DialogContent
+            onCloseAutoFocus={(event) => {
+              if (navigatingFromMore.current) {
+                event.preventDefault()
+                navigatingFromMore.current = false
+                window.requestAnimationFrame(() => document.querySelector<HTMLElement>('main h1')?.focus())
+              }
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>More</DialogTitle>
+              <DialogDescription>Budget and category tools</DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              <nav aria-label="More destinations" className="grid gap-2">
+                {destinations.filter(({ view: destination }) => destination === 'kakeibo' || destination === 'categories').map((d) => (
+                  <NavButton
+                    key={d.view}
+                    {...d}
+                    active={view === d.view}
+                    onNavigate={(destination) => {
+                      navigatingFromMore.current = true
+                      setMoreOpen(false)
+                      onNavigate(destination)
+                    }}
+                    className="w-full flex-row justify-start px-3 text-sm"
+                  />
+                ))}
+              </nav>
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+        {/* Five full-size targets fit the 320px phone without clipping labels. */}
         <Button
           className="h-[52px] min-w-0 flex-col gap-[3px] self-center rounded-[14px] px-1 text-[length:min(0.75rem,14px)]"
           onClick={onAdd}

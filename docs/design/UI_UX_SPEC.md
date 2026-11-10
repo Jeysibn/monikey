@@ -80,9 +80,9 @@ Categories are the TLD's seeded set only — income: Salary, Freelance, Other; e
 
 Four views in one page, no router (TLD §4). `App.tsx` holds the selected view and the selected month.
 
-- **Mobile (<768px):** bottom bar — Overview · Activity · Accounts · Kakeibo · **+ Add** (filled primary tile). 68px tall plus safe-area inset; five equal columns; icon over a short label; every item ≥44px tall and ≥57px wide at 320px.
-- **Tablet (768–1023px):** 80px left rail — icon over label for the four views. *Add transaction* is in each page header.
-- **Desktop (≥1024px):** 224px compact sidebar — key-and-coin mark + "MoniKey", then four labelled items. *Add transaction* is in each page header.
+- **Mobile (<768px):** bottom bar — Overview · Activity · Accounts · More · **+ Add** (filled primary tile). 68px tall plus safe-area inset; five equal targets. More opens a dialog with Kakeibo and Categories.
+- **Tablet (768–1023px):** 80px left rail — icon over label for the five current views. *Add transaction* is in each page header.
+- **Desktop (≥1024px):** 224px compact sidebar — key-and-coin mark + "MoniKey", then five labelled views. *Add transaction* is in each page header.
 - Switching view moves focus to the new view's `h1` (so keyboard and screen-reader users land at the top).
 - The **month** (default: current month) is shared by Overview, Activity and Kakeibo. Accounts is "right now" and ignores it. Future months are not offered; the list is the last 12 months.
 - Exactly **one filled primary button** is visible per screen: *Add transaction* — except on first run (no accounts), where **Add account** is the only primary and every *Add transaction* control is disabled and unstyled as primary (§4, Overview states).

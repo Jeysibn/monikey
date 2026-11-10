@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright'
 
 test('Overview links to separate analytics without pushing current balances down', async ({ page }) => {
   const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
+  const captureScreenshots = process.env.MONIKEY_CAPTURE_PHASE_D_SCREENSHOTS === '1'
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
     await page.goto('/')
@@ -15,11 +16,11 @@ test('Overview links to separate analytics without pushing current balances down
     const dimensions = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
     expect(dimensions.scroll, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(dimensions.width)
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-    if (width === 390) {
+    if (captureScreenshots && width === 390) {
       await mkdir(screenshots, { recursive: true })
       await page.screenshot({ path: `${screenshots}/overview-mobile-390.png` })
     }
-    if (width === 1440) await page.screenshot({ path: `${screenshots}/overview-desktop-1440.png`, fullPage: true })
+    if (captureScreenshots && width === 1440) await page.screenshot({ path: `${screenshots}/overview-desktop-1440.png`, fullPage: true })
     await page.getByRole('button', { name: 'View analytics' }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeFocused()
   }

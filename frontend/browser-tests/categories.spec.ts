@@ -29,14 +29,17 @@ test('category management fits supported viewports and has no axe violations', a
 
 test('category search explains when filters have no matches', async ({ page }) => {
   const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
+  const captureScreenshots = process.env.MONIKEY_CAPTURE_PHASE_D_SCREENSHOTS === '1'
   await page.setViewportSize({ width: 390, height: 844 })
   await openCategories(page)
   await page.getByLabel('Search categories').fill('no category has this exact name')
   const noResults = page.getByText('No categories match these filters.', { exact: true })
   await expect(noResults).toBeVisible()
   await noResults.scrollIntoViewIfNeeded()
-  await mkdir(screenshots, { recursive: true })
-  await page.screenshot({ path: `${screenshots}/categories-filtered-empty-390.png` })
+  if (captureScreenshots) {
+    await mkdir(screenshots, { recursive: true })
+    await page.screenshot({ path: `${screenshots}/categories-filtered-empty-390.png` })
+  }
 })
 
 test('failed category reads expose a retry and recover', async ({ page }) => {

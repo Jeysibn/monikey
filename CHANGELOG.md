@@ -24,7 +24,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
-- Contextual Moki illustrations for first-run guidance, first-account confirmation, empty Accounts and Activity, filtered Activity with no matches, and Kakeibo planning.
+- Contextual Moki illustrations for first-run guidance, a compact welcome on the populated Overview, empty Accounts and Activity, filtered Activity with no matches, and Kakeibo planning. The first-account thumbs-up was removed; the approved pose remains unused.
 - Kakeibo monthly plans and reports, weekly reflections, and expense classification using the four fixed envelopes (PRs #1–#8).
 - Wallet account presentation and reviewed card artwork, including recovered and regenerated artwork (PRs #10–#17).
 - Backup-gated GitOps release automation and source-run provenance in the dispatch payload (PRs #14 and #19). The workflow skips dispatch when its repository token is absent; configuring it is an owner-controlled prerequisite after initial schema adoption. This entry does not claim a production release.

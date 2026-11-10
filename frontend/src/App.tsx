@@ -321,7 +321,6 @@ function App() {
     if (result.ok) setWalletPreferences(result.preferences)
   }
   const saveAccount = async (values: AccountValues, card: CardChoice) => {
-    const firstAccount = accounts.data?.accounts.length === 0
     let accountId: number | null
     try {
       accountId = storesCards ? await source.addAccount(values, card?.productId ?? null) : await source.addAccount(values)
@@ -330,7 +329,7 @@ function App() {
     }
     if (accountId !== null && !storesCards) keepCardInBrowser(accountId, values.type, card)
     setVersion((v) => v + 1)
-    setStatus({ text: accountSavedMessage(values), ...(firstAccount ? { moki: 'firstAccountSaved' as const } : {}) })
+    setStatus({ text: accountSavedMessage(values) })
     setAccountForm(null)
   }
   const editAccount = (id: number, from: HTMLElement) => {

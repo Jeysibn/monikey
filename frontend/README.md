@@ -3,7 +3,7 @@
 React 19 + TypeScript + Vite 8 + Tailwind CSS v4, with five shadcn/ui components and Lucide icons.
 Design source of truth: [`/DESIGN.md`](../DESIGN.md). Screens and behaviour: [`/docs/design/UI_UX_SPEC.md`](../docs/design/UI_UX_SPEC.md).
 
-Moki's approved poses, asset inventory, optimization details, accessibility rules, and placement guidance are documented in [`docs/design/MOKI_ASSET_GUIDE.md`](../docs/design/MOKI_ASSET_GUIDE.md). Use the shared `src/components/Moki.tsx` component and its typed pose registry for mascot artwork.
+Moki's approved poses, asset inventory, optimization details, accessibility rules, and placement guidance are documented in [`docs/design/MOKI_ASSET_GUIDE.md`](../docs/design/MOKI_ASSET_GUIDE.md). Use the shared `src/components/Moki.tsx` component and its typed pose registry for mascot artwork. The welcome pose appears on the populated Overview after accounts load; first-account saves keep the standard text confirmation, and the thumbs-up pose is currently unused.
 
 **Current implementation:** `src/dataSource.ts` defines the screen-to-data boundary; `src/mockSource.ts` supplies fictional previews; `src/httpSource.ts` calls same-origin `/api` routes; and `src/wire.ts` validates and maps JSON. The app has Overview, Activity, Accounts, Categories, and Kakeibo views. Quick Add handles income, expenses, card payments, and liquid-account transfers. Category defaults suggest expense envelopes; saved transaction classifications remain independent. The repository includes unit and Playwright browser tests. Browser automation does not replace real-device or manual screen-reader review. Deployment status is tracked separately; a successful local build does not prove production deployment.
 

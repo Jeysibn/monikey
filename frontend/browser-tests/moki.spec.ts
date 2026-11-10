@@ -1,28 +1,58 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
-test('Moki appears only for the matching first-run and empty states', async ({ page }) => {
+test('populated Overview welcomes returning users and keeps financial information visible after reload', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/?demo=no-accounts')
+  await page.goto('/')
 
   const welcome = page.locator('img[src="/moki/moki-wave.webp"]')
   await expect(welcome).toBeVisible()
   await expect(welcome).toHaveAttribute('alt', '')
-  await expect(page.getByRole('button', { name: 'Add account' })).toBeVisible()
-  await expect(page.getByRole('img')).toHaveCount(0)
-  const overviewAxe = await new AxeBuilder({ page }).include('main').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
-  expect(overviewAxe.violations.map(({ id }) => id)).toEqual([])
-  await page.screenshot({ path: 'test-results/browser/moki-overview-mobile.png', fullPage: true })
+  await expect(welcome).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.getByText('Welcome back!')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Wallets' })).toBeVisible()
+  await expect(page.getByText('Start by adding a cash, bank or e-wallet account.')).toHaveCount(0)
+  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-mobile.png' })
+
+  await page.reload()
+  await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Accounts', exact: true }).click()
-  await expect(page.locator('img[src="/moki/moki-empty-wallet.webp"]')).toBeVisible()
-  await expect(page.getByRole('region', { name: 'All accounts' }).getByRole('button', { name: 'Add account' })).toBeVisible()
-  await page.screenshot({ path: 'test-results/browser/moki-accounts-mobile.png', fullPage: true })
+  await expect(page.locator('img[src="/moki/moki-empty-wallet.webp"]')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'All accounts' }).getByRole('button', { name: /View details for Cash on hand/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeVisible()
+  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-accounts-mobile.png' })
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.screenshot({ path: 'test-results/browser/moki-accounts-desktop.png', fullPage: true })
+  await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
+  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-accounts-desktop.png', fullPage: true })
+  await page.getByRole('button', { name: 'Overview', exact: true }).click()
+  await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
+  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-desktop.png', fullPage: true })
 })
 
-test('first-use artwork disappears after the first account is saved', async ({ page }) => {
+test('populated welcome waits for Overview data and stays hidden during refreshes and errors', async ({ page }) => {
+  await page.goto('/?demo=slow')
+  const welcome = page.locator('img[src="/moki/moki-wave.webp"]')
+  await expect(welcome).toHaveCount(0)
+  await expect(welcome).toBeVisible({ timeout: 10_000 })
+
+  await page.getByLabel('Month', { exact: true }).selectOption('2026-09')
+  await expect(welcome).toHaveCount(0)
+  await expect(welcome).toBeVisible({ timeout: 10_000 })
+
+  await page.goto('/?demo=load-error&failing=summary')
+  await expect(welcome).toHaveCount(0)
+  await expect(page.getByRole('alert')).toContainText(/Couldn’t load your summary|Couldn't load your summary/)
+
+  await page.goto('/?demo=offline')
+  await expect(welcome).toHaveCount(0)
+  await expect(page.getByRole('alert').first()).toContainText(/Couldn’t load|Couldn't load/)
+})
+
+test('first-account saves keep normal status feedback without a setup-dependent mascot', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?demo=no-accounts')
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
@@ -31,19 +61,8 @@ test('first-use artwork disappears after the first account is saved', async ({ p
   await page.getByLabel('Current balance (₱)').fill('0')
   await page.getByRole('dialog').getByRole('button', { name: 'Add account' }).click()
   await expect(page.getByText('Account added: QA Cash Account.')).toBeVisible()
-  await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toHaveCount(0)
-  await expect(page.locator('img[src="/moki/moki-thumbs-up.webp"]')).toBeVisible()
-  await page.screenshot({ path: 'test-results/browser/moki-first-account-success-mobile.png', fullPage: true })
-})
-
-test('first-account success art is withheld when the save fails', async ({ page }) => {
-  await page.goto('/?demo=no-accounts&behavior=save-error')
-  await page.getByRole('button', { name: 'Add account', exact: true }).first().click()
-  await page.getByLabel('Name', { exact: true }).fill('QA Failed Account')
-  await page.getByLabel('Current balance (₱)').fill('0')
-  await page.getByRole('dialog').getByRole('button', { name: 'Add account' }).click()
-  await expect(page.getByText("Couldn't save. Check your connection and try again. Your account details are still here.")).toBeVisible()
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
   await expect(page.locator('img[src="/moki/moki-thumbs-up.webp"]')).toHaveCount(0)
 })
 
@@ -139,13 +158,32 @@ test('only the pose for the current state is requested', async ({ page }) => {
 
   await page.goto('/')
   await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
-  expect(requests).toEqual([])
+  await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
+  expect(requests).toEqual(['/moki/moki-wave.webp'])
 
   await page.goto('/?demo=no-accounts')
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
   await page.getByRole('button', { name: 'Accounts', exact: true }).click()
   await expect(page.locator('img[src="/moki/moki-empty-wallet.webp"]')).toBeVisible()
-  expect(requests).toEqual(['/moki/moki-wave.webp', '/moki/moki-empty-wallet.webp'])
+  expect(requests).toEqual(['/moki/moki-wave.webp', '/moki/moki-wave.webp', '/moki/moki-empty-wallet.webp'])
+})
+
+test('populated Overview welcome stays visible and compact at supported widths', async ({ page }) => {
+  await page.goto('/')
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    const image = page.locator('img[src="/moki/moki-wave.webp"]')
+    await expect(image).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
+    await expect(page.getByText('Welcome back!')).toBeVisible()
+    const bounds = await image.boundingBox()
+    const dimensions = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
+    expect(dimensions.scroll, `Overview horizontal overflow at ${width}px`).toBeLessThanOrEqual(width)
+    expect(bounds?.x).toBeGreaterThanOrEqual(0)
+    expect((bounds?.x ?? 0) + (bounds?.width ?? width)).toBeLessThanOrEqual(width)
+    if (width === 390) await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-mobile.png' })
+    if (width === 1440) await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-desktop.png', fullPage: true })
+  }
 })
 
 test('Moki states fit supported widths without cropping or horizontal overflow', async ({ page }) => {

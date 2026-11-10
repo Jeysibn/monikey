@@ -101,6 +101,15 @@ export function OverviewView({
   const recentWaiting = forcedLoading || (!recentRes.data && !recentRes.error)
   const positionLoading = summaryWaiting || snapshotWaiting
   const anyLoading = positionLoading || recentWaiting
+  const showWelcome =
+    Boolean(snapshot?.accounts.length) &&
+    !anyLoading &&
+    !accountsRes.error &&
+    !summaryRes.error &&
+    !recentRes.error &&
+    !accountsRes.stale &&
+    !summaryRes.stale &&
+    !recentRes.stale
   const updating = useDelayedFlag(summaryRes.stale || recentRes.stale || accountsRes.stale, 400)
   // DOM order follows the visual reading order at each responsive layout.
   const desktopLayout = useSyncExternalStore(subscribeToDesktopLayout, getDesktopLayout, () => false)
@@ -345,6 +354,18 @@ export function OverviewView({
         <UpdatingStamp show={updating} />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
+
+      {showWelcome && (
+        <Card className="mb-4 flex items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 md:!py-3">
+          <Moki pose="welcome" size="small" loading="eager" />
+          <div className="min-w-0">
+            <p className="font-semibold">Welcome back!</p>
+            <p className="text-sm leading-snug text-muted-foreground">
+              Here&rsquo;s your money overview. Keep an eye on spending and stay on top of your budget.
+            </p>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
         {layoutSections}

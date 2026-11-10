@@ -35,6 +35,7 @@ export function CategoryIconPicker({ value, onChange }: { value: CategoryIconKey
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault() }} // searching must not submit the surrounding category form
           aria-label="Search category icons"
           placeholder="Search icons"
           className="min-h-10 w-full rounded-control border border-input bg-background pr-3 pl-9 text-sm"

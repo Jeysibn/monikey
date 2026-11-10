@@ -245,3 +245,17 @@ test('category icon picker supports search, keyboard selection, edit and persist
   await page.getByRole('button', { name: `Edit ${name}` }).click()
   await expect(page.getByText('No icon selected')).toBeVisible()
 })
+
+test('pressing Enter in the icon search does not save the category', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'More', exact: true }).first().click()
+  await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Categories', exact: true }).click()
+  await page.getByRole('button', { name: 'Add category' }).click()
+  await page.getByLabel('Name', { exact: true }).fill(`QA Enter ${Date.now().toString(36)}`)
+  await page.getByLabel('Search category icons').fill('car')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(500)
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByText('Category created.', { exact: true })).toHaveCount(0)
+})

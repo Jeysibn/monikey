@@ -45,10 +45,20 @@ async function seedAnalyticsApi(baseURL: string, request: import('@playwright/te
     needs_limit: '18000.00', wants_limit: '5000.00', culture_limit: '2000.00', unexpected_limit: '3000.00', monthly_intention: null,
   } })
   expect(plan.status(), await plan.text()).toBe(200)
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const part = (name: string) => parts.find((item) => item.type === name)!.value
+  const currentDate = `${part('year')}-${part('month')}-${part('day')}`
+  const currentMonth = currentDate.slice(0, 7)
+  const currentPlan = await request.put(`${baseURL}/api/kakeibo/months/${currentMonth}`, { data: {
+    planned_income: '36000.00', allocated_starting_funds: '2000.00', savings_target: '5000.00', prior_period_debt_reserve: '3000.00',
+    needs_limit: '100.00', wants_limit: '50.00', culture_limit: '25.00', unexpected_limit: '10.00', monthly_intention: null,
+  } })
+  expect(currentPlan.status(), await currentPlan.text()).toBe(200)
+  return { currentDate, currentMonth }
 }
 
 test('Dashboard uses synthetic ledger records, supports date and account filters, and keeps navigation responsive', async ({ page, request, baseURL }) => {
-  if (process.env.MONIKEY_DASHBOARD_API_FIXTURE === '1') await seedAnalyticsApi(baseURL!, request)
+  const fixture = process.env.MONIKEY_DASHBOARD_API_FIXTURE === '1' ? await seedAnalyticsApi(baseURL!, request) : null
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 })
     await openDashboard(page)
@@ -73,6 +83,14 @@ test('Dashboard uses synthetic ledger records, supports date and account filters
   await page.getByLabel('Filter analytics by account').selectOption('2')
   await expect(page.getByText('Kakeibo limits cover all accounts. Clear the account filter to compare saved plans with actual spending.')).toBeVisible()
   await expect(page.getByText('Actual expense classifications in this period for the selected account.')).toBeVisible()
+  if (fixture) {
+    await page.getByLabel('Filter analytics by account').selectOption('')
+    await page.getByLabel('Date range').selectOption('custom')
+    await page.getByLabel('Start date').fill(fixture.currentDate)
+    await page.getByLabel('End date').fill(fixture.currentDate)
+    await expect(page.getByText('Full-month plan comparisons are hidden for partial date ranges. Actual spending for those dates remains included in the other charts.')).toBeVisible()
+    await expect(page.getByRole('region', { name: `Kakeibo ${fixture.currentMonth}` })).toHaveCount(0)
+  }
 })
 
 test('Dashboard reports no saved plan honestly for the no-plan fixture', async ({ page }) => {

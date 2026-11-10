@@ -19,6 +19,7 @@ All amount values are emitted as decimal strings from PostgreSQL `NUMERIC`; the 
 - **Spending by category:** expense transactions grouped by stable category ID. Archived categories remain included and labeled. The current schema requires every transaction to have a category, so an uncategorized transaction cannot exist in this version.
 - **Kakeibo actuals:** expense transactions grouped by their saved envelope. Expenses without an envelope are separately identified as unclassified.
 - **Kakeibo plan:** only plans explicitly saved for a month are compared. Plan amounts cover all accounts. The UI hides plan comparisons while an account filter is active, while still showing that account's envelope actuals.
+- **Partial months:** plan-versus-actual comparisons appear only when the selected date range covers every calendar day of that month. Partial-month spending remains included in the other analytics, but is not labeled over or under a full-month plan.
 
 Transfers and credit-card repayments are separate ledger records and do not enter income or expenses. Card purchases are expense transaction rows and are counted once. The current ledger has no separate signed-refund record; a refund must follow existing category and transaction rules and is not inferred by analytics. Category names/icons are joined by category ID so archived historical references remain recognizable.
 

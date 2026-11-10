@@ -40,6 +40,13 @@ export const isCard = (account: Pick<AccountInfo, 'type'>): boolean => account.t
 /** "2026-10-24" -> "2026-10" */
 export const monthOf = (date: string): string => date.slice(0, 7)
 
+/** True only when a selected date range includes every calendar day in the named month. */
+export function coversFullCalendarMonth(month: string, startDate: string, endDate: string): boolean {
+  const [year, number] = month.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10)
+  return startDate <= `${month}-01` && endDate >= lastDay
+}
+
 /** Mock-only analytics over synthetic fixture rows. Production analytics are aggregated by PostgreSQL. */
 export function mockAnalytics(data: MockData, query: { startDate: string; endDate: string; accountId: number | null }): AnalyticsReport {
   if (query.endDate < query.startDate) throw new Error('End date must be on or after start date.')

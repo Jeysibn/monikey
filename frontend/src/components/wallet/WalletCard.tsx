@@ -177,6 +177,7 @@ export function WalletCard({
             <DialogTrigger asChild>
               <button
                 type="button"
+                data-card-face=""
                 className="absolute inset-0 z-10 cursor-pointer rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => onSelect?.(item.accountId)}
               >

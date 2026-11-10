@@ -5,6 +5,7 @@ import { isMoney, MAX_MONEY_CENTAVOS, amountText } from './lib/money.ts'
 import type {
   AccountInfo,
   AccountsSnapshot,
+  AnalyticsReport,
   ActivityItem,
   CardStatus,
   Category,
@@ -14,6 +15,7 @@ import type {
   KakeiboEnvelopeReport,
   KakeiboMonth,
   KakeiboPlan,
+  KakeiboPlanStatus,
   KakeiboPlanValues,
   KakeiboReview,
   KakeiboReviewValues,
@@ -23,6 +25,7 @@ import type {
   LiquidAccountType,
 } from './types.ts'
 import { ENVELOPES, PLAN_MONEY_FIELDS, isMonday, parsePlanAmount, parseSavedDeclared } from './lib/kakeibo.ts'
+import { isCategoryIconKey } from './lib/categoryIconRegistry.ts'
 
 export type WireMoney = string
 export type WireAccountType = AccountInfo['type']
@@ -54,6 +57,8 @@ export interface WireCategory {
   /** ADR-021. Absent from a server that predates Kakeibo. */
   default_kakeibo_envelope?: KakeiboEnvelope | null
   is_archived?: boolean
+  /** Nullable and absent from older servers. Unknown values safely resolve to no icon. */
+  icon_key?: string | null
 }
 
 export interface WireTransaction {
@@ -236,7 +241,9 @@ function parseCategory(value: unknown): Category {
   const defaultEnvelope = envelopeField(row, 'default_kakeibo_envelope', 'category envelope')
   if (type === 'income' && defaultEnvelope) throw contractError('category envelope') // only expense categories may suggest one
   if (row.is_archived !== undefined && typeof row.is_archived !== 'boolean') throw contractError('category archive status')
-  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }) }
+  if (row.icon_key !== undefined && row.icon_key !== null && typeof row.icon_key !== 'string') throw contractError('category icon')
+  const iconKey = isCategoryIconKey(row.icon_key) ? row.icon_key : null
+  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }), ...(row.icon_key === undefined ? {} : { iconKey }) }
 }
 
 const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -333,6 +340,53 @@ export function fromWireSummary(value: unknown, expectedMonth: string): Financia
   }
 }
 
+export function fromWireAnalytics(value: unknown, expected: { startDate: string; endDate: string; accountId: number | null }): AnalyticsReport {
+  const row = record(value, 'analytics report')
+  if (row.start_date !== expected.startDate || row.end_date !== expected.endDate || row.account_id !== expected.accountId) throw contractError('analytics filters')
+  const totals = (value: unknown, what: string) => {
+    const item = record(value, what)
+    return { income: toCentavos(item.income, `${what} income`), expenses: toCentavos(item.expenses, `${what} expenses`), netCashFlow: toCentavos(item.net_cash_flow, `${what} net cash flow`) }
+  }
+  const previousTotals = row.previous_totals === null ? null : totals(row.previous_totals, 'previous analytics totals')
+  if (!Array.isArray(row.months) || !Array.isArray(row.categories) || !Array.isArray(row.kakeibo)) throw contractError('analytics rows')
+  const months = row.months.map((value) => {
+    const item = record(value, 'analytics month')
+    const month = string(item.month, 'analytics month')
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw contractError('analytics month')
+    return { month, income: toCentavos(item.income, 'analytics income'), expenses: toCentavos(item.expenses, 'analytics expenses') }
+  })
+  const categories = row.categories.map((value) => {
+    const item = record(value, 'analytics category')
+    if (typeof item.archived !== 'boolean') throw contractError('analytics category archive status')
+    if (item.icon_key !== null && item.icon_key !== undefined && typeof item.icon_key !== 'string') throw contractError('analytics category icon')
+    return {
+      id: id(item.id, 'analytics category'), name: string(item.name, 'analytics category name'),
+      iconKey: isCategoryIconKey(item.icon_key) ? item.icon_key : null, archived: item.archived,
+      expenses: toCentavos(item.expenses, 'analytics category expenses'),
+    }
+  })
+  const envelopes = ['needs', 'wants', 'culture', 'unexpected'] as const
+  const kakeiboTotalRow = record(row.kakeibo_totals, 'analytics Kakeibo totals')
+  const kakeiboTotals = Object.fromEntries([...envelopes, 'unclassified' as const].map((key) => [key, toCentavos(kakeiboTotalRow[key], 'analytics Kakeibo total')])) as AnalyticsReport['kakeiboTotals']
+  const kakeibo = row.kakeibo.map((value) => {
+    const item = record(value, 'analytics Kakeibo month')
+    const month = string(item.month, 'analytics Kakeibo month')
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw contractError('analytics Kakeibo month')
+    const status = item.plan_status
+    if (status !== 'saved' && status !== 'not_saved' && status !== 'legacy_unknown') throw contractError('analytics Kakeibo plan status')
+    const actualRow = record(item.actuals, 'analytics Kakeibo actuals')
+    const actuals = Object.fromEntries(envelopes.map((key) => [key, toCentavos(actualRow[key], 'analytics envelope actual')])) as Record<KakeiboEnvelope, Centavos>
+    let limits: Record<KakeiboEnvelope, Centavos> | null = null
+    if (item.limits !== null) {
+      const limitRow = record(item.limits, 'analytics Kakeibo limits')
+      limits = Object.fromEntries(envelopes.map((key) => [key, toCentavos(limitRow[key], 'analytics envelope limit')])) as Record<KakeiboEnvelope, Centavos>
+    }
+    if ((status === 'saved') !== (limits !== null)) throw contractError('analytics Kakeibo limits')
+    return { month, planStatus: status as KakeiboPlanStatus, limits, actuals, unclassified: toCentavos(item.unclassified, 'analytics unclassified expenses') }
+  })
+  return { startDate: expected.startDate, endDate: expected.endDate, accountId: expected.accountId, totals: totals(row.totals, 'analytics totals'), previousTotals, months, categories, kakeiboTotals, kakeibo }
+}
+
 export function fromWireTransaction(value: unknown, accounts: AccountInfo[], categories: Category[]): ActivityItem {
   const row = record(value, 'transaction')
   const accountId = id(row.account_id, 'transaction')
@@ -357,6 +411,7 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
     amount,
     title: note ?? category.name,
     categoryName: category.name,
+    categoryIconKey: category.iconKey ?? null,
     accountName: account.name,
     accountType: account.type,
     cardName: null,

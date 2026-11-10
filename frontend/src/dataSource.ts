@@ -1,5 +1,6 @@
 import type {
   AccountsSnapshot,
+  AnalyticsReport,
   ActivityPage,
   Category,
   EntryTarget,
@@ -32,6 +33,7 @@ export interface CategoryValues {
   name: string
   type: 'income' | 'expense'
   defaultEnvelope: KakeiboEnvelope | null
+  iconKey?: string | null
 }
 
 export interface DataSource {
@@ -40,10 +42,11 @@ export interface DataSource {
   loadAccounts(signal: AbortSignal): Promise<AccountsSnapshot>
   loadCategories(signal: AbortSignal): Promise<Category[]>
   createCategory(values: CategoryValues): Promise<void>
-  updateCategory(id: number, values: Pick<CategoryValues, 'name' | 'defaultEnvelope'>): Promise<void>
+  updateCategory(id: number, values: Pick<CategoryValues, 'name' | 'defaultEnvelope' | 'iconKey'>): Promise<void>
   setCategoryArchived(id: number, archived: boolean): Promise<void>
   deleteCategory(id: number): Promise<void>
   loadSummary(month: string, signal: AbortSignal): Promise<FinancialSummary>
+  loadAnalytics(query: { startDate: string; endDate: string; accountId: number | null }, signal: AbortSignal): Promise<AnalyticsReport>
   loadActivity(query: ActivityQuery, signal: AbortSignal): Promise<ActivityPage>
   /** Current balance or signed card debt, never the original opening amount. */
   loadAccountForEdit(id: number, signal: AbortSignal): Promise<AccountValues>

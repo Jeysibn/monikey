@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { filterCategories } from '../src/lib/categoryList.ts'
+import { categoryEmptyMessage, filterCategories } from '../src/lib/categoryList.ts'
 import type { Category } from '../src/types.ts'
 
 const categories: Category[] = [
@@ -17,4 +17,9 @@ test('category filters compose type, lifecycle, envelope and case-insensitive na
   assert.deepEqual(filterCategories(categories, { ...base, status: 'archived', query: '' }).map(({ id }) => id), [4])
   assert.deepEqual(filterCategories(categories, { ...base, envelope: 'culture', query: '' }).map(({ id }) => id), [2])
   assert.deepEqual(filterCategories(categories, { ...base, type: 'income', query: '' }).map(({ id }) => id), [3])
+})
+
+test('category empty copy distinguishes an empty collection from filtered no matches', () => {
+  assert.equal(categoryEmptyMessage(false), 'No categories yet. Select Add category to create one.')
+  assert.equal(categoryEmptyMessage(true), 'No categories match these filters.')
 })

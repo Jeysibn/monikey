@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { ApiError } from '../src/dataSource.ts'
-import { fromWireEditableAccount, toWireAccountUpdate, fromWireAccount, fromWireAccounts, fromWireCategories, fromWireField, fromWirePayment, fromWireSummary, fromWireTransaction, toCentavos, toWireAccountInput, toWireEntryInput } from '../src/wire.ts'
+import { fromWireAnalytics, fromWireEditableAccount, toWireAccountUpdate, fromWireAccount, fromWireAccounts, fromWireCategories, fromWireField, fromWirePayment, fromWireSummary, fromWireTransaction, toCentavos, toWireAccountInput, toWireEntryInput } from '../src/wire.ts'
 import type { AccountInfo, Category, EntryValues } from '../src/types.ts'
 
 const accounts: AccountInfo[] = [
@@ -46,8 +46,29 @@ test('summary and categories are strictly mapped', () => {
   assert.throws(() => fromWireSummary({ month: '2026-09' }, '2026-10'), ApiError)
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense' }]), categories)
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', is_archived: true }]), [{ ...categories[0], archived: true }])
+  assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 'shopping-basket' }]), [{ ...categories[0], iconKey: 'shopping-basket' }])
+  assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 'unrecognized-old-key' }]), [{ ...categories[0], iconKey: null }])
+  assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 12 }]), ApiError)
   assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'expense', is_archived: 'true' }]), ApiError)
   assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'transfer' }]), ApiError)
+})
+
+test('analytics wire values stay exact and validate the requested filter', () => {
+  const wire = {
+    start_date: '2026-10-01', end_date: '2026-10-31', account_id: null,
+    totals: { income: '36500.00', expenses: '26724.40', net_cash_flow: '9775.60' },
+    previous_totals: null,
+    months: [{ month: '2026-10', income: '36500.00', expenses: '26724.40' }],
+    categories: [{ id: 4, name: 'Food', icon_key: 'utensils', archived: false, expenses: '250.00' }],
+    kakeibo_totals: { needs: '19951.90', wants: '3864.00', culture: '1800.00', unexpected: '486.50', unclassified: '1025.00' },
+    kakeibo: [{ month: '2026-10', plan_status: 'saved', limits: { needs: '18000.00', wants: '5000.00', culture: '2000.00', unexpected: '3000.00' }, actuals: { needs: '19951.90', wants: '3864.00', culture: '1800.00', unexpected: '486.50' }, unclassified: '1025.00' }],
+  }
+  const parsed = fromWireAnalytics(wire, { startDate: '2026-10-01', endDate: '2026-10-31', accountId: null })
+  assert.equal(parsed.totals.netCashFlow, 977_560)
+  assert.equal(parsed.categories[0].iconKey, 'utensils')
+  assert.equal(parsed.kakeibo[0].limits?.needs, 1_800_000)
+  assert.equal(parsed.kakeiboTotals.unclassified, 102_500)
+  assert.throws(() => fromWireAnalytics(wire, { startDate: '2026-10-02', endDate: '2026-10-31', accountId: null }), ApiError)
 })
 
 test('transaction and payment rows map to editable activity entries', () => {

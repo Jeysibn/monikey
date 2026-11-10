@@ -203,15 +203,15 @@ These ratios were computed during design. Rendered text and field contrast were 
 
 Desktop arithmetic at 1280px: sidebar 224 + canvas 1056 − 2×24 margins = **1008 content**; 12 columns → column 62, gap 24; span-6 = 492, span-3 = 234; `492 + 234 + 234 + 2×24 = 1008` ✓. Content never exceeds 1440 (centred beyond that). *(Raised from 1032 on 2026-11-02 at the owner's request, so wide desktops use their space and wallet cards are not cramped.)*
 
-### Navigation (four views, no router)
+### Navigation (five current views, no router)
 
 | Viewport | Navigation | Add transaction |
 |---|---|---|
-| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · Kakeibo · **Add** (the filled item, rightmost for thumb reach). Five equal columns (≥57px each at 320px), icon over a 12px label on every item, Add included. | Bottom-bar item |
-| 768–1023 | **Left rail**, 80px: icon over label, four items; the active item's icon sits in a soft-blue pill. | Page-header button |
-| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then four labelled items. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
+| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · More · **Add**. More opens a dialog with Kakeibo and Categories, keeping labels and touch targets usable on narrow phones. | Bottom-bar item |
+| 768–1023 | **Left rail**, 80px: icon over label, all five current views; the active item's icon sits in a soft-blue pill. | Page-header button |
+| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then all five labelled views. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
 
-The four destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1.
+Destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1. On phones, the More dialog groups less frequent destinations and restores focus when dismissed.
 
 ---
 

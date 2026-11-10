@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -24,6 +25,10 @@ AccountType = Literal["cash", "bank", "ewallet", "credit_card"]
 CategoryType = Literal["income", "expense"]
 CategoryStatus = Literal["active", "archived", "all"]
 KakeiboEnvelope = Literal["needs", "wants", "culture", "unexpected"]
+CategoryIconKey = Literal[
+    "shopping-basket", "utensils", "car-front", "house", "briefcase-business", "graduation-cap",
+    "heart-pulse", "gamepad-2", "book-open", "shopping-bag", "gift", "piggy-bank",
+]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
@@ -163,11 +168,13 @@ class CategoryInput(InputModel):
     name: CategoryName
     type: CategoryType
     default_kakeibo_envelope: KakeiboEnvelope | None = None
+    icon_key: CategoryIconKey | None = None
 
 
 class CategoryUpdateInput(InputModel):
     name: CategoryName | None = None
     default_kakeibo_envelope: KakeiboEnvelope | None = None
+    icon_key: CategoryIconKey | None = None
 
 
 class CategoryArchiveInput(InputModel):
@@ -861,7 +868,7 @@ def list_categories(
     category_type: CategoryType | None = Query(default=None, alias="type"),
     status: CategoryStatus = Query(default="all"),
 ) -> list[dict[str, object]]:
-    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories"
+    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories"
     clauses: list[str] = []
     parameters: list[object] = []
     if category_type is not None:
@@ -883,7 +890,7 @@ def list_categories(
 def get_category(category_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
     with open_connection() as connection:
         row = connection.execute(
-            "SELECT id, name, type, default_kakeibo_envelope, is_archived FROM categories WHERE id = %s",
+            "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories WHERE id = %s",
             (category_id,),
         ).fetchone()
     if row is None:
@@ -903,10 +910,10 @@ def create_category(values: CategoryInput) -> dict[str, object]:
     try:
         with open_connection() as connection:
             row = connection.execute(
-                """INSERT INTO categories (name, type, default_kakeibo_envelope)
-                   VALUES (%s, %s, %s)
-                   RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
-                (values.name, values.type, values.default_kakeibo_envelope),
+                """INSERT INTO categories (name, type, default_kakeibo_envelope, icon_key)
+                   VALUES (%s, %s, %s, %s)
+                   RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
+                (values.name, values.type, values.default_kakeibo_envelope, values.icon_key),
             ).fetchone()
     except psycopg.errors.UniqueViolation:
         raise ApiProblem(
@@ -925,14 +932,14 @@ def update_category(
 ) -> dict[str, object]:
     supplied = values.model_fields_set
     if not supplied:
-        raise ApiProblem(422, "invalid_field", "Provide a category name or default envelope to update.")
+        raise ApiProblem(422, "invalid_field", "Provide a category name, default envelope, or icon to update.")
     if "name" in supplied and values.name is None:
         raise ApiProblem(422, "invalid_field", "Category name cannot be empty.", "name")
 
     try:
         with open_connection() as connection:
             category = connection.execute(
-                """SELECT id, name, type, default_kakeibo_envelope, is_archived
+                """SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key
                      FROM categories WHERE id = %s FOR UPDATE""",
                 (category_id,),
             ).fetchone()
@@ -951,14 +958,15 @@ def update_category(
                 )
             row = connection.execute(
                 """UPDATE categories
-                      SET name = %s, default_kakeibo_envelope = %s
+                      SET name = %s, default_kakeibo_envelope = %s, icon_key = %s
                     WHERE id = %s
-                    RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+                    RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
                 (
                     values.name if "name" in supplied else category["name"],
                     values.default_kakeibo_envelope
                     if "default_kakeibo_envelope" in supplied
                     else category["default_kakeibo_envelope"],
+                    values.icon_key if "icon_key" in supplied else category["icon_key"],
                     category_id,
                 ),
             ).fetchone()
@@ -980,7 +988,7 @@ def set_category_archived(
     with open_connection() as connection:
         row = connection.execute(
             """UPDATE categories SET is_archived = %s WHERE id = %s
-               RETURNING id, name, type, default_kakeibo_envelope, is_archived""",
+               RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
             (values.is_archived, category_id),
         ).fetchone()
     if row is None:
@@ -1014,7 +1022,7 @@ def update_category_envelope_default(
 ) -> dict[str, object]:
     with open_connection() as connection:
         category = connection.execute(
-            "SELECT id, name, type FROM categories WHERE id = %s",
+            "SELECT id, name, type, icon_key, is_archived FROM categories WHERE id = %s",
             (category_id,),
         ).fetchone()
         if category is None:
@@ -1026,7 +1034,7 @@ def update_category_envelope_default(
             UPDATE categories
             SET default_kakeibo_envelope = %s
             WHERE id = %s
-            RETURNING id, name, type, default_kakeibo_envelope
+            RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key
             """,
             (values.default_kakeibo_envelope, category_id),
         ).fetchone()
@@ -1334,6 +1342,140 @@ def get_summary(month: str) -> dict[str, str]:
         "net_position": format_money(totals["liquid_balance"] - totals["signed_card_debt"]),
         "month_income": format_money(totals["month_income"]),
         "month_expenses": format_money(totals["month_expenses"]),
+    }
+
+
+@app.get("/api/analytics")
+def get_analytics(
+    start_date: CalendarDate,
+    end_date: CalendarDate,
+    account_id: Annotated[int | None, Query(ge=1)] = None,
+) -> dict[str, object]:
+    """Bounded server-side analytics. Date values are Manila calendar dates, end_date is inclusive."""
+    if end_date < start_date:
+        raise ApiProblem(422, "invalid_field", "End date must be on or after start date.", "end_date")
+    days = (end_date - start_date).days + 1
+    if days > 366:
+        raise ApiProblem(422, "invalid_field", "Choose a date range of 366 days or fewer.", "end_date")
+    try:
+        end_exclusive = end_date + timedelta(days=1)
+    except OverflowError:
+        raise ApiProblem(422, "invalid_field", "End date is outside the supported range.", "end_date") from None
+    parameters: tuple[object, ...]
+    account_clause = "" if account_id is None else " AND t.account_id = %s"
+    account_parameter: tuple[object, ...] = () if account_id is None else (account_id,)
+    with open_connection() as connection:
+        if account_id is not None and not connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM accounts WHERE id = %s)", (account_id,),
+        ).fetchone()["exists"]:
+            raise ApiProblem(400, "invalid_field", "Choose an existing account.", "account_id")
+
+        def totals_between(start: date, end: date) -> dict[str, str]:
+            row = connection.execute(
+                f"""SELECT
+                      COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'income'), 0) AS income,
+                      COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense'), 0) AS expenses
+                    FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                    WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}""",
+                (start, end, *account_parameter),
+            ).fetchone()
+            income = Decimal(row["income"])
+            expenses = Decimal(row["expenses"])
+            return {"income": format_money(income), "expenses": format_money(expenses), "net_cash_flow": format_money(income - expenses)}
+
+        totals = totals_between(start_date, end_exclusive)
+        manila_today = datetime.now(ZoneInfo("Asia/Manila")).date()
+        comparison = None
+        if end_date < manila_today:
+            try:
+                previous_start = start_date - timedelta(days=days)
+            except OverflowError:
+                previous_start = None
+            if previous_start is not None:
+                comparison = totals_between(previous_start, start_date)
+
+        parameters = (start_date, end_exclusive, *account_parameter)
+        monthly_rows = connection.execute(
+            f"""WITH months AS (
+                  SELECT generate_series(date_trunc('month', %s::date), date_trunc('month', %s::date), interval '1 month')::date AS month
+                ), actuals AS (
+                  SELECT date_trunc('month', t.transaction_date)::date AS month,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'income'), 0) AS income,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense'), 0) AS expenses
+                  FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                  WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                  GROUP BY 1
+                )
+                SELECT months.month, COALESCE(actuals.income, 0) AS income, COALESCE(actuals.expenses, 0) AS expenses
+                FROM months LEFT JOIN actuals ON actuals.month = months.month ORDER BY months.month""",
+            (start_date, end_date, *parameters),
+        ).fetchall()
+        category_rows = connection.execute(
+            f"""SELECT c.id, c.name, c.icon_key, c.is_archived, SUM(t.amount) AS expenses
+                FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                WHERE c.type = 'expense' AND t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                GROUP BY c.id, c.name, c.icon_key, c.is_archived ORDER BY SUM(t.amount) DESC, c.name""",
+            parameters,
+        ).fetchall()
+        envelope_rows = connection.execute(
+            f"""WITH months AS (
+                  SELECT generate_series(date_trunc('month', %s::date), date_trunc('month', %s::date), interval '1 month')::date AS month
+                ), actuals AS (
+                  SELECT date_trunc('month', t.transaction_date)::date AS month,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'needs'), 0) AS needs,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'wants'), 0) AS wants,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'culture'), 0) AS culture,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+                    COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope IS NULL), 0) AS unclassified
+                  FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                  WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                  GROUP BY 1
+                )
+                SELECT months.month, (p.month IS NOT NULL) AS has_plan, p.plan_presence,
+                  p.needs_limit, p.wants_limit, p.culture_limit, p.unexpected_limit,
+                  COALESCE(actuals.needs, 0) AS needs, COALESCE(actuals.wants, 0) AS wants,
+                  COALESCE(actuals.culture, 0) AS culture, COALESCE(actuals.unexpected, 0) AS unexpected,
+                  COALESCE(actuals.unclassified, 0) AS unclassified
+                FROM months LEFT JOIN kakeibo_month_plans AS p ON p.month = months.month
+                LEFT JOIN actuals ON actuals.month = months.month ORDER BY months.month""",
+            (start_date, end_date, start_date, end_exclusive, *account_parameter),
+        ).fetchall()
+        envelope_totals = connection.execute(
+            f"""SELECT
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'needs'), 0) AS needs,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'wants'), 0) AS wants,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'culture'), 0) AS culture,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+                COALESCE(SUM(t.amount) FILTER (WHERE c.type = 'expense' AND t.kakeibo_envelope IS NULL), 0) AS unclassified
+              FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+              WHERE t.transaction_date >= %s AND t.transaction_date < %s{account_clause}""",
+            parameters,
+        ).fetchone()
+
+    envelopes = ("needs", "wants", "culture", "unexpected")
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "account_id": account_id,
+        "totals": totals,
+        "previous_totals": comparison,
+        "months": [{
+            "month": row["month"].isoformat()[:7],
+            "income": format_money(row["income"]),
+            "expenses": format_money(row["expenses"]),
+        } for row in monthly_rows],
+        "categories": [{
+            "id": row["id"], "name": row["name"], "icon_key": row["icon_key"],
+            "archived": row["is_archived"], "expenses": format_money(row["expenses"]),
+        } for row in category_rows],
+        "kakeibo_totals": {key: format_money(envelope_totals[key]) for key in (*envelopes, "unclassified")},
+        "kakeibo": [{
+            "month": row["month"].isoformat()[:7],
+            "plan_status": "not_saved" if not row["has_plan"] or row["plan_presence"] == "not_saved" else "saved" if row["plan_presence"] == "saved" else "legacy_unknown",
+            "limits": None if row["plan_presence"] != "saved" else {key: format_money(row[f"{key}_limit"]) for key in envelopes},
+            "actuals": {key: format_money(row[key]) for key in envelopes},
+            "unclassified": format_money(row["unclassified"]),
+        } for row in envelope_rows],
     }
 
 

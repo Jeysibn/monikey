@@ -9,7 +9,7 @@ const accounts = [
   { id: 1, name: 'Main Bank', type: 'bank', balance: '1000.00' },
   { id: 2, name: 'Blue Card', type: 'credit_card', credit_limit: '5000.00', outstanding_signed_debt: '300.00', available_credit: '4700.00', owed: '300.00', credit: '0.00' },
 ]
-const categories = [{ id: 4, name: 'Food', type: 'expense' }]
+const categories = [{ id: 4, name: 'Food', type: 'expense', icon_key: 'utensils' }]
 const tx = (id: number, created_at: string) => ({ id, account_id: 2, category_id: 4, amount: '10.00', transaction_date: '2026-10-25', note: `T${id}`, created_at })
 const payment = (id: number, created_at: string) => ({ id, source_account_id: 1, card_account_id: 2, amount: '5.00', payment_date: '2026-10-25', note: `P${id}`, created_at })
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
@@ -32,6 +32,7 @@ test('loadActivity requests both filtered lists with one spare row and merges ex
   assert.deepEqual(result.items.map((item) => item.key), ['t-1', 't-2'])
   assert.equal(result.hasMore, true)
   assert.equal(result.items[0].createdAt, '2026-10-25T09:00:00.000900Z')
+  assert.equal(result.items[0].categoryIconKey, 'utensils')
   assert.equal(requests.length, 5)
   const transactionUrl = new URL(requests.find((item) => item.url.startsWith('/api/transactions?'))!.url, 'http://localhost')
   const paymentUrl = new URL(requests.find((item) => item.url.startsWith('/api/credit-card-payments?'))!.url, 'http://localhost')
@@ -40,6 +41,28 @@ test('loadActivity requests both filtered lists with one spare row and merges ex
   assert.equal(transactionUrl.searchParams.get('limit'), '3')
   assert.equal(paymentUrl.searchParams.get('account_id'), '2')
   assert.equal(paymentUrl.searchParams.get('limit'), '3')
+})
+
+test('loadAnalytics sends bounded date and account filters and parses exact totals', async () => {
+  const requests: string[] = []
+  const source = createHttpSource(async (input) => {
+    const url = String(input)
+    requests.push(url)
+    return json({
+      start_date: '2026-10-01', end_date: '2026-10-31', account_id: 2,
+      totals: { income: '0.00', expenses: '20.50', net_cash_flow: '-20.50' }, previous_totals: null,
+      months: [{ month: '2026-10', income: '0.00', expenses: '20.50' }], categories: [],
+      kakeibo_totals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: '20.50' },
+      kakeibo: [{ month: '2026-10', plan_status: 'not_saved', limits: null, actuals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00' }, unclassified: '20.50' }],
+    })
+  })
+  const report = await source.loadAnalytics({ startDate: '2026-10-01', endDate: '2026-10-31', accountId: 2 }, signal())
+  assert.equal(report.totals.expenses, 2050)
+  const url = new URL(requests[0], 'http://localhost')
+  assert.equal(url.pathname, '/api/analytics')
+  assert.equal(url.searchParams.get('start_date'), '2026-10-01')
+  assert.equal(url.searchParams.get('end_date'), '2026-10-31')
+  assert.equal(url.searchParams.get('account_id'), '2')
 })
 
 test('loadActivity leaves empty months empty and caps the wire limit at 1001', async () => {
@@ -106,16 +129,16 @@ test('category management writes use the PR 1 contract and invalidate cached cat
   }
   const source = createHttpSource(fetcher)
   assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])
-  await source.createCategory({ name: 'Courses', type: 'expense', defaultEnvelope: 'culture' })
-  await source.updateCategory(7, { name: 'Reading', defaultEnvelope: 'needs' })
+  await source.createCategory({ name: 'Courses', type: 'expense', defaultEnvelope: 'culture', iconKey: 'shopping-basket' })
+  await source.updateCategory(7, { name: 'Reading', defaultEnvelope: 'needs', iconKey: null })
   await source.setCategoryArchived(7, true)
   await source.deleteCategory(8)
   assert.deepEqual(requests.map(({ url, init }) => [url, init?.method]), [
     ['/api/categories', 'GET'], ['/api/categories', 'POST'], ['/api/categories/7', 'PATCH'],
     ['/api/categories/7/archive', 'PATCH'], ['/api/categories/8', 'DELETE'],
   ])
-  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Courses', type: 'expense', default_kakeibo_envelope: 'culture' })
-  assert.deepEqual(JSON.parse(String(requests[2].init?.body)), { name: 'Reading', default_kakeibo_envelope: 'needs' })
+  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Courses', type: 'expense', default_kakeibo_envelope: 'culture', icon_key: 'shopping-basket' })
+  assert.deepEqual(JSON.parse(String(requests[2].init?.body)), { name: 'Reading', default_kakeibo_envelope: 'needs', icon_key: null })
   assert.deepEqual(JSON.parse(String(requests[3].init?.body)), { is_archived: true })
   assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])
   assert.equal(requests.filter(({ url, init }) => url === '/api/categories' && init?.method === 'GET').length, 2)

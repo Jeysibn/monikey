@@ -231,6 +231,22 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Alternatives:** Nullable plan amounts (would spread null handling across each plan field); infer absence from zero values or review timestamps (ambiguous and unsafe).
 - **Consequences:** Fresh databases apply migration 006 after 005. Existing databases apply it once after verifying migrations and rehearsing backup/restore. The added nullable field is tolerated by older code, but an older API writing a new plan cannot set its presence; on re-upgrade that row remains explicitly `legacy_unknown` until confirmed. A frontend receiving a non-null plan from an older API without `plan_status` treats it as `legacy_unknown` rather than assuming it was deliberate.
 
+### ADR-023 — Optional persistent category icons
+
+- **Status:** Accepted by the owner's UI modernization mission; implementation is staged in Draft PR #27 and is not a deployment record.
+- **Context:** Category names appear in management, transaction entry and historical Activity. Optional visuals can make scanning easier, but arbitrary uploads or executable component names create asset, safety and maintenance costs.
+- **Decision:** Store an optional nullable `categories.icon_key` string from one curated Lucide registry. The frontend uses stable keys and a safe generic category fallback; the API validates keys against a closed allowlist, and migration 008 adds a matching database check. Users can set, edit and clear the selection. Category names remain visible everywhere.
+- **Compatibility and history:** Existing categories remain `NULL`. Omitted icon fields continue to work for old clients; a missing or unknown response key resolves to the fallback. Icon changes never alter category IDs/types, transactions, amounts, account positions, archive state, defaults or saved Kakeibo envelopes. Do not backfill or infer icons as data migration behavior.
+- **Alternatives:** Arbitrary image upload (deferred: storage, sanitization, rights and lifecycle requirements); arbitrary Lucide component names or URLs (rejected: not a stable safe contract); deriving icon from category text (rejected: labels are user-editable and inference would change unpredictably).
+- **Consequences:** Frontend, API and migration allowlists must stay in sync; adding or removing keys needs a coordinated code/schema update. The migration uses the existing checksum and backup-gated release runner; production rollout remains a separately authorized operation.
+
+### ADR-024 — Separate analytics Dashboard from Overview
+
+- **Status:** Accepted by the owner's UI modernization mission; implementation is staged after category icons in Draft PR #28 and is not a deployment record.
+- **Context:** Overview is the daily position and action-oriented home, while users also need trend and category analysis. A large chart page would bury balances and recent activity.
+- **Decision:** Keep Overview as the default landing view and add a separate Dashboard for period-based analysis. The Dashboard must use server-aggregated decimal-string data from bounded date/account filters; the browser does not sum paginated transactions as authoritative financial data. Transfers and credit-card repayments are excluded from income/expense cashflow; card purchases remain expenses exactly once. Kakeibo planned-versus-actual uses saved plans and stored transaction envelopes. No historical balance/net-worth chart is shown without a reliable ledger reconstruction model.
+- **Consequences:** A bounded analytics API and explicit metric definitions require backend queries/tests. The interface will show data periods and no-plan/no-data states, and provide text alternatives for charts. No production deployment or migration is authorized by this ADR.
+
 ## Change-control template
 
 Use this for future changes:
@@ -273,3 +289,4 @@ Use this for future changes:
 - **v1.6 (2026-11-02):** ADR-020 stores each account's chosen card (`accounts.card_product_id`) in the database; Codex implements migration 004 and the API.
 - **v1.7 (2026-11-02):** ADR-021 accepts Kakeibo planning/reflection metadata, nullable transaction envelopes and category suggestions, and two metadata tables; migration 005 and API/UI follow-up are staged separately.
 - **v1.8 (2026-11-10):** ADR-022 records the merged installation-wide category model, archive-safe transaction references, immutable type, and migration 007. This is a source/design record, not deployment evidence.
+- **v1.9 (2026-11-11):** ADR-023 and ADR-024 record the owner-approved category-icon and separate-Dashboard scope for staged Draft PRs; neither indicates a production rollout.

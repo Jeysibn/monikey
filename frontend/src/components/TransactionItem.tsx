@@ -4,6 +4,7 @@ import { cn } from 'cn'
 import { MoneyText } from '@/components/MoneyText'
 import { Button } from '@/components/ui/button'
 import { formatPeso } from '@/lib/money'
+import { CategoryIcon } from '@/lib/categoryIcons'
 import type { ActivityItem } from '@/types'
 
 /*
@@ -57,6 +58,7 @@ export function TransactionItem({
               `${item.accountName} → ${item.destinationAccountName}`
             ) : (
               <>
+                <CategoryIcon iconKey={item.categoryIconKey} className="mr-1 inline size-4 align-[-3px]" />
                 {item.categoryName} ·{' '}
                 {onCard && <CreditCard aria-hidden="true" className="mr-1 inline size-4 align-[-3px]" />}
                 {item.accountName}

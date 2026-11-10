@@ -146,7 +146,7 @@ reflections. These are separate from the five ledger tables. Monetary columns
 use PostgreSQL `NUMERIC(12,2)`; JSON money values are decimal strings.
 
 A **migration** is a numbered SQL change to a database's structure or rules.
-The number makes the intended order explicit. Migration files `001`–`007` are
+The number makes the intended order explicit. Migration files `001`–`008` are
 in `database/`. The database migration runner in `database/migrate.py` records
 checksums, serializes runners with a PostgreSQL advisory lock, recognizes known
 starting schemas, and fails closed on incomplete or unknown states. The API
@@ -160,6 +160,11 @@ classifications. The database guide explains the synthetic migration tests
 and the backup/recovery rehearsal: [`database/README.md`](../database/README.md).
 For an existing live database, follow the GitOps backup and migration gates;
 never run a production migration as a local learning exercise.
+
+Migration 008 adds an optional category icon key from a small allowlisted Lucide
+collection. Existing rows remain unset, and changing an icon does not change
+transaction history. Source support does not mean the migration has been
+applied to production.
 
 ## Stage 3: Develop and test locally
 

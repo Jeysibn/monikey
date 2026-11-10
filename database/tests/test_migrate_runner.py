@@ -107,6 +107,13 @@ def baseline_007() -> CatalogConnection:
     return connection
 
 
+def baseline_008() -> CatalogConnection:
+    connection = baseline_007()
+    connection.tables["categories"].add("icon_key")
+    connection.constraints.add("categories_icon_key_allowed")
+    return connection
+
+
 class MigrationRunnerTests(unittest.TestCase):
     def test_refuses_to_adopt_partial_core_schema(self):
         connection = baseline_001()
@@ -138,10 +145,17 @@ class MigrationRunnerTests(unittest.TestCase):
     def test_recognizes_complete_existing_schema_at_migration_003(self):
         self.assertEqual(migrate.infer_baseline(baseline_003()), 3)
 
-    def test_migration_007_is_the_next_version_after_006(self):
-        self.assertEqual(len(migrate.MIGRATIONS), 7)
+    def test_migration_008_follows_category_lifecycle_without_changing_older_baselines(self):
+        self.assertEqual(len(migrate.MIGRATIONS), 8)
         self.assertEqual(migrate.infer_baseline(baseline_006()), 6)
         self.assertEqual(migrate.infer_baseline(baseline_007()), 7)
+        self.assertEqual(migrate.infer_baseline(baseline_008()), 8)
+
+    def test_refuses_partial_migration_008_state(self):
+        connection = baseline_008()
+        connection.constraints.remove("categories_icon_key_allowed")
+        with self.assertRaisesRegex(migrate.MigrationError, "008 appears partial"):
+            migrate.infer_baseline(connection)
 
     def test_refuses_partial_migration_007_state(self):
         connection = baseline_007()
@@ -153,7 +167,7 @@ class MigrationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(migrate.MigrationError, "verified release workflow"):
             migrate.require_migration_permission(3, apply_missing=False)
             migrate.require_migration_permission(6, apply_missing=False)
-        migrate.require_migration_permission(7, apply_missing=False)
+        migrate.require_migration_permission(8, apply_missing=False)
 
     def test_rejects_unrecognized_extra_tables_and_columns(self):
         connection = baseline_003()

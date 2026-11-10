@@ -4,17 +4,9 @@ import { MoreHorizontal, Pencil } from 'lucide-react'
 import { MoneyText } from '@/components/MoneyText'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTrigger } from '@/components/ui/dialog'
-import { formatPeso } from '@/lib/money'
 import { MONIKEY_DEFAULT_ARTWORK_PATH } from '@/wallet/artworkCatalog'
 import { faceFigure, usedShare, type WalletCardVM } from '@/wallet/walletModel'
 import { WalletCardDetailsContent } from './WalletCardDetailsDialog'
-
-const accountTypeLabels = {
-  cash: 'Cash',
-  bank: 'Bank account',
-  ewallet: 'E-wallet',
-  credit_card: 'Credit card',
-} as const
 
 function AccountCardActions({
   item,
@@ -124,14 +116,6 @@ function CardFace({ item, onLightArt }: { item: WalletCardVM; onLightArt: boolea
   )
 }
 
-function faceLabel(item: WalletCardVM): string {
-  const figure = faceFigure(item)
-  const parts = [`View details for ${item.accountName}`, accountTypeLabels[item.accountType], `${figure.label} ${formatPeso(figure.centavos)}`]
-  if (figure.note) parts.push(figure.note)
-  if (item.accountType === 'credit_card' && item.creditLimitCentavos !== null) parts.push(`${formatPeso(item.creditLimitCentavos)} limit`)
-  return parts.join(', ')
-}
-
 /*
  * One account's card: its artwork with the figure printed bottom-left, the details dialog opened by
  * clicking the face, and the upper-right three-dot menu (Edit, Pay card). Used by the Accounts grid and,
@@ -193,7 +177,6 @@ export function WalletCard({
             <DialogTrigger asChild>
               <button
                 type="button"
-                aria-label={faceLabel(item)}
                 className="absolute inset-0 z-10 cursor-pointer rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => onSelect?.(item.accountId)}
               >
@@ -204,6 +187,7 @@ export function WalletCard({
                   )}
                 </span>
                 <CardFace item={item} onLightArt={onLightArt} />
+                <span className="sr-only">View details</span>
                 {fallbackNote && <span className="sr-only">{fallbackNote}</span>}
               </button>
             </DialogTrigger>

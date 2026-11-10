@@ -12,6 +12,15 @@ const cents = (value: unknown): bigint => {
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
 }
 
+async function openCategories(page: import('@playwright/test').Page) {
+  const direct = page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Categories' })
+  if (await direct.count()) await direct.last().click()
+  else {
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Categories', exact: true }).click()
+  }
+}
+
 test('Quick Add preserves category defaults, overrides, history, archive and restore', async ({ page }) => {
   test.setTimeout(60_000)
   const suffix = Date.now().toString(36)
@@ -26,8 +35,9 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   expect(accountCreate.status()).toBe(201)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(initialName)
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('expense')
   await page.getByLabel('Default Kakeibo envelope').selectOption('needs')
@@ -35,6 +45,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.getByLabel('Search categories').fill(initialName)
   await expect(page.getByRole('button', { name: `Edit ${initialName}` })).toBeVisible()
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(unusedName)
   await page.getByRole('button', { name: 'Create category' }).click()
   await page.getByLabel('Search categories').fill(unusedName)
@@ -43,6 +54,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.getByRole('button', { name: `Delete ${unusedName}` }).click()
   await expect(page.getByRole('button', { name: `Edit ${unusedName}` })).toHaveCount(0)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
   await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
@@ -144,7 +156,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   expect(afterReport.envelopes.needs.actual_spent).toBe(beforeReport.envelopes.needs.actual_spent)
 
   // Category Management is reachable from navigation; rename and change only the default for future entries.
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
   await page.getByLabel('Filter category type').selectOption('expense')
   await page.getByLabel('Search categories').fill(initialName)
   await page.getByRole('button', { name: `Edit ${initialName}` }).click()
@@ -175,7 +187,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   const beforeArchiveSummary = await apiJson(page, `/api/summary?month=${month}`)
   const beforeArchiveReport = await apiJson(page, `/api/kakeibo/months/${month}/report`)
 
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
   await page.getByLabel('Search categories').fill(renamedName)
   page.once('dialog', (confirmation) => confirmation.accept())
   await page.getByRole('button', { name: `Archive ${renamedName}` }).click()
@@ -202,7 +214,7 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   expect(preserved?.category_id).toBe(created?.category_id)
   expect(preserved?.kakeibo_envelope).toBe('wants')
 
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
   await page.getByLabel('Search categories').fill(renamedName)
   await page.getByRole('button', { name: 'Add transaction' }).click()
   await expect(page.getByRole('radio', { name: renamedName, exact: true })).toHaveCount(0)

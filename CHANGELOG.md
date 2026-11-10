@@ -29,12 +29,19 @@ version. GitHub Release objects are separate metadata; none existed at the
 - Wallet account presentation and reviewed card artwork, including recovered and regenerated artwork (PRs #10–#17).
 - Backup-gated GitOps release automation and source-run provenance in the dispatch payload (PRs #14 and #19). The workflow skips dispatch when its repository token is absent; configuring it is an owner-controlled prerequisite after initial schema adoption. This entry does not claim a production release.
 - Installation-wide custom income and expense categories with rename, archive, restore, and safe deletion. Expense categories suggest a default envelope; saved transaction envelopes remain independent (PRs #20–#22, migration 007).
+- Optional persistent Lucide icons for income and expense categories, displayed in category management, Quick Add, and Activity (Draft PR #27, migration 008).
+- A separate, server-aggregated financial Analytics Dashboard with date/account filters, monthly cashflow, category spending, and saved Kakeibo plan comparisons (Draft PR #28).
 
 ### Fixed
 - Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
+- Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
+- Added Dashboard to direct navigation and placed Accounts with Kakeibo and Categories in the phone More menu to retain five clear bottom-bar targets.
+- Added a compact Overview link to Dashboard and clarified empty Categories versus filtered no-results messaging (Draft PR #29).
+- Moved category create/edit into the shared accessible dialog so the category list stays visible on mobile; verified focus, viewport bounds, and dialog accessibility.
+- Aligned account-card accessible names with their visible names and balances, while retaining a screen-reader hint for opening details (Draft PR #29).
 
 ### Database
-- Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules. The source contains these migrations, but the latest production migration state is unverified.
+- Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules; migration 008 adds the optional, validated `icon_key` column for category icons. The source contains these migrations, but the latest production migration state is unverified. Migration 008 has not been applied to any production database.
 
 ## [1.2.0] - 2026-10-30
 

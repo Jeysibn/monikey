@@ -10,7 +10,7 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, isNotFound } from '
 import { entryValues } from '../src/lib/ledger.ts'
 import { categoriesForTransaction } from '../src/lib/entryForm.ts'
 import { suggestedEnvelope } from '../src/lib/kakeibo.ts'
-import { buildSnapshot } from '../src/lib/finance.ts'
+import { buildSnapshot, mockAnalytics } from '../src/lib/finance.ts'
 import { saveMessage } from '../src/lib/entryText.ts'
 import { getMockData } from '../src/mockData.ts'
 import { createMockSource, nowIso } from '../src/mockSource.ts'
@@ -22,6 +22,21 @@ const OCT = '2026-10'
 const expense: EntryValues = { kind: 'expense', amount: '385', accountId: 3, cardId: null, destinationAccountId: null, categoryId: 4, date: '2026-10-25', note: '' }
 const pay: EntryValues = { kind: 'payment', amount: '5,000', accountId: 2, cardId: 4, destinationAccountId: null, categoryId: null, date: '2026-10-25', note: '' }
 const wallet: AccountValues = { type: 'cash', name: 'Wallet', balance: '100', limit: '', owed: '' }
+
+describe('mock analytics', () => {
+  it('aggregates only matching transaction rows with exact centavo arithmetic and stable categories', () => {
+    const report = mockAnalytics(getMockData(), { startDate: '2026-10-01', endDate: '2026-10-25', accountId: null })
+    assert.deepEqual(report.totals, { income: 3_650_000, expenses: 2_712_740, netCashFlow: 937_260 })
+    assert.equal(report.months[0].month, '2026-10')
+    assert.equal(report.months[0].expenses, 2_712_740)
+    assert.equal(report.kakeiboTotals.needs, 1_995_190)
+    assert.equal(report.kakeiboTotals.unclassified, 102_500)
+    assert.equal(report.kakeibo[0].planStatus, 'saved')
+    const filtered = mockAnalytics(getMockData(), { startDate: '2026-10-01', endDate: '2026-10-25', accountId: 2 })
+    assert.equal(filtered.totals.income, 3_650_000)
+    assert.equal(filtered.kakeiboTotals.needs, 999_900)
+  })
+})
 
 const rejection = async (p: Promise<unknown>): Promise<ApiError> => {
   try {
@@ -89,9 +104,10 @@ describe('writes', () => {
   it('custom expense categories suggest new envelopes while preserving historical classification, labels and totals through archive/restore', async () => {
     const source = createMockSource()
     const before = await source.loadSummary(OCT, signal)
-    await source.createCategory({ name: 'Learning', type: 'expense', defaultEnvelope: 'culture' })
+    await source.createCategory({ name: 'Learning', type: 'expense', defaultEnvelope: 'culture', iconKey: 'book-open' })
     let categories = await source.loadCategories(signal)
     const category = categories.find((item) => item.name === 'Learning')!
+    assert.equal(category.iconKey, 'book-open')
     const oldExpense: EntryValues = { ...expense, amount: '10', categoryId: category.id, note: 'Custom category expense', envelope: 'wants' }
     await source.saveEntry(oldExpense)
     const afterExpense = await source.loadSummary(OCT, signal)
@@ -100,10 +116,13 @@ describe('writes', () => {
     const wantsAfterOld = afterExpenseKakeibo.envelopes.wants.spent
     const needsBeforeFuture = afterExpenseKakeibo.envelopes.needs.spent
 
-    await source.updateCategory(category.id, { name: 'Reading', defaultEnvelope: 'needs' })
+    await source.updateCategory(category.id, { name: 'Learning renamed', defaultEnvelope: 'needs' })
+    assert.equal((await source.loadCategories(signal)).find((item) => item.id === category.id)?.iconKey, 'book-open')
+    await source.updateCategory(category.id, { name: 'Reading', defaultEnvelope: 'needs', iconKey: null })
     const renamed = await source.loadCategories(signal)
     assert.equal(renamed.find((item) => item.id === category.id)?.name, 'Reading')
     assert.equal(renamed.find((item) => item.id === category.id)?.defaultEnvelope, 'needs')
+    assert.equal(renamed.find((item) => item.id === category.id)?.iconKey, null)
     assert.equal((await source.loadKakeiboMonth(OCT, signal)).envelopes.wants.spent, wantsAfterOld)
 
     const suggestion = suggestedEnvelope(renamed, category.id)

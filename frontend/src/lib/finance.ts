@@ -3,6 +3,7 @@ import type {
   AccountBalance,
   AccountInfo,
   ActivityItem,
+  AnalyticsReport,
   CardStatus,
   Centavos,
   Category,
@@ -38,6 +39,73 @@ export const isCard = (account: Pick<AccountInfo, 'type'>): boolean => account.t
 
 /** "2026-10-24" -> "2026-10" */
 export const monthOf = (date: string): string => date.slice(0, 7)
+
+/** True only when a selected date range includes every calendar day in the named month. */
+export function coversFullCalendarMonth(month: string, startDate: string, endDate: string): boolean {
+  const [year, number] = month.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10)
+  return startDate <= `${month}-01` && endDate >= lastDay
+}
+
+/** Mock-only analytics over synthetic fixture rows. Production analytics are aggregated by PostgreSQL. */
+export function mockAnalytics(data: MockData, query: { startDate: string; endDate: string; accountId: number | null }): AnalyticsReport {
+  if (query.endDate < query.startDate) throw new Error('End date must be on or after start date.')
+  const rows = data.transactions.filter((row) => row.date >= query.startDate && row.date <= query.endDate && (query.accountId === null || row.accountId === query.accountId))
+  const types = new Map(data.categories.map((category) => [category.id, category.type]))
+  const totals = (start: string, end: string) => {
+    let income = 0
+    let expenses = 0
+    for (const row of data.transactions) {
+      if (row.date < start || row.date >= end || (query.accountId !== null && row.accountId !== query.accountId)) continue
+      if (types.get(row.categoryId) === 'income') income += row.amount
+      else expenses += row.amount
+    }
+    return { income, expenses, netCashFlow: income - expenses }
+  }
+  const day = (value: string) => Date.parse(`${value}T00:00:00Z`)
+  const endExclusive = new Date(day(query.endDate) + 86_400_000).toISOString().slice(0, 10)
+  const previousStart = new Date(day(query.startDate) - (day(endExclusive) - day(query.startDate))).toISOString().slice(0, 10)
+  const previousTotals = query.endDate < data.today ? totals(previousStart, query.startDate) : null
+  const monthKeys: string[] = []
+  let month = monthOf(query.startDate)
+  const finalMonth = monthOf(query.endDate)
+  while (month <= finalMonth) {
+    monthKeys.push(month)
+    const [year, number] = month.split('-').map(Number)
+    const next = number === 12 ? [year + 1, 1] : [year, number + 1]
+    month = `${next[0]}-${String(next[1]).padStart(2, '0')}`
+  }
+  const categories = new Map<number, number>()
+  for (const row of rows) if (types.get(row.categoryId) === 'expense') categories.set(row.categoryId, (categories.get(row.categoryId) ?? 0) + row.amount)
+  const envelopeTotals = Object.fromEntries(['needs', 'wants', 'culture', 'unexpected'].map((envelope) => [envelope, rows.filter((row) => row.envelope === envelope && types.get(row.categoryId) === 'expense').reduce((sum, row) => sum + row.amount, 0)])) as Record<KakeiboEnvelope, number>
+  const unclassified = rows.filter((row) => row.envelope == null && types.get(row.categoryId) === 'expense').reduce((sum, row) => sum + row.amount, 0)
+  const plans = new Map((data.kakeiboPlans ?? []).map((plan) => [plan.month, plan]))
+  const envelopes = ['needs', 'wants', 'culture', 'unexpected'] as const
+  return {
+    startDate: query.startDate,
+    endDate: query.endDate,
+    accountId: query.accountId,
+    totals: totals(query.startDate, endExclusive),
+    previousTotals,
+    months: monthKeys.map((key) => {
+      const end = new Date(Date.parse(`${key}-01T00:00:00Z`))
+      end.setUTCMonth(end.getUTCMonth() + 1)
+      const monthStart = `${key}-01`
+      return { month: key, ...totals(query.startDate > monthStart ? query.startDate : monthStart, query.endDate < end.toISOString().slice(0, 10) ? endExclusive : end.toISOString().slice(0, 10)) }
+    }),
+    categories: [...categories].map(([id, expenses]) => {
+      const category = data.categories.find((item) => item.id === id)!
+      return { id, name: category.name, iconKey: category.iconKey ?? null, archived: category.archived ?? false, expenses }
+    }).sort((a, b) => b.expenses - a.expenses || a.name.localeCompare(b.name)),
+    kakeiboTotals: { ...envelopeTotals, unclassified },
+    kakeibo: monthKeys.map((key) => {
+      const plan = plans.get(key)
+      const actuals = Object.fromEntries(envelopes.map((envelope) => [envelope, rows.filter((row) => monthOf(row.date) === key && row.envelope === envelope && types.get(row.categoryId) === 'expense').reduce((sum, row) => sum + row.amount, 0)])) as Record<typeof envelopes[number], number>
+      const unclassified = rows.filter((row) => monthOf(row.date) === key && row.envelope == null && types.get(row.categoryId) === 'expense').reduce((sum, row) => sum + row.amount, 0)
+      return { month: key, planStatus: plan ? 'saved' as const : 'not_saved' as const, limits: plan ? plan.limits : null, actuals, unclassified }
+    }),
+  }
+}
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -256,6 +324,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       amount: t.amount,
       title: t.note ?? category.name,
       categoryName: category.name,
+      categoryIconKey: category.iconKey ?? null,
       accountName: acct.name,
       accountType: acct.type,
       cardName: null,

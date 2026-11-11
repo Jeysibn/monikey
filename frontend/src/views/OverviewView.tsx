@@ -10,6 +10,7 @@ import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
+import { QuickActions } from '@/components/overview/QuickActions'
 import { WalletStack } from '@/components/wallet/WalletStack'
 import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
@@ -57,10 +58,12 @@ export function OverviewView({
   addState,
   onMonthChange,
   onAdd,
+  onAddIncome,
   onAddAccount,
   onPayCard,
   onEditAccount,
   onTransfer,
+  onQuickTransfer,
   onAddExpense,
   onOpenAccounts,
   walletPreferences,
@@ -75,11 +78,13 @@ export function OverviewView({
   loading: boolean // ?demo=loading: show the skeleton whatever has arrived
   addState: AddState
   onMonthChange: (month: string) => void
-  onAdd: () => void
+  onAdd: () => void // Add expense
+  onAddIncome: () => void
   onAddAccount: () => void
   onPayCard: (cardId: number) => void
   onEditAccount: (accountId: number, from: HTMLElement) => void
   onTransfer: (fromAccountId: number) => void // the wallet's Transfer, from the selected account
+  onQuickTransfer: () => void // the quick action: a transfer with no account chosen yet
   onAddExpense: (accountId: number) => void
   onOpenAccounts: () => void
   walletPreferences: WalletPreferencesV1
@@ -117,11 +122,11 @@ export function OverviewView({
   const desktopLayout = useSyncExternalStore(subscribeToDesktopLayout, getDesktopLayout, () => false)
 
   const positionSection = summaryRes.error ? (
-    <div key="position" className="order-1 min-w-0 lg:order-none lg:col-span-12">
+    <div key="position" className="min-w-0 lg:col-span-12">
       <ErrorBlock what="your summary" updatedAt={summaryRes.updatedAt} onRetry={summaryRes.retry} focusAfter="main h1" />
     </div>
   ) : !hasAccounts && !positionLoading ? (
-    <Card key="position" className="order-1 lg:order-none lg:col-span-12">
+    <Card key="position" className="lg:col-span-12">
       <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[112px_minmax(0,1fr)] sm:text-left">
         <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" />
         <div>
@@ -139,7 +144,7 @@ export function OverviewView({
     <section
       key="position"
       aria-labelledby="net-position-label"
-      className="order-1 min-w-0 rounded-card bg-hero lg:order-none p-5 text-white md:px-7 md:py-[26px] lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-x-10 lg:px-9 lg:py-8"
+      className="min-w-0 rounded-card bg-hero p-5 text-white md:px-7 md:py-[26px] lg:col-span-12 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-x-10 lg:px-9 lg:py-8"
     >
       <div className="min-w-0">
         <div className="flex items-baseline justify-between gap-3 lg:justify-start lg:gap-3.5">
@@ -217,7 +222,7 @@ export function OverviewView({
   )
 
   const walletSection = (
-    <div key="wallet" className="order-4 min-w-0 lg:order-none lg:col-span-7 lg:col-start-1 lg:row-start-2">
+    <div key="wallet" className="min-w-0">
       <WalletStack
         accounts={accountsRes}
         loading={forcedLoading}
@@ -232,7 +237,7 @@ export function OverviewView({
   )
 
   const recentActivitySection = (
-    <div key="recent" className="order-5 min-w-0 lg:order-none lg:col-span-5 lg:col-start-8 lg:row-start-2">
+    <div key="recent" className="min-w-0">
       <Card aria-labelledby="recent-activity-title" role="region">
         <CardHeader>
           <CardTitle id="recent-activity-title" tabIndex={-1}>Recent activity</CardTitle>
@@ -281,7 +286,7 @@ export function OverviewView({
   )
 
   const monthSection = (
-    <Card key="month" role="region" aria-labelledby="this-month-title" className="order-2 min-w-0 lg:order-none lg:col-span-6 lg:row-start-3">
+    <Card key="month" role="region" aria-labelledby="this-month-title" className="min-w-0">
       {/* This month. Income and expenses of the selected month; card payments are not counted. */}
       <CardTitle id="this-month-title">This month</CardTitle>
       <CardDescription>{label} · card payments aren&rsquo;t counted as expenses</CardDescription>
@@ -307,7 +312,7 @@ export function OverviewView({
   )
 
   const creditCardsSection = (
-    <Card key="credit-cards" role="region" aria-labelledby="credit-cards-title" className="order-3 min-w-0 lg:order-none lg:col-span-6 lg:col-start-7 lg:row-start-3">
+    <Card key="credit-cards" role="region" aria-labelledby="credit-cards-title" className="min-w-0">
       {/* Credit-card balances are as of today and don't change with the selected month. */}
       <CardTitle id="credit-cards-title" tabIndex={-1}>Credit cards</CardTitle>
       <CardDescription>Available credit isn&rsquo;t cash.</CardDescription>
@@ -343,9 +348,54 @@ export function OverviewView({
     </Card>
   )
 
+  // The card that owes the most: what the Pay card quick action opens (the form lets the person pick another).
+  const payTarget = cards.reduce<(typeof cards)[number] | null>((best, card) => (card.owed > 0 && (best === null || card.owed > best.owed) ? card : best), null)
+  const actionsBlocked = addBlocked(addState)
+
+  const quickActions = !hasAccounts ? null : (
+    <div key="actions" className="min-w-0 lg:col-span-12">
+      <QuickActions
+        disabled={actionsBlocked}
+        canPay={payTarget !== null}
+        onExpense={onAdd}
+        onIncome={onAddIncome}
+        onTransfer={onQuickTransfer}
+        onPayCard={() => payTarget && onPayCard(payTarget.account.id)}
+      />
+    </div>
+  )
+
+  // The welcome sits BELOW the net position so it never displaces it. Its slot is reserved (same height whether the
+  // panel is showing or briefly hidden while data refreshes), so nothing below it jumps. It only exists when the
+  // person has accounts (or might: until the accounts load we assume they do, so the space is held from the start).
+  const welcomeSlot = hasAccounts ? (
+    <div key="welcome" className="min-h-[6.5rem] max-[359px]:min-h-[7.75rem] md:min-h-[6.625rem] min-w-0 lg:col-span-12" data-welcome-slot="">
+      {showWelcome && (
+        <Card className="flex h-full items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 md:!py-3">
+          <Moki pose="welcome" size="small" loading="eager" />
+          <div className="min-w-0">
+            <p className="font-semibold">Welcome back!</p>
+            <p className="text-sm leading-snug text-muted-foreground">
+              Here&rsquo;s your money overview. Keep an eye on spending and stay on top of your budget.
+            </p>
+          </div>
+        </Card>
+      )}
+    </div>
+  ) : null
+
+  // From 1024px two balanced columns (wallets and this month; recent activity and credit cards), so neither leaves a
+  // gap under a shorter card. Below that, one column in the order the spec reads: this month and credit context
+  // first, then wallets and recent activity.
   const layoutSections = desktopLayout
-    ? [positionSection, walletSection, recentActivitySection, monthSection, creditCardsSection]
-    : [positionSection, monthSection, creditCardsSection, walletSection, recentActivitySection]
+    ? [
+        positionSection,
+        quickActions,
+        welcomeSlot,
+        <div key="left" className="grid min-w-0 content-start gap-4 md:gap-6 lg:col-span-7">{walletSection}{monthSection}</div>,
+        <div key="right" className="grid min-w-0 content-start gap-4 md:gap-6 lg:col-span-5">{recentActivitySection}{creditCardsSection}</div>,
+      ]
+    : [positionSection, quickActions, welcomeSlot, monthSection, creditCardsSection, walletSection, recentActivitySection]
 
   return (
     <div aria-busy={anyLoading}>
@@ -357,21 +407,9 @@ export function OverviewView({
           <ChartNoAxesCombined aria-hidden="true" />
           View analytics
         </Button>
-        <UpdatingStamp show={updating} />
+        <UpdatingStamp show={updating} className="sr-only md:not-sr-only md:inline-block md:min-w-[5.5rem]" />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
-
-      {showWelcome && (
-        <Card className="mb-4 flex items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 md:!py-3">
-          <Moki pose="welcome" size="small" loading="eager" />
-          <div className="min-w-0">
-            <p className="font-semibold">Welcome back!</p>
-            <p className="text-sm leading-snug text-muted-foreground">
-              Here&rsquo;s your money overview. Keep an eye on spending and stay on top of your budget.
-            </p>
-          </div>
-        </Card>
-      )}
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
         {layoutSections}

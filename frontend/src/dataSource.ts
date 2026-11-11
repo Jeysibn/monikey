@@ -1,3 +1,4 @@
+import type { ActivityFilters } from './lib/activityFilters.ts'
 import type {
   AccountsSnapshot,
   AnalyticsReport,
@@ -27,6 +28,8 @@ export interface ActivityQuery {
   month: string // "YYYY-MM"
   accountId: number | null // an entry matches if it uses the account (a card payment: either side)
   limit: number // rows to show; the source works out whether there are more
+  /** Search and filters, applied to the whole month before the limit (see lib/activityFilters.ts). Absent means none. */
+  filters?: ActivityFilters
 }
 
 export interface CategoryValues {

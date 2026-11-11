@@ -161,8 +161,8 @@ export function createMockSource({
 
     loadAnalytics: (query, signal) => read('analytics', `analytics:${query.startDate}:${query.endDate}:${query.accountId}`, signal, () => mockAnalytics(data, query)),
 
-    loadActivity: ({ month, accountId, limit }: ActivityQuery, signal): Promise<ActivityPage> =>
-      read('activity', `activity:${month}:${accountId}:${limit}`, signal, () => activityPage(data, month, accountId, limit)),
+    loadActivity: ({ month, accountId, limit, filters }: ActivityQuery, signal): Promise<ActivityPage> =>
+      read('activity', `activity:${month}:${accountId}:${limit}:${JSON.stringify(filters ?? null)}`, signal, () => activityPage(data, month, accountId, limit, filters)),
 
     loadAccountForEdit: async (id: number, signal: AbortSignal): Promise<AccountValues> =>
       read('account-edit', `account-edit:${id}`, signal, () => {

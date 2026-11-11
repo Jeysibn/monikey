@@ -18,6 +18,7 @@ import type {
   LedgerSnapshot,
   MockData,
 } from '../types.ts'
+import { activitySources, NO_ACTIVITY_FILTERS, searchMatches, type ActivityFilters } from './activityFilters.ts'
 import { amountText } from './money.ts'
 import { compareTimestamps } from './timestamp.ts'
 
@@ -360,9 +361,11 @@ export function kakeiboWeek(data: MockData, weekStart: string): KakeiboWeek {
  * `accountId` keeps entries that use that account (for a card payment, either side) and is applied
  * BEFORE the limit, as the API will do: filtering a capped list afterwards could drop matches.
  */
-export function buildActivity(data: MockData, month: string, limit?: number, accountId?: number | null): ActivityItem[] {
+export function buildActivity(data: MockData, month: string, limit?: number, accountId?: number | null, filters: ActivityFilters = NO_ACTIVITY_FILTERS): ActivityItem[] {
   const account = (id: number) => data.accounts.find((a) => a.id === id)
   const items: (ActivityItem & { createdAt: string })[] = []
+  // The same rules as the API, applied before the limit: a type, a category and a search over what a row shows.
+  const wanted = activitySources(filters)
 
   for (const t of data.transactions) {
     if (monthOf(t.date) !== month) continue
@@ -370,6 +373,9 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
     const category = data.categories.find((c) => c.id === t.categoryId)
     const acct = account(t.accountId)
     if (!category || !acct) continue
+    if (!wanted.transactions || (wanted.transactionKind !== null && category.type !== wanted.transactionKind)) continue
+    if (filters.categoryId !== null && t.categoryId !== filters.categoryId) continue
+    if (!searchMatches([t.note, category.name, acct.name], filters.search)) continue
     items.push({
       key: `t-${t.id}`,
       kind: category.type,
@@ -404,6 +410,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
     const source = account(p.sourceAccountId)
     const card = account(p.cardAccountId)
     if (!source || !card) continue
+    if (!wanted.payments || !searchMatches([p.note, source.name, card.name], filters.search)) continue
     items.push({
       key: `p-${p.id}`,
       kind: 'payment',
@@ -436,6 +443,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
     const source = account(transfer.sourceAccountId)
     const destination = account(transfer.destinationAccountId)
     if (!source || !destination) continue
+    if (!wanted.transfers || !searchMatches([transfer.note, source.name, destination.name], filters.search)) continue
     items.push({
       key: `x-${transfer.id}`,
       kind: 'transfer',
@@ -477,8 +485,9 @@ export function activityPage(
   month: string,
   accountId: number | null,
   limit: number,
+  filters: ActivityFilters = NO_ACTIVITY_FILTERS,
 ): { items: ActivityItem[]; hasMore: boolean } {
-  const rows = buildActivity(data, month, limit + 1, accountId)
+  const rows = buildActivity(data, month, limit + 1, accountId, filters)
   return { items: rows.slice(0, limit), hasMore: rows.length > limit }
 }
 

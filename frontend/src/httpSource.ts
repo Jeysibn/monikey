@@ -1,3 +1,4 @@
+import { activitySources, NO_ACTIVITY_FILTERS, normalizeSearch } from './lib/activityFilters.ts'
 import { ApiError, type ActivityQuery, type CategoryValues, type DataSource } from './dataSource.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
@@ -218,7 +219,7 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       return fromWireAnalytics(await getJson(urlWithQuery('/api/analytics', query), signal, fetcher), expected)
     },
 
-    async loadActivity({ month, accountId, limit }: ActivityQuery, signal) {
+    async loadActivity({ month, accountId, limit, filters = NO_ACTIVITY_FILTERS }: ActivityQuery, signal) {
       const requestLimit = Math.min(Math.max(1, limit) + 1, ACTIVITY_MAX_ROWS + 1)
       const transactionQuery = new URLSearchParams({ month, limit: String(requestLimit) })
       const paymentQuery = new URLSearchParams({ month, limit: String(requestLimit) })
@@ -228,10 +229,18 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
         paymentQuery.set('account_id', String(accountId))
         transferQuery.set('account_id', String(accountId))
       }
+      // Search and filters go to the server so they apply to the whole month before its limit. A type or a category
+      // rules some reads out entirely (a payment has no category), so those reads are skipped, not filtered afterwards.
+      const wanted = activitySources(filters)
+      const search = normalizeSearch(filters.search)
+      if (search !== '') for (const query of [transactionQuery, paymentQuery, transferQuery]) query.set('q', search)
+      if (filters.categoryId !== null && wanted.transactions) transactionQuery.set('category_id', String(positiveId(filters.categoryId)))
+      if (wanted.transactionKind !== null) transactionQuery.set('kind', wanted.transactionKind)
+      const none: Promise<unknown> = Promise.resolve([])
       const [transactionRows, paymentRows, transferRows, accountsSnapshot, categories] = await Promise.all([
-        getJson(urlWithQuery('/api/transactions', transactionQuery), signal, fetcher),
-        getJson(urlWithQuery('/api/credit-card-payments', paymentQuery), signal, fetcher),
-        getJson(urlWithQuery('/api/account-transfers', transferQuery), signal, fetcher),
+        wanted.transactions ? getJson(urlWithQuery('/api/transactions', transactionQuery), signal, fetcher) : none,
+        wanted.payments ? getJson(urlWithQuery('/api/credit-card-payments', paymentQuery), signal, fetcher) : none,
+        wanted.transfers ? getJson(urlWithQuery('/api/account-transfers', transferQuery), signal, fetcher) : none,
         accountsRead ?? readAccounts(signal),
         categoriesRead ?? readCategories(signal),
       ])

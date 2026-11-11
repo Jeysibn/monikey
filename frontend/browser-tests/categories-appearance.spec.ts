@@ -1,5 +1,11 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { hasRealApi } from './fixtures'
+
+// These specs create, edit and archive real categories, so they need the Compose stack; the mock source cannot persist them.
+test.beforeEach(async ({ request }) => {
+  test.skip(!(await hasRealApi(request)), 'Needs the real API and database (see README: Two environments).')
+})
 
 /*
  * Category appearance and lifecycle against the real stack (ADR-026): icon and color persist through the API

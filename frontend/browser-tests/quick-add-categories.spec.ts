@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { hasRealApi } from './fixtures'
+
+// These specs create, edit and archive real categories, so they need the Compose stack; the mock source cannot persist them.
+test.beforeEach(async ({ request }) => {
+  test.skip(!(await hasRealApi(request)), 'Needs the real API and database (see README: Two environments).')
+})
 
 async function apiJson(page: import('@playwright/test').Page, path: string) {
   const response = await page.request.get(path)

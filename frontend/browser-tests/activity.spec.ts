@@ -82,7 +82,8 @@ test('filters apply to the whole month BEFORE paging: an older match on a later 
 
   await page.getByLabel('Search activity').fill(`needle-${suffix}`)
   await expect(countLine(page)).toHaveText(/^3 matching entries/) // all three, found server-side, no "Load more" needed
-  for (const n of [1, 2, 3]) await expect(page.getByText(`needle-${suffix} ${n}`, { exact: true }).first()).toBeVisible()
+  // each row is in the page twice (a phone button and a desktop row), so look at the one that is shown
+  for (const n of [1, 2, 3]) await expect(page.getByText(new RegExp(`needle-${suffix} ${n}$`)).filter({ visible: true })).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0)
 
   // Changing a filter resets paging: Load more first, then filter, then reset => back to one page.
@@ -149,7 +150,7 @@ test('category filter lists an archived category that has history, labelled, and
   await expect(category.locator('option', { hasText: `QA Unused ${suffix}` })).toHaveCount(0) // no history: it could match nothing
   await category.selectOption({ label: `${name} (archived)` })
   await expect(countLine(page)).toHaveText(/^1 matching entry/)
-  await expect(page.getByText(`history ${suffix}`).first()).toBeVisible()
+  await expect(page.getByText(new RegExp(`history ${suffix}$`)).filter({ visible: true })).toHaveCount(1)
 })
 
 test('Edit and Delete keep working under filters, and a saved change that no longer matches says it is hidden', async ({ page, request }) => {

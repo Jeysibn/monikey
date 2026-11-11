@@ -182,3 +182,34 @@ Bugs found by the new tests and fixed: the artwork collapsed to a line inside th
 | Layout: drawer geometry at 320, 360, 390, 768, 1024, 1440 px; no horizontal overflow, no console errors | right-hand 440 px full-height panel from 768 px; bottom sheet below |
 
 Real-device checks for Accounts (iOS Safari, Android Chrome) are still open: the bottom sheet with the on-screen keyboard (search), card swipe and tap on the Overview deck, and drawer scrolling.
+
+## Phase 7 — Overview and Activity polish (local branch `feat/ui-redesign-overview-activity`, from the Accounts tip)
+
+Reference: [ACTIVITY_SEARCH_FILTERS.md](./ACTIVITY_SEARCH_FILTERS.md) (behavior, server contract, and the check that no ADR is required).
+
+**Overview** (every calculation, the hero, the wallet deck and swipe, card artwork and the Moki rules are unchanged):
+
+- **Hero first.** The "Welcome back!" panel moved from above the hero to below it, in a slot reserved at the panel's measured height at every width, so it appearing or disappearing during a refresh moves nothing (it still hides while data is loading, stale or failed, as the Moki rule requires). The "Updating…" stamp no longer reflows the header.
+- **Quick actions** directly under the hero: Add expense, Add income, Transfer, Pay card (opens on the card that owes the most; off with a reason when none owes). They open the existing Quick Add flow and wait for the accounts to load.
+- **Two balanced desktop columns:** Wallets with This month, and Recent activity with Credit cards (no more gap under a shorter card). Below 1024 px the order is unchanged.
+- Navigation unchanged and tested: View analytics, View all (Activity), View all accounts, and Open (the account details drawer). No Dashboard analytics were added to Overview.
+
+**Activity:** search (debounced, clear button, Escape), type and category filters with consistent combinations, archived categories with history, Reset filters, honest count labels, paging that restarts on any filter change, and filters applied by the server before the page limit. Backend: three read endpoints gained optional `q`, `category_id` and `kind` parameters (no migration).
+
+**Test isolation:** the Moki browser spec wrote three tracked reference screenshots every run. It now writes to `test-results/` unless run with `MONIKEY_UPDATE_BASELINES=1`. The approved baselines are unchanged.
+
+Bugs found by the new tests and fixed: a typed-then-Reset race that re-applied a pending search after the reset; the reserved welcome slot being shorter than the panel.
+
+### Phase 7 verification record (2026-11-12, local)
+
+| Check | Result |
+|---|---|
+| `tsc -b` / `oxlint` / `npm run build` | clean |
+| `npm test` | 395 tests, all pass (20 new for Activity filters) |
+| `backend/test.sh` | 99 passed (14 new for the filters; 85 before) |
+| `database/test.sh` | passes (no schema or migration change in this phase) |
+| Playwright, real API on a fresh DB: `dashboard` (fixture) first, then `activity`, `overview`, `accounts`, `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | see the final run below |
+| Playwright, mock mode | see the final run below |
+| axe WCAG 2.0 and 2.1 A and AA: Activity with filters and Overview, 320 to 1440 px | no violations |
+
+Real-device checks (iOS Safari, Android Chrome) stay open, now including the Activity search field with the on-screen keyboard and the Overview quick-action row.

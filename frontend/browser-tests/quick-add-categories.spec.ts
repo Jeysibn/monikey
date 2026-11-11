@@ -218,7 +218,8 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Activity' }).click()
-  await expect(page.getByText(renamedName, { exact: false }).first()).toBeVisible()
+  // The category name is shown on the entry's row (the filter's own category choices also contain it, so look in the list).
+  await expect(page.locator('main ul li').getByText(renamedName).filter({ visible: true }).first()).toBeVisible()
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.getByRole('button', { name: new RegExp(`Edit QA purchase ${suffix}`) }).click()
   await expect(page.getByRole('radio', { name: renamedName, exact: true })).toBeChecked()

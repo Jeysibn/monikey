@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 
 import { EmptyState } from '@/components/EmptyState'
+import { Moki } from '@/components/Moki'
 import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
@@ -141,6 +142,7 @@ export function ActivityView({
         filtered ? (
           <EmptyState
             message="Nothing matches these filters."
+            illustration={<Moki pose="searching" size="medium" />}
             action={
               <Button variant="secondary" onClick={() => onAccountChange(null)}>
                 Clear filters
@@ -150,6 +152,7 @@ export function ActivityView({
         ) : (
           <EmptyState
             message={`No activity in ${label}.`}
+            illustration={<Moki pose="resting" size="medium" />}
             action={
               <Button variant="secondary" onClick={onAdd} disabled={addBlocked(addState)}>
                 <Plus aria-hidden="true" />

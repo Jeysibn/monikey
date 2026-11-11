@@ -7,6 +7,7 @@ import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { WalletGrid } from '@/components/wallet/WalletGrid'
 import { WalletViewToggle, type WalletViewMode } from '@/components/wallet/WalletViewToggle'
 import { EmptyState } from '@/components/EmptyState'
+import { Moki } from '@/components/Moki'
 import { ErrorBlock, InlineFailure } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { PageHeader } from '@/components/PageHeader'
@@ -174,6 +175,7 @@ export function AccountsView({
               <EmptyState
                 className="rounded-card"
                 message="Add your first cash, bank, e-wallet or credit card account."
+                illustration={<Moki pose="emptyWallet" size="small" />}
                 action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
               />
             ) : (
@@ -212,6 +214,7 @@ export function AccountsView({
               ) : rows.length === 0 ? (
                 <EmptyState
                   message="Add your first cash, bank or e-wallet account."
+                  illustration={snapshot?.accounts.length === 0 ? <Moki pose="emptyWallet" size="small" /> : undefined}
                   action={<Button variant="secondary" onClick={() => onAddAccount('account')}>Add account</Button>}
                 />
               ) : (

@@ -17,7 +17,7 @@ export function StatusMessage({ note, onDismiss }: { note: StatusNote | null; on
   return (
     <div role="status" aria-live="polite">
       {note && (
-        <div className="mb-[18px] flex items-start gap-2 rounded-control bg-success-soft py-2 pr-1.5 pl-4 text-[0.9375rem] text-income-ink">
+        <div className="mb-[18px] flex items-center gap-2 rounded-control bg-success-soft py-2 pr-1.5 pl-3 text-[0.9375rem] text-income-ink">
           <p className="min-w-0 flex-1 py-1.5">
             {note.text}
             {note.action && (

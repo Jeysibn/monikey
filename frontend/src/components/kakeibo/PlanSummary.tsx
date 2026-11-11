@@ -3,6 +3,7 @@ import { Quote } from 'lucide-react'
 import { cn } from 'cn'
 
 import { InlineNotice } from '@/components/InlineNotice'
+import { Moki } from '@/components/Moki'
 import { MoneyText } from '@/components/MoneyText'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { monthLabel } from '@/lib/finance'
@@ -61,10 +62,13 @@ export function PlanSummary({ report }: { report: KakeiboMonth }) {
     return (
       <Card role="region" aria-labelledby="kakeibo-plan-title" className="min-w-0">
         <CardTitle id="kakeibo-plan-title" tabIndex={-1}>No plan for {label} yet</CardTitle>
-        <CardDescription>
-          A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
-          Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
-        </CardDescription>
+        <div className="mt-3 flex items-start gap-3">
+          <CardDescription className="min-w-0 flex-1">
+            A plan says how much you expect to earn, what you&rsquo;ll set aside first, and a limit for each envelope.
+            Use <span className="font-semibold text-foreground">Create plan</span> to start. You can skip it and keep tracking as usual.
+          </CardDescription>
+          <Moki pose="planning" size="small" />
+        </div>
         {recorded}
       </Card>
     )

@@ -4,6 +4,7 @@ import { cn } from 'cn'
 
 import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { EmptyState } from '@/components/EmptyState'
+import { Moki } from '@/components/Moki'
 import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
@@ -100,6 +101,15 @@ export function OverviewView({
   const recentWaiting = forcedLoading || (!recentRes.data && !recentRes.error)
   const positionLoading = summaryWaiting || snapshotWaiting
   const anyLoading = positionLoading || recentWaiting
+  const showWelcome =
+    Boolean(snapshot?.accounts.length) &&
+    !anyLoading &&
+    !accountsRes.error &&
+    !summaryRes.error &&
+    !recentRes.error &&
+    !accountsRes.stale &&
+    !summaryRes.stale &&
+    !recentRes.stale
   const updating = useDelayedFlag(summaryRes.stale || recentRes.stale || accountsRes.stale, 400)
   // DOM order follows the visual reading order at each responsive layout.
   const desktopLayout = useSyncExternalStore(subscribeToDesktopLayout, getDesktopLayout, () => false)
@@ -109,14 +119,19 @@ export function OverviewView({
       <ErrorBlock what="your summary" updatedAt={summaryRes.updatedAt} onRetry={summaryRes.retry} focusAfter="main h1" />
     </div>
   ) : !hasAccounts && !positionLoading ? (
-    <Card key="position" className="order-1 text-center lg:order-none lg:col-span-12">
-      <p className="text-lg font-semibold">
-        Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.
-      </p>
-      <Button className="mt-4" onClick={onAddAccount}>
-        <Plus aria-hidden="true" />
-        Add account
-      </Button>
+    <Card key="position" className="order-1 lg:order-none lg:col-span-12">
+      <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[112px_minmax(0,1fr)] sm:text-left">
+        <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" />
+        <div>
+          <p className="text-lg font-semibold">
+            Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.
+          </p>
+          <Button className="mt-4" onClick={onAddAccount}>
+            <Plus aria-hidden="true" />
+            Add account
+          </Button>
+        </div>
+      </div>
     </Card>
   ) : (
     <section
@@ -339,6 +354,18 @@ export function OverviewView({
         <UpdatingStamp show={updating} />
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
+
+      {showWelcome && (
+        <Card className="mb-4 flex items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 md:!py-3">
+          <Moki pose="welcome" size="small" loading="eager" />
+          <div className="min-w-0">
+            <p className="font-semibold">Welcome back!</p>
+            <p className="text-sm leading-snug text-muted-foreground">
+              Here&rsquo;s your money overview. Keep an eye on spending and stay on top of your budget.
+            </p>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
         {layoutSections}

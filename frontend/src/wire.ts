@@ -25,6 +25,7 @@ import type {
   LiquidAccountType,
 } from './types.ts'
 import { ENVELOPES, PLAN_MONEY_FIELDS, isMonday, parsePlanAmount, parseSavedDeclared } from './lib/kakeibo.ts'
+import { isCategoryColorKey } from './lib/categoryColors.ts'
 import { isCategoryIconKey } from './lib/categoryIconRegistry.ts'
 
 export type WireMoney = string
@@ -59,6 +60,10 @@ export interface WireCategory {
   is_archived?: boolean
   /** Nullable and absent from older servers. Unknown values safely resolve to no icon. */
   icon_key?: string | null
+  /** ADR-026. Nullable and absent from older servers. Unknown values safely resolve to the neutral color. */
+  color_key?: string | null
+  /** ADR-026. All-time count of transactions using the category; absent from older servers. */
+  usage_count?: number
 }
 
 export interface WireTransaction {
@@ -243,7 +248,17 @@ function parseCategory(value: unknown): Category {
   if (row.is_archived !== undefined && typeof row.is_archived !== 'boolean') throw contractError('category archive status')
   if (row.icon_key !== undefined && row.icon_key !== null && typeof row.icon_key !== 'string') throw contractError('category icon')
   const iconKey = isCategoryIconKey(row.icon_key) ? row.icon_key : null
-  return { id: id(row.id, 'category'), name, type, ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }), ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }), ...(row.icon_key === undefined ? {} : { iconKey }) }
+  if (row.color_key !== undefined && row.color_key !== null && typeof row.color_key !== 'string') throw contractError('category color')
+  const colorKey = isCategoryColorKey(row.color_key) ? row.color_key : null
+  if (row.usage_count !== undefined && (typeof row.usage_count !== 'number' || !Number.isSafeInteger(row.usage_count) || row.usage_count < 0)) throw contractError('category usage')
+  return {
+    id: id(row.id, 'category'), name, type,
+    ...(defaultEnvelope === undefined ? {} : { defaultEnvelope }),
+    ...(row.is_archived === undefined ? {} : { archived: row.is_archived === true }),
+    ...(row.icon_key === undefined ? {} : { iconKey }),
+    ...(row.color_key === undefined ? {} : { colorKey }),
+    ...(row.usage_count === undefined ? {} : { usageCount: row.usage_count }),
+  }
 }
 
 const CARD_PRODUCT_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -359,9 +374,10 @@ export function fromWireAnalytics(value: unknown, expected: { startDate: string;
     const item = record(value, 'analytics category')
     if (typeof item.archived !== 'boolean') throw contractError('analytics category archive status')
     if (item.icon_key !== null && item.icon_key !== undefined && typeof item.icon_key !== 'string') throw contractError('analytics category icon')
+    if (item.color_key !== null && item.color_key !== undefined && typeof item.color_key !== 'string') throw contractError('analytics category color')
     return {
       id: id(item.id, 'analytics category'), name: string(item.name, 'analytics category name'),
-      iconKey: isCategoryIconKey(item.icon_key) ? item.icon_key : null, archived: item.archived,
+      iconKey: isCategoryIconKey(item.icon_key) ? item.icon_key : null, colorKey: isCategoryColorKey(item.color_key) ? item.color_key : null, archived: item.archived,
       expenses: toCentavos(item.expenses, 'analytics category expenses'),
     }
   })
@@ -412,6 +428,7 @@ export function fromWireTransaction(value: unknown, accounts: AccountInfo[], cat
     title: note ?? category.name,
     categoryName: category.name,
     categoryIconKey: category.iconKey ?? null,
+    categoryColorKey: category.colorKey ?? null,
     accountName: account.name,
     accountType: account.type,
     cardName: null,

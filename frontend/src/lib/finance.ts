@@ -95,7 +95,7 @@ export function mockAnalytics(data: MockData, query: { startDate: string; endDat
     }),
     categories: [...categories].map(([id, expenses]) => {
       const category = data.categories.find((item) => item.id === id)!
-      return { id, name: category.name, iconKey: category.iconKey ?? null, archived: category.archived ?? false, expenses }
+      return { id, name: category.name, iconKey: category.iconKey ?? null, colorKey: category.colorKey ?? null, archived: category.archived ?? false, expenses }
     }).sort((a, b) => b.expenses - a.expenses || a.name.localeCompare(b.name)),
     kakeiboTotals: { ...envelopeTotals, unclassified },
     kakeibo: monthKeys.map((key) => {
@@ -325,6 +325,7 @@ export function buildActivity(data: MockData, month: string, limit?: number, acc
       title: t.note ?? category.name,
       categoryName: category.name,
       categoryIconKey: category.iconKey ?? null,
+      categoryColorKey: category.colorKey ?? null,
       accountName: acct.name,
       accountType: acct.type,
       cardName: null,

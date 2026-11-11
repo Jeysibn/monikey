@@ -44,6 +44,10 @@ export interface Category {
   defaultEnvelope?: KakeiboEnvelope | null
   /** Optional presentation metadata; unknown legacy values resolve to the default icon. */
   iconKey?: string | null
+  /** Optional curated color key (ADR-026); unknown legacy values resolve to the neutral color. */
+  colorKey?: string | null
+  /** All-time number of transactions that use this category; absent from servers that predate ADR-026. */
+  usageCount?: number
   /** Archived categories remain available for historical transaction labels. */
   archived?: boolean
 }
@@ -99,7 +103,7 @@ export interface AnalyticsReport {
   totals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos }
   previousTotals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos } | null
   months: { month: string; income: Centavos; expenses: Centavos }[]
-  categories: { id: number; name: string; iconKey: string | null; archived: boolean; expenses: Centavos }[]
+  categories: { id: number; name: string; iconKey: string | null; colorKey: string | null; archived: boolean; expenses: Centavos }[]
   kakeiboTotals: Record<KakeiboEnvelope | 'unclassified', Centavos>
   kakeibo: {
     month: string
@@ -140,6 +144,7 @@ export interface ActivityItem {
   title: string // note, or the category name when there is no note
   categoryName: string | null // null for payments
   categoryIconKey?: string | null
+  categoryColorKey?: string | null
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid

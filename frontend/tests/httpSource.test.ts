@@ -129,7 +129,7 @@ test('category management writes use the PR 1 contract and invalidate cached cat
   }
   const source = createHttpSource(fetcher)
   assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])
-  await source.createCategory({ name: 'Courses', type: 'expense', defaultEnvelope: 'culture', iconKey: 'shopping-basket' })
+  await source.createCategory({ name: 'Courses', type: 'expense', defaultEnvelope: 'culture', iconKey: 'shopping-basket', colorKey: 'teal' })
   await source.updateCategory(7, { name: 'Reading', defaultEnvelope: 'needs', iconKey: null })
   await source.setCategoryArchived(7, true)
   await source.deleteCategory(8)
@@ -137,7 +137,7 @@ test('category management writes use the PR 1 contract and invalidate cached cat
     ['/api/categories', 'GET'], ['/api/categories', 'POST'], ['/api/categories/7', 'PATCH'],
     ['/api/categories/7/archive', 'PATCH'], ['/api/categories/8', 'DELETE'],
   ])
-  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Courses', type: 'expense', default_kakeibo_envelope: 'culture', icon_key: 'shopping-basket' })
+  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { name: 'Courses', type: 'expense', default_kakeibo_envelope: 'culture', icon_key: 'shopping-basket', color_key: 'teal' })
   assert.deepEqual(JSON.parse(String(requests[2].init?.body)), { name: 'Reading', default_kakeibo_envelope: 'needs', icon_key: null })
   assert.deepEqual(JSON.parse(String(requests[3].init?.body)), { is_archived: true })
   assert.deepEqual(await source.loadCategories(signal()), [{ id: 7, name: 'Books', type: 'expense', defaultEnvelope: 'culture', archived: false }])

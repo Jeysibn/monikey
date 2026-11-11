@@ -24,14 +24,14 @@ const accounts: Account[] = [
 ]
 
 const categories: Category[] = [
-  { id: 1, name: 'Salary', type: 'income', iconKey: 'briefcase-business' },
-  { id: 2, name: 'Freelance', type: 'income', iconKey: 'briefcase-business' },
+  { id: 1, name: 'Salary', type: 'income', iconKey: 'briefcase-business', colorKey: 'green' },
+  { id: 2, name: 'Freelance', type: 'income', iconKey: 'briefcase-business', colorKey: 'teal' },
   { id: 3, name: 'Other', type: 'income' },
-  { id: 4, name: 'Food', type: 'expense', iconKey: 'utensils' },
-  { id: 5, name: 'Transportation', type: 'expense', iconKey: 'car-front' },
-  { id: 6, name: 'Groceries', type: 'expense', iconKey: 'shopping-basket' },
-  { id: 7, name: 'Bills', type: 'expense', iconKey: 'house' },
-  { id: 8, name: 'Shopping', type: 'expense', iconKey: 'shopping-bag' },
+  { id: 4, name: 'Food', type: 'expense', iconKey: 'utensils', colorKey: 'orange' },
+  { id: 5, name: 'Transportation', type: 'expense', iconKey: 'car-front', colorKey: 'blue' },
+  { id: 6, name: 'Groceries', type: 'expense', iconKey: 'shopping-basket', colorKey: 'green' },
+  { id: 7, name: 'Bills', type: 'expense', iconKey: 'house', colorKey: 'indigo' },
+  { id: 8, name: 'Shopping', type: 'expense', iconKey: 'shopping-bag', colorKey: 'pink' },
   { id: 9, name: 'Other', type: 'expense' },
 ]
 const defaultEnvelopes: Record<number, KakeiboEnvelope> = { 5: 'needs', 6: 'needs', 7: 'needs', 8: 'wants' }

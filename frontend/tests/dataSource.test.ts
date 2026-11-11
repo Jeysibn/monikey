@@ -95,8 +95,39 @@ describe('reads', () => {
   })
   it('the snapshot the forms use equals the one built from the ledger', async () => {
     const source = createMockSource()
-    const fromSource = { ...(await source.loadAccounts(signal)), categories: await source.loadCategories(signal) }
+    // usageCount is the one derived extra (ADR-026); the forms' snapshot is otherwise identical.
+    const categories = (await source.loadCategories(signal)).map(({ usageCount: _usage, ...rest }) => rest)
+    const fromSource = { ...(await source.loadAccounts(signal)), categories }
     assert.deepEqual(fromSource, buildSnapshot(getMockData()))
+  })
+  it('categories report their all-time usage count, including archived ones', async () => {
+    const source = createMockSource()
+    const data = getMockData()
+    const expected = (id: number) => data.transactions.filter((t) => t.categoryId === id).length
+    const counted = await source.loadCategories(signal)
+    for (const category of counted) assert.equal(category.usageCount, expected(category.id), category.name)
+    assert.ok(counted.some((c) => (c.usageCount ?? 0) > 0))
+    const used = counted.find((c) => (c.usageCount ?? 0) > 0)!
+    await source.setCategoryArchived(used.id, true)
+    assert.equal((await source.loadCategories(signal)).find((c) => c.id === used.id)?.usageCount, used.usageCount)
+  })
+})
+
+describe('category appearance writes', () => {
+  it('color persists, is kept when omitted, can be cleared, and never changes amounts or envelopes', async () => {
+    const source = createMockSource()
+    const before = await source.loadSummary(OCT, signal)
+    await source.createCategory({ name: 'Pets', type: 'expense', defaultEnvelope: 'wants', iconKey: 'paw-print', colorKey: 'purple' })
+    const created = (await source.loadCategories(signal)).find((c) => c.name === 'Pets')!
+    assert.equal(created.colorKey, 'purple')
+    assert.equal(created.usageCount, 0)
+    await source.updateCategory(created.id, { name: 'Pets & vet', defaultEnvelope: 'wants' }) // appearance omitted: unchanged
+    let again = (await source.loadCategories(signal)).find((c) => c.id === created.id)!
+    assert.deepEqual([again.iconKey, again.colorKey], ['paw-print', 'purple'])
+    await source.updateCategory(created.id, { name: 'Pets & vet', defaultEnvelope: 'wants', colorKey: null })
+    again = (await source.loadCategories(signal)).find((c) => c.id === created.id)!
+    assert.equal(again.colorKey, null)
+    assert.deepEqual(await source.loadSummary(OCT, signal), before)
   })
 })
 

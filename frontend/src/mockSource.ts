@@ -116,7 +116,12 @@ export function createMockSource({
         return { accounts, liquid, cards }
       }),
 
-    loadCategories: (signal): Promise<Category[]> => read('categories', 'categories', signal, () => data.categories),
+    // Like the API, each category carries its all-time transaction count (one pass over the transactions, no per-row lookups).
+    loadCategories: (signal): Promise<Category[]> => read('categories', 'categories', signal, () => {
+      const used = new Map<number, number>()
+      for (const t of data.transactions) used.set(t.categoryId, (used.get(t.categoryId) ?? 0) + 1)
+      return data.categories.map((c) => ({ ...c, usageCount: used.get(c.id) ?? 0 }))
+    }),
 
     createCategory: async (values: CategoryValues): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'name')
@@ -125,7 +130,7 @@ export function createMockSource({
       if (data.categories.some((c) => c.type === values.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
       if (values.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
       const id = Math.max(0, ...data.categories.map((c) => c.id)) + 1
-      data = { ...data, categories: [...data.categories, { id, name, type: values.type, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey, archived: false }] }
+      data = { ...data, categories: [...data.categories, { id, name, type: values.type, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey, colorKey: values.colorKey, archived: false }] }
     },
 
     updateCategory: async (id, values): Promise<void> => {
@@ -136,7 +141,7 @@ export function createMockSource({
       if (!name) throw new ApiError(422, 'invalid_field', 'Category name cannot be empty.', 'name')
       if (data.categories.some((c) => c.id !== id && c.type === current.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
       if (current.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
-      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, name, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey === undefined ? c.iconKey : values.iconKey } : c) }
+      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, name, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey === undefined ? c.iconKey : values.iconKey, colorKey: values.colorKey === undefined ? c.colorKey : values.colorKey } : c) }
     },
 
     setCategoryArchived: async (id, archived): Promise<void> => {

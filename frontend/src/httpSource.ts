@@ -186,12 +186,12 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     },
 
     async createCategory(values: CategoryValues) {
-      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey })
+      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey, color_key: values.colorKey })
       categoriesRead = null
     },
 
     async updateCategory(id, values) {
-      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey })
+      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey, color_key: values.colorKey })
       categoriesRead = null
     },
 

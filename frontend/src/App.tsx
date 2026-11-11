@@ -5,6 +5,7 @@ import { AddAccountDialog } from '@/components/AddAccountDialog'
 import { EditAccountDialog } from '@/components/EditAccountDialog'
 import { ClassifyDialog } from '@/components/kakeibo/ClassifyDialog'
 import { KakeiboPlanDialog } from '@/components/kakeibo/KakeiboPlanDialog'
+import { AccountDetailsContext, type AccountDetailsServices } from '@/components/accounts/accountDetailsContext'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
@@ -12,6 +13,7 @@ import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
 import type { DataSource } from '@/dataSource'
 import { accountSavedMessage, accountUpdatedMessage, type AccountValues } from '@/lib/accountForm'
 import { describeWriteError } from '@/lib/apiErrors'
+import { loadRecentAccountActivity } from '@/lib/accountActivity'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthLabel, monthOf, nextPageSize } from '@/lib/finance'
@@ -226,6 +228,18 @@ function App() {
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'expense', null, accountId) })
   }
+  /** Account details "Add income": Quick Add on this account, as income. */
+  const openIncomeOn = (accountId: number) => {
+    if (!snapshot) return
+    rememberOpener()
+    setSession({ mode: 'add', values: startEntry(snapshot, 'income', null, accountId) })
+  }
+  /** Account details "View all in Activity": this month's Activity, filtered to the account. */
+  const viewActivityFor = (accountId: number) => {
+    setAccountFilter(accountId)
+    setMonth(monthOf(source.today))
+    setView('activity')
+  }
   const openPay = (cardId: number) => {
     if (!snapshot) return
     rememberOpener()
@@ -400,6 +414,17 @@ function App() {
     setStatus({ text: `${count} ${noun} ${envelope === null ? 'cleared' : `moved to ${envelopeLabel(envelope)}`}. Balances and totals are unchanged.` })
     setClassifyMonth(null)
   }
+  // The account details panel (Accounts grid and list, Overview deck) acts through these existing flows.
+  const accountDetails: AccountDetailsServices = {
+    version,
+    loadRecent: (accountId, signal) => loadRecentAccountActivity(source, source.today, accountId, signal),
+    onAddExpense: openExpenseOn,
+    onAddIncome: openIncomeOn,
+    onTransfer: openTransferFrom,
+    onPayCard: openPay,
+    onEdit: editAccount,
+    onViewActivity: viewActivityFor,
+  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -407,7 +432,7 @@ function App() {
   }
 
   return (
-    <>
+    <AccountDetailsContext.Provider value={accountDetails}>
       <AppShell view={view} onNavigate={setView} onAdd={openAdd} addState={addState}>
         <StatusMessage note={status} onDismiss={() => setStatus(null)} />
         {categories.error && view !== 'categories' && (
@@ -573,7 +598,7 @@ function App() {
           />
         </>
       )}
-    </>
+    </AccountDetailsContext.Provider>
   )
 }
 

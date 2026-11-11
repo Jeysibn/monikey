@@ -81,8 +81,12 @@ function DialogContent({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
-  /** "wide": a near-full-height phone sheet and a 580px desktop dialog, for long forms such as Add/Edit Transaction. */
-  size?: "default" | "wide"
+  /**
+   * "wide": a near-full-height phone sheet and a 580px desktop dialog, for long forms such as Add/Edit Transaction.
+   * "drawer": the same near-full-height sheet on phones and a full-height 440px panel on the right from 768px, for
+   * read-and-act details such as an account.
+   */
+  size?: "default" | "wide" | "drawer"
 }) {
   const wide = size === "wide"
   const viewportHeight = useVisualViewportHeight(wide)
@@ -92,9 +96,14 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex w-full flex-col overflow-hidden rounded-t-sheet bg-card text-card-foreground shadow-float outline-none",
-          "md:inset-auto md:top-1/2 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-sheet",
-          wide ? "max-h-[95dvh] md:max-h-[min(92dvh,900px)] md:w-[580px]" : "max-h-[92dvh] md:w-[500px]",
+          "fixed z-50 flex flex-col overflow-hidden bg-card text-card-foreground shadow-float outline-none",
+          // Position and shape per size (classes are composed, not overridden: there is no class merging here).
+          size === "drawer"
+            ? "inset-x-0 bottom-0 max-h-[95dvh] w-full rounded-t-sheet md:inset-x-auto md:inset-y-0 md:right-0 md:h-dvh md:max-h-none md:w-[440px] md:max-w-full md:rounded-t-none md:rounded-l-sheet"
+            : cn(
+                "inset-x-0 bottom-0 w-full rounded-t-sheet md:inset-auto md:top-1/2 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-sheet",
+                wide ? "max-h-[95dvh] md:max-h-[min(92dvh,900px)] md:w-[580px]" : "max-h-[92dvh] md:w-[500px]",
+              ),
           className
         )}
         style={wide && viewportHeight ? { maxHeight: `${Math.floor(viewportHeight * 0.95)}px`, ...style } : style}

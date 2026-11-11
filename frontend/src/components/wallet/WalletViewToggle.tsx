@@ -5,12 +5,14 @@ export type WalletViewMode = 'cards' | 'list'
 export function WalletViewToggle({
   value,
   onChange,
+  className = 'mb-4 flex justify-end gap-2',
 }: {
   value: WalletViewMode
   onChange: (mode: WalletViewMode) => void
+  className?: string
 }) {
   return (
-    <div role="group" aria-label="Account display" className="mb-4 flex justify-end gap-2">
+    <div role="group" aria-label="Account display" className={className}>
       <button
         type="button"
         aria-pressed={value === 'cards'}

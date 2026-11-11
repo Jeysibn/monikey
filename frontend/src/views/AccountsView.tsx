@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 
 import { AccountRow } from '@/components/AccountRow'
 import { CreditCardSummary } from '@/components/CreditCardSummary'
 import { WalletGrid } from '@/components/wallet/WalletGrid'
-import { WalletViewToggle, type WalletViewMode } from '@/components/wallet/WalletViewToggle'
+import { AccountDetailsDrawer } from '@/components/accounts/AccountDetailsDrawer'
+import { AccountsToolbar } from '@/components/accounts/AccountsToolbar'
+import type { WalletViewMode } from '@/components/wallet/WalletViewToggle'
 import { EmptyState } from '@/components/EmptyState'
 import { Moki } from '@/components/Moki'
 import { ErrorBlock, InlineFailure } from '@/components/ErrorBlock'
@@ -13,6 +15,7 @@ import { MoneyText } from '@/components/MoneyText'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
+import { accountEntries, arrangeAccounts, readAccountsPrefs, writeAccountsPrefs, type AccountsViewPrefs } from '@/lib/accountsView'
 import type { Resource } from '@/useResource'
 import type { AccountsSnapshot, AddState, FinancialSummary } from '@/types'
 import { buildWalletGalleryModel } from '@/wallet/walletModel'
@@ -59,7 +62,17 @@ export function AccountsView({
   onTransfer: () => void
   walletPreferences: WalletPreferencesV1
 }) {
-  const [displayMode, setDisplayMode] = useState<WalletViewMode>('cards')
+  // The display mode, type filter and sort are presentation choices kept in this browser; the search is not.
+  const [prefs, setPrefs] = useState<AccountsViewPrefs>(() => readAccountsPrefs())
+  const [query, setQuery] = useState('')
+  const [detailsId, setDetailsId] = useState<number | null>(null)
+  const detailsOpener = useRef<HTMLElement | null>(null)
+  const displayMode: WalletViewMode = prefs.mode
+  const update = (patch: Partial<Omit<AccountsViewPrefs, 'version'>>) => {
+    const next = { ...prefs, ...patch }
+    setPrefs(next)
+    writeAccountsPrefs(next)
+  }
   const snapshot = accountsRes.data
   // Until the accounts have arrived the first-run question cannot be answered, so assume an account exists.
   const hasAccounts = snapshot ? snapshot.accounts.length > 0 : true
@@ -68,6 +81,18 @@ export function AccountsView({
   const cards = snapshot?.cards ?? []
   const wallet = snapshot ? buildWalletGalleryModel(snapshot, walletPreferences) : { liquid: [], cards: [] }
   const allWalletCards = [...wallet.liquid, ...wallet.cards]
+  // Search, type filter and sort decide which accounts show and in what order, in both display modes.
+  const entries = useMemo(() => (snapshot ? accountEntries(snapshot) : []), [snapshot])
+  const arranged = arrangeAccounts(entries, { query, type: prefs.type, sort: prefs.sort })
+  const position = new Map(arranged.map((entry, index) => [entry.id, index]))
+  const arrangedBy = <T,>(items: readonly T[], idOf: (item: T) => number): T[] => items.filter((item) => position.has(idOf(item))).sort((a, b) => position.get(idOf(a))! - position.get(idOf(b))!)
+  const shownCards = arrangedBy(allWalletCards, (card) => card.accountId)
+  const shownRows = arrangedBy(rows, (row) => row.account.id)
+  const shownCreditCards = arrangedBy(cards, (card) => card.account.id)
+  const filteredOut = entries.length > 0 && arranged.length === 0
+  const resetFilters = () => { setQuery(''); update({ type: 'all' }) }
+  const openDetails = (accountId: number, from: HTMLElement) => { detailsOpener.current = from; setDetailsId(accountId) }
+  const detailsItem = detailsId === null ? null : allWalletCards.find((card) => card.accountId === detailsId) ?? null
   // Two requests feed this screen, and each failure is shown for what it affects and with its own time: the accounts
   // (the rows and cards) fail both sections; the summary (the two totals) fails only the totals, next to rows that loaded.
   const accountsFailed = accountsRes.error !== null
@@ -116,14 +141,27 @@ export function AccountsView({
         </Button>
       </div>
 
-      <WalletViewToggle value={displayMode} onChange={setDisplayMode} />
+      {snapshot && entries.length > 0 && (
+        <AccountsToolbar
+          query={query}
+          onQuery={setQuery}
+          type={prefs.type}
+          onType={(type) => update({ type })}
+          sort={prefs.sort}
+          onSort={(sort) => update({ sort })}
+          mode={displayMode}
+          onMode={(mode) => update({ mode })}
+          shown={arranged.length}
+          total={entries.length}
+        />
+      )}
 
       {displayMode === 'cards' ? (
         <div className="grid grid-cols-1 gap-4 md:gap-5">
           {/* Net position banner: both totals side by side. Available credit is never part of either. */}
           <Card>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <CardTitle id="net-position-title" tabIndex={-1}>Net position</CardTitle>
+              <CardTitle id="net-position-title" tabIndex={-1}>Net position <span className="text-sm font-medium text-muted-foreground">as of today</span></CardTitle>
               {totalsLoading ? (
                 <Bar className="h-7 w-36" />
               ) : summaryFailed ? (
@@ -155,7 +193,7 @@ export function AccountsView({
               </div>
             </dl>
             <CardDescription className="mt-3 mb-0">
-              Available credit isn&rsquo;t cash and isn&rsquo;t part of your total money.
+              Money you have minus what you owe. Available credit isn&rsquo;t cash and isn&rsquo;t part of your total money.
             </CardDescription>
           </Card>
 
@@ -171,6 +209,12 @@ export function AccountsView({
                   <li key={i}><Bar className="aspect-[1.586/1] w-full rounded-[18px]" /></li>
                 ))}
               </ul>
+            ) : filteredOut ? (
+              <EmptyState
+                className="rounded-card"
+                message="No accounts match your search or filter."
+                action={<Button variant="secondary" onClick={resetFilters}>Show all accounts</Button>}
+              />
             ) : allWalletCards.length === 0 ? (
               <EmptyState
                 className="rounded-card"
@@ -180,7 +224,7 @@ export function AccountsView({
               />
             ) : (
               <WalletGrid
-                items={allWalletCards}
+                items={shownCards}
                 onEdit={onEditAccount}
                 onPayCard={onPayCard}
               />
@@ -211,6 +255,8 @@ export function AccountsView({
                     </li>
                   ))}
                 </ul>
+              ) : rows.length > 0 && shownRows.length === 0 ? (
+                <p className="py-4 text-sm text-muted-foreground">No cash, bank or e-wallet accounts match your search or filter.</p>
               ) : rows.length === 0 ? (
                 <EmptyState
                   message="Add your first cash, bank or e-wallet account."
@@ -219,8 +265,8 @@ export function AccountsView({
                 />
               ) : (
                 <ul>
-                  {rows.map((item) => (
-                    <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} />
+                  {shownRows.map((item) => (
+                    <AccountRow key={item.account.id} item={item} onEdit={onEditAccount} onDetails={openDetails} />
                   ))}
                 </ul>
               )}
@@ -276,6 +322,9 @@ export function AccountsView({
             ))
           ) : (
             <>
+              {cards.length > 0 && shownCreditCards.length === 0 && (
+                <p className="rounded-card border border-border bg-card p-4 text-sm text-muted-foreground">No credit cards match your search or filter.</p>
+              )}
               {cards.length === 0 && (
                 <EmptyState
                   className="rounded-card"
@@ -283,9 +332,9 @@ export function AccountsView({
                   action={<Button variant="secondary" onClick={() => onAddAccount('credit card')}>Add credit card</Button>}
                 />
               )}
-              {cards.map((status) => (
+              {shownCreditCards.map((status) => (
                 <Card key={status.account.id}>
-                  <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} fullWidthPay className="py-0 first:pt-0" />
+                  <CreditCardSummary status={status} onPay={onPayCard} onEdit={onEditAccount} onDetails={openDetails} fullWidthPay className="py-0 first:pt-0" />
                 </Card>
               ))}
               {cards.length > 0 && (
@@ -304,6 +353,17 @@ export function AccountsView({
         )}
       </div>
       )}
+
+      {/* The list's details panel; the card gallery opens the same panel from the card itself. */}
+      <AccountDetailsDrawer
+        item={detailsItem}
+        onClose={() => setDetailsId(null)}
+        onClosed={(event) => {
+          event.preventDefault()
+          const target = detailsOpener.current?.isConnected ? detailsOpener.current : document.querySelector<HTMLElement>('main h1')
+          target?.focus()
+        }}
+      />
     </div>
   )
 }

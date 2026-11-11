@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import { MONIKEY_DEFAULT_ARTWORK_PATH } from '@/wallet/artworkCatalog'
 import { faceFigure, usedShare, type WalletCardVM } from '@/wallet/walletModel'
-import { WalletCardDetailsContent } from './WalletCardDetailsDialog'
+import { AccountDetailsContent } from '@/components/accounts/AccountDetailsContent'
 
 function AccountCardActions({
   item,
@@ -196,7 +196,7 @@ export function WalletCard({
           </div>
         </article>
       </li>
-      <WalletCardDetailsContent item={item} imageSrc={imageSrc} onImageError={imageFailed} />
+      <AccountDetailsContent item={item} imageSrc={imageSrc} onImageError={imageFailed} onClose={() => setDetailsOpen(false)} />
     </Dialog>
   )
 }

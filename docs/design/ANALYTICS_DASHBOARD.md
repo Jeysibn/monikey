@@ -9,7 +9,7 @@ Dashboard is the analysis page, separate from Overview (ADR-024). It is drawn wi
 | **Reporting Month** (a month picker, current month by default) | The four KPI cards, the income-versus-expenses columns (six months ending at the picked month), and the monthly Kakeibo plan versus actual | The analysis range, its account filter, or chart sorting |
 | **Analysis range** (presets or a custom inclusive range, plus an account filter) | Spending by category, daily spending, weekday averages, daily Kakeibo spending and the insights | The Reporting Month |
 
-Each scope reads its own report from the server, so one can never move the other's figures. This is tested (unit, backend and browser). The current month is *month to date* and is labelled and hatched as such.
+**The account filter belongs to the Analysis range only.** The monthly KPIs, the monthly columns and the monthly Kakeibo plan versus actual always cover **all accounts** for the Reporting Month, and the section says so with an "All accounts" label. The analysis states when it is filtered ("Main Savings only"). Each scope reads its own report from the server, so one can never move the other's figures. This is tested (unit, backend and browser). The current month is *month to date* and is labelled and hatched as such.
 
 Analysis presets: this month, last month, last 7 days, last 30 days, last 3 months (this month through today plus the two before), this year, custom. The end date may not be after today (Manila). A range must be valid and at most 366 days; invalid ranges are explained on screen and are never sent.
 

@@ -41,10 +41,12 @@ export function ReportingSection({ today, source, version }: { today: string; so
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <h2 id="dashboard-reporting-title" className="text-lg leading-[1.3] font-semibold tracking-[-0.01em] md:text-xl">Monthly financial summary</h2>
-          <p className="text-sm text-muted-foreground">Calendar months only. It follows the month you pick here, not the analysis range below.</p>
+          <p className="text-sm text-muted-foreground">Calendar months only. It follows the month you pick here, not the analysis range or account filter below.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <MonthSelect id="dashboard-month" value={month} options={monthOptions(today, 24)} onChange={setMonth} />
+          {/* The monthly figures always cover every account; the account filter below belongs to the analysis only. */}
+          <span data-scope="all-accounts" className="rounded-full border border-border bg-card px-3 py-1.5 text-sm font-semibold">All accounts</span>
           {mtd && <span className="rounded-full bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground">Month to date, through {formatDateLong(through)}</span>}
         </div>
       </div>

@@ -1059,22 +1059,51 @@ def update_category_envelope_default(
     return row
 
 
+# Activity search and filters (additive, optional query parameters on the three Activity reads). They are applied
+# in SQL, before ORDER BY and LIMIT, so a filtered page is the newest matching rows of the whole month and never
+# a filter over rows that happened to be loaded.
+ActivitySearch = Annotated[str | None, Query(max_length=80, description="Case-insensitive text to find")]
+
+
+def like_pattern(value: str | None) -> str | None:
+    """'%text%' for ILIKE ... ESCAPE '\\' with the person's own % and _ and \\ matched literally; None for a blank search."""
+    text = " ".join((value or "").split())
+    if not text:
+        return None
+    return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 @app.get("/api/transactions")
 def list_transactions(
     month: str,
     account_id: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=1001)] = 50,
+    category_id: Annotated[int | None, Query(ge=1)] = None,
+    kind: Literal["income", "expense"] | None = None,
+    q: ActivitySearch = None,
 ) -> list[dict[str, object]]:
     start_date, end_date = month_bounds(month)
     query = """
         SELECT t.id, t.account_id, t.category_id, t.amount, t.transaction_date, t.note, t.kakeibo_envelope, t.created_at
         FROM transactions AS t
+        JOIN categories AS c ON c.id = t.category_id
+        JOIN accounts AS a ON a.id = t.account_id
         WHERE t.transaction_date >= %s AND t.transaction_date < %s
     """
     parameters: list[object] = [start_date, end_date]
     if account_id is not None:
         query += " AND t.account_id = %s"
         parameters.append(account_id)
+    if category_id is not None:
+        query += " AND t.category_id = %s"
+        parameters.append(category_id)
+    if kind is not None:
+        query += " AND c.type = %s"
+        parameters.append(kind)
+    pattern = like_pattern(q)
+    if pattern is not None:  # what a row shows: its note, its category and its account
+        query += " AND (t.note ILIKE %s ESCAPE '\\' OR c.name ILIKE %s ESCAPE '\\' OR a.name ILIKE %s ESCAPE '\\')"
+        parameters.extend((pattern, pattern, pattern))
     query += " ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC LIMIT %s"
     parameters.append(limit)
     with open_connection() as connection:
@@ -1189,17 +1218,24 @@ def list_payments(
     month: str,
     account_id: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=1001)] = 50,
+    q: ActivitySearch = None,
 ) -> list[dict[str, object]]:
     start_date, end_date = month_bounds(month)
     query = """
         SELECT p.id, p.source_account_id, p.card_account_id, p.amount, p.payment_date, p.note, p.created_at
         FROM credit_card_payments AS p
+        JOIN accounts AS source ON source.id = p.source_account_id
+        JOIN accounts AS card ON card.id = p.card_account_id
         WHERE p.payment_date >= %s AND p.payment_date < %s
     """
     parameters: list[object] = [start_date, end_date]
     if account_id is not None:
         query += " AND (p.source_account_id = %s OR p.card_account_id = %s)"
         parameters.extend((account_id, account_id))
+    pattern = like_pattern(q)
+    if pattern is not None:  # its note and both accounts it shows
+        query += " AND (p.note ILIKE %s ESCAPE '\\' OR source.name ILIKE %s ESCAPE '\\' OR card.name ILIKE %s ESCAPE '\\')"
+        parameters.extend((pattern, pattern, pattern))
     query += " ORDER BY p.payment_date DESC, p.created_at DESC, p.id DESC LIMIT %s"
     parameters.append(limit)
     with open_connection() as connection:
@@ -1258,18 +1294,25 @@ def list_transfers(
     month: str,
     account_id: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=1001)] = 50,
+    q: ActivitySearch = None,
 ) -> list[dict[str, object]]:
     start_date, end_date = month_bounds(month)
     query = """
-        SELECT id, source_account_id, destination_account_id, amount, transfer_date, note, created_at
-        FROM account_transfers
-        WHERE transfer_date >= %s AND transfer_date < %s
+        SELECT x.id, x.source_account_id, x.destination_account_id, x.amount, x.transfer_date, x.note, x.created_at
+        FROM account_transfers AS x
+        JOIN accounts AS source ON source.id = x.source_account_id
+        JOIN accounts AS destination ON destination.id = x.destination_account_id
+        WHERE x.transfer_date >= %s AND x.transfer_date < %s
     """
     parameters: list[object] = [start_date, end_date]
     if account_id is not None:
-        query += " AND (source_account_id = %s OR destination_account_id = %s)"
+        query += " AND (x.source_account_id = %s OR x.destination_account_id = %s)"
         parameters.extend((account_id, account_id))
-    query += " ORDER BY transfer_date DESC, created_at DESC, id DESC LIMIT %s"
+    pattern = like_pattern(q)
+    if pattern is not None:  # its note and both accounts it shows
+        query += " AND (x.note ILIKE %s ESCAPE '\\' OR source.name ILIKE %s ESCAPE '\\' OR destination.name ILIKE %s ESCAPE '\\')"
+        parameters.extend((pattern, pattern, pattern))
+    query += " ORDER BY x.transfer_date DESC, x.created_at DESC, x.id DESC LIMIT %s"
     parameters.append(limit)
     with open_connection() as connection:
         rows = connection.execute(query, parameters).fetchall()

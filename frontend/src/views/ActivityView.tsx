@@ -198,7 +198,7 @@ export function ActivityView({
           </p>
           <div className="flex items-center gap-x-3">
             <UpdatingStamp show={updating} />
-            {filtered && (
+            {filtered && items.length > 0 && ( // with no results the empty state below has its own Reset filters
               <Button variant="link" className="min-h-11 px-0" onClick={onReset}>
                 Reset filters
               </Button>

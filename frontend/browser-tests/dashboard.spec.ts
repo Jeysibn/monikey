@@ -155,6 +155,7 @@ test('category sorting, the Kakeibo plan versus actual and the daily envelope ta
   await useOctoberLedger(page, request, baseURL)
   const categories = page.getByRole('region', { name: 'Spending by category' })
   const names = async () => (await categories.getByRole('list', { name: 'Categories' }).locator('li').allInnerTexts()).map((t) => t.split('\n')[0]!.trim())
+  await expect(categories.getByRole('list', { name: 'Categories' }).locator('li').first()).toBeVisible() // wait for the real API to answer
   expect((await names())[0]).toBe('Bills') // highest first
   await page.getByLabel('Sort categories by').selectOption('low')
   expect((await names())[0]).toBe('Transportation')
@@ -203,7 +204,8 @@ test('a bad analysis range is explained and never requested', async ({ page, req
   // A range longer than 366 days is refused in words too.
   await page.getByLabel('Analysis start date').fill('2025-01-01')
   await expect(page.getByRole('alert').filter({ hasText: '366 days' })).toBeVisible()
-  if (FIXTURE) expect(analytics.filter((url) => url.includes('start_date=2025-01-01') || url.includes('start_date=2026-10-20'))).toEqual([])
+  // Only a range that cannot be valid must never reach the server: 20 Oct to 25 Oct (typed first) is fine to request.
+  if (FIXTURE) expect(analytics.filter((url) => url.includes('start_date=2025-01-01') || url.includes('end_date=2026-10-10'))).toEqual([])
 })
 
 test('Dashboard reports no saved plan honestly for the no-plan fixture', async ({ page, request }) => {

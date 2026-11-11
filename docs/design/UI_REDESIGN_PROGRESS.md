@@ -121,3 +121,32 @@ Kakeibo now links to Categories ("Manage category defaults"). The DataSource `se
 Test stabilisation done in this phase: `overview-dashboard.spec.ts` no longer depends on accounts left by earlier specs (`browser-tests/fixtures.ts` seeds its own), and specs that run axe on a freshly loaded page ask for reduced motion, because axe sometimes sampled the header Add button halfway through its 150 ms colour fade (a measurement artifact, reproduced at 2 in 30 loads before and 0 in 60 after).
 
 Real-device checks for Kakeibo (iOS Safari, Android Chrome) are still open: tab keyboard and touch behaviour, the folded plan details, the reflection dialogs with the on-screen keyboard.
+
+## Phase 5 — Dashboard (local branch `feat/ui-redesign-dashboard`, from the Kakeibo tip)
+
+Decision recorded first: **ADR-025 accepted with native SVG** (no Recharts or any charting library); see `docs/architecture/ADR.md` and the measurements in `docs/architecture/proposed/ADR-025-FEASIBILITY-recharts-measurements.md`. Audit and gap list: `docs/design/DASHBOARD_GAP_ANALYSIS.md`. Behavior and API reference: `docs/design/ANALYTICS_DASHBOARD.md`.
+
+Implemented:
+
+- **Two independent scopes.** Reporting Month (KPIs, six-month columns, Kakeibo plan versus actual) and Analysis range (category, daily, weekday, daily Kakeibo, insights) have separate state and separate requests; the account filter belongs to the analysis only.
+- **Monthly section:** four KPI cards (total income, total expenses, surplus or deficit, expense-to-income ratio, "Not available" without income), income-versus-expenses columns with the current month hatched and labelled month to date, Kakeibo plan versus actual with limit ticks and "Over by" in words, unclassified shown apart, savings targets stated as goals.
+- **Analysis section:** presets (this month, last month, 7 days, 30 days, 3 months, this year, custom) validated before any request; spending by category (donut, sortable highest, lowest, A to Z, archived labelled); daily spending including zero-spend days; weekday averages by occurrence count; daily Kakeibo spending (stacked, unclassified included); insights (average daily, expense transactions, highest day, zero-spend days, top category).
+- **Backend** (`/api/analytics`, no migration): per-month `surplus`, `expense_to_income_percent`, `complete`; opt-in `detail=true` adding `daily`, `weekdays`, `insights`; future end dates rejected.
+- **Frontend:** native SVG primitives and tested chart maths; a data table, keyboard readout and legend for every chart; per-section loading, empty and error states; an error boundary around the lazy Dashboard.
+- **Bundle:** the Dashboard chunk is 27.99 kB (9.09 kB gzip) for all six charts and their tables, against 13.49 kB (3.81 kB gzip) before; the entry bundle grew from 160.47 to 161.41 kB gzip.
+- **Bugs found by the new tests and fixed:** a scrollable data table that a keyboard could not reach (now only scrolls, labelled and focusable, while visible); the lazy-chunk retry (a cached failed import needs a reload).
+
+### Phase 5 verification record (2026-11-12, local)
+
+| Check | Result |
+|---|---|
+| `tsc -b` / `oxlint` / `npm run build` | clean |
+| `npm test` | 358 tests, all pass (26 new for the contract and mock parity, 15 for chart maths and ranges) |
+| `backend/test.sh` | 85 passed (16 new analytics tests; 69 before) |
+| Playwright, real API on a fresh DB, `MONIKEY_DASHBOARD_API_FIXTURE=1`: `dashboard`, `overview-dashboard` | 11 pass, 2 skipped (mock-only scenarios) |
+| Playwright, real stack: `kakeibo`, `categories*`, `navigation`, `quick-add*` | 20 of 20 pass |
+| Playwright, mock mode: `dashboard`, `moki`, `navigation`, `overview-dashboard`, `kakeibo` | 27 pass, 2 skipped by design |
+| Accessibility: axe WCAG 2.0 and 2.1 A and AA at 320, 390 and 1440 px, data tables closed and open | no violations |
+| Manual scripted check, Chromium emulation, 320, 360, 390, 768, 1024, 1440 px | no horizontal overflow, no console errors |
+
+Real-device checks for the Dashboard (iOS Safari, Android Chrome) are still open: chart touch reading, the custom date inputs, the data tables with the on-screen keyboard.

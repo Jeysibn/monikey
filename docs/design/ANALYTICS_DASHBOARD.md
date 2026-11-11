@@ -1,32 +1,57 @@
 # Analytics Dashboard
 
-Dashboard is a separate analysis page. Overview remains the default home for current account position, recent activity, and next actions. Dashboard uses bounded server aggregates; it does not derive financial totals from paginated Activity rows.
+Dashboard is the analysis page, separate from Overview (ADR-024). It is drawn with native SVG and CSS, with no charting library (ADR-025). Overview stays the home for current balances and next actions.
 
-## Data request
+## Two independent date scopes
 
-`GET /api/analytics?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&account_id=ID`
+| Scope | Controls | Never affected by |
+|---|---|---|
+| **Reporting Month** (a month picker, current month by default) | The four KPI cards, the income-versus-expenses columns (six months ending at the picked month), and the monthly Kakeibo plan versus actual | The analysis range, its account filter, or chart sorting |
+| **Analysis range** (presets or a custom inclusive range, plus an account filter) | Spending by category, daily spending, weekday averages, daily Kakeibo spending and the insights | The Reporting Month |
 
-Dates are Manila calendar dates, both inclusive to the caller. The API converts the inclusive end to a half-open SQL range (`>= start`, `< end + 1 day`), accepts a maximum of 366 days, and validates an optional account ID. `previous_totals` compares the same number of calendar days immediately before the selected range. It is `null` when the selected range includes today or a future date, because the period is incomplete.
+Each scope reads its own report from the server, so one can never move the other's figures. This is tested (unit, backend and browser). The current month is *month to date* and is labelled and hatched as such.
 
-All amount values are emitted as decimal strings from PostgreSQL `NUMERIC`; the frontend parses them to exact integer centavos for display. The mock source uses integer-centavo arithmetic only for synthetic local fixtures.
+Analysis presets: this month, last month, last 7 days, last 30 days, last 3 months (this month through today plus the two before), this year, custom. The end date may not be after today (Manila). A range must be valid and at most 366 days; invalid ranges are explained on screen and are never sent.
+
+## API
+
+`GET /api/analytics?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD[&account_id=ID][&detail=true]`
+
+Dates are Manila calendar dates and both are inclusive. The end may not be in the future (422), the range may not exceed 366 days, and an unknown account is 400. All amounts are decimal strings from PostgreSQL `NUMERIC`; the browser parses them to exact whole centavos and only formats.
+
+The base response (used by the Reporting Month, which passes no account) has `totals`, `previous_totals`, `months`, `categories`, `kakeibo_totals` and `kakeibo`. Each `months[]` row also has:
+
+- `surplus`: income minus expenses (may be negative; not account cash flow).
+- `expense_to_income_percent`: expenses as a share of income, one decimal, half-up, or `null` when income is zero (never infinity or 0).
+- `complete`: the requested range covers every day of that calendar month (false means month to date or partial).
+
+`detail=true` (used by the Analysis range) adds:
+
+- `daily[]`: one row for **every** date in the range, including zero-spend days, with `expenses` and the five envelope sums (`needs`, `wants`, `culture`, `unexpected`, `unclassified`) that add up to `expenses`.
+- `weekdays[]`: seven rows (ISO 1 Monday to 7 Sunday) with `total`, `occurrences` (how many of that weekday are in the range) and `average` (`total` divided by `occurrences`, zero days included, half-up to the centavo).
+- `insights`: `days`, `average_daily_spending`, `expense_transactions` (expense entries only), `highest_day` (earliest date wins a tie, `null` when nothing was spent) and `zero_spend_days`.
 
 ## Metric definitions
 
-- **Income:** sum of transaction rows whose referenced category type is `income`.
-- **Expenses:** sum of transaction rows whose referenced category type is `expense`.
-- **Net cash flow:** income minus expenses for the selected period. This is not account-balance growth or net worth.
-- **Monthly bars and expense trend:** the same income and expense definitions grouped by transaction calendar month. Every month in the selected range is present, including months with zero activity.
-- **Spending by category:** expense transactions grouped by stable category ID. Archived categories remain included and labeled. The current schema requires every transaction to have a category, so an uncategorized transaction cannot exist in this version.
-- **Kakeibo actuals:** expense transactions grouped by their saved envelope. Expenses without an envelope are separately identified as unclassified.
-- **Kakeibo plan:** only plans explicitly saved for a month are compared. Plan amounts cover all accounts. The UI hides plan comparisons while an account filter is active, while still showing that account's envelope actuals.
-- **Partial months:** plan-versus-actual comparisons appear only when the selected date range covers every calendar day of that month. Partial-month spending remains included in the other analytics, but is not labeled over or under a full-month plan.
+- **Income / expenses:** transaction rows whose category type is income / expense. Card purchases are expenses once; card payments and transfers are separate records and never enter either; available credit is not cash.
+- **Surplus or deficit:** income minus expenses for the month. It is a period figure, not a change in account balances or net worth.
+- **Category spending:** expense rows grouped by stable category ID, archived categories included and labelled.
+- **Kakeibo actuals:** expense rows by their saved envelope; rows without one are `unclassified`, still part of total spending. **Kakeibo plan versus actual** compares the reporting month's saved limits with that month's actuals (so far, for the current month). A month with no saved plan, or a legacy unconfirmed one, shows actuals without limits and says so. Savings targets are goals, never spending or savings.
+- **Daily Kakeibo** is what was actually spent each day, not a daily budget.
+- **No history of balances:** there is no dated balance data, so there is no net-worth or balance chart.
 
-Transfers and credit-card repayments are separate ledger records and do not enter income or expenses. Card purchases are expense transaction rows and are counted once. The current ledger has no separate signed-refund record; a refund must follow existing category and transaction rules and is not inferred by analytics. Category names/icons are joined by category ID so archived historical references remain recognizable.
+## Charts, accessibility and responsiveness
 
-The Dashboard does not show historical account balance or net-worth trends. The application does not store dated balance snapshots, and reconstructing past balances needs a separately reviewed opening-balance and correction policy.
+Shared primitives (`components/charts`): `ChartFrame` (title, description, legend, live readout, data table), `ColumnChart` (grouped or stacked columns, partial periods hatched) and `Donut`, with the maths in `lib/chartMath.ts` (nice axes, tick thinning, donut geometry, compact peso labels). Every chart:
 
-## Charts, navigation, and accessibility
+- has a visible title and description, and a legend that names each series (partial months are hatched, not only lighter);
+- is reachable by keyboard: focus the chart, then Left/Right/Home/End read each column into a polite live readout; pointer and touch read a column the same way;
+- has an equivalent data table (always in the accessibility tree; "Show data table" reveals it for everyone) with the same numbers as the picture;
+- is drawn in real pixels so labels stay 11 to 12 px and thin out at 320 px, with no horizontal page scroll;
+- uses design tokens, Manrope and no animation or gradient.
 
-The page uses local CSS bars and a small inline SVG line plot; it adds no chart library. Charts have textual values for assistive technology, legends, empty states, and no forecast or smoothing. Dashboard code is lazy-loaded so Overview does not download the view chunk until it is opened. On phones, Overview, Dashboard, and Activity remain in the bottom bar; Accounts, Kakeibo, and Categories are in the accessible More dialog. Tablet and desktop use direct navigation.
+Each section has its own loading, empty and error states (with Retry). The lazy-loaded Dashboard sits in an error boundary; if its file cannot be downloaded, "Try again" reloads the page, because React caches a failed import.
 
-To validate with synthetic records, run the frontend browser suite. Screenshots in `docs/design/screenshots/ui-modernization/phase-c-dashboard/` show the mock source, while `phase-c-dashboard-api/` shows the actual Nginx/React/FastAPI/PostgreSQL flow with a disposable database. Neither contains production financial data.
+## Testing
+
+Backend: `backend/tests/test_analytics_detail.py` and `test_api.py` (surplus, ratio rounding, zero days, weekday occurrence maths including a half-up case, tie-breaking, accounting invariants, future and invalid ranges, scope independence). Frontend unit: `tests/chartMath.test.ts`, mock parity in `tests/dataSource.test.ts`, strict parsing in `tests/wire.test.ts` and `tests/httpSource.test.ts`. Browser: `browser-tests/dashboard.spec.ts` (mock data, or the real API with `MONIKEY_DASHBOARD_API_FIXTURE=1` on a fresh database), including axe with the tables open and closed.

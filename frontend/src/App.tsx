@@ -121,6 +121,8 @@ function App() {
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
   const lastAccount = useRef<number | null>(null)
   const lastPayFrom = useRef<number | null>(null)
+  // The same two, as state, only so the account picker can list them first (refs must not be read while rendering).
+  const [recentAccounts, setRecentAccounts] = useState<{ account: number | null; payFrom: number | null }>({ account: null, payFrom: null })
   const opener = useRef<HTMLElement | null>(null) // the control that opened the dialog, so focus can go back to it
   const demoLoading = import.meta.env.VITE_DATA_SOURCE !== 'http' && demo === 'loading'
 
@@ -254,6 +256,7 @@ function App() {
     if (!target) {
       if (values.kind === 'payment') lastPayFrom.current = values.accountId
       else lastAccount.current = values.accountId
+      setRecentAccounts({ account: lastAccount.current, payFrom: lastPayFrom.current })
     }
     // The write is done. The confirmation is built from the figures fetched again afterwards.
     let text = 'Saved.'
@@ -553,6 +556,9 @@ function App() {
             snapshot={snapshot}
             session={session}
             month={month}
+            today={source.today}
+            recentAccountId={recentAccounts.account}
+            recentPayFromId={recentAccounts.payFrom}
             onSubmit={saveEntry}
             onDelete={deleteEntry}
             onOpenChange={(open) => !open && setSession(null)}

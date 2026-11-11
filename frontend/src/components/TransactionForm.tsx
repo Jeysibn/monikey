@@ -6,13 +6,14 @@ import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle 
 import { Button } from '@/components/ui/button'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { Input } from '@/components/ui/input'
+import { AccountPicker } from '@/components/AccountPicker'
+import { DateShortcuts } from '@/components/DateShortcuts'
 import { MoneyInput } from '@/components/MoneyInput'
 import { FieldError, FormField } from '@/components/FormField'
 import { InlineNotice } from '@/components/InlineNotice'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { EnvelopePicker } from '@/components/kakeibo/EnvelopePicker'
 import {
-  accountOptionLabel,
   accountsFor,
   categoriesForTransaction,
   notices,
@@ -31,7 +32,7 @@ import { suggestedEnvelope } from '@/lib/kakeibo'
 import { accountById, cardOf } from '@/lib/snapshot'
 import { amountText, formatPeso } from '@/lib/money'
 import { useDelayedFlag } from '@/useDelayedFlag'
-import type { AccountInfo, LedgerSnapshot } from '@/types'
+import type { LedgerSnapshot } from '@/types'
 
 /*
  * The Quick Add form (UI_UX_SPEC section 7): expense, income and card payment in one component.
@@ -62,33 +63,17 @@ const FIELD_ID: Record<EntryField, string> = {
   date: 'qa-date',
   note: 'qa-note',
 }
-const FIELD_ORDER: EntryField[] = ['amount', 'account', 'destination', 'card', 'category', 'envelope', 'date', 'note']
+// The order of the form on screen: the error summary lists problems in this order too.
+const FIELD_ORDER: EntryField[] = ['amount', 'date', 'account', 'destination', 'card', 'category', 'envelope', 'note']
 const FAILED_SAVE = "Couldn't save. Check your connection and try again. Your entry is still here."
-
-function AccountOptions({ accounts, snapshot, withFigures }: { accounts: AccountInfo[]; snapshot: LedgerSnapshot; withFigures: boolean }) {
-  const group = (label: string, list: AccountInfo[]) =>
-    list.length > 0 && (
-      <optgroup label={label}>
-        {list.map((a) => (
-          <option key={a.id} value={a.id}>
-            {accountOptionLabel(a, snapshot, withFigures)}
-          </option>
-        ))}
-      </optgroup>
-    )
-  return (
-    <>
-      {group('Cash & bank', accounts.filter((a) => a.type === 'cash' || a.type === 'bank'))}
-      {group('E-wallet', accounts.filter((a) => a.type === 'ewallet'))}
-      {group('Credit cards — adds to debt', accounts.filter(isCard))}
-    </>
-  )
-}
 
 export function TransactionForm({
   mode,
   hidden = false,
   snapshot,
+  today,
+  recentAccountId,
+  recentPayFromId,
   initial,
   amountRef,
   onDirty,
@@ -100,6 +85,9 @@ export function TransactionForm({
   mode: 'add' | 'edit'
   hidden?: boolean // the delete confirmation is showing: keep what was typed, show nothing
   snapshot: LedgerSnapshot
+  today: string // the Asia/Manila calendar date, for the Today and Yesterday shortcuts
+  recentAccountId: number | null // the account used last in this session, listed first in the picker
+  recentPayFromId: number | null // the same for "Pay from" on a card payment
   initial: EntryValues
   amountRef: RefObject<HTMLInputElement | null>
   onDirty: () => void // something was typed: the dialog then ignores clicks outside
@@ -217,8 +205,6 @@ export function TransactionForm({
     ? `Owed now: ${formatPeso(owed)}. No category — payments aren't expenses.`
     : "No category — payments aren't expenses."
 
-  const select = 'h-12 w-full min-w-0 cursor-pointer rounded-control border border-input bg-card pl-3.5 text-base text-foreground disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-disabled-fg aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive'
-
   return (
     <form noValidate hidden={hidden} onSubmit={submit} aria-busy={saving} className="flex min-h-0 flex-1 flex-col">
       {!hidden && (
@@ -289,63 +275,66 @@ export function TransactionForm({
             </Button>
           )}
 
+          <FormField id="qa-date" label="Date" error={dateError}>
+            <DateShortcuts today={today} value={values.date} disabled={saving} onPick={(date) => set({ date }, 'date')} />
+            <Input
+              id="qa-date"
+              type="date"
+              value={values.date}
+              onChange={(e) => set({ date: e.target.value }, 'date')}
+              onBlur={() => blur('date')}
+              aria-invalid={!!dateError}
+              aria-describedby={describedBy('qa-date', dateError)}
+            />
+          </FormField>
+
           <FormField id="qa-account" label={ACCOUNT_LABEL[values.kind]} error={accountError} helper={accountHelp}>
-            <select
+            <AccountPicker
               id="qa-account"
-              value={values.accountId ?? ''}
-              onChange={(e) => set({ accountId: e.target.value === '' ? null : Number(e.target.value) }, 'account')}
+              accounts={accountsFor(values.kind, 'account', snapshot)}
+              snapshot={snapshot}
+              value={values.accountId}
+              recentId={editing ? null : values.kind === 'payment' ? recentPayFromId : recentAccountId}
+              withFigures={!editing}
+              placeholder={values.kind === 'payment' ? 'Choose where to pay from' : values.kind === 'transfer' ? 'Choose a source account' : 'Choose an account'}
+              invalid={!!accountError}
+              describedBy={describedBy('qa-account', accountError, accountHelp)}
+              onChange={(accountId) => set({ accountId }, 'account')}
               onBlur={() => blur('account')}
-              aria-invalid={!!accountError}
-              aria-describedby={describedBy('qa-account', accountError, accountHelp)}
-              className={select}
-            >
-            <option value="">{values.kind === 'payment' ? 'Choose where to pay from' : values.kind === 'transfer' ? 'Choose a source account' : 'Choose an account'}</option>
-              <AccountOptions accounts={accountsFor(values.kind, 'account', snapshot)} snapshot={snapshot} withFigures={!editing} />
-            </select>
+            />
           </FormField>
 
           {values.kind === 'payment' && (
             <FormField id="qa-card" label="Pay card" error={cardError} helper={cardHelp}>
-              <select
+              <AccountPicker
                 id="qa-card"
-                value={values.cardId ?? ''}
-                onChange={(e) => set({ cardId: e.target.value === '' ? null : Number(e.target.value) }, 'card')}
+                accounts={accountsFor('payment', 'card', snapshot)}
+                snapshot={snapshot}
+                value={values.cardId}
+                withFigures={!editing}
+                placeholder="Choose a card"
+                invalid={!!cardError}
+                describedBy={describedBy('qa-card', cardError, cardHelp)}
+                onChange={(cardId) => set({ cardId }, 'card')}
                 onBlur={() => blur('card')}
-                aria-invalid={!!cardError}
-                aria-describedby={describedBy('qa-card', cardError, cardHelp)}
-                className={select}
-              >
-                <option value="">Choose a card</option>
-                {accountsFor('payment', 'card', snapshot).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {editing ? a.name : `${a.name} — owed ${formatPeso(cardOf(snapshot, a.id)?.owed ?? 0)}`}
-                  </option>
-                ))}
-              </select>
+              />
             </FormField>
           )}
 
           {values.kind === 'transfer' && (
-            <FormField
-              id="qa-destination"
-              label="Transfer to"
-              error={destinationError}
-              helper={transferHelp}
-            >
-              <select
+            <FormField id="qa-destination" label="Transfer to" error={destinationError} helper={transferHelp}>
+              <AccountPicker
                 id="qa-destination"
-                value={values.destinationAccountId ?? ''}
-                onChange={(e) => set({ destinationAccountId: e.target.value === '' ? null : Number(e.target.value) }, 'destination')}
+                accounts={transferAccounts.filter((a) => a.id !== values.accountId)}
+                snapshot={snapshot}
+                value={values.destinationAccountId}
+                withFigures={!editing}
+                placeholder="Choose a destination account"
+                invalid={!!destinationError}
+                describedBy={describedBy('qa-destination', destinationError, transferHelp)}
+                onChange={(destinationAccountId) => set({ destinationAccountId }, 'destination')}
                 onBlur={() => blur('destination')}
-                aria-invalid={!!destinationError}
-                aria-describedby={describedBy('qa-destination', destinationError, transferHelp)}
-                className={select}
-              >
-                <option value="">Choose a destination account</option>
-                {transferAccounts.filter((a) => a.id !== values.accountId).map((a) => (
-                  <option key={a.id} value={a.id}>{accountOptionLabel(a, snapshot, !editing)}</option>
-                ))}
-              </select>
+              />
             </FormField>
           )}
 
@@ -419,18 +408,6 @@ export function TransactionForm({
               {w}
             </InlineNotice>
           ))}
-
-          <FormField id="qa-date" label="Date" error={dateError}>
-            <Input
-              id="qa-date"
-              type="date"
-              value={values.date}
-              onChange={(e) => set({ date: e.target.value }, 'date')}
-              onBlur={() => blur('date')}
-              aria-invalid={!!dateError}
-              aria-describedby={describedBy('qa-date', dateError)}
-            />
-          </FormField>
 
           <FormField id="qa-note" label="Note (optional)" error={noteError}>
             <Input

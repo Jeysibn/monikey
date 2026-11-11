@@ -27,6 +27,9 @@ function Body({
   session,
   snapshot,
   month,
+  today,
+  recentAccountId,
+  recentPayFromId,
   amountRef,
   onDirty,
   onSavingChange,
@@ -37,6 +40,9 @@ function Body({
   session: EntrySession
   snapshot: LedgerSnapshot
   month: string
+  today: string
+  recentAccountId: number | null
+  recentPayFromId: number | null
   amountRef: React.RefObject<HTMLInputElement | null>
   onDirty: () => void
   onSavingChange: (saving: boolean) => void
@@ -61,6 +67,9 @@ function Body({
         mode={session.mode}
         hidden={confirming}
         snapshot={snapshot}
+        today={today}
+        recentAccountId={recentAccountId}
+        recentPayFromId={recentPayFromId}
         initial={session.values}
         amountRef={amountRef}
         onDirty={onDirty}
@@ -85,6 +94,9 @@ export function QuickAddDialog({
   session,
   snapshot,
   month,
+  today,
+  recentAccountId,
+  recentPayFromId,
   onSubmit,
   onDelete,
   onOpenChange,
@@ -93,6 +105,9 @@ export function QuickAddDialog({
   session: EntrySession | null // null while the dialog is closed
   snapshot: LedgerSnapshot
   month: string // the month being viewed: the delete text only mentions "this month" for entries in it
+  today: string // the Asia/Manila calendar date (the data source's), for the date shortcuts
+  recentAccountId: number | null // the account used last, listed first in the account picker
+  recentPayFromId: number | null // the same for "Pay from" on a card payment
   onSubmit: (values: EntryValues, target?: EntryTarget) => Promise<void>
   onDelete: (target: EntryTarget) => Promise<void>
   onOpenChange: (open: boolean) => void
@@ -111,13 +126,15 @@ export function QuickAddDialog({
     >
       {session && (
         <DialogContent
+          size="wide"
           onOpenAutoFocus={(e) => {
             guard.current = { dirty: false, saving: false }
             if (session.confirmFirst) return // Cancel takes focus itself
             e.preventDefault()
             amountRef.current?.focus()
           }}
-          onEscapeKeyDown={(e) => guard.current.saving && e.preventDefault()}
+          // Escape inside an open account list closes only that list (the picker handles it).
+          onEscapeKeyDown={(e) => (guard.current.saving || (e.target instanceof Element && e.target.closest('[data-account-picker][data-open]'))) && e.preventDefault()}
           onInteractOutside={(e) => (guard.current.saving || guard.current.dirty) && e.preventDefault()}
           onCloseAutoFocus={onClosed}
         >
@@ -127,6 +144,9 @@ export function QuickAddDialog({
             session={session}
             snapshot={snapshot}
             month={month}
+            today={today}
+            recentAccountId={recentAccountId}
+            recentPayFromId={recentPayFromId}
             amountRef={amountRef}
             onDirty={() => (guard.current.dirty = true)}
             onSavingChange={(saving) => (guard.current.saving = saving)}

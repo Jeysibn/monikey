@@ -24,6 +24,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
+- Release audit (local): a final integration-readiness report, a responsive/accessibility sweep, end-to-end money-flow tests, and Activity-filter contract documentation and fixtures. ADR-026 is recorded in the ADR log. Nothing is deployed.
 - Activity search and filters: search notes, categories and accounts, filter by type and category (archived categories with history included), with Reset filters and honest counts. Filters are applied by the server to the whole month before paging. Three read endpoints gain optional `q`, `category_id` and `kind` parameters; no migration, and calls without them behave as before (local, unreleased).
 - Overview polish: quick actions under the hero, the welcome panel below the hero in a reserved slot, and balanced desktop columns (local, unreleased).
 - Accounts redesign: search by name, a type filter and sorts that never rank a card's debt as a balance, remembered Cards/List and filter choices, a clearer net-position summary, and an account details drawer (a bottom sheet on phones) with balance or debt, limit, utilization, available credit labelled not cash, recent activity and quick actions. Original card artwork and card gestures are unchanged. Frontend only; no API or database change (local, unreleased).

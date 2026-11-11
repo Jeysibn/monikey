@@ -130,7 +130,10 @@ test('a money account shows its balance and actions; a card shows debt, limit, u
   const all = await faces(page).all()
   let liquid: Locator | undefined
   let card: Locator | undefined
-  for (const face of all) (await isLiquid(face) ? (liquid ??= face) : (card ??= face))
+  for (const face of all) {
+    if (await isLiquid(face)) liquid ??= face
+    else card ??= face
+  }
   expect(liquid && card).toBeTruthy()
 
   const liquidName = await nameOf(liquid!)
@@ -166,7 +169,10 @@ test('quick actions open the existing flows on this account, and View all opens 
   const all = await faces(page).all()
   let liquid: Locator | undefined
   let card: Locator | undefined
-  for (const face of all) (await isLiquid(face) ? (liquid ??= face) : (card ??= face))
+  for (const face of all) {
+    if (await isLiquid(face)) liquid ??= face
+    else card ??= face
+  }
   const liquidName = await nameOf(liquid!)
   const cardName = await nameOf(card!)
   const drawer = page.locator('[data-account-details]')

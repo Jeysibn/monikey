@@ -118,6 +118,21 @@ export function AccountsView({
     </>
   )
 
+  const toolbar = snapshot && entries.length > 0 ? (
+        <AccountsToolbar
+          query={query}
+          onQuery={setQuery}
+          type={prefs.type}
+          onType={(type) => update({ type })}
+          sort={prefs.sort}
+          onSort={(sort) => update({ sort })}
+          mode={displayMode}
+          onMode={(mode) => update({ mode })}
+          shown={arranged.length}
+          total={entries.length}
+        />
+  ) : null
+
   return (
     <div aria-busy={loading}>
       <p role="status" className="sr-only">
@@ -140,21 +155,6 @@ export function AccountsView({
           Add account
         </Button>
       </div>
-
-      {snapshot && entries.length > 0 && (
-        <AccountsToolbar
-          query={query}
-          onQuery={setQuery}
-          type={prefs.type}
-          onType={(type) => update({ type })}
-          sort={prefs.sort}
-          onSort={(sort) => update({ sort })}
-          mode={displayMode}
-          onMode={(mode) => update({ mode })}
-          shown={arranged.length}
-          total={entries.length}
-        />
-      )}
 
       {displayMode === 'cards' ? (
         <div className="grid grid-cols-1 gap-4 md:gap-5">
@@ -197,6 +197,8 @@ export function AccountsView({
             </CardDescription>
           </Card>
 
+          {toolbar}
+
           <section aria-labelledby="all-accounts-title" className="min-w-0">
             <h2 id="all-accounts-title" className="sr-only">All accounts</h2>
             {accountsFailed ? (
@@ -233,6 +235,7 @@ export function AccountsView({
         </div>
       ) : (
       <div className="grid grid-cols-1 gap-4 md:gap-6">
+        {toolbar}
         {/* Money you have */}
         <section role="region" aria-labelledby="money-you-have-title" className="grid min-w-0 gap-4 md:gap-6">
           {accountsFailed ? (

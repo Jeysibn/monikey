@@ -35,7 +35,7 @@ export function AccountsToolbar({
 }) {
   const hint = SORTS.find((s) => s.value === sort)?.hint
   return (
-    <section aria-label="Find and arrange accounts" className="mb-4 grid gap-2.5 rounded-card border border-border bg-card p-3 md:p-4">
+    <section aria-label="Find and arrange accounts" className="grid gap-2.5 rounded-card border border-border bg-card p-3 md:p-4">
       <div className="grid gap-2.5 min-[560px]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <label className="relative block min-[560px]:col-auto">
           <span className="sr-only">Search accounts</span>

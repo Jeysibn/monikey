@@ -150,3 +150,35 @@ Implemented:
 | Manual scripted check, Chromium emulation, 320, 360, 390, 768, 1024, 1440 px | no horizontal overflow, no console errors |
 
 Real-device checks for the Dashboard (iOS Safari, Android Chrome) are still open: chart touch reading, the custom date inputs, the data tables with the on-screen keyboard.
+
+## Phase 6 — Accounts (local branch `feat/ui-redesign-accounts`, from the Dashboard tip)
+
+First, one decision recorded: the Dashboard's **account filter stays analysis-only**. The monthly KPIs, monthly columns and monthly Kakeibo plan versus actual always cover all accounts, and the monthly section now says "All accounts"; the analysis states when it is filtered. Documented in `ANALYTICS_DASHBOARD.md` and pinned by the browser test.
+
+Implemented (frontend only; no backend, API or migration change):
+
+- **Toolbar** (`AccountsToolbar`): search by name (case and extra spaces ignored), type filter (All, Cash & bank, E-wallets, Credit cards), sort (Default order, Name A–Z, Highest balance, Lowest balance, Most owed), the existing Cards/List toggle, and a live count ("2 of 5 accounts"). Placed after the net-position summary, as in the spec.
+- **Sorting never ranks a debt as a balance:** balance sorts order only cash, bank and e-wallet accounts and list cards after them A–Z; "Most owed" orders cards and lists the other accounts after them; the toolbar says what each sort compares.
+- **Saved presentation choices:** display mode, type and sort persist in this browser (`monikey.accountsView`, validated field by field; corrupt or blocked storage falls back to defaults). The search is not saved. No figure is ever stored.
+- **Summary:** "Net position as of today" with Money you have, Money you owe, and "money you have minus what you owe; available credit isn't cash".
+- **Account details** (`AccountDetailsContent`): a right-hand drawer from 768 px and a near-full-height bottom sheet below; original card artwork; for money accounts the current balance, for cards the amount owed (or card credit), limit, limit in use, a progress bar and **available credit labelled "(not cash)"**; Over-limit and below-zero warnings; recent activity (the account's latest five entries); Edit account in the footer. Opened from the card face (grid and Overview deck) and from a new Details button in the list.
+- **Quick actions, existing flows only:** money accounts get Add expense, Add income and Transfer (money moves from this account); cards get Add expense (a purchase, adds to debt) and Pay card (disabled, with the reason, when nothing is owed). Edit account and View all in Activity (this month, filtered to the account) for all.
+- **No new API:** recent activity reuses the Activity read, which already filters by account; it takes the current month and tops up from the previous month only when fewer than five entries exist.
+- **Shared dialog:** `DialogContent size="drawer"`.
+- **Unchanged by design:** card artwork and faces, the three-dot menu, tap/click and keyboard gestures on cards, the Overview deck, account deletion (none), banking, billing cycles and charts (none added).
+
+Bugs found by the new tests and fixed: the artwork collapsed to a line inside the drawer (an `overflow-hidden` wrapper in a fixed-height grid); two buttons were both named "Close" (the footer is now "Done").
+
+### Phase 6 verification record (2026-11-12, local)
+
+| Check | Result |
+|---|---|
+| `tsc -b` / `oxlint` / `npm run build` | clean |
+| `npm test` | 375 tests, all pass (17 new: filter, search, sorts, saved preferences incl. blocked or corrupt storage, recent-activity read) |
+| Backend / database suites | not run: nothing in them changed in this phase |
+| Playwright, real API on a fresh DB: `dashboard` (fixture), then `accounts`, `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | 11 pass and 2 skipped (mock-only), then 29 of 29 |
+| Playwright, mock mode: `accounts`, `dashboard`, `moki`, `navigation`, `overview-dashboard`, `kakeibo` | all pass (API-only tests skip by design) |
+| Accessibility: axe WCAG 2.0 and 2.1 A and AA, Accounts in Cards and List at 320 to 1440 px, and the details drawer | no violations |
+| Layout: drawer geometry at 320, 360, 390, 768, 1024, 1440 px; no horizontal overflow, no console errors | right-hand 440 px full-height panel from 768 px; bottom sheet below |
+
+Real-device checks for Accounts (iOS Safari, Android Chrome) are still open: the bottom sheet with the on-screen keyboard (search), card swipe and tap on the Overview deck, and drawer scrolling.

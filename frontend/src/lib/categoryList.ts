@@ -42,19 +42,21 @@ export function sortCategories(categories: Category[], sort: CategorySort): Cate
   return [...categories].sort(sort === 'name' ? byName : (a, b) => (b.usageCount ?? 0) - (a.usageCount ?? 0) || byName(a, b))
 }
 
+/** Whether a category passes the envelope filter and the search (not the tab). `viewCategories` skips the envelope filter on the Income tab, where it means nothing. */
+export function passesFilters(category: Category, filters: { envelope: EnvelopeFilter; query: string }): boolean {
+  const query = filters.query.trim().toLocaleLowerCase()
+  const envelopeOk =
+    filters.envelope === 'all' || (filters.envelope === 'none' ? !category.defaultEnvelope : category.defaultEnvelope === filters.envelope)
+  return envelopeOk && (!query || category.name.toLocaleLowerCase().includes(query))
+}
+
 /** The envelope filter only means something for expense categories, so the Income tab ignores it. */
 export function viewCategories(
   categories: Category[],
   view: { tab: CategoryTab; envelope: EnvelopeFilter; query: string; sort: CategorySort },
 ): Category[] {
-  const query = view.query.trim().toLocaleLowerCase()
-  const matchesEnvelope = (category: Category) =>
-    view.tab === 'income' || view.envelope === 'all' ||
-    (view.envelope === 'none' ? !category.defaultEnvelope : category.defaultEnvelope === view.envelope)
-  const filtered = categories.filter((category) =>
-    categoryTabOf(category) === view.tab && matchesEnvelope(category) && (!query || category.name.toLocaleLowerCase().includes(query)),
-  )
-  return sortCategories(filtered, view.sort)
+  const filters = { envelope: view.tab === 'income' ? ('all' as const) : view.envelope, query: view.query }
+  return sortCategories(categories.filter((category) => categoryTabOf(category) === view.tab && passesFilters(category, filters)), view.sort)
 }
 
 /** "Used by 12 transactions", "Used by 1 transaction" or "Not used yet" (the all-time count the API reports). */

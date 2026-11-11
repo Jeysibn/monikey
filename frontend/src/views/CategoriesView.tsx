@@ -13,6 +13,7 @@ import type { DataSource } from '@/dataSource'
 import {
   categoryEmptyMessage,
   categoryTabCounts,
+  passesFilters,
   viewCategories,
   type CategorySort,
   type CategoryTab,
@@ -92,8 +93,11 @@ export function CategoriesView({
     } else {
       await source.createCategory(values)
       setTab(values.type) // show the new category where it belongs
-      setQuery('')
-      setEnvelope('all')
+      // Clear the search or envelope filter only if it would hide the new category, judged against what is in the
+      // box right now (the person may have typed while the save was running, and that must survive).
+      const created: Category = { id: 0, name: values.name, type: values.type, defaultEnvelope: values.defaultEnvelope }
+      setQuery((current) => (passesFilters(created, { envelope: 'all', query: current }) ? current : ''))
+      setEnvelope((current) => (values.type === 'income' || passesFilters(created, { envelope: current, query: '' }) ? current : 'all')) // the Income tab ignores the envelope filter
       setPageIndex(0)
     }
     setEditor(null)

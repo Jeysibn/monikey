@@ -142,3 +142,26 @@ test('sorting orders by use or name and phones show the tabs on one row', async 
   const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   expect(names).toEqual(sorted)
 })
+
+test('creating a category keeps a search that still matches it and clears one that would hide it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const suffix = Date.now().toString(36)
+  await openCategories(page)
+  const search = page.getByLabel('Search categories')
+
+  await search.fill(`QA Keep ${suffix}`)
+  await page.getByRole('button', { name: 'Add category' }).click()
+  await page.getByLabel('Name', { exact: true }).fill(`QA Keep ${suffix} One`)
+  await page.getByRole('button', { name: 'Create category' }).click()
+  await expect(page.getByText('Category created.', { exact: true })).toBeVisible()
+  await expect(search).toHaveValue(`QA Keep ${suffix}`) // it still matches: left alone
+  await expect(page.getByRole('button', { name: `Edit QA Keep ${suffix} One` })).toBeVisible()
+
+  await search.fill('no category is named this')
+  await page.getByRole('button', { name: 'Add category' }).click()
+  await page.getByLabel('Name', { exact: true }).fill(`QA Other ${suffix}`)
+  await page.getByRole('button', { name: 'Create category' }).click()
+  await expect(page.getByText('Category created.', { exact: true })).toBeVisible()
+  await expect(search).toHaveValue('') // it would have been hidden: the search is cleared so the new row shows
+  await expect(page.getByRole('button', { name: `Edit QA Other ${suffix}` })).toBeVisible()
+})

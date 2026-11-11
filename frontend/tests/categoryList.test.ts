@@ -24,7 +24,7 @@ test('category empty copy distinguishes an empty collection from filtered no mat
   assert.equal(categoryEmptyMessage(true), 'No categories match these filters.')
 })
 
-import { canDeleteCategory, categoryTabCounts, sortCategories, usageText, viewCategories } from '../src/lib/categoryList.ts'
+import { canDeleteCategory, categoryTabCounts, passesFilters, sortCategories, usageText, viewCategories } from '../src/lib/categoryList.ts'
 
 const catalogue: Category[] = [
   { id: 1, name: 'Groceries', type: 'expense', defaultEnvelope: 'needs', usageCount: 12 },
@@ -68,4 +68,15 @@ test('usage text and delete eligibility follow the all-time count; an unknown co
   assert.equal(canDeleteCategory(catalogue[6]!), true)
   assert.equal(canDeleteCategory(catalogue[0]!), false)
   assert.equal(canDeleteCategory({ id: 9, name: 'x', type: 'expense' }), false)
+})
+
+test('a new category keeps the typed search when it matches and is only revealed by clearing when it would be hidden', () => {
+  const created: Category = { id: 0, name: 'Pet care', type: 'expense', defaultEnvelope: 'wants' }
+  assert.equal(passesFilters(created, { envelope: 'all', query: '' }), true)
+  assert.equal(passesFilters(created, { envelope: 'all', query: ' pet ' }), true) // typed meanwhile: keep it
+  assert.equal(passesFilters(created, { envelope: 'all', query: 'groceries' }), false) // would hide it: clear
+  assert.equal(passesFilters(created, { envelope: 'wants', query: '' }), true)
+  assert.equal(passesFilters(created, { envelope: 'needs', query: '' }), false)
+  assert.equal(passesFilters(created, { envelope: 'none', query: '' }), false)
+  assert.equal(passesFilters({ ...created, type: 'income', defaultEnvelope: null }, { envelope: 'needs', query: '' }), false) // income has no default; the Income tab skips this filter itself
 })

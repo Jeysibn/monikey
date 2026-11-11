@@ -21,7 +21,10 @@ async function openActivity(page: Page) {
 }
 const countLine = (page: Page) => page.getByRole('status').filter({ hasText: /entr/ }).first()
 
-/** A month with more than one page: three older "needle" rows, then 55 newer filler rows. API only. */
+/**
+ * A month with MORE THAN TWO pages whatever else is in the database: three older "needle" rows, then 108 newer
+ * filler rows (111 in all), so "Load more" reaches 100 entries on a fresh database too. API only.
+ */
 async function seedBigMonth(request: APIRequestContext) {
   const suffix = uniqueSuffix()
   const ledger = (await seedPopulatedLedger(request))!
@@ -32,7 +35,7 @@ async function seedBigMonth(request: APIRequestContext) {
     expect(response.status(), await response.text()).toBe(201)
   }
   for (let i = 1; i <= 3; i += 1) await post(`needle-${suffix} ${i}`) // created first, so they are OLDER than every filler on the same day
-  for (let i = 1; i <= 55; i += 1) await post(`filler-${suffix} ${String(i).padStart(2, '0')}`)
+  for (let i = 1; i <= 108; i += 1) await post(`filler-${suffix} ${String(i).padStart(3, '0')}`)
   return { suffix, ledger, expense }
 }
 

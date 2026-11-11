@@ -198,7 +198,7 @@ Reference: [ACTIVITY_SEARCH_FILTERS.md](./ACTIVITY_SEARCH_FILTERS.md) (behavior,
 
 **Test isolation:** the Moki browser spec wrote three tracked reference screenshots every run. It now writes to `test-results/` unless run with `MONIKEY_UPDATE_BASELINES=1`. The approved baselines are unchanged.
 
-Bugs found by the new tests and fixed: a typed-then-Reset race that re-applied a pending search after the reset; the reserved welcome slot being shorter than the panel.
+Bugs found by the new tests and fixed: a typed-then-Reset race that re-applied a pending search after the reset; the reserved welcome slot being shorter than the panel; and a paging test that only passed once earlier runs had piled up rows (it now seeds 111 rows itself).
 
 ### Phase 7 verification record (2026-11-12, local)
 
@@ -208,8 +208,10 @@ Bugs found by the new tests and fixed: a typed-then-Reset race that re-applied a
 | `npm test` | 395 tests, all pass (20 new for Activity filters) |
 | `backend/test.sh` | 99 passed (14 new for the filters; 85 before) |
 | `database/test.sh` | passes (no schema or migration change in this phase) |
-| Playwright, real API on a fresh DB: `dashboard` (fixture) first, then `activity`, `overview`, `accounts`, `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | see the final run below |
-| Playwright, mock mode | see the final run below |
+| Playwright, real API on a fresh DB: `dashboard` (fixture) first | 11 pass, 2 skipped (mock-only) |
+| Playwright, real API, same DB: `activity`, `overview`, `accounts`, `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | 44 pass, 0 fail, 2 skipped (mock-only) |
+| Playwright, mock mode: `accounts`, `activity`, `overview`, `dashboard`, `moki`, `navigation`, `overview-dashboard`, `kakeibo` | 48 pass, 0 fail, 5 skipped (API-only) |
+| Tracked files changed by running the suites | none (the Moki spec now writes to `test-results/`) |
 | axe WCAG 2.0 and 2.1 A and AA: Activity with filters and Overview, 320 to 1440 px | no violations |
 
 Real-device checks (iOS Safari, Android Chrome) stay open, now including the Activity search field with the on-screen keyboard and the Overview quick-action row.

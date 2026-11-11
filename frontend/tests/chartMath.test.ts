@@ -143,3 +143,14 @@ describe('sortRows', () => {
     assert.deepEqual(rows.map((r) => r.name), ['beta', 'Alpha', 'gamma'])
   })
 })
+
+import { isChunkLoadError } from '../src/lib/chunkErrors.ts'
+describe('isChunkLoadError', () => {
+  it('recognises a failed lazy import and nothing else', () => {
+    assert.equal(isChunkLoadError(new TypeError('Failed to fetch dynamically imported module: https://x/assets/DashboardView-1.js')), true)
+    assert.equal(isChunkLoadError(new Error('Importing a module script failed.')), true)
+    assert.equal(isChunkLoadError(Object.assign(new Error('x'), { name: 'ChunkLoadError' })), true)
+    assert.equal(isChunkLoadError(new Error('Cannot read properties of undefined')), false)
+    assert.equal(isChunkLoadError('Failed to fetch dynamically imported module'), false)
+  })
+})

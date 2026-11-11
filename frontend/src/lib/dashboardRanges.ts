@@ -93,3 +93,16 @@ export function sortRows<T extends { name: string; amount: number }>(rows: T[], 
   const byName = (a: T, b: T) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   return [...rows].sort(sort === 'az' ? byName : sort === 'low' ? (a, b) => a.amount - b.amount || byName(a, b) : (a, b) => b.amount - a.amount || byName(a, b))
 }
+
+const UTC_FORMAT = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...options })
+const LONG = UTC_FORMAT({ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+const SHORT = UTC_FORMAT({ month: 'short', day: 'numeric' })
+const WEEKDAY = UTC_FORMAT({ weekday: 'long' })
+const MONTH_SHORT = UTC_FORMAT({ month: 'short' })
+
+/** "Sat, Oct 24, 2026": the date exactly as written, never moved by a time zone. */
+export const formatDateLong = (date: string): string => LONG.format(new Date(`${date}T00:00:00Z`))
+/** "Oct 24" */
+export const formatDateShort = (date: string): string => SHORT.format(new Date(`${date}T00:00:00Z`))
+export const monthShortName = (month: string): string => MONTH_SHORT.format(new Date(`${month}-01T00:00:00Z`))
+export const WEEKDAY_NAMES = [1, 2, 3, 4, 5, 6, 7].map((iso) => WEEKDAY.format(new Date(Date.UTC(2024, 0, iso)))) // 2024-01-01 is a Monday

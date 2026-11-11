@@ -6,6 +6,7 @@ import { EditAccountDialog } from '@/components/EditAccountDialog'
 import { ClassifyDialog } from '@/components/kakeibo/ClassifyDialog'
 import { KakeiboPlanDialog } from '@/components/kakeibo/KakeiboPlanDialog'
 import { ErrorBlock } from '@/components/ErrorBlock'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
 import type { DataSource } from '@/dataSource'
@@ -444,6 +445,7 @@ function App() {
           />
         )}
         {view === 'dashboard' && (
+          <ErrorBoundary what="the Dashboard" resetKey={view}>
           <Suspense fallback={<div className="space-y-4" role="status" aria-label="Loading Dashboard"><div className="h-8 w-44 animate-pulse rounded bg-secondary motion-reduce:animate-none" /><div className="h-28 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /><div className="h-64 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /></div>}>
             <DashboardView
               today={source.today}
@@ -454,6 +456,7 @@ function App() {
               addState={addState}
             />
           </Suspense>
+          </ErrorBoundary>
         )}
         {view === 'activity' && (
           <ActivityView

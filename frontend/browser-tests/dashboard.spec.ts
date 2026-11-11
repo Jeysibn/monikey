@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 
 import { hasRealApi } from './fixtures'

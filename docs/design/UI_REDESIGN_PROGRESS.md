@@ -133,7 +133,7 @@ Implemented:
 - **Analysis section:** presets (this month, last month, 7 days, 30 days, 3 months, this year, custom) validated before any request; spending by category (donut, sortable highest, lowest, A to Z, archived labelled); daily spending including zero-spend days; weekday averages by occurrence count; daily Kakeibo spending (stacked, unclassified included); insights (average daily, expense transactions, highest day, zero-spend days, top category).
 - **Backend** (`/api/analytics`, no migration): per-month `surplus`, `expense_to_income_percent`, `complete`; opt-in `detail=true` adding `daily`, `weekdays`, `insights`; future end dates rejected.
 - **Frontend:** native SVG primitives and tested chart maths; a data table, keyboard readout and legend for every chart; per-section loading, empty and error states; an error boundary around the lazy Dashboard.
-- **Bundle:** the Dashboard chunk is 27.99 kB (9.09 kB gzip) for all six charts and their tables, against 13.49 kB (3.81 kB gzip) before; the entry bundle grew from 160.47 to 161.41 kB gzip.
+- **Bundle:** the Dashboard chunk is 28.07 kB (9.12 kB gzip) for all six charts and their tables, against 13.49 kB (3.81 kB gzip) before; the entry bundle grew from 160.47 to 161.41 kB gzip.
 - **Bugs found by the new tests and fixed:** a scrollable data table that a keyboard could not reach (now only scrolls, labelled and focusable, while visible); the lazy-chunk retry (a cached failed import needs a reload).
 
 ### Phase 5 verification record (2026-11-12, local)
@@ -141,7 +141,7 @@ Implemented:
 | Check | Result |
 |---|---|
 | `tsc -b` / `oxlint` / `npm run build` | clean |
-| `npm test` | 358 tests, all pass (26 new for the contract and mock parity, 15 for chart maths and ranges) |
+| `npm test` | 358 tests, all pass (26 more than the 332 before this phase) |
 | `backend/test.sh` | 85 passed (16 new analytics tests; 69 before) |
 | Playwright, real API on a fresh DB, `MONIKEY_DASHBOARD_API_FIXTURE=1`: `dashboard`, `overview-dashboard` | 11 pass, 2 skipped (mock-only scenarios) |
 | Playwright, real stack: `kakeibo`, `categories*`, `navigation`, `quick-add*` | 20 of 20 pass |

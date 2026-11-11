@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
+/*
+ * Where this spec's evidence screenshots go. By default a temporary, untracked folder, so running the suite never
+ * rewrites the approved reference images in docs/. To regenerate those baselines ON PURPOSE, run with
+ * MONIKEY_UPDATE_BASELINES=1 and review the diff before committing.
+ */
+const SHOTS = process.env.MONIKEY_UPDATE_BASELINES === '1' ? '../docs/design/screenshots/moki/correction' : 'test-results/browser/moki-correction'
+
 /** Opens a view the way a person would: directly from the main navigation where it is shown, otherwise through More (phones). */
 async function openView(page: Page, name: string) {
   const main = page.getByRole('navigation', { name: 'Main' })
@@ -25,7 +32,7 @@ test('populated Overview welcomes returning users and keeps financial informatio
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Wallets' })).toBeVisible()
   await expect(page.getByText('Start by adding a cash, bank or e-wallet account.')).toHaveCount(0)
-  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-mobile.png' })
+  await page.screenshot({ path: `${SHOTS}/after-populated-overview-mobile.png` })
 
   await page.reload()
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
@@ -36,13 +43,13 @@ test('populated Overview welcomes returning users and keeps financial informatio
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'All accounts' }).getByRole('button', { name: /Cash on hand.*View details/ })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add account', exact: true })).toBeVisible()
-  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-accounts-mobile.png' })
+  await page.screenshot({ path: `${SHOTS}/after-populated-accounts-mobile.png` })
   await page.setViewportSize({ width: 1440, height: 960 })
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
-  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-accounts-desktop.png', fullPage: true })
+  await page.screenshot({ path: `${SHOTS}/after-populated-accounts-desktop.png`, fullPage: true })
   await page.getByRole('button', { name: 'Overview', exact: true }).click()
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
-  await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-desktop.png', fullPage: true })
+  await page.screenshot({ path: `${SHOTS}/after-populated-overview-desktop.png`, fullPage: true })
 })
 
 test('populated welcome waits for Overview data and stays hidden during refreshes and errors', async ({ page }) => {
@@ -94,14 +101,14 @@ test('Activity separates an empty history from filtered no-results', async ({ pa
   await page.getByLabel('Account').selectOption('1')
   await expect(page.locator('img[src="/moki/moki-search.webp"]')).toBeVisible()
   await expect(page.getByText('Nothing matches these filters.')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reset filters' })).toBeVisible()
   const activityAxe = await new AxeBuilder({ page }).include('main').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
   expect(activityAxe.violations.map(({ id }) => id)).toEqual([])
   await page.screenshot({ path: 'test-results/browser/moki-activity-no-results-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: 'test-results/browser/moki-activity-no-results-mobile.png', fullPage: true })
 
-  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await page.getByRole('button', { name: 'Reset filters' }).click()
   await expect(page.locator('img[src="/moki/moki-search.webp"]')).toHaveCount(0)
   await expect(page.locator('img[src="/moki/moki-sleeping.webp"]')).toBeVisible()
 })
@@ -193,8 +200,8 @@ test('populated Overview welcome stays visible and compact at supported widths',
     expect(dimensions.scroll, `Overview horizontal overflow at ${width}px`).toBeLessThanOrEqual(width)
     expect(bounds?.x).toBeGreaterThanOrEqual(0)
     expect((bounds?.x ?? 0) + (bounds?.width ?? width)).toBeLessThanOrEqual(width)
-    if (width === 390) await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-mobile.png' })
-    if (width === 1440) await page.screenshot({ path: '../docs/design/screenshots/moki/correction/after-populated-overview-desktop.png', fullPage: true })
+    if (width === 390) await page.screenshot({ path: `${SHOTS}/after-populated-overview-mobile.png` })
+    if (width === 1440) await page.screenshot({ path: `${SHOTS}/after-populated-overview-desktop.png`, fullPage: true })
   }
 })
 

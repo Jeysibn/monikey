@@ -28,7 +28,11 @@ KakeiboEnvelope = Literal["needs", "wants", "culture", "unexpected"]
 CategoryIconKey = Literal[
     "shopping-basket", "utensils", "car-front", "house", "briefcase-business", "graduation-cap",
     "heart-pulse", "gamepad-2", "book-open", "shopping-bag", "gift", "piggy-bank",
+    "coffee", "bus", "receipt", "smartphone", "plane", "wallet",
+    "banknote", "dumbbell", "shirt", "paw-print", "music", "wrench",
 ]
+# Curated keys, never raw CSS or hex: the frontend owns the contrast-checked colors (ADR-026).
+CategoryColorKey = Literal["blue", "green", "teal", "amber", "orange", "red", "pink", "purple", "indigo", "slate"]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
@@ -169,12 +173,14 @@ class CategoryInput(InputModel):
     type: CategoryType
     default_kakeibo_envelope: KakeiboEnvelope | None = None
     icon_key: CategoryIconKey | None = None
+    color_key: CategoryColorKey | None = None
 
 
 class CategoryUpdateInput(InputModel):
     name: CategoryName | None = None
     default_kakeibo_envelope: KakeiboEnvelope | None = None
     icon_key: CategoryIconKey | None = None
+    color_key: CategoryColorKey | None = None
 
 
 class CategoryArchiveInput(InputModel):
@@ -863,24 +869,41 @@ def update_account(account_id: Annotated[int, Path(gt=0)], values: AccountUpdate
         raise ApiProblem(409, "duplicate_account_name", "An account with this name already exists.", "name") from None
 
 
+CATEGORY_COLUMNS = "c.id, c.name, c.type, c.default_kakeibo_envelope, c.is_archived, c.icon_key, c.color_key"
+
+
+def fetch_category(connection: psycopg.Connection, category_id: int) -> dict[str, object] | None:
+    """One category with its all-time usage count (transactions referencing it; archived rows included)."""
+    return connection.execute(
+        f"""SELECT {CATEGORY_COLUMNS},
+                   (SELECT COUNT(*) FROM transactions AS t WHERE t.category_id = c.id)::int AS usage_count
+              FROM categories AS c WHERE c.id = %s""",
+        (category_id,),
+    ).fetchone()
+
+
 @app.get("/api/categories")
 def list_categories(
     category_type: CategoryType | None = Query(default=None, alias="type"),
     status: CategoryStatus = Query(default="all"),
 ) -> list[dict[str, object]]:
-    query = "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories"
+    # Usage counts come from ONE grouped aggregate joined once (never a query per category).
+    query = f"""SELECT {CATEGORY_COLUMNS}, COALESCE(u.usage_count, 0)::int AS usage_count
+                  FROM categories AS c
+                  LEFT JOIN (SELECT category_id, COUNT(*) AS usage_count
+                               FROM transactions GROUP BY category_id) AS u ON u.category_id = c.id"""
     clauses: list[str] = []
     parameters: list[object] = []
     if category_type is not None:
-        clauses.append("type = %s")
+        clauses.append("c.type = %s")
         parameters.append(category_type)
     if status == "active":
-        clauses.append("is_archived = FALSE")
+        clauses.append("c.is_archived = FALSE")
     elif status == "archived":
-        clauses.append("is_archived = TRUE")
+        clauses.append("c.is_archived = TRUE")
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
-    query += " ORDER BY type, lower(name), id"
+    query += " ORDER BY c.type, lower(c.name), c.id"
     with open_connection() as connection:
         rows = connection.execute(query, parameters).fetchall()
     return rows
@@ -889,10 +912,7 @@ def list_categories(
 @app.get("/api/categories/{category_id}")
 def get_category(category_id: Annotated[int, Path(gt=0)]) -> dict[str, object]:
     with open_connection() as connection:
-        row = connection.execute(
-            "SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key FROM categories WHERE id = %s",
-            (category_id,),
-        ).fetchone()
+        row = fetch_category(connection, category_id)
     if row is None:
         raise ApiProblem(404, "not_found", "Category not found.")
     return row
@@ -909,12 +929,13 @@ def create_category(values: CategoryInput) -> dict[str, object]:
         )
     try:
         with open_connection() as connection:
-            row = connection.execute(
-                """INSERT INTO categories (name, type, default_kakeibo_envelope, icon_key)
-                   VALUES (%s, %s, %s, %s)
-                   RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
-                (values.name, values.type, values.default_kakeibo_envelope, values.icon_key),
+            created = connection.execute(
+                """INSERT INTO categories (name, type, default_kakeibo_envelope, icon_key, color_key)
+                   VALUES (%s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (values.name, values.type, values.default_kakeibo_envelope, values.icon_key, values.color_key),
             ).fetchone()
+            row = fetch_category(connection, created["id"])
     except psycopg.errors.UniqueViolation:
         raise ApiProblem(
             409,
@@ -932,14 +953,14 @@ def update_category(
 ) -> dict[str, object]:
     supplied = values.model_fields_set
     if not supplied:
-        raise ApiProblem(422, "invalid_field", "Provide a category name, default envelope, or icon to update.")
+        raise ApiProblem(422, "invalid_field", "Provide a category name, default envelope, icon, or color to update.")
     if "name" in supplied and values.name is None:
         raise ApiProblem(422, "invalid_field", "Category name cannot be empty.", "name")
 
     try:
         with open_connection() as connection:
             category = connection.execute(
-                """SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key
+                """SELECT id, name, type, default_kakeibo_envelope, is_archived, icon_key, color_key
                      FROM categories WHERE id = %s FOR UPDATE""",
                 (category_id,),
             ).fetchone()
@@ -956,20 +977,21 @@ def update_category(
                     "Only expense categories can have a Kakeibo default.",
                     "default_kakeibo_envelope",
                 )
-            row = connection.execute(
+            connection.execute(
                 """UPDATE categories
-                      SET name = %s, default_kakeibo_envelope = %s, icon_key = %s
-                    WHERE id = %s
-                    RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
+                      SET name = %s, default_kakeibo_envelope = %s, icon_key = %s, color_key = %s
+                    WHERE id = %s""",
                 (
                     values.name if "name" in supplied else category["name"],
                     values.default_kakeibo_envelope
                     if "default_kakeibo_envelope" in supplied
                     else category["default_kakeibo_envelope"],
                     values.icon_key if "icon_key" in supplied else category["icon_key"],
+                    values.color_key if "color_key" in supplied else category["color_key"],
                     category_id,
                 ),
-            ).fetchone()
+            )
+            row = fetch_category(connection, category_id)
     except psycopg.errors.UniqueViolation:
         raise ApiProblem(
             409,
@@ -986,11 +1008,11 @@ def set_category_archived(
     category_id: Annotated[int, Path(gt=0)],
 ) -> dict[str, object]:
     with open_connection() as connection:
-        row = connection.execute(
-            """UPDATE categories SET is_archived = %s WHERE id = %s
-               RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key""",
+        updated = connection.execute(
+            "UPDATE categories SET is_archived = %s WHERE id = %s RETURNING id",
             (values.is_archived, category_id),
         ).fetchone()
+        row = fetch_category(connection, category_id) if updated else None
     if row is None:
         raise ApiProblem(404, "not_found", "Category not found.")
     return row
@@ -1029,15 +1051,11 @@ def update_category_envelope_default(
             raise ApiProblem(404, "not_found", "Category not found.")
         if category["type"] != "expense" and values.default_kakeibo_envelope is not None:
             raise ApiProblem(422, "invalid_field", "Only expense categories can have a Kakeibo default.", "default_kakeibo_envelope")
-        row = connection.execute(
-            """
-            UPDATE categories
-            SET default_kakeibo_envelope = %s
-            WHERE id = %s
-            RETURNING id, name, type, default_kakeibo_envelope, is_archived, icon_key
-            """,
+        connection.execute(
+            "UPDATE categories SET default_kakeibo_envelope = %s WHERE id = %s",
             (values.default_kakeibo_envelope, category_id),
-        ).fetchone()
+        )
+        row = fetch_category(connection, category_id)
     return row
 
 
@@ -1411,10 +1429,10 @@ def get_analytics(
             (start_date, end_date, *parameters),
         ).fetchall()
         category_rows = connection.execute(
-            f"""SELECT c.id, c.name, c.icon_key, c.is_archived, SUM(t.amount) AS expenses
+            f"""SELECT c.id, c.name, c.icon_key, c.color_key, c.is_archived, SUM(t.amount) AS expenses
                 FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
                 WHERE c.type = 'expense' AND t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
-                GROUP BY c.id, c.name, c.icon_key, c.is_archived ORDER BY SUM(t.amount) DESC, c.name""",
+                GROUP BY c.id, c.name, c.icon_key, c.color_key, c.is_archived ORDER BY SUM(t.amount) DESC, c.name""",
             parameters,
         ).fetchall()
         envelope_rows = connection.execute(
@@ -1465,7 +1483,7 @@ def get_analytics(
             "expenses": format_money(row["expenses"]),
         } for row in monthly_rows],
         "categories": [{
-            "id": row["id"], "name": row["name"], "icon_key": row["icon_key"],
+            "id": row["id"], "name": row["name"], "icon_key": row["icon_key"], "color_key": row["color_key"],
             "archived": row["is_archived"], "expenses": format_money(row["expenses"]),
         } for row in category_rows],
         "kakeibo_totals": {key: format_money(envelope_totals[key]) for key in (*envelopes, "unclassified")},

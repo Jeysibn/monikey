@@ -100,6 +100,7 @@ run_sql_file "$migration_db" "$script_dir/005_kakeibo.sql"
 run_sql_file "$migration_db" "$script_dir/006_kakeibo_plan_presence.sql"
 run_sql_file "$migration_db" "$script_dir/007_custom_categories.sql"
 run_sql_file "$migration_db" "$script_dir/008_category_icons.sql"
+run_sql_file "$migration_db" "$script_dir/009_category_colors.sql"
 migrated_snapshot="$(financial_snapshot "$migration_db")"
 if [[ "$migrated_snapshot" != "$before_snapshot" ]]; then
   echo "Migration changed the financial snapshot." >&2
@@ -110,7 +111,7 @@ if [[ "$unclassified" != "0" ]]; then
   echo "Migration assigned a historical Kakeibo classification." >&2
   exit 1
 fi
-echo "Migrations 005–008 preserve synthetic records, balances, totals, and historical NULL classifications."
+echo "Migrations 005–009 preserve synthetic records, balances, totals, and historical NULL classifications."
 
 port_mapping="$(docker port "$test_container" 5432/tcp | head -n 1)"
 test_port="${port_mapping##*:}"
@@ -132,6 +133,8 @@ assert categories.status_code == 200, categories.text
 assert all('icon_key' in row for row in categories.json())
 food = next(row for row in categories.json() if row['name'] == 'Food')
 assert food['icon_key'] is None
+assert all('color_key' in row and 'usage_count' in row for row in categories.json())
+assert food['color_key'] is None
 
 review = client.put('/api/kakeibo/months/2026-11/review', json={
     'actual_saved_declared': None,

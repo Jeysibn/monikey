@@ -53,6 +53,7 @@ run_sql_file "$repo_root/database/005_kakeibo.sql"
 run_sql_file "$repo_root/database/006_kakeibo_plan_presence.sql"
 run_sql_file "$repo_root/database/007_custom_categories.sql"
 run_sql_file "$repo_root/database/008_category_icons.sql"
+run_sql_file "$repo_root/database/009_category_colors.sql"
 
 port_mapping="$(docker port "$test_container" 5432/tcp | head -n 1)"
 test_port="${port_mapping##*:}"

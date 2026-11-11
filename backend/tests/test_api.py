@@ -143,8 +143,8 @@ def test_bounded_analytics_uses_only_transactions_and_preserves_archived_categor
     assert body["previous_totals"] == {"income": "25.00", "expenses": "0.00", "net_cash_flow": "25.00"}
     assert body["months"] == [{"month": "2020-10", "income": "100.00", "expenses": "35.00"}]
     assert body["categories"] == [
-        {"id": food, "name": "Food", "icon_key": None, "archived": True, "expenses": "25.00"},
-        {"id": groceries, "name": "Groceries", "icon_key": None, "archived": False, "expenses": "10.00"},
+        {"id": food, "name": "Food", "icon_key": None, "color_key": None, "archived": True, "expenses": "25.00"},
+        {"id": groceries, "name": "Groceries", "icon_key": None, "color_key": None, "archived": False, "expenses": "10.00"},
     ]
     october = next(row for row in body["kakeibo"] if row["month"] == "2020-10")
     assert october["plan_status"] == "saved"

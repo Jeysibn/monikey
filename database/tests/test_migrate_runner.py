@@ -114,6 +114,13 @@ def baseline_008() -> CatalogConnection:
     return connection
 
 
+def baseline_009() -> CatalogConnection:
+    connection = baseline_008()
+    connection.tables["categories"].add("color_key")
+    connection.constraints.add("categories_color_key_allowed")
+    return connection
+
+
 class MigrationRunnerTests(unittest.TestCase):
     def test_refuses_to_adopt_partial_core_schema(self):
         connection = baseline_001()
@@ -145,8 +152,19 @@ class MigrationRunnerTests(unittest.TestCase):
     def test_recognizes_complete_existing_schema_at_migration_003(self):
         self.assertEqual(migrate.infer_baseline(baseline_003()), 3)
 
+    def test_migration_009_follows_icons_and_keeps_older_baselines(self):
+        self.assertEqual(len(migrate.MIGRATIONS), 9)
+        self.assertEqual(migrate.infer_baseline(baseline_008()), 8)
+        self.assertEqual(migrate.infer_baseline(baseline_009()), 9)
+
+    def test_refuses_partial_migration_009_state(self):
+        connection = baseline_009()
+        connection.constraints.remove("categories_color_key_allowed")
+        with self.assertRaisesRegex(migrate.MigrationError, "009 appears partial"):
+            migrate.infer_baseline(connection)
+
     def test_migration_008_follows_category_lifecycle_without_changing_older_baselines(self):
-        self.assertEqual(len(migrate.MIGRATIONS), 8)
+        self.assertEqual(len(migrate.MIGRATIONS), 9)
         self.assertEqual(migrate.infer_baseline(baseline_006()), 6)
         self.assertEqual(migrate.infer_baseline(baseline_007()), 7)
         self.assertEqual(migrate.infer_baseline(baseline_008()), 8)
@@ -167,7 +185,7 @@ class MigrationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(migrate.MigrationError, "verified release workflow"):
             migrate.require_migration_permission(3, apply_missing=False)
             migrate.require_migration_permission(6, apply_missing=False)
-        migrate.require_migration_permission(8, apply_missing=False)
+        migrate.require_migration_permission(9, apply_missing=False)
 
     def test_rejects_unrecognized_extra_tables_and_columns(self):
         connection = baseline_003()

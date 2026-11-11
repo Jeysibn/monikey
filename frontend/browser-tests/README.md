@@ -27,7 +27,7 @@ Change the project name if reusing this procedure while another QA run is active
 
 Not every spec can run against the real API:
 
-- **Mock source** (`?demo=` scenarios such as `no-accounts`, `no-plan`, `load-error`): start `npm run dev -- --host 127.0.0.1 --port 5199` in `frontend/` and run with `MONIKEY_QA_BASE_URL=http://127.0.0.1:5199`. Needed by most of `moki.spec.ts` and the demo tests in `dashboard.spec.ts`. An HTTP-source build ignores `?demo=`, so those tests fail there; that is an environment mismatch, not a product defect.
+- **Mock source** (`?demo=` scenarios such as `no-accounts`, `no-plan`, `load-error`): start `npm run dev -- --host 127.0.0.1 --port 5199` in `frontend/` and run with `MONIKEY_QA_BASE_URL=http://127.0.0.1:5199`. Needed by `moki.spec.ts` (skipped against the real API) and the demo tests in `dashboard.spec.ts`. An HTTP-source build ignores `?demo=`, so those tests fail there; that is an environment mismatch, not a product defect.
 - **Real API stack** (Compose above): needed by `categories.spec.ts`, `quick-add-categories.spec.ts` and the API-mode Dashboard tests, which run with `MONIKEY_DASHBOARD_API_FIXTURE=1`. That mode seeds its records through the API and is not idempotent, so reset the QA project with `down --volumes` before repeating it.
 
 `navigation.spec.ts` and `overview-dashboard.spec.ts` run in either environment. Several specs rewrite tracked screenshots under `docs/`; review `git status` after a run.

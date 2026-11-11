@@ -243,6 +243,7 @@ test('the list view opens the same details panel and returns focus to its button
 })
 
 test('Accounts fits every supported width with no horizontal scroll and no axe violations, cards and list', async ({ page }) => {
+  test.setTimeout(90_000) // twelve axe scans (six widths, two layouts); a database full of earlier QA accounts makes each slower
   for (const width of [320, 360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     await openAccounts(page)

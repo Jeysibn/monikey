@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
+import { hasRealApi } from './fixtures'
+
+// Moki's states are reached through the mock source's ?demo= scenarios, which the real API ignores.
+test.beforeEach(async ({ request }) => {
+  test.skip(await hasRealApi(request), 'Uses the mock data source\'s ?demo= scenarios (see README: Two environments).')
+})
+
 /*
  * Where this spec's evidence screenshots go. By default a temporary, untracked folder, so running the suite never
  * rewrites the approved reference images in docs/. To regenerate those baselines ON PURPOSE, run with

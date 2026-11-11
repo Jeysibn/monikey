@@ -1,6 +1,6 @@
 # MoniKey v1 — Architecture Decision Records (ADRs)
 
-**Version:** 1.8
+**Version:** 1.11
 **Last reviewed:** 2026-11-10
 **Status:** ADR-022's installation-wide category model and archive-safe history are implemented in merged PRs #20–#22. This records accepted source architecture; it does not claim migration 007 or the latest images are deployed. Current deployment evidence is summarized in [ROADMAP.md](ROADMAP.md#current-source-and-release-status).
 **Related documents:** [TLD.md](TLD.md), [ROADMAP.md](ROADMAP.md), [AI_AGENT_PLAYBOOK.md](AI_AGENT_PLAYBOOK.md)

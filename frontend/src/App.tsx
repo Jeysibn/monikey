@@ -14,6 +14,7 @@ import type { DataSource } from '@/dataSource'
 import { accountSavedMessage, accountUpdatedMessage, type AccountValues } from '@/lib/accountForm'
 import { describeWriteError } from '@/lib/apiErrors'
 import { loadRecentAccountActivity } from '@/lib/accountActivity'
+import { entryMatchesFilters, NO_ACTIVITY_FILTERS, withCategory, withKind, type ActivityFilters } from '@/lib/activityFilters'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthLabel, monthOf, nextPageSize } from '@/lib/finance'
@@ -103,8 +104,9 @@ function App() {
   const [walletPreferences, setWalletPreferences] = useState<WalletPreferencesV1>(() => readWalletPreferences())
   const [month, setMonth] = useState(() => monthOf(source.today))
   const [accountFilter, setAccountFilter] = useState<number | null>(null) // Activity's account filter
+  const [activityFilters, setActivityFilters] = useState<ActivityFilters>(NO_ACTIVITY_FILTERS) // Activity's search, type and category
   // The page size belongs to one combination of filters; a different month or account starts again at one page.
-  const filterKey = `${month}|${accountFilter}`
+  const filterKey = `${month}|${accountFilter}|${JSON.stringify(activityFilters)}`
   const [paged, setPaged] = useState({ key: filterKey, size: ACTIVITY_PAGE_SIZE })
   const pageSize = paged.key === filterKey ? paged.size : ACTIVITY_PAGE_SIZE
   // Forget the old page size as soon as the filters change, so coming back to a month starts at one page again.
@@ -139,8 +141,8 @@ function App() {
     version,
   )
   const activity = useResource(
-    view === 'activity' ? `activity:${month}:${accountFilter}:${pageSize}` : null,
-    (signal) => source.loadActivity({ month, accountId: accountFilter, limit: pageSize }, signal),
+    view === 'activity' ? `activity:${month}:${accountFilter}:${JSON.stringify(activityFilters)}:${pageSize}` : null,
+    (signal) => source.loadActivity({ month, accountId: accountFilter, limit: pageSize, filters: activityFilters }, signal),
     version,
   )
   const kakeibo = useResource(view === 'kakeibo' ? `kakeibo:${month}` : null, (signal) => source.loadKakeiboMonth(month, signal), version)
@@ -237,6 +239,7 @@ function App() {
   /** Account details "View all in Activity": this month's Activity, filtered to the account. */
   const viewActivityFor = (accountId: number) => {
     setAccountFilter(accountId)
+    setActivityFilters(NO_ACTIVITY_FILTERS) // a search or type left over from before would hide what was asked for
     setMonth(monthOf(source.today))
     setView('activity')
   }
@@ -283,13 +286,16 @@ function App() {
     let again: StatusNote['action']
     const hidden =
       view === 'activity' &&
-      (monthOf(values.date) !== month || (accountFilter !== null && !involvesAccount(values, accountFilter)))
+      (monthOf(values.date) !== month ||
+        (accountFilter !== null && !involvesAccount(values, accountFilter)) ||
+        (snapshot !== undefined && !entryMatchesFilters(values, activityFilters, snapshot)))
     if (hidden) {
       text += " It's hidden by your filters."
       again = {
         label: 'Show it',
         run: () => {
           setAccountFilter(null)
+          setActivityFilters(NO_ACTIVITY_FILTERS)
           setMonth(monthOf(values.date))
         },
       }
@@ -490,10 +496,16 @@ function App() {
             page={activity}
             month={month}
             accountId={accountFilter}
+            filters={activityFilters}
+            categories={categories.data ?? []}
             loading={demoLoading}
             addState={addState}
             onMonthChange={setMonth}
             onAccountChange={setAccountFilter}
+            onSearch={(search) => setActivityFilters((current) => ({ ...current, search }))}
+            onKind={(kind) => setActivityFilters((current) => withKind(current, kind, categories.data ?? []))}
+            onCategory={(categoryId) => setActivityFilters((current) => withCategory(current, categoryId, categories.data ?? []))}
+            onReset={() => { setAccountFilter(null); setActivityFilters(NO_ACTIVITY_FILTERS) }}
             onLoadMore={() => setPaged({ key: filterKey, size: nextPageSize(pageSize) })}
             onAdd={openAdd}
             onEdit={(item, from) => openEdit(item, from)}

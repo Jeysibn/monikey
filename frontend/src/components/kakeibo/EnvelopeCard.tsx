@@ -2,7 +2,7 @@ import { BookOpen, House, Sparkles, TriangleAlert, Umbrella, type LucideIcon } f
 import { cn } from 'cn'
 
 import { MoneyText } from '@/components/MoneyText'
-import { ENVELOPE_INFO, envelopeProgress } from '@/lib/kakeibo'
+import { ENVELOPE_ACCENT, ENVELOPE_INFO, envelopeProgress } from '@/lib/kakeibo'
 import { formatPeso } from '@/lib/money'
 import type { KakeiboEnvelope, KakeiboEnvelopeReport } from '@/types'
 
@@ -18,12 +18,13 @@ export function EnvelopeCard({ envelope, report, className }: { envelope: Kakeib
   const { label, meaning } = ENVELOPE_INFO[envelope]
   const Icon = ICON[envelope]
   const { state, percent } = envelopeProgress(report)
+  const accent = ENVELOPE_ACCENT[envelope]
   const titleId = `envelope-${envelope}-title`
 
   return (
     <article aria-labelledby={titleId} className={cn('min-w-0 rounded-card border border-border bg-card p-5', className)}>
       <div className="flex items-center gap-3">
-        <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
+        <span aria-hidden="true" style={{ backgroundColor: accent.bg, color: accent.fg }} className="grid size-10 shrink-0 place-items-center rounded-full">
           <Icon className="size-5" />
         </span>
         <div className="min-w-0">
@@ -61,7 +62,7 @@ export function EnvelopeCard({ envelope, report, className }: { envelope: Kakeib
           aria-label={`${formatPeso(report.spent)} of ${formatPeso(report.limit)} spent`}
           className="mt-3 h-2.5 overflow-hidden rounded-full bg-secondary"
         >
-          <div className={cn('h-full rounded-full', state === 'over' ? 'bg-debt' : 'bg-primary')} style={{ width: `${percent}%` }} />
+          <div className={cn('h-full rounded-full', state === 'over' && 'bg-debt')} style={{ width: `${percent}%`, ...(state === 'over' ? {} : { backgroundColor: accent.solid }) }} />
         </div>
       )}
 

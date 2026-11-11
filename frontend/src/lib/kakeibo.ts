@@ -3,6 +3,7 @@ import type {
   Centavos,
   KakeiboEnvelope,
   KakeiboEnvelopeReport,
+  KakeiboMonth,
   KakeiboPlan,
   KakeiboPlanValues,
   KakeiboReview,
@@ -149,6 +150,50 @@ export function envelopeProgress(report: KakeiboEnvelopeReport): { state: Envelo
   if (report.spent > report.limit) return { state: 'over', percent: 100 }
   if (report.spent === report.limit) return { state: 'at-limit', percent: 100 }
   return { state: 'within', percent }
+}
+
+/*
+ * The accent of each envelope (spec section 6.5): one subtle tint, ink and solid per envelope so the four cards
+ * are quick to tell apart. They belong to the four fixed envelopes, NOT to categories (a category's own color is
+ * independent), and the envelope's name is always written next to its color. The tint and ink are text-grade
+ * contrast and the solid is graphics-grade against white (both checked in tests/kakeibo.test.ts).
+ */
+export const ENVELOPE_ACCENT: Record<KakeiboEnvelope, { bg: string; fg: string; solid: string }> = {
+  needs: { bg: '#E3EDFD', fg: '#1B4DB0', solid: '#2D6BD8' },
+  wants: { bg: '#EEE6FB', fg: '#512A98', solid: '#7449CE' },
+  culture: { bg: '#DDF4F2', fg: '#0F5F5A', solid: '#14857F' },
+  unexpected: { bg: '#FEF1D2', fg: '#7A4A06', solid: '#A8690C' },
+}
+
+/**
+ * The plan summary's three headline figures, for display only (like `envelopeProgress`): whole-centavo sums of the
+ * four per-envelope figures the server reported. They cover the four envelopes only, so expenses that have no
+ * envelope are NOT in them (they stay in the month's total expenses), and a savings target is not in them either
+ * (it is a goal, never money already saved). `null` when the month has no plan, because then no envelope has a limit.
+ */
+export interface PlanProgress {
+  allocated: Centavos // the four limits together
+  classifiedSpent: Centavos // spending that has an envelope
+  remaining: Centavos // the four remainders together; negative when the envelopes are over their limits together
+  percent: number | null // classified spending as a share of the allocation, 0-100; null when nothing is allocated
+  overCount: number // envelopes spent past their own limit
+}
+
+export function planProgress(report: KakeiboMonth): PlanProgress | null {
+  let allocated = 0
+  let classifiedSpent = 0
+  let remaining = 0
+  let overCount = 0
+  for (const envelope of ENVELOPES) {
+    const { limit, spent, remaining: left } = report.envelopes[envelope]
+    if (limit === null || left === null) return null
+    allocated += limit
+    classifiedSpent += spent
+    remaining += left
+    if (spent > limit) overCount += 1
+  }
+  const percent = allocated === 0 ? null : Math.min(100, Math.floor((classifiedSpent * 100) / allocated))
+  return { allocated, classifiedSpent, remaining, percent, overCount }
 }
 
 /* ---------- Weeks (Monday to Sunday, as the server counts them) ---------- */

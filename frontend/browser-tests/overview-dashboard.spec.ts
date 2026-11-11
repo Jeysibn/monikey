@@ -6,7 +6,11 @@ import { seedPopulatedLedger } from './fixtures'
 
 // These specs need a populated ledger. Seed it here (real API only; mock data already has one) instead of
 // relying on accounts that an earlier spec happened to leave behind.
-test.beforeEach(async ({ request }) => {
+test.beforeEach(async ({ page, request }) => {
+  // The header Add button is disabled while data loads and then fades to its enabled colors (150ms). Axe can sample
+  // a half-faded color and report a contrast failure that no person would see. The app turns that transition off
+  // for reduced motion, so the test asks for it and scans a settled page.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await seedPopulatedLedger(request)
 })
 

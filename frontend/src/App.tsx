@@ -399,20 +399,6 @@ function App() {
     setStatus({ text: `${count} ${noun} ${envelope === null ? 'cleared' : `moved to ${envelopeLabel(envelope)}`}. Balances and totals are unchanged.` })
     setClassifyMonth(null)
   }
-  /** Saves each changed suggestion in turn; resolves with the categories that failed (the dialog keeps them). */
-  const saveSuggestions = async (changes: { id: number; envelope: KakeiboEnvelope | null }[]): Promise<number[]> => {
-    const failed: number[] = []
-    for (const change of changes) {
-      try {
-        await source.setCategoryEnvelope(change.id, change.envelope)
-      } catch {
-        failed.push(change.id)
-      }
-    }
-    if (failed.length < changes.length) setCategoriesVersion((v) => v + 1) // Quick Add reads the new suggestions
-    if (failed.length === 0) setStatus({ text: 'Suggestions saved. Expenses you already saved keep their envelopes.' })
-    return failed
-  }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
     const target = opener.current?.isConnected ? opener.current : document.querySelector<HTMLElement>('main h1')
@@ -517,8 +503,7 @@ function App() {
             onSaveWeek={saveWeek}
             onSaveReview={saveReview}
             onClassify={openClassify}
-            categories={categories.data}
-            onSaveSuggestions={saveSuggestions}
+            onManageCategories={() => setView('categories')}
             onDialogOpen={() => rememberOpener()}
             onDialogClosed={restoreFocus}
           />

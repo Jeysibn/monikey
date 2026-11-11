@@ -14,8 +14,10 @@ import { switchKind } from '../src/lib/entryForm.ts'
 import { buildSnapshot } from '../src/lib/finance.ts'
 import {
   EMPTY_PLAN,
+  ENVELOPE_ACCENT,
   envelopeProgress,
   parsePlanAmount,
+  planProgress,
   planEstimate,
   planValues,
   suggestedEnvelope,
@@ -370,5 +372,60 @@ describe('mock source', () => {
     await assert.rejects(source.loadKakeiboMonth('2026-10', signal()))
     assert.equal((await source.loadKakeiboMonth('2026-10', signal())).month, '2026-10') // retry works
     await source.loadAccounts(signal()) // other reads are unaffected
+  })
+})
+
+describe('plan summary figures (display-only sums of the server\'s per-envelope figures)', () => {
+  const env = (limit: number | null, spent: number) => ({ limit, spent, remaining: limit === null ? null : limit - spent })
+  const month = (envelopes: Record<'needs' | 'wants' | 'culture' | 'unexpected', ReturnType<typeof env>>, extra: object = {}) =>
+    ({ month: '2026-10', planStatus: 'saved', plan: null, actualIncome: 0, availableToAllocate: 0, unallocated: 0, envelopes, unclassifiedExpenses: 0, totalExpenses: 0, review: null, actualsChangedSinceReview: false, ...extra }) as unknown as Parameters<typeof planProgress>[0]
+
+  it('adds the four limits, the classified spending and the remainders in whole centavos', () => {
+    const progress = planProgress(month({ needs: env(1_800_000, 1_250_075), wants: env(500_000, 140_000), culture: env(200_000, 0), unexpected: env(300_000, 48_650) }))!
+    assert.equal(progress.allocated, 2_800_000)
+    assert.equal(progress.classifiedSpent, 1_438_725)
+    assert.equal(progress.remaining, 2_800_000 - 1_438_725) // allocation minus classified spending, to the centavo
+    assert.equal(progress.percent, 51) // floor(51.38): "100%" never shows before the limit is reached
+    assert.equal(progress.overCount, 0)
+  })
+  it('counts envelopes over their own limit and keeps a negative combined remainder', () => {
+    const progress = planProgress(month({ needs: env(100_000, 150_000), wants: env(100_000, 20_000), culture: env(0, 5_000), unexpected: env(0, 0) }))!
+    assert.equal(progress.overCount, 2) // needs, and culture (spent with a zero limit)
+    assert.equal(progress.remaining, 200_000 - 175_000)
+    assert.equal(progress.percent, 87)
+    assert.equal(planProgress(month({ needs: env(100, 300), wants: env(0, 0), culture: env(0, 0), unexpected: env(0, 0) }))!.percent, 100) // capped
+  })
+  it('has no percentage when nothing is allocated, and no figures at all when the month has no plan', () => {
+    assert.equal(planProgress(month({ needs: env(0, 0), wants: env(0, 0), culture: env(0, 0), unexpected: env(0, 0) }))!.percent, null)
+    assert.equal(planProgress(month({ needs: env(null, 10), wants: env(null, 0), culture: env(null, 0), unexpected: env(null, 0) })), null)
+  })
+  it('ignores unclassified expenses and any savings target: they are not envelope spending', () => {
+    const base = month({ needs: env(100_000, 40_000), wants: env(0, 0), culture: env(0, 0), unexpected: env(0, 0) })
+    const withUnclassified = { ...base, unclassifiedExpenses: 999_999, totalExpenses: 1_039_999 }
+    assert.deepEqual(planProgress(withUnclassified), planProgress(base))
+  })
+  it('agrees with the server on a real mock month (allocation = available - unallocated)', async () => {
+    const report = await createMockSource().loadKakeiboMonth('2026-10', new AbortController().signal)
+    const progress = planProgress(report)
+    if (!progress) return assert.equal(report.plan, null)
+    assert.equal(progress.allocated, report.availableToAllocate! - report.unallocated!)
+    assert.equal(progress.classifiedSpent, report.totalExpenses - report.unclassifiedExpenses)
+  })
+})
+
+describe('envelope accents', () => {
+  const lum = (hex: string) => {
+    const c = (i: number) => { const v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+    return 0.2126 * c(0) + 0.7152 * c(1) + 0.0722 * c(2)
+  }
+  const ratio = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number]; return (hi + 0.05) / (lo + 0.05) }
+  it('has readable ink on each tint (4.5:1) and a visible solid on white (3:1)', () => {
+    for (const [key, accent] of Object.entries(ENVELOPE_ACCENT)) {
+      assert.ok(ratio(accent.fg, accent.bg) >= 4.5, `${key} ink on tint`)
+      assert.ok(ratio(accent.solid, '#FFFFFF') >= 3, `${key} solid on white`)
+    }
+  })
+  it('covers exactly the four fixed envelopes', () => {
+    assert.deepEqual(Object.keys(ENVELOPE_ACCENT).sort(), ['culture', 'needs', 'unexpected', 'wants'])
   })
 })

@@ -24,6 +24,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
+- Kakeibo redesign: two tabs (Plan & Progress, Reflections), a plan summary, four accented envelope cards, folded plan details and a direct Classify action. Category defaults are managed in Categories, so the Category Suggestions editor was removed from Kakeibo. No Kakeibo calculation or backend behavior changed (local, unreleased).
 - Redesigned Add/Edit Transaction: Date directly after Amount with Today/Yesterday shortcuts, a searchable account picker, a compact Kakeibo row, and a wider dialog with a near-full-height phone sheet (local, unreleased).
 - Categories page redesign: Expenses/Income/Archived tabs with counts, search, envelope filter and sort, curated category colors and more icons, Add/Edit dialog with live preview, styled Archive and Delete confirmations, and all-time usage counts. Migration `009_category_colors.sql` adds nullable `color_key` and widens the icon allowlist; it is additive and has not been applied to any production database (local, unreleased).
 - Contextual Moki illustrations for first-run guidance, a compact welcome on the populated Overview, empty Accounts and Activity, filtered Activity with no matches, and Kakeibo planning. The first-account thumbs-up was removed; the approved pose remains unused.
@@ -35,6 +36,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 - A separate, server-aggregated financial Analytics Dashboard with date/account filters, monthly cashflow, category spending, and saved Kakeibo plan comparisons (source PR #28).
 
 ### Fixed
+- The Kakeibo plan button's accessible name now begins with its visible text, as WCAG 2.5.3 requires.
 - Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
 - Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
 - Added Dashboard to direct navigation and placed Accounts with Kakeibo and Categories in the phone More menu to retain five clear bottom-bar targets.

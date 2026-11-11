@@ -112,7 +112,7 @@ test('Kakeibo planning pose appears only while the selected month has no plan', 
   await openView(page, 'Kakeibo')
   await expect(page.locator('img[src="/moki/moki-checklist-thinking.webp"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No plan for October 2026 yet' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Create the October 2026 plan' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create plan for October 2026', exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/browser/moki-kakeibo-mobile.png', fullPage: true })
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.screenshot({ path: 'test-results/browser/moki-kakeibo-desktop.png', fullPage: true })

@@ -84,3 +84,40 @@ Not done (by decision or later phases): Recharts and the Dashboard rebuild (ADR-
 | Manual scripted check, Chromium emulation | no horizontal overflow and no console errors at 320, 360, 390, 768, 1024, 1440 px; editors fit the viewport |
 
 Real-device checks for Categories (iOS Safari, Android Chrome) are still open: tabs on one row, icon grid scrolling inside the sheet, color swatch tap targets, keyboard behaviour with the editor open.
+
+## Phase 4 — Kakeibo (local branch `feat/ui-redesign-kakeibo`, from the cleaned Phase 3 tip)
+
+Implemented (frontend only; no backend, calculation or migration change):
+
+- **Two ARIA tabs** (`components/Tabs.tsx`: arrows, Home, End, roving tabindex, linked panels): Plan & Progress and Reflections. Tabs only switch what is shown; the month stays shared with Overview and Activity.
+- **Plan & Progress:** cobalt plan summary (`PlanHero`: set aside for the four envelopes, spent in envelopes, left or over, one progress bar, an over-limit count); four envelope cards with a subtle accent per envelope (`ENVELOPE_ACCENT`, separate from category colors, contrast-checked); the Not-yet-classified card with the Classify action; folded Monthly plan details (`PlanDetails`: planned income, starting funds, savings target, debt reserve, available to allocate, unallocated or over-allocated, intention, Recorded so far, Edit/Confirm plan); no-plan state keeps the Moki pose, the "No plan for … yet" heading and a Create plan action.
+- **Reflections:** the existing weekly check-in and month-end reflection cards and dialogs, unchanged in behaviour, including saved snapshots and the "activity changed since this reflection" warning (reworded to point at the Plan & Progress tab).
+- **Accessibility fix:** the header plan button's accessible name now starts with its visible text ("Create/Edit/Confirm plan for October 2026"). The old label failed WCAG 2.5.3 (label in name) and was found by axe.
+- **Display arithmetic only:** `planProgress` sums the server's four per-envelope figures in whole centavos (unit-tested, including agreement with `available − unallocated`). Savings targets are labelled goals, never savings, and unclassified expenses stay inside total expenses with the screen saying so.
+
+### Category Suggestions removed — functional equivalence confirmed first
+
+| Category Suggestions (removed from Kakeibo) | Where it lives now |
+|---|---|
+| Set the default envelope of an active expense category | Categories → Edit → "Default Kakeibo envelope" (also for archived ones) |
+| See every category's default at a glance | Category rows show "Default: Needs" etc.; the envelope filter (Any, each envelope, No default) lists them |
+| Income categories have no default | Editor hides the field for income; API and database refuse it |
+| A default only suggests for new expenses; saved ones are unchanged | Stated in the editor; covered by `quick-add-categories.spec.ts` (suggestion, manual override wins, history unchanged) and backend tests |
+| Bulk save with partial-failure handling | Not carried over: each category saves on its own, so there is no partial failure to report |
+
+Kakeibo now links to Categories ("Manage category defaults"). The DataSource `setCategoryEnvelope` method and its API route remain; nothing in the UI calls them any more.
+
+### Phase 4 verification record (2026-11-12, local)
+
+| Check | Result |
+|---|---|
+| `tsc -b` / `oxlint` / `npm run build` | clean |
+| `npm test` | 331 tests, 331 pass (7 new: plan-progress sums, over-limit counts, no-plan, unclassified excluded, envelope accent contrast) |
+| Playwright, real stack on a fresh DB: `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | 21 of 21 pass |
+| `kakeibo.spec.ts` + `overview-dashboard.spec.ts` repeated 8 times on the real stack | 48 of 48 pass |
+| Playwright, mock mode: `dashboard`, `moki`, `navigation`, `overview-dashboard`, `kakeibo` | all pass (API-only tests skip by design) |
+| Manual scripted check, Chromium emulation: plan, no-plan and reviewed states, both tabs | no horizontal overflow and no console errors at 320, 360, 390, 768, 1024, 1440 px |
+
+Test stabilisation done in this phase: `overview-dashboard.spec.ts` no longer depends on accounts left by earlier specs (`browser-tests/fixtures.ts` seeds its own), and specs that run axe on a freshly loaded page ask for reduced motion, because axe sometimes sampled the header Add button halfway through its 150 ms colour fade (a measurement artifact, reproduced at 2 in 30 loads before and 0 in 60 after).
+
+Real-device checks for Kakeibo (iOS Safari, Android Chrome) are still open: tab keyboard and touch behaviour, the folded plan details, the reflection dialogs with the on-screen keyboard.

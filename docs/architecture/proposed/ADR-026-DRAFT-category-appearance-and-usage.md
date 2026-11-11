@@ -1,6 +1,6 @@
 # DRAFT ADR-026 — Category color, wider icon set and usage counts
 
-- **Status:** PROPOSED — needs owner approval before any migration or API code is written. Not applied anywhere. No production migration is authorized by this document.
+- **Status:** Direction APPROVED by the owner (2026-11-12) and implemented LOCALLY on `feat/ui-redesign-categories-nav`; not pushed, not released. No production migration is authorized by this document. Final numbering and move into `ADR.md` happen when the stack merges.
 - **Date:** 2026-11-12 · **Extends:** ADR-022 (category lifecycle) and ADR-023 (optional `icon_key`, only on PR #25's branch).
 - **Why an ADR:** it adds a database column, widens a database CHECK, and adds a derived API field. ADR-023 set the precedent that category appearance gets an ADR and a backup-gated migration.
 
@@ -28,3 +28,10 @@ Same checksum and backup-gated runner as 007/008; rehearsed in the disposable QA
 - [ ] Approve migration 009 with the curated color keys and widened icon allowlist.
 - [ ] Approve `usage_count` as an API field.
 - [ ] Confirm PR #25 (migration 008) is the base for this work.
+
+## Implementation notes (local, 2026-11-12)
+
+- **Usage count, no N+1:** the list endpoint joins ONE grouped aggregate (`SELECT category_id, COUNT(*) FROM transactions GROUP BY category_id`) once; single-category responses (get, create, update, archive) use a scalar count for that one id. A backend test counts statements and proves the list is one query however many categories exist. There is no index on `transactions.category_id` (none exists today, and the adoption check in `migrate.py` enumerates the allowed `idx_*` names); at this app's scale a single sequential pass is fine. Revisit with its own migration if the ledger grows large.
+- **Constraint swap:** 009 drops and re-adds `categories_icon_key_allowed` under the same name with a strict superset, so `migrate.py`'s migration-008 marker still holds. It validates existing rows (all `NULL` or old keys), so it cannot fail on valid data.
+- **Sync guards:** `backend/tests/test_category_appearance.py` and `frontend/tests/categoryAppearance.test.ts` both parse `009_category_colors.sql` and fail if the SQL, FastAPI `Literal`s and TypeScript registries drift apart.
+- **Verified:** fresh install (001→009 in `database/test.sh`), upgrade 008→009 with a synthetic ledger (`tests/category_colors_*.sql`), and a pre-005 backup restored and migrated through 009 with the API running (`database/rehearse_recovery.sh`).

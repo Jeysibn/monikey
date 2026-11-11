@@ -12,17 +12,21 @@ export function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  dense = false,
 }: {
   legend: string
   name: string
   value: T
   options: { value: T; label: string }[]
   onChange: (value: T) => void
+  /** Compact one-row tabs for labels that carry a count: smaller type, no inline check (the raised, outlined surface marks the choice). */
+  dense?: boolean
 }) {
+  const small = dense || options.length > 3
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0">
       <legend className="sr-only">{legend}</legend>
-      <div className="grid gap-1 rounded-full bg-secondary p-1" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${options.length > 3 ? "4.25rem" : "5.5rem"}, 1fr))` }}>
+      <div className="grid gap-1 rounded-full bg-secondary p-1" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${small ? "4.25rem" : "5.5rem"}, 1fr))` }}>
         {options.map((o) => (
           <label key={o.value} className="relative block">
             <input
@@ -36,12 +40,12 @@ export function SegmentedControl<T extends string>({
             <span
               className={cn(
                 'flex h-11 cursor-pointer items-center justify-center rounded-full font-semibold',
-                options.length > 3 ? 'px-0.5 text-sm whitespace-nowrap' : 'gap-1.5 text-[0.9375rem]',
+                small ? 'px-0.5 text-sm whitespace-nowrap' : 'gap-1.5 text-[0.9375rem]',
                 'text-muted-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring',
                 value === o.value && 'bg-card text-foreground shadow-[0_0_0_1px_var(--rule)]',
               )}
             >
-              {value === o.value && options.length <= 3 && <Check aria-hidden="true" className="size-4" />}
+              {value === o.value && !small && <Check aria-hidden="true" className="size-4" />}
               {o.label}
             </span>
           </label>

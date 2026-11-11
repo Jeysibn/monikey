@@ -35,7 +35,7 @@ test('category editor dialog fits supported viewports, focuses the name field an
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 })
     await trigger.click()
-    const dialog = page.getByRole('dialog', { name: 'Add a category' })
+    const dialog = page.getByRole('dialog', { name: 'Add category' })
     await expect(page.getByLabel('Name', { exact: true })).toBeFocused()
     const layout = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
     const bounds = await dialog.boundingBox()
@@ -81,7 +81,7 @@ test('empty category collection points to the supported create action', async ({
   await openCategories(page)
   await expect(page.getByText('No categories yet. Select Add category to create one.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Add category' }).click()
-  await expect(page.getByRole('dialog', { name: 'Add a category' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Add category' })).toBeVisible()
 })
 
 test('failed category reads expose a retry and recover', async ({ page }) => {
@@ -117,7 +117,7 @@ test('income and expense categories validate, save, filter, search and paginate'
 
   await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('button', { name: 'Create category' }).click()
-  await expect(page.getByRole('alert')).toHaveText('Enter a category name.')
+  await expect(page.getByText('Enter a category name.', { exact: true })).toBeVisible()
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
   await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
@@ -129,7 +129,8 @@ test('income and expense categories validate, save, filter, search and paginate'
   await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
   await page.getByRole('button', { name: 'Create category' }).click()
-  await expect(page.getByRole('alert')).toContainText('already exists')
+  await expect(page.getByText(/already exists/)).toBeVisible()
+  await expect(page.getByLabel('Name', { exact: true })).toBeFocused()
 
   await page.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('button', { name: 'Add category' }).click()
@@ -140,17 +141,16 @@ test('income and expense categories validate, save, filter, search and paginate'
   await page.getByLabel('Search categories').fill(expenseName)
   await expect(page.getByRole('button', { name: `Edit ${expenseName}` })).toBeVisible()
 
-  await page.getByLabel('Filter category type').selectOption('expense')
-  await page.getByLabel('Filter category status').selectOption('active')
+  await page.getByText(/^Expenses \d+$/).click()
   await page.getByLabel('Search categories').fill(expenseName)
-  await expect(page.getByRole('listitem')).toHaveCount(1)
+  await expect(page.getByRole('list', { name: 'Categories' }).getByRole('listitem')).toHaveCount(1)
   await expect(page.getByText('Default: Needs')).toBeVisible()
   await page.getByRole('button', { name: `Edit ${expenseName}` }).click()
   await page.getByLabel('Name', { exact: true }).fill(renamedExpenseName)
   await page.getByLabel('Default Kakeibo envelope').selectOption('culture')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Add category' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Add category' })).toBeFocused() // the renamed row no longer matches the search, so focus falls back to Add
   await page.getByLabel('Search categories').fill(renamedExpenseName)
   await expect(page.getByRole('button', { name: `Edit ${renamedExpenseName}` })).toBeVisible()
   await expect(page.getByText('Default: Culture')).toBeVisible()
@@ -164,12 +164,11 @@ test('income and expense categories validate, save, filter, search and paginate'
   }
   await page.reload()
   await openCategories(page)
-  await page.getByLabel('Filter category type').selectOption('expense')
-  await page.getByLabel('Filter category status').selectOption('active')
   await page.getByLabel('Search categories').fill(manyPrefix)
-  await expect(page.getByRole('listitem')).toHaveCount(50)
+  const categoryList = page.getByRole('list', { name: 'Categories' })
+  await expect(categoryList.getByRole('listitem')).toHaveCount(50)
   await page.getByRole('button', { name: 'Next' }).click()
-  await expect(page.getByRole('listitem')).toHaveCount(5)
+  await expect(categoryList.getByRole('listitem')).toHaveCount(5)
   await expect(page.getByRole('button', { name: `Edit ${manyPrefix} 54` })).toBeVisible()
 })
 
@@ -217,7 +216,8 @@ test('category icon picker supports search, keyboard selection, edit and persist
   const categoryRadio = page.getByRole('radio', { name, exact: true })
   await expect(categoryRadio.locator('xpath=..').locator('svg.lucide-briefcase-business')).toHaveCount(1)
   await page.getByLabel('Amount').fill('1.00')
-  await page.getByLabel('Account').selectOption({ index: 1 })
+  await page.getByRole('dialog').getByLabel('Account', { exact: true }).click()
+  await page.getByRole('dialog').getByRole('option').first().click()
   await categoryRadio.focus()
   await page.keyboard.press('Space')
   await expect(categoryRadio).toBeChecked()

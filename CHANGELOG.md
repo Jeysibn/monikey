@@ -24,6 +24,8 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
+- Redesigned Add/Edit Transaction: Date directly after Amount with Today/Yesterday shortcuts, a searchable account picker, a compact Kakeibo row, and a wider dialog with a near-full-height phone sheet (local, unreleased).
+- Categories page redesign: Expenses/Income/Archived tabs with counts, search, envelope filter and sort, curated category colors and more icons, Add/Edit dialog with live preview, styled Archive and Delete confirmations, and all-time usage counts. Migration `009_category_colors.sql` adds nullable `color_key` and widens the icon allowlist; it is additive and has not been applied to any production database (local, unreleased).
 - Contextual Moki illustrations for first-run guidance, a compact welcome on the populated Overview, empty Accounts and Activity, filtered Activity with no matches, and Kakeibo planning. The first-account thumbs-up was removed; the approved pose remains unused.
 - Kakeibo monthly plans and reports, weekly reflections, and expense classification using the four fixed envelopes (PRs #1–#8).
 - Wallet account presentation and reviewed card artwork, including recovered and regenerated artwork (PRs #10–#17).

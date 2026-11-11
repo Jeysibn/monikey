@@ -4,7 +4,7 @@ import { cn } from 'cn'
 
 import { DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { CategoryIcon } from '@/lib/categoryIcons'
+import { CategoryBadge } from '@/components/CategoryBadge'
 import { Input } from '@/components/ui/input'
 import { AccountPicker } from '@/components/AccountPicker'
 import { DateShortcuts } from '@/components/DateShortcuts'
@@ -369,7 +369,7 @@ export function TransactionForm({
                       )}
                     >
                       {values.categoryId === c.id && <Check aria-hidden="true" className="size-4" />}
-                      <CategoryIcon iconKey={c.iconKey} className="size-4" />
+                      <CategoryBadge iconKey={c.iconKey} colorKey={c.colorKey} size="sm" />
                       {c.name}
                     </span>
                   </label>

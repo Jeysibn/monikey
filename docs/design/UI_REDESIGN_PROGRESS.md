@@ -49,3 +49,38 @@ Use synthetic data only. Record device, OS and browser version for each.
 - [ ] Display size and font scale at maximum: no clipped controls, no horizontal scroll.
 
 See also `docs/design/REAL_DEVICE_CHECKLIST.md` for the existing release checklist.
+
+## Phase 3 — Categories, appearance and navigation (local branch `feat/ui-redesign-categories-nav`)
+
+Baseline: the local integrated branch `feat/frontend-moki-integration` (verified to contain PRs #26–#29's `1c4d046` plus the Moki work, migration 008, `/api/analytics`, Dashboard and the five-column mobile navigation), with the Phase 2 branch merged in. The remote copy of that branch is behind by 15 local commits; nothing here is pushed.
+
+Implemented:
+
+- **Migration 009** (`database/009_category_colors.sql`): nullable `color_key` with a curated-key CHECK, and a strict-superset icon CHECK (24 Lucide keys). Additive, no backfill, no ledger change. Registered in `migrate.py`, compose, test scripts and the recovery rehearsal.
+- **API:** `color_key` on create/update/read, `usage_count` on every category response (one grouped aggregate for lists), `color_key` in analytics category rows.
+- **Contract:** `types.ts`, `wire.ts`, `httpSource`, `mockSource`/`mockData` carry colorKey and usageCount; unknown or missing keys fall back to the neutral color; wrong types are contract errors.
+- **Registries:** `lib/categoryColors.ts` (10 curated colors, contrast-checked in tests), 12 more icons, `CategoryBadge` (tinted icon square).
+- **Categories page:** Expenses / Income / Archived tabs with counts, search, envelope filter, sort (most used, A–Z), rows with icon, color, default envelope and usage; Add/Edit dialog with icon picker, color picker, default envelope (expense only), live preview; styled Archive confirmation; Delete only from the editor and only while unused (in-place confirmation); Restore immediate.
+- **Shared components:** `ConfirmPanel` / `ConfirmDialog` (compact destructive confirmation, replaces `window.confirm`).
+- **Appearance consumers:** Quick Add category chips and Activity rows show the persisted badge; Dashboard category list uses it too.
+- **Navigation:** the existing five-column bar (Overview, Dashboard, Activity, More, Add; Accounts, Kakeibo and Categories under More) was verified at 320/360/390 and on desktop; unchanged.
+
+Not done (by decision or later phases): Recharts and the Dashboard rebuild (ADR-025 not approved), Overview/Kakeibo/Accounts/Activity redesign phases, deployment of anything.
+
+### Phase 3 verification record (2026-11-12, local)
+
+| Check | Result |
+|---|---|
+| `tsc -b` | clean |
+| `oxlint` | clean |
+| `npm test` | 324 tests, 324 pass |
+| `npm run build` | succeeds |
+| `database/test.sh` (fresh install and 008→009 upgrade on disposable Postgres 17.6, plus 18 migration-runner unit tests) | passes |
+| `database/rehearse_recovery.sh` (pre-005 backup restored, migrated 005–009, API checked, financial snapshot unchanged) | passes |
+| `backend/test.sh` | 69 passed |
+| Playwright on the Compose QA stack: `categories*`, `quick-add*`, `navigation`, `overview-dashboard` | 16 of 17 pass in one ordered run on a fresh database; the failing one (`overview-dashboard.spec.ts:5`) passes alone and depends on accounts already existing, which is not something this work changed |
+| Playwright in mock mode (the harness `dashboard`/`moki` specs are written for) | 18 pass, 1 skipped by design |
+| Playwright `dashboard` with `MONIKEY_DASHBOARD_API_FIXTURE=1` against the real API | analytics, axe and 320px specs pass; the 2 mock-only scenario specs do not apply to API mode |
+| Manual scripted check, Chromium emulation | no horizontal overflow and no console errors at 320, 360, 390, 768, 1024, 1440 px; editors fit the viewport |
+
+Real-device checks for Categories (iOS Safari, Android Chrome) are still open: tabs on one row, icon grid scrolling inside the sheet, color swatch tap targets, keyboard behaviour with the editor open.

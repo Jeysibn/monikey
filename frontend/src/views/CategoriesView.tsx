@@ -1,145 +1,281 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { Plus, Search } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 
-import type { DataSource } from '@/dataSource'
-import { ENVELOPES, ENVELOPE_INFO, envelopeLabel } from '@/lib/kakeibo'
-import { categoryEmptyMessage, filterCategories, type CategoryStatus } from '@/lib/categoryList'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CategoryFormDialog, type CategoryFormValues } from '@/components/categories/CategoryFormDialog'
+import { CategoryRow } from '@/components/categories/CategoryRow'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorBlock } from '@/components/ErrorBlock'
 import { PageHeader } from '@/components/PageHeader'
-import { CategoryIconPicker } from '@/components/CategoryIconPicker'
-import { CategoryIcon } from '@/lib/categoryIcons'
-import { isCategoryIconKey, type CategoryIconKey } from '@/lib/categoryIconRegistry'
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import type { Category, CategoryType, KakeiboEnvelope } from '@/types'
+import { SegmentedControl } from '@/components/SegmentedControl'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import type { DataSource } from '@/dataSource'
+import {
+  categoryEmptyMessage,
+  categoryTabCounts,
+  viewCategories,
+  type CategorySort,
+  type CategoryTab,
+  type EnvelopeFilter,
+} from '@/lib/categoryList'
+import { ENVELOPES, ENVELOPE_INFO } from '@/lib/kakeibo'
+import type { Category } from '@/types'
 import type { Resource } from '@/useResource'
 
+/*
+ * Categories (spec §5): the one place to organise income and expense categories. Three tabs (Expenses, Income,
+ * Archived, each with a count), search, an envelope filter, a sort, and a row per category showing its icon and
+ * color, default Kakeibo envelope and how much it is used. Add and Edit open one dialog (a bottom sheet on
+ * phones); Archive asks first, Restore is immediate, Delete lives in the Edit dialog and only while the
+ * category is unused. Appearance and defaults never change saved transactions, amounts or envelopes.
+ */
 const PAGE_SIZE = 50
+const SELECT = 'h-11 min-w-0 cursor-pointer rounded-control border border-input bg-card pr-7 pl-2.5 text-sm text-foreground sm:min-w-40 sm:pr-9 sm:pl-3 sm:text-[0.9375rem]'
 
-export function CategoriesView({ categories: resource, source, onChanged, onAdd }: { categories: Resource<Category[]>; source: DataSource; onChanged: () => void; onAdd: () => void }) {
-  const [type, setType] = useState<CategoryType | 'all'>('all')
-  const [formType, setFormType] = useState<CategoryType>('expense')
-  const [status, setStatus] = useState<CategoryStatus>('active')
-  const [envelope, setEnvelope] = useState<KakeiboEnvelope | 'all'>('all')
+export function CategoriesView({
+  categories: resource,
+  source,
+  onChanged,
+  onAdd,
+}: {
+  categories: Resource<Category[]>
+  source: DataSource
+  onChanged: () => void
+  onAdd: () => void
+}) {
+  const [tab, setTab] = useState<CategoryTab>('expense')
+  const [envelope, setEnvelope] = useState<EnvelopeFilter>('all')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<CategorySort>('usage')
   const [pageIndex, setPageIndex] = useState(0)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [editing, setEditing] = useState<Category | null>(null)
-  const [name, setName] = useState('')
-  const [editEnvelope, setEditEnvelope] = useState<KakeiboEnvelope | ''>('')
-  const [iconKey, setIconKey] = useState<CategoryIconKey | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [editor, setEditor] = useState<{ category: Category | null } | null>(null)
+  const [archiving, setArchiving] = useState<Category | null>(null)
   const [message, setMessage] = useState('')
-  const [formError, setFormError] = useState('')
   const [actionError, setActionError] = useState('')
-  const nameRef = useRef<HTMLInputElement>(null)
-  const addTriggerRef = useRef<HTMLButtonElement>(null)
-  const openerRef = useRef<HTMLButtonElement>(null)
-  const focusAddOnCloseRef = useRef(false)
-  const rows = useMemo(() => filterCategories(resource.data ?? [], { type, status, envelope, query }), [resource.data, type, status, envelope, query])
+  const [working, setWorking] = useState(false)
+  const addRef = useRef<HTMLButtonElement>(null)
+  const opener = useRef<HTMLElement | null>(null)
+
+  const all = useMemo(() => resource.data ?? [], [resource.data])
+  const counts = useMemo(() => categoryTabCounts(all), [all])
+  const rows = useMemo(() => viewCategories(all, { tab, envelope, query, sort }), [all, tab, envelope, query, sort])
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const page = Math.min(pageIndex, pageCount - 1)
   const visibleRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const filtering = query.trim() !== '' || (tab !== 'income' && envelope !== 'all')
 
-  const beginEdit = (category?: Category) => {
-    setEditing(category ?? null)
-    if (category) setFormType(category.type)
-    setName(category?.name ?? '')
-    setEditEnvelope(category?.defaultEnvelope ?? '')
-    setIconKey(isCategoryIconKey(category?.iconKey) ? category.iconKey : null)
-    setFormError('')
-    setActionError('')
+  // Radix returns focus only to a DialogTrigger; these open from ordinary buttons, so put it back by hand.
+  const restoreFocus = (event: Event) => {
+    event.preventDefault()
+    const target = opener.current?.isConnected ? opener.current : addRef.current
+    window.requestAnimationFrame(() => target?.focus())
+  }
+  const openEditor = (category: Category | null, from: HTMLElement | null) => {
+    opener.current = from
     setMessage('')
-    focusAddOnCloseRef.current = false
+    setActionError('')
+    setEditor({ category })
   }
 
-  const run = async (action: () => Promise<void>, success: string, focusAddOnClose = false) => {
-    setSaving(true)
-    setFormError('')
+  const finish = (text: string) => {
+    setMessage(text)
+    onChanged()
+  }
+
+  const save = async (values: CategoryFormValues) => {
+    const editing = editor?.category
+    if (editing) {
+      await source.updateCategory(editing.id, { name: values.name, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey, colorKey: values.colorKey })
+      // If the saved category no longer matches the search or filter, its row will disappear: send focus to Add instead.
+      const updated: Category = { ...editing, name: values.name, defaultEnvelope: values.defaultEnvelope }
+      if (viewCategories([updated], { tab, envelope, query, sort }).length === 0) opener.current = null
+    } else {
+      await source.createCategory(values)
+      setTab(values.type) // show the new category where it belongs
+      setQuery('')
+      setEnvelope('all')
+      setPageIndex(0)
+    }
+    setEditor(null)
+    finish(editing ? 'Category updated.' : 'Category created.')
+  }
+
+  const remove = async (category: Category) => {
+    await source.deleteCategory(category.id)
+    opener.current = null
+    setEditor(null)
+    finish('Category deleted.')
+  }
+
+  const setArchived = async (category: Category, archived: boolean) => {
+    setWorking(true)
     setActionError('')
     try {
-      await action()
-      setMessage(success)
-      if (editorOpen) {
-        focusAddOnCloseRef.current = focusAddOnClose
-        setEditorOpen(false)
-        setEditing(null)
-      }
-      onChanged()
+      await source.setCategoryArchived(category.id, archived)
+      finish(archived ? 'Category archived. Past transactions keep it.' : 'Category restored.')
+      window.requestAnimationFrame(() => addRef.current?.focus()) // the row (and its button) just left this tab
     } catch (error) {
-      const errorText = error instanceof Error ? error.message : 'Could not save this category. Try again.'
-      if (editorOpen) setFormError(errorText)
-      else setActionError(errorText)
+      setActionError(error instanceof Error ? error.message : 'Could not change this category. Try again.')
     } finally {
-      setSaving(false)
+      setWorking(false)
     }
   }
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const normalized = name.trim().replace(/\s+/g, ' ')
-    if (!normalized) { setFormError('Enter a category name.'); return }
-    const chosen = editing ? editing.type : formType
-    const defaultEnvelope = chosen === 'expense' ? editEnvelope || null : null
-    if (!editing) { setType(chosen); setStatus('active'); setEnvelope('all'); setPageIndex(0) }
-    if (editing) {
-      const updated = { ...editing, name: normalized, defaultEnvelope, iconKey }
-      const remainsVisible = filterCategories([updated], { type, status, envelope, query }).length > 0
-      void run(() => source.updateCategory(editing.id, { name: normalized, defaultEnvelope, iconKey }), 'Category updated.', !remainsVisible)
-    }
-    else void run(() => source.createCategory({ name: normalized, type: chosen, defaultEnvelope, iconKey }), 'Category created.')
-  }
+  const tabOptions: { value: CategoryTab; label: string }[] = [
+    { value: 'expense', label: `Expenses ${counts.expense}` },
+    { value: 'income', label: `Income ${counts.income}` },
+    { value: 'archived', label: `Archived ${counts.archived}` },
+  ]
 
-  return <Dialog open={editorOpen} onOpenChange={(open) => { if (open || !saving) setEditorOpen(open) }}>
+  return (
     <div>
-    <PageHeader title="Categories" onAdd={onAdd}>
-      <DialogTrigger asChild><Button ref={addTriggerRef} variant="secondary" size="sm" onClick={(event) => { openerRef.current = event.currentTarget; beginEdit() }}>Add category</Button></DialogTrigger>
-    </PageHeader>
-    <p className="mb-4 text-sm text-muted-foreground">Organize income and expenses. Expense defaults suggest a Kakeibo envelope for new transactions; saved expenses keep their own classification.</p>
-    {message && <p role="status" className="mb-4 rounded-control bg-success-soft px-4 py-3 text-sm text-income-ink">{message}</p>}
-    {actionError && <p role="alert" className="mb-4 rounded-control bg-destructive/10 px-4 py-3 text-sm text-destructive">{actionError}</p>}
-    <DialogContent
-      onOpenAutoFocus={(event) => { event.preventDefault(); nameRef.current?.focus() }}
-      onCloseAutoFocus={(event) => {
-        event.preventDefault()
-        const focusTarget = focusAddOnCloseRef.current || !openerRef.current?.isConnected ? addTriggerRef.current : openerRef.current
-        window.requestAnimationFrame(() => focusTarget?.focus())
-        focusAddOnCloseRef.current = false
-      }}
-      onEscapeKeyDown={(event) => saving && event.preventDefault()}
-      onInteractOutside={(event) => saving && event.preventDefault()}
-    >
-      <DialogHeader>
-        <DialogTitle>{editing ? `Edit ${editing.name}` : 'Add a category'}</DialogTitle>
-        <DialogDescription>Names are unique within income or expense categories.</DialogDescription>
-      </DialogHeader>
-      <DialogBody>
-        <form id="category-editor-form" onSubmit={submit} className="grid gap-3">
-          <label className="grid gap-1.5 text-sm font-medium">Name<input ref={nameRef} autoComplete="off" maxLength={60} value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
-          {!editing && <label className="grid gap-1.5 text-sm font-medium">Type<select value={formType} onChange={(event) => setFormType(event.target.value as CategoryType)} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="expense">Expense</option><option value="income">Income</option></select></label>}
-          {(editing ? editing.type === 'expense' : formType !== 'income') && <label className="grid gap-1.5 text-sm font-medium">Default Kakeibo envelope<select value={editEnvelope} onChange={(event) => setEditEnvelope(event.target.value as KakeiboEnvelope | '')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="">No default</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>}
-          <CategoryIconPicker value={iconKey} onChange={setIconKey} />
-          {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
-        </form>
-      </DialogBody>
-      <DialogFooter>
-        <Button type="button" variant="secondary" disabled={saving} onClick={() => setEditorOpen(false)}>Cancel</Button>
-        <Button type="submit" form="category-editor-form" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create category'}</Button>
-      </DialogFooter>
-    </DialogContent>
-    <Card>
-      <CardHeader><CardTitle>Category list</CardTitle><CardDescription>{rows.length} {rows.length === 1 ? 'category' : 'categories'}{rows.length > PAGE_SIZE ? ` · Page ${page + 1} of ${pageCount}` : ''}</CardDescription></CardHeader>
-      <CardContent>
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
-          <label className="grid gap-1 text-sm">Type<select aria-label="Filter category type" value={type} onChange={(event) => setType(event.target.value as CategoryType | 'all')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="all">Income and expense</option><option value="income">Income</option><option value="expense">Expense</option></select></label>
-          <label className="grid gap-1 text-sm">Status<select aria-label="Filter category status" value={status} onChange={(event) => setStatus(event.target.value as CategoryStatus)} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="active">Active</option><option value="archived">Archived</option><option value="all">Active and archived</option></select></label>
-          <label className="grid gap-1 text-sm">Kakeibo envelope<select aria-label="Filter Kakeibo envelope" value={envelope} onChange={(event) => setEnvelope(event.target.value as KakeiboEnvelope | 'all')} className="min-h-11 rounded-control border border-input bg-background px-3"><option value="all">All envelopes</option>{ENVELOPES.map((item) => <option key={item} value={item}>{ENVELOPE_INFO[item].label}</option>)}</select></label>
-        </div>
-        <label className="mb-3 grid gap-1 text-sm">Search categories<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name" className="min-h-11 rounded-control border border-input bg-background px-3" /></label>
-        {resource.loading && !resource.data ? <p role="status" className="py-6 text-center text-muted-foreground">Loading categories…</p> : resource.error ? <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} /> : rows.length === 0 ? <p role="status" className="py-6 text-center text-muted-foreground">{categoryEmptyMessage((resource.data?.length ?? 0) > 0)}</p> : <ul className="divide-y divide-border">{visibleRows.map((category) => <li key={category.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="flex items-center gap-2 font-medium"><CategoryIcon iconKey={category.iconKey} />{category.name} <span className="ml-1 text-xs font-normal text-muted-foreground">{category.type}{category.archived ? ' · archived' : ''}</span></p>{category.type === 'expense' && <p className="text-sm text-muted-foreground">Default: {envelopeLabel(category.defaultEnvelope)}</p>}</div><div className="flex flex-wrap gap-2"><DialogTrigger asChild><Button aria-label={`Edit ${category.name}`} variant="secondary" size="sm" onClick={(event) => { openerRef.current = event.currentTarget; beginEdit(category) }}>Edit</Button></DialogTrigger>{category.archived ? <Button aria-label={`Restore ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => void run(() => source.setCategoryArchived(category.id, false), 'Category restored.')}>Restore</Button> : <Button aria-label={`Archive ${category.name}`} variant="secondary" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Archive “${category.name}”? Historical transactions will keep this category.`)) void run(() => source.setCategoryArchived(category.id, true), 'Category archived.') }}>Archive</Button>}<Button aria-label={`Delete ${category.name}`} variant="ghost" size="sm" disabled={saving} onClick={() => { if (window.confirm(`Permanently delete “${category.name}”? This only works when no transactions refer to it.`)) void run(() => source.deleteCategory(category.id), 'Category deleted.') }}>Delete</Button></div></li>)}</ul>}
-        {rows.length > PAGE_SIZE && <div className="mt-4 flex items-center justify-between gap-3"><Button variant="secondary" disabled={page === 0} onClick={() => setPageIndex(page - 1)}>Previous</Button><span className="text-sm text-muted-foreground">Page {page + 1} of {pageCount}</span><Button variant="secondary" disabled={page >= pageCount - 1} onClick={() => setPageIndex(page + 1)}>Next</Button></div>}
-      </CardContent>
-    </Card>
+      <PageHeader title="Categories" onAdd={onAdd}>
+        <Button ref={addRef} variant="secondary" onClick={(e) => openEditor(null, e.currentTarget)}>
+          <Plus aria-hidden="true" />
+          Add category
+        </Button>
+      </PageHeader>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Organize income and expenses. An expense category’s default suggests a Kakeibo envelope for new transactions; expenses you already saved keep their own.
+      </p>
+      {message && (
+        <p role="status" className="mb-4 rounded-control bg-success-soft px-4 py-3 text-sm text-income-ink">
+          {message}
+        </p>
+      )}
+      {actionError && (
+        <p role="alert" className="mb-4 rounded-control bg-error-soft px-4 py-3 text-sm text-error-ink">
+          {actionError}
+        </p>
+      )}
+
+      <Card>
+        <CardContent className="grid gap-4">
+          <SegmentedControl
+            legend="Category list"
+            name="category-tab"
+            value={tab}
+            options={tabOptions}
+            dense
+            onChange={(next) => {
+              setTab(next)
+              setPageIndex(0)
+            }}
+          />
+          <div className="grid grid-cols-[minmax(0,11fr)_minmax(0,9fr)] gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <label className="relative col-span-2 block sm:col-span-1">
+              <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                aria-label="Search categories"
+                placeholder="Search categories"
+                autoComplete="off"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value)
+                  setPageIndex(0)
+                }}
+                className="h-11 w-full min-w-0 rounded-control border border-input bg-card pr-3 pl-9 text-base"
+              />
+            </label>
+            {tab !== 'income' && (
+              <select
+                aria-label="Filter Kakeibo envelope"
+                value={envelope}
+                onChange={(e) => {
+                  setEnvelope(e.target.value as EnvelopeFilter)
+                  setPageIndex(0)
+                }}
+                className={SELECT}
+              >
+                <option value="all">Any envelope</option>
+                {ENVELOPES.map((key) => (
+                  <option key={key} value={key}>
+                    {ENVELOPE_INFO[key].label}
+                  </option>
+                ))}
+                <option value="none">No default</option>
+              </select>
+            )}
+            <select aria-label="Sort categories" value={sort} onChange={(e) => setSort(e.target.value as CategorySort)} className={SELECT}>
+              <option value="usage">Most used</option>
+              <option value="name">A–Z</option>
+            </select>
+          </div>
+
+          {resource.loading && !resource.data ? (
+            <p role="status" className="py-6 text-center text-muted-foreground">
+              Loading categories…
+            </p>
+          ) : resource.error ? (
+            <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} />
+          ) : rows.length === 0 ? (
+            <p className="py-6 text-center text-muted-foreground">
+              {filtering || all.length > 0 ? (tab === 'archived' && !filtering ? 'No archived categories.' : categoryEmptyMessage(true)) : categoryEmptyMessage(false)}
+            </p>
+          ) : (
+            <ul className="m-0 list-none divide-y divide-border p-0" aria-label="Categories">
+              {visibleRows.map((category) => (
+                <CategoryRow
+                  key={category.id}
+                  category={category}
+                  disabled={working}
+                  onEdit={(c, from) => openEditor(c, from)}
+                  onArchive={(c, from) => {
+                    opener.current = from
+                    setMessage('')
+                    setArchiving(c)
+                  }}
+                  onRestore={(c) => void setArchived(c, false)}
+                />
+              ))}
+            </ul>
+          )}
+          {rows.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="secondary" disabled={page === 0} onClick={() => setPageIndex(page - 1)}>
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} of {pageCount}
+              </span>
+              <Button variant="secondary" disabled={page >= pageCount - 1} onClick={() => setPageIndex(page + 1)}>
+                Next
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <CategoryFormDialog
+        open={editor !== null}
+        category={editor?.category ?? null}
+        initialType={tab === 'income' ? 'income' : 'expense'}
+        onSubmit={save}
+        onDelete={remove}
+        onOpenChange={(open) => !open && setEditor(null)}
+        onClosed={restoreFocus}
+      />
+
+      <ConfirmDialog
+        open={archiving !== null}
+        title={archiving ? `Archive “${archiving.name}”?` : 'Archive category?'}
+        confirmLabel="Archive category"
+        busyLabel="Archiving…"
+        tone="default"
+        onConfirm={async () => {
+          if (!archiving) return
+          await source.setCategoryArchived(archiving.id, true)
+          opener.current = null // the row leaves this tab
+          setArchiving(null)
+          finish('Category archived. Past transactions keep it.')
+        }}
+        onOpenChange={(open) => !open && setArchiving(null)}
+        onClosed={restoreFocus}
+      >
+        <p>It won’t be offered for new transactions. Past transactions, amounts and Kakeibo envelopes stay exactly as they are.</p>
+        <p>You can restore it any time from the Archived tab.</p>
+      </ConfirmDialog>
     </div>
-  </Dialog>
+  )
 }

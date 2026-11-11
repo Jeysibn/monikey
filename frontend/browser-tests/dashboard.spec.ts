@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 
+import { hasRealApi } from './fixtures'
+
 const screenshots = process.env.MONIKEY_DASHBOARD_API_FIXTURE === '1'
   ? '../docs/design/screenshots/ui-modernization/phase-c-dashboard-api'
   : '../docs/design/screenshots/ui-modernization/phase-c-dashboard'
@@ -94,7 +96,8 @@ test('Dashboard uses synthetic ledger records, supports date and account filters
   }
 })
 
-test('Dashboard reports no saved plan honestly for the no-plan fixture', async ({ page }) => {
+test('Dashboard reports no saved plan honestly for the no-plan fixture', async ({ page, request }) => {
+  test.skip(await hasRealApi(request), 'Uses the mock data source\'s ?demo= scenarios; it has no effect against the real API.')
   await page.goto('/?demo=no-plan')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Dashboard' }).first().click()
@@ -102,7 +105,8 @@ test('Dashboard reports no saved plan honestly for the no-plan fixture', async (
   await expect(page.getByText('Actual expense classifications in this period.')).toBeVisible()
 })
 
-test('a Dashboard analytics failure leaves other views usable', async ({ page }) => {
+test('a Dashboard analytics failure leaves other views usable', async ({ page, request }) => {
+  test.skip(await hasRealApi(request), 'Uses the mock data source\'s ?demo= failure scenario; it has no effect against the real API.')
   await page.goto('/?demo=load-error&failing=analytics')
   await page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Dashboard' }).first().click()
   await expect(page.getByRole('alert')).toContainText("Couldn't load Dashboard analytics.")

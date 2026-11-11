@@ -2,6 +2,14 @@ import { expect, test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 
+import { seedPopulatedLedger } from './fixtures'
+
+// These specs need a populated ledger. Seed it here (real API only; mock data already has one) instead of
+// relying on accounts that an earlier spec happened to leave behind.
+test.beforeEach(async ({ request }) => {
+  await seedPopulatedLedger(request)
+})
+
 test('Overview links to separate analytics without pushing current balances down', async ({ page }) => {
   const screenshots = '../docs/design/screenshots/ui-modernization/phase-d-polish'
   const captureScreenshots = process.env.MONIKEY_CAPTURE_PHASE_D_SCREENSHOTS === '1'

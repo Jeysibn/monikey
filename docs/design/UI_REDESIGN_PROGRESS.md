@@ -112,8 +112,8 @@ Kakeibo now links to Categories ("Manage category defaults"). The DataSource `se
 | Check | Result |
 |---|---|
 | `tsc -b` / `oxlint` / `npm run build` | clean |
-| `npm test` | 331 tests, 331 pass (7 new: plan-progress sums, over-limit counts, no-plan, unclassified excluded, envelope accent contrast) |
-| Playwright, real stack on a fresh DB: `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | 21 of 21 pass |
+| `npm test` | 332 tests, 332 pass (8 new: plan-progress sums, over-limit counts, no-plan, unclassified excluded, envelope accent contrast) |
+| Playwright, real stack on a fresh DB: `kakeibo`, `categories*`, `navigation`, `overview-dashboard`, `quick-add*` | 22 of 22 pass |
 | `kakeibo.spec.ts` + `overview-dashboard.spec.ts` repeated 8 times on the real stack | 48 of 48 pass |
 | Playwright, mock mode: `dashboard`, `moki`, `navigation`, `overview-dashboard`, `kakeibo` | all pass (API-only tests skip by design) |
 | Manual scripted check, Chromium emulation: plan, no-plan and reviewed states, both tabs | no horizontal overflow and no console errors at 320, 360, 390, 768, 1024, 1440 px |

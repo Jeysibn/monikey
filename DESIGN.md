@@ -222,7 +222,7 @@ Full details in [`COMPONENT_INVENTORY.md`](docs/design/COMPONENT_INVENTORY.md). 
 - **shadcn/ui source (only the five approved):** `Button`, `Card`, `Input`, `Label`, `Dialog`.
 - **Native HTML:** `<select>` (account, category, month, filters), `<input type="date">`, radio inputs for the type switcher.
 - **Small custom components (15):** `AppShell` (with private `SideNav` and `BottomNav`), `PageHeader`, `SummaryCard`, `AccountRow` (the account list row), `CreditCardSummary`, `TransactionItem`, `TransactionForm`, `AccountForm`, `SegmentedControl`, `FormField`, `MoneyText`, `EmptyState`, `InlineNotice`, `ConfirmDeleteDialog`, `SkeletonValue`.
-- **Not added:** Select, Toast/Sonner, Sheet, Tabs, Tooltip, Skeleton (shadcn), Form libraries, charts, animation libraries.
+- **Not added:** Select, Toast/Sonner, Sheet, Tabs, Tooltip, Skeleton (shadcn), Form libraries, charting libraries (the Dashboard draws native SVG, ADR-025), animation libraries.
 
 ### Icons
 
@@ -267,7 +267,7 @@ Studied for **patterns only** — no branding, screenshots, copy or assets were 
 
 ## Out of scope for v1 design
 
-Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account deletion, category management, export.
+Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or billing cycles, investments, bank sync, charting libraries (Dashboard analytics are in scope as native SVG, ADR-024 and ADR-025), multi-currency, authentication, dark mode, account deletion, category management, export.
 
 ---
 

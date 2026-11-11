@@ -1,6 +1,6 @@
 # DRAFT ADR-025 — Dashboard charting library and the two-scope date model
 
-- **Status:** PROPOSED — needs owner approval. Nothing here is installed or implemented. Not yet merged into `ADR.md`.
+- **Status:** DECIDED 2026-11-12 — the owner chose **native SVG** (no Recharts). The accepted text is ADR-025 in [`ADR.md`](../ADR.md); this file is kept as the proposal record, and its Recharts recommendation (section 3, item 2 and section 4) was **not adopted**. The measurements are in the feasibility record.
 - **Date:** 2026-11-12 · **Amends:** ADR-024 (separate Dashboard, only on unmerged PR #25) and the "no charts" boundaries in ADR-015, `DESIGN.md` ("Not added: … charts") and `UI_UX_SPEC.md` ("No charts, no sparklines…").
 - **Numbering note:** ADR-023 and ADR-024 exist only on PR #25's branch. If #25 is not merged first, renumber on merge.
 

@@ -187,7 +187,7 @@ export function AccountDetailsContent({
             <Pencil aria-hidden="true" />Edit account
           </Button>
         )}
-        <Button type="button" className="ml-auto min-h-11" onClick={onClose}>Close</Button>
+        <Button type="button" className="ml-auto min-h-11" onClick={onClose}>Done</Button>
       </DialogFooter>
     </DialogContent>
   )

@@ -83,6 +83,11 @@ export function ActivityView({
   const label = monthLabel(month)
   const filtered = hasActivityFilters(filters, accountId)
   const search = useDebouncedCommit(filters.search, onSearch, normalizeSearch)
+  // Reset also drops what is still being typed: a pending, not-yet-sent search must not come back after the reset.
+  const reset = () => {
+    search.clear()
+    onReset()
+  }
   const choices = useMemo(() => categoryChoices(categories, filters.kind), [categories, filters.kind])
   const noCategories = filters.kind === 'payment' || filters.kind === 'transfer'
 
@@ -199,7 +204,7 @@ export function ActivityView({
           <div className="flex items-center gap-x-3">
             <UpdatingStamp show={updating} />
             {filtered && items.length > 0 && ( // with no results the empty state below has its own Reset filters
-              <Button variant="link" className="min-h-11 px-0" onClick={onReset}>
+              <Button variant="link" className="min-h-11 px-0" onClick={reset}>
                 Reset filters
               </Button>
             )}
@@ -226,7 +231,7 @@ export function ActivityView({
             message="Nothing matches these filters."
             illustration={<Moki pose="searching" size="medium" />}
             action={
-              <Button variant="secondary" onClick={onReset}>
+              <Button variant="secondary" onClick={reset}>
                 Reset filters
               </Button>
             }

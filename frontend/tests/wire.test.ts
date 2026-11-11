@@ -65,7 +65,7 @@ test('analytics wire values stay exact and validate the requested filter', () =>
     start_date: '2026-10-01', end_date: '2026-10-31', account_id: null,
     totals: { income: '36500.00', expenses: '26724.40', net_cash_flow: '9775.60' },
     previous_totals: null,
-    months: [{ month: '2026-10', income: '36500.00', expenses: '26724.40' }],
+    months: [{ month: '2026-10', income: '36500.00', expenses: '26724.40', surplus: '9775.60', expense_to_income_percent: '73.2', complete: false }],
     categories: [{ id: 4, name: 'Food', icon_key: 'utensils', archived: false, expenses: '250.00' }],
     kakeibo_totals: { needs: '19951.90', wants: '3864.00', culture: '1800.00', unexpected: '486.50', unclassified: '1025.00' },
     kakeibo: [{ month: '2026-10', plan_status: 'saved', limits: { needs: '18000.00', wants: '5000.00', culture: '2000.00', unexpected: '3000.00' }, actuals: { needs: '19951.90', wants: '3864.00', culture: '1800.00', unexpected: '486.50' }, unclassified: '1025.00' }],
@@ -74,6 +74,10 @@ test('analytics wire values stay exact and validate the requested filter', () =>
   assert.equal(parsed.totals.netCashFlow, 977_560)
   assert.equal(parsed.categories[0].iconKey, 'utensils')
   assert.equal(parsed.kakeibo[0].limits?.needs, 1_800_000)
+  assert.deepEqual([parsed.months[0]!.surplus, parsed.months[0]!.expenseToIncomePercent, parsed.months[0]!.complete], [977_560, '73.2', false])
+  assert.equal(parsed.daily, undefined) // day-level sections only when requested
+  for (const bad of ['73', '73.25', 73.2, '', 'abc']) assert.throws(() => fromWireAnalytics({ ...wire, months: [{ ...wire.months[0], expense_to_income_percent: bad }] }, { startDate: '2026-10-01', endDate: '2026-10-31', accountId: null }), ApiError)
+  assert.throws(() => fromWireAnalytics({ ...wire, months: [{ ...wire.months[0], complete: 'yes' }] }, { startDate: '2026-10-01', endDate: '2026-10-31', accountId: null }), ApiError)
   assert.equal(parsed.kakeiboTotals.unclassified, 102_500)
   assert.throws(() => fromWireAnalytics(wire, { startDate: '2026-10-02', endDate: '2026-10-31', accountId: null }), ApiError)
 })
@@ -141,4 +145,29 @@ test('ADR-020: the card is sent only when given (an older API refuses unknown fi
   assert.equal(toWireAccountInput(bank, null).card_product_id, null)
   assert.equal('card_product_id' in toWireAccountUpdate(bank), false)
   assert.equal(toWireAccountUpdate(bank, null).card_product_id, null)
+})
+
+test('analytics day-level sections are validated strictly: no gaps, envelopes add up, seven ISO weekdays', () => {
+  const day = (date: string, expenses: string, unclassified = expenses) => ({ date, expenses, needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified })
+  const weekdays = [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, total: '0.00', occurrences: 1, average: '0.00' }))
+  const wire = {
+    start_date: '2026-10-01', end_date: '2026-10-03', account_id: null, totals: { income: '0.00', expenses: '9.00', net_cash_flow: '-9.00' }, previous_totals: null,
+    months: [{ month: '2026-10', income: '0.00', expenses: '9.00', surplus: '-9.00', expense_to_income_percent: null, complete: false }], categories: [],
+    kakeibo_totals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: '9.00' }, kakeibo: [],
+    daily: [day('2026-10-01', '9.00'), day('2026-10-02', '0.00'), day('2026-10-03', '0.00')], weekdays,
+    insights: { days: 3, average_daily_spending: '3.00', expense_transactions: 1, highest_day: { date: '2026-10-01', expenses: '9.00' }, zero_spend_days: 2 },
+  }
+  const expected = { startDate: '2026-10-01', endDate: '2026-10-03', accountId: null, detail: true }
+  const parsed = fromWireAnalytics(wire, expected)
+  assert.deepEqual(parsed.daily!.map((d) => d.expenses), [900, 0, 0])
+  assert.equal(parsed.insights!.highestDay!.expenses, 900)
+  assert.equal(fromWireAnalytics({ ...wire, insights: { ...wire.insights, highest_day: null } }, expected).insights!.highestDay, null)
+  assert.throws(() => fromWireAnalytics({ ...wire, daily: [wire.daily[0], wire.daily[2]] }, expected), ApiError) // a missing date
+  assert.throws(() => fromWireAnalytics({ ...wire, daily: [wire.daily[0], wire.daily[0], wire.daily[2]] }, expected), ApiError) // a repeated date
+  assert.throws(() => fromWireAnalytics({ ...wire, daily: [{ ...wire.daily[0], needs: '1.00' }, wire.daily[1], wire.daily[2]] }, expected), ApiError) // envelopes do not add up to the day
+  assert.throws(() => fromWireAnalytics({ ...wire, weekdays: weekdays.slice(0, 6) }, expected), ApiError)
+  assert.throws(() => fromWireAnalytics({ ...wire, weekdays: [{ ...weekdays[0], weekday: 8 }, ...weekdays.slice(1)] }, expected), ApiError)
+  assert.throws(() => fromWireAnalytics({ ...wire, insights: undefined }, expected), ApiError)
+  const { daily: _daily, ...withoutDaily } = wire
+  assert.throws(() => fromWireAnalytics(withoutDaily, expected), ApiError) // detail was requested but not delivered
 })

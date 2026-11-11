@@ -210,10 +210,11 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       return fromWireSummary(await getJson(urlWithQuery('/api/summary', query), signal, fetcher), month)
     },
 
-    async loadAnalytics({ startDate, endDate, accountId }, signal) {
+    async loadAnalytics({ startDate, endDate, accountId, detail = false }, signal) {
       const query = new URLSearchParams({ start_date: startDate, end_date: endDate })
       if (accountId !== null) query.set('account_id', String(positiveId(accountId)))
-      const expected = { startDate, endDate, accountId }
+      if (detail) query.set('detail', 'true') // the day-level sections for the analysis range
+      const expected = { startDate, endDate, accountId, detail }
       return fromWireAnalytics(await getJson(urlWithQuery('/api/analytics', query), signal, fetcher), expected)
     },
 

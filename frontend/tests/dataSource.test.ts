@@ -10,7 +10,7 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, isNotFound } from '
 import { entryValues } from '../src/lib/ledger.ts'
 import { categoriesForTransaction } from '../src/lib/entryForm.ts'
 import { suggestedEnvelope } from '../src/lib/kakeibo.ts'
-import { buildSnapshot, mockAnalytics } from '../src/lib/finance.ts'
+import { buildSnapshot, expenseToIncomePercent, mockAnalytics } from '../src/lib/finance.ts'
 import { saveMessage } from '../src/lib/entryText.ts'
 import { getMockData } from '../src/mockData.ts'
 import { createMockSource, nowIso } from '../src/mockSource.ts'
@@ -386,5 +386,97 @@ describe('mock card choices (ADR-020)', () => {
     const source = createMockSource()
     await assert.rejects(source.addAccount({ ...bank, type: 'cash', name: 'Pocket' }, 'maribank-debit'), (e: unknown) => e instanceof ApiError && e.status === 422 && e.field === 'card_product_id')
     await assert.rejects(source.addAccount(bank, 'Mari Bank'), (e: unknown) => e instanceof ApiError && e.status === 422)
+  })
+})
+
+describe('mock analytics: monthly fields and day-level sections follow the server rules', () => {
+  const FOOD = 4, BILLS = 7, SALARY = 1
+  const base = getMockData()
+  const withRows = (rows: { date: string; categoryId: number; amount: number; envelope?: 'needs' | 'wants' | 'culture' | 'unexpected' | null; accountId?: number }[], today = '2026-12-31') => ({
+    ...base, today, payments: [], transfers: [],
+    transactions: rows.map((row, i) => ({ id: i + 1, accountId: row.accountId ?? 2, categoryId: row.categoryId, amount: row.amount, date: row.date, note: null, createdAt: `2026-01-01T00:00:0${i % 10}Z`, envelope: row.envelope ?? null })),
+  })
+  const range = (data: ReturnType<typeof withRows>, startDate: string, endDate: string, extra: object = {}) => mockAnalytics(data, { startDate, endDate, accountId: null, detail: true, ...extra })
+
+  it('reports surplus, the expense-to-income ratio (half up, none without income) and whether a month is complete', () => {
+    const data = withRows([
+      { date: '2020-09-05', categoryId: SALARY, amount: 20_000 }, { date: '2020-09-06', categoryId: FOOD, amount: 5_000 },
+      { date: '2020-10-04', categoryId: FOOD, amount: 3_000 },
+    ], '2020-10-15')
+    const [september, october] = mockAnalytics(data, { startDate: '2020-09-01', endDate: '2020-10-15', accountId: null }).months
+    assert.deepEqual(september, { month: '2020-09', income: 20_000, expenses: 5_000, surplus: 15_000, expenseToIncomePercent: '25.0', complete: true })
+    assert.equal(october!.surplus, -3_000) // a deficit is just negative
+    assert.equal(october!.expenseToIncomePercent, null)
+    assert.equal(october!.complete, false) // month to date
+    assert.equal(expenseToIncomePercent(100, 800), '12.5')
+    assert.equal(expenseToIncomePercent(100, 300), '33.3')
+    assert.equal(expenseToIncomePercent(1, 8), '12.5')
+    assert.equal(expenseToIncomePercent(5, 8000), '0.1') // 0.0625 percent rounds half up to one decimal
+    assert.equal(expenseToIncomePercent(1, 2000), '0.1') // exactly 0.05: half up, not to even
+  })
+
+  it('has one row per date including zero-spend days, and income is never spending', () => {
+    const data = withRows([{ date: '2020-10-02', categoryId: FOOD, amount: 1_000 }, { date: '2020-10-02', categoryId: FOOD, amount: 550 }, { date: '2020-10-03', categoryId: SALARY, amount: 99_900 }])
+    const report = range(data, '2020-10-01', '2020-10-05')
+    assert.deepEqual(report.daily!.map((d) => d.date), ['2020-10-01', '2020-10-02', '2020-10-03', '2020-10-04', '2020-10-05'])
+    assert.deepEqual(report.daily!.map((d) => d.expenses), [0, 1_550, 0, 0, 0])
+    assert.equal(report.daily!.reduce((sum, d) => sum + d.expenses, 0), report.totals.expenses)
+  })
+
+  it('splits each day by envelope and keeps unclassified spending inside the day total', () => {
+    const data = withRows([
+      { date: '2020-10-02', categoryId: BILLS, amount: 1_000, envelope: 'needs' }, { date: '2020-10-02', categoryId: BILLS, amount: 400, envelope: 'wants' },
+      { date: '2020-10-02', categoryId: BILLS, amount: 300, envelope: 'culture' }, { date: '2020-10-02', categoryId: BILLS, amount: 200, envelope: 'unexpected' },
+      { date: '2020-10-02', categoryId: BILLS, amount: 125 },
+    ])
+    const day = range(data, '2020-10-02', '2020-10-02').daily![0]!
+    assert.deepEqual([day.needs, day.wants, day.culture, day.unexpected, day.unclassified, day.expenses], [1_000, 400, 300, 200, 125, 2_025])
+  })
+
+  it('averages each weekday by how many times it occurs, zero days included, rounding half up', () => {
+    const data = withRows([{ date: '2020-10-01', categoryId: FOOD, amount: 1 }, { date: '2020-10-02', categoryId: FOOD, amount: 900 }])
+    const { weekdays, daily } = range(data, '2020-10-01', '2020-10-08') // starts on a Thursday
+    const thursday = weekdays![3]!, friday = weekdays![4]!, monday = weekdays![0]!
+    assert.deepEqual(thursday, { weekday: 4, total: 1, occurrences: 2, average: 1 }) // 0.5 centavo rounds up to 1, not to 0
+    assert.deepEqual(friday, { weekday: 5, total: 900, occurrences: 1, average: 900 })
+    assert.deepEqual([monday.occurrences, monday.average], [1, 0])
+    assert.equal(weekdays!.reduce((sum, d) => sum + d.occurrences, 0), daily!.length)
+    assert.deepEqual(range(withRows([]), '2020-10-01', '2020-10-31').weekdays!.map((d) => d.occurrences), [4, 4, 4, 5, 5, 5, 4]) // a month starting Thursday
+  })
+
+  it('computes insights from expenses only and breaks a tie by the earlier date', () => {
+    const data = withRows([
+      { date: '2020-10-03', categoryId: FOOD, amount: 2_000 }, { date: '2020-10-01', categoryId: BILLS, amount: 2_000 },
+      { date: '2020-10-04', categoryId: FOOD, amount: 1_000 }, { date: '2020-10-02', categoryId: SALARY, amount: 50_000 },
+    ])
+    assert.deepEqual(range(data, '2020-10-01', '2020-10-05').insights, { days: 5, averageDailySpending: 1_000, expenseTransactions: 3, highestDay: { date: '2020-10-01', expenses: 2_000 }, zeroSpendDays: 2 })
+    assert.deepEqual(range(withRows([]), '2020-10-01', '2020-10-03').insights, { days: 3, averageDailySpending: 0, expenseTransactions: 0, highestDay: null, zeroSpendDays: 3 })
+  })
+
+  it('never counts a card payment or a transfer as spending, and counts a card purchase once', () => {
+    const data = { ...withRows([{ date: '2020-10-02', categoryId: FOOD, amount: 4_000, accountId: 4 }]),
+      payments: [{ id: 1, sourceAccountId: 2, cardAccountId: 4, amount: 4_000, date: '2020-10-03', note: null, createdAt: '2020-10-03T00:00:00Z' }],
+      transfers: [{ id: 1, sourceAccountId: 2, destinationAccountId: 1, amount: 2_500, date: '2020-10-03', note: null, createdAt: '2020-10-03T00:00:00Z' }] } as unknown as ReturnType<typeof withRows>
+    const report = range(data, '2020-10-01', '2020-10-05')
+    assert.equal(report.totals.expenses, 4_000)
+    assert.deepEqual(report.daily!.map((d) => d.expenses), [0, 4_000, 0, 0, 0])
+    assert.equal(report.insights!.expenseTransactions, 1)
+    assert.equal(range(data, '2020-10-01', '2020-10-05', { accountId: 1 }).insights!.expenseTransactions, 0) // an account with no activity
+  })
+
+  it('rejects a range that ends in the future or before it starts, like the API', () => {
+    const data = withRows([], '2020-10-10')
+    assert.throws(() => range(data, '2020-10-01', '2020-10-11'), /future/)
+    assert.throws(() => range(data, '2020-10-05', '2020-10-04'), /on or after/)
+    assert.doesNotThrow(() => range(data, '2020-10-10', '2020-10-10'))
+  })
+
+  it('keeps monthly figures independent of the analysis range that was asked for in between', () => {
+    const data = withRows([{ date: '2020-10-02', categoryId: SALARY, amount: 10_000 }, { date: '2020-10-20', categoryId: FOOD, amount: 4_000 }])
+    const reporting = () => mockAnalytics(data, { startDate: '2020-05-01', endDate: '2020-10-31', accountId: null }).months
+    const before = reporting()
+    range(data, '2020-10-18', '2020-10-22')
+    assert.deepEqual(reporting(), before)
+    assert.deepEqual([before.at(-1)!.income, before.at(-1)!.expenses], [10_000, 4_000])
   })
 })

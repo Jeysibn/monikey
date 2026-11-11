@@ -51,7 +51,7 @@ test('loadAnalytics sends bounded date and account filters and parses exact tota
     return json({
       start_date: '2026-10-01', end_date: '2026-10-31', account_id: 2,
       totals: { income: '0.00', expenses: '20.50', net_cash_flow: '-20.50' }, previous_totals: null,
-      months: [{ month: '2026-10', income: '0.00', expenses: '20.50' }], categories: [],
+      months: [{ month: '2026-10', income: '0.00', expenses: '20.50', surplus: '-20.50', expense_to_income_percent: null, complete: true }], categories: [],
       kakeibo_totals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: '20.50' },
       kakeibo: [{ month: '2026-10', plan_status: 'not_saved', limits: null, actuals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00' }, unclassified: '20.50' }],
     })
@@ -63,6 +63,31 @@ test('loadAnalytics sends bounded date and account filters and parses exact tota
   assert.equal(url.searchParams.get('start_date'), '2026-10-01')
   assert.equal(url.searchParams.get('end_date'), '2026-10-31')
   assert.equal(url.searchParams.get('account_id'), '2')
+  assert.equal(url.searchParams.has('detail'), false) // the monthly reporting request never asks for day-level sections
+  assert.equal(report.months[0]!.surplus, -2050)
+  assert.equal(report.months[0]!.expenseToIncomePercent, null)
+})
+
+test('loadAnalytics asks for the day-level sections only when detail is requested, and rejects an incomplete answer', async () => {
+  const urls: string[] = []
+  const base = {
+    start_date: '2026-10-01', end_date: '2026-10-02', account_id: null, totals: { income: '0.00', expenses: '5.00', net_cash_flow: '-5.00' }, previous_totals: null,
+    months: [{ month: '2026-10', income: '0.00', expenses: '5.00', surplus: '-5.00', expense_to_income_percent: null, complete: false }], categories: [],
+    kakeibo_totals: { needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: '5.00' }, kakeibo: [],
+  }
+  const day = (date: string, expenses: string) => ({ date, expenses, needs: '0.00', wants: '0.00', culture: '0.00', unexpected: '0.00', unclassified: expenses })
+  const weekdays = [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, total: weekday === 4 ? '5.00' : '0.00', occurrences: weekday === 4 || weekday === 5 ? 1 : 0, average: weekday === 4 ? '5.00' : '0.00' }))
+  const detail = { daily: [day('2026-10-01', '5.00'), day('2026-10-02', '0.00')], weekdays, insights: { days: 2, average_daily_spending: '2.50', expense_transactions: 1, highest_day: { date: '2026-10-01', expenses: '5.00' }, zero_spend_days: 1 } }
+  const source = createHttpSource(async (input) => {
+    urls.push(String(input))
+    return json(urls.length === 1 ? { ...base, ...detail } : { ...base, daily: detail.daily.slice(1), weekdays, insights: detail.insights })
+  })
+  const report = await source.loadAnalytics({ startDate: '2026-10-01', endDate: '2026-10-02', accountId: null, detail: true }, signal())
+  assert.equal(new URL(urls[0]!, 'http://localhost').searchParams.get('detail'), 'true')
+  assert.equal(report.daily!.length, 2)
+  assert.equal(report.insights!.averageDailySpending, 250)
+  assert.equal(report.weekdays![3]!.average, 500)
+  await assert.rejects(source.loadAnalytics({ startDate: '2026-10-01', endDate: '2026-10-02', accountId: null, detail: true }, signal()), ApiError) // a day is missing from the series
 })
 
 test('loadActivity leaves empty months empty and caps the wire limit at 1001', async () => {

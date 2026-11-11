@@ -3,7 +3,9 @@ import type {
   AccountBalance,
   AccountInfo,
   ActivityItem,
+  AnalyticsDay,
   AnalyticsReport,
+  AnalyticsWeekday,
   CardStatus,
   Centavos,
   Category,
@@ -48,8 +50,21 @@ export function coversFullCalendarMonth(month: string, startDate: string, endDat
 }
 
 /** Mock-only analytics over synthetic fixture rows. Production analytics are aggregated by PostgreSQL. */
-export function mockAnalytics(data: MockData, query: { startDate: string; endDate: string; accountId: number | null }): AnalyticsReport {
+/** Whole-centavo division rounded half up, like the server's Decimal ROUND_HALF_UP (never banker's rounding). */
+const divideHalfUp = (numerator: number, denominator: number): number => Math.floor((2 * numerator + denominator) / (2 * denominator))
+
+/** Expenses as a percentage of income, one decimal, as text; null (not infinity) when there was no income. */
+export function expenseToIncomePercent(expenses: number, income: number): string | null {
+  if (income === 0) return null
+  const tenths = divideHalfUp(expenses * 1000, income)
+  return `${Math.floor(tenths / 10)}.${tenths % 10}`
+}
+
+const addDays = (date: string, days: number): string => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
+export function mockAnalytics(data: MockData, query: { startDate: string; endDate: string; accountId: number | null; detail?: boolean }): AnalyticsReport {
   if (query.endDate < query.startDate) throw new Error('End date must be on or after start date.')
+  if (query.endDate > data.today) throw new Error('End date cannot be in the future.') // like the API: every day in a range has already happened
   const rows = data.transactions.filter((row) => row.date >= query.startDate && row.date <= query.endDate && (query.accountId === null || row.accountId === query.accountId))
   const types = new Map(data.categories.map((category) => [category.id, category.type]))
   const totals = (start: string, end: string) => {
@@ -88,10 +103,15 @@ export function mockAnalytics(data: MockData, query: { startDate: string; endDat
     totals: totals(query.startDate, endExclusive),
     previousTotals,
     months: monthKeys.map((key) => {
-      const end = new Date(Date.parse(`${key}-01T00:00:00Z`))
-      end.setUTCMonth(end.getUTCMonth() + 1)
-      const monthStart = `${key}-01`
-      return { month: key, ...totals(query.startDate > monthStart ? query.startDate : monthStart, query.endDate < end.toISOString().slice(0, 10) ? endExclusive : end.toISOString().slice(0, 10)) }
+      const [year, number] = key.split('-').map(Number)
+      const first = `${key}-01`
+      const last = new Date(Date.UTC(year!, number!, 0)).toISOString().slice(0, 10)
+      const { income, expenses } = totals(query.startDate > first ? query.startDate : first, addDays(query.endDate < last ? query.endDate : last, 1))
+      return {
+        month: key, income, expenses, surplus: income - expenses,
+        expenseToIncomePercent: expenseToIncomePercent(expenses, income),
+        complete: query.startDate <= first && query.endDate >= last,
+      }
     }),
     categories: [...categories].map(([id, expenses]) => {
       const category = data.categories.find((item) => item.id === id)!
@@ -104,6 +124,40 @@ export function mockAnalytics(data: MockData, query: { startDate: string; endDat
       const unclassified = rows.filter((row) => monthOf(row.date) === key && row.envelope == null && types.get(row.categoryId) === 'expense').reduce((sum, row) => sum + row.amount, 0)
       return { month: key, planStatus: plan ? 'saved' as const : 'not_saved' as const, limits: plan ? plan.limits : null, actuals, unclassified }
     }),
+    ...(query.detail ? mockAnalyticsDetail(rows.filter((row) => types.get(row.categoryId) === 'expense'), query.startDate, query.endDate) : {}),
+  }
+}
+
+/** The day-level sections over expense rows: every date once, weekday averages by occurrence count, insights. */
+function mockAnalyticsDetail(expenseRows: { date: string; amount: number; envelope?: KakeiboEnvelope | null }[], startDate: string, endDate: string): Pick<AnalyticsReport, 'daily' | 'weekdays' | 'insights'> {
+  const days: AnalyticsDay[] = []
+  for (let date = startDate; date <= endDate; date = addDays(date, 1)) {
+    const day: AnalyticsDay = { date, expenses: 0, needs: 0, wants: 0, culture: 0, unexpected: 0, unclassified: 0 }
+    for (const row of expenseRows) {
+      if (row.date !== date) continue
+      day.expenses += row.amount
+      day[row.envelope ?? 'unclassified'] += row.amount
+    }
+    days.push(day)
+  }
+  const weekdays: AnalyticsWeekday[] = [1, 2, 3, 4, 5, 6, 7].map((weekday) => {
+    const matching = days.filter((day) => new Date(`${day.date}T00:00:00Z`).getUTCDay() === weekday % 7) // 7 is Sunday (0 in JS)
+    const total = matching.reduce((sum, day) => sum + day.expenses, 0)
+    return { weekday, total, occurrences: matching.length, average: matching.length === 0 ? 0 : divideHalfUp(total, matching.length) }
+  })
+  const total = days.reduce((sum, day) => sum + day.expenses, 0)
+  let highest: AnalyticsDay | null = null
+  for (const day of days) if (day.expenses > (highest?.expenses ?? 0)) highest = day // strictly greater keeps the earliest date on a tie
+  return {
+    daily: days,
+    weekdays,
+    insights: {
+      days: days.length,
+      averageDailySpending: days.length === 0 ? 0 : divideHalfUp(total, days.length),
+      expenseTransactions: expenseRows.length,
+      highestDay: highest === null ? null : { date: highest.date, expenses: highest.expenses },
+      zeroSpendDays: days.filter((day) => day.expenses === 0).length,
+    },
   }
 }
 

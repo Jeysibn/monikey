@@ -355,7 +355,7 @@ export function fromWireSummary(value: unknown, expectedMonth: string): Financia
   }
 }
 
-export function fromWireAnalytics(value: unknown, expected: { startDate: string; endDate: string; accountId: number | null }): AnalyticsReport {
+export function fromWireAnalytics(value: unknown, expected: { startDate: string; endDate: string; accountId: number | null; detail?: boolean }): AnalyticsReport {
   const row = record(value, 'analytics report')
   if (row.start_date !== expected.startDate || row.end_date !== expected.endDate || row.account_id !== expected.accountId) throw contractError('analytics filters')
   const totals = (value: unknown, what: string) => {
@@ -368,7 +368,13 @@ export function fromWireAnalytics(value: unknown, expected: { startDate: string;
     const item = record(value, 'analytics month')
     const month = string(item.month, 'analytics month')
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw contractError('analytics month')
-    return { month, income: toCentavos(item.income, 'analytics income'), expenses: toCentavos(item.expenses, 'analytics expenses') }
+    const percent = item.expense_to_income_percent
+    if (percent !== null && (typeof percent !== 'string' || !/^\d+\.\d$/.test(percent))) throw contractError('analytics expense ratio')
+    if (typeof item.complete !== 'boolean') throw contractError('analytics month completeness')
+    return {
+      month, income: toCentavos(item.income, 'analytics income'), expenses: toCentavos(item.expenses, 'analytics expenses'),
+      surplus: toCentavos(item.surplus, 'analytics surplus'), expenseToIncomePercent: percent as string | null, complete: item.complete,
+    }
   })
   const categories = row.categories.map((value) => {
     const item = record(value, 'analytics category')
@@ -400,7 +406,58 @@ export function fromWireAnalytics(value: unknown, expected: { startDate: string;
     if ((status === 'saved') !== (limits !== null)) throw contractError('analytics Kakeibo limits')
     return { month, planStatus: status as KakeiboPlanStatus, limits, actuals, unclassified: toCentavos(item.unclassified, 'analytics unclassified expenses') }
   })
-  return { startDate: expected.startDate, endDate: expected.endDate, accountId: expected.accountId, totals: totals(row.totals, 'analytics totals'), previousTotals, months, categories, kakeiboTotals, kakeibo }
+  const report: AnalyticsReport = { startDate: expected.startDate, endDate: expected.endDate, accountId: expected.accountId, totals: totals(row.totals, 'analytics totals'), previousTotals, months, categories, kakeiboTotals, kakeibo }
+  if (expected.detail) Object.assign(report, parseAnalyticsDetail(row, expected))
+  return report
+}
+
+/** The day-level sections of an analysis range. Every date from start to end must be present, in order, once. */
+function parseAnalyticsDetail(row: Record<string, unknown>, expected: { startDate: string; endDate: string }): Pick<AnalyticsReport, 'daily' | 'weekdays' | 'insights'> {
+  if (!Array.isArray(row.daily) || !Array.isArray(row.weekdays)) throw contractError('analytics detail')
+  const daily = row.daily.map((value) => {
+    const item = record(value, 'analytics day')
+    const amount = (key: string) => toCentavos(item[key], `analytics day ${key}`)
+    return {
+      date: calendarDate(item.date, 'analytics day'), expenses: amount('expenses'), needs: amount('needs'), wants: amount('wants'),
+      culture: amount('culture'), unexpected: amount('unexpected'), unclassified: amount('unclassified'),
+    }
+  })
+  const first = daily[0]
+  const last = daily[daily.length - 1]
+  if (!first || !last || first.date !== expected.startDate || last.date !== expected.endDate) throw contractError('analytics days')
+  for (let i = 1; i < daily.length; i += 1) {
+    if (Date.parse(`${daily[i]!.date}T00:00:00Z`) - Date.parse(`${daily[i - 1]!.date}T00:00:00Z`) !== 86_400_000) throw contractError('analytics days') // no gaps, no repeats
+  }
+  for (const day of daily) {
+    if (day.needs + day.wants + day.culture + day.unexpected + day.unclassified !== day.expenses) throw contractError('analytics day envelopes') // unclassified is spending too
+  }
+  const weekdays = row.weekdays.map((value) => {
+    const item = record(value, 'analytics weekday')
+    const weekday = item.weekday
+    const occurrences = item.occurrences
+    if (typeof weekday !== 'number' || !Number.isInteger(weekday) || weekday < 1 || weekday > 7) throw contractError('analytics weekday')
+    if (typeof occurrences !== 'number' || !Number.isInteger(occurrences) || occurrences < 0) throw contractError('analytics weekday occurrences')
+    return { weekday, total: toCentavos(item.total, 'analytics weekday total'), occurrences, average: toCentavos(item.average, 'analytics weekday average') }
+  })
+  if (weekdays.length !== 7 || weekdays.some((day, index) => day.weekday !== index + 1)) throw contractError('analytics weekdays')
+  const insights = record(row.insights, 'analytics insights')
+  const count = (key: string) => {
+    const n = insights[key]
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) throw contractError(`analytics insight ${key}`)
+    return n
+  }
+  let highestDay: { date: string; expenses: Centavos } | null = null
+  if (insights.highest_day !== null) {
+    const item = record(insights.highest_day, 'analytics highest day')
+    highestDay = { date: calendarDate(item.date, 'analytics highest day'), expenses: toCentavos(item.expenses, 'analytics highest day expenses') }
+  }
+  return {
+    daily, weekdays,
+    insights: {
+      days: count('days'), averageDailySpending: toCentavos(insights.average_daily_spending, 'analytics average daily spending'),
+      expenseTransactions: count('expense_transactions'), highestDay, zeroSpendDays: count('zero_spend_days'),
+    },
+  }
 }
 
 export function fromWireTransaction(value: unknown, accounts: AccountInfo[], categories: Category[]): ActivityItem {

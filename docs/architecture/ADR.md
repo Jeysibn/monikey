@@ -263,6 +263,15 @@ ADRs explain **why** MoniKey uses each technology or pattern. Changing an accept
 - **Revisit condition:** reconsider a charting library only if requirements become substantially more complex, for example zoom or brush selection, pan, many simultaneous series, stacked or area combinations, real-time updates, or more than roughly eight chart kinds. Re-measure size, dependency tree and audit at that time and record a new ADR. Until then, no dependency is added.
 - **Boundaries:** No historical net-worth or balance chart (there is no dated balance history), no forecasts or AI insight text, and no production deployment or migration is authorized by this ADR.
 
+### ADR-026 — Category color, wider icon set and usage counts
+
+- **Status:** Accepted (owner direction approved 2026-11-12). Implemented and tested locally; **not released**. Applying migration 009 to any real database still requires the backup-gated release flow and a separate owner approval.
+- **Context:** The approved redesign shows categories with an icon and a color, and needs to say how many transactions use a category before it can be deleted. ADR-023 already stores an optional `icon_key`; there is no color, the icon set is small, and usage is not exposed.
+- **Decision:** Migration `009_category_colors.sql` adds a nullable `categories.color_key` (a closed list of ten names, never raw CSS or hex) and widens `categories_icon_key_allowed` to a strict superset. `GET /api/categories[/{id}]` also returns `color_key` and a derived `usage_count` (all transactions referencing the category, archived included; one grouped query for the list). `POST` and `PATCH` accept `icon_key` and `color_key`. Existing rows stay `NULL`; the interface shows a neutral fallback. Appearance and usage never change category IDs, types, amounts, balances, archive state or Kakeibo envelopes.
+- **Alternatives:** free hex colors (unsafe, unreadable, hard to validate); foreground/background pairs in the database (presentation belongs in code); counting usage in the browser (sees only loaded rows); a separate appearance table (splits one record for no benefit).
+- **Consequences:** The SQL allowlists, the FastAPI literals and the TypeScript registries must stay in sync; tests parse `009_category_colors.sql` and fail on drift. It extends migration order to 001–009 under the existing checksum ledger. Rolling the API back leaves the extra column harmless. Details and the rehearsal evidence: `docs/architecture/proposed/ADR-026-DRAFT-category-appearance-and-usage.md` (kept as the proposal record).
+- **Numbering:** ADR-023 to ADR-026 exist only on the redesign branch stack until it merges to `main`; renumber on merge if another ADR lands first.
+
 ## Change-control template
 
 Use this for future changes:
@@ -307,3 +316,4 @@ Use this for future changes:
 - **v1.8 (2026-11-10):** ADR-022 records the merged installation-wide category model, archive-safe transaction references, immutable type, and migration 007. This is a source/design record, not deployment evidence.
 - **v1.9 (2026-11-11):** ADR-023 and ADR-024 record the owner-approved category-icon and separate-Dashboard scope for staged Draft PRs; neither indicates a production rollout.
 - **v1.10 (2026-11-12):** ADR-025 accepts native SVG for the Dashboard (no charting library) and the two-scope date model; it implies no deployment.
+- **v1.11 (2026-11-12):** ADR-026 accepts category color, the wider icon allowlist and `usage_count` (migration 009); source and tests only, no production migration is authorized. The Activity search/filter parameters were reviewed and need no ADR (backward-compatible optional query parameters; see `docs/design/ACTIVITY_SEARCH_FILTERS.md`).

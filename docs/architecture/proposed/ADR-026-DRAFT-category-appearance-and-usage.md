@@ -1,4 +1,4 @@
-# DRAFT ADR-026 — Category color, wider icon set and usage counts
+# ADR-026 (proposal record; accepted text is in ADR.md) — Category color, wider icon set and usage counts
 
 - **Status:** Direction APPROVED by the owner (2026-11-12) and implemented LOCALLY on `feat/ui-redesign-categories-nav`; not pushed, not released. No production migration is authorized by this document. Final numbering and move into `ADR.md` happen when the stack merges.
 - **Date:** 2026-11-12 · **Extends:** ADR-022 (category lifecycle) and ADR-023 (optional `icon_key`, only on PR #25's branch).
@@ -25,8 +25,8 @@ Same checksum and backup-gated runner as 007/008; rehearsed in the disposable QA
 
 ## Approval needed
 
-- [ ] Approve migration 009 with the curated color keys and widened icon allowlist.
-- [ ] Approve `usage_count` as an API field.
+- [x] Approve migration 009 with the curated color keys and widened icon allowlist.
+- [x] Approve `usage_count` as an API field.
 - [ ] Confirm PR #25 (migration 008) is the base for this work.
 
 ## Implementation notes (local, 2026-11-12)

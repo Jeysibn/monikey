@@ -125,6 +125,20 @@ def test_shared_response_fixtures_match_all_financial_reads(client: TestClient) 
     assert_timestamped_row(payments[0], fixture("payments-list.json")[0])
     assert client.get("/api/credit-card-payments", params={"month": "2026-09"}).json() == fixture("payments-empty-month.json")
 
+    # Optional Activity filters change which rows are returned, never their shape: the same fixtures describe them.
+    october = {"month": "2026-10"}
+    for params in ({"q": "synthetic EXPENSE"}, {"q": "test wallet"}, {"q": "food"}, {"category_id": food_id}, {"kind": "expense", "q": "synthetic"}):
+        rows = client.get("/api/transactions", params={**october, **params}).json()
+        assert len(rows) == 1, params
+        assert_timestamped_row(rows[0], fixture("transactions-list.json")[0])
+    for params in ({"kind": "income"}, {"q": "no such text"}, {"category_id": food_id + 1000}):
+        assert client.get("/api/transactions", params={**october, **params}).json() == fixture("transactions-empty-month.json"), params
+    for params in ({"q": "synthetic card"}, {"q": "test overpaid card"}, {"q": "test wallet"}):
+        rows = client.get("/api/credit-card-payments", params={**october, **params}).json()
+        assert len(rows) == 1, params
+        assert_timestamped_row(rows[0], fixture("payments-list.json")[0])
+    assert client.get("/api/credit-card-payments", params={**october, "q": "no such text"}).json() == fixture("payments-empty-month.json")
+
     updated_transaction = client.put(
         f"/api/transactions/{transaction.json()['id']}",
         json={

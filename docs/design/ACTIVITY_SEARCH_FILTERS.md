@@ -32,6 +32,19 @@ Checked against `AGENTS.md`, the AI agent playbook, the master plan and the exis
 
 Performance: the month bounds every query, as before. Matching adds two inner joins on indexed primary keys and an `ILIKE` over a month's rows; there is no new index and none is needed at this scale.
 
+### Contract confirmation (final audit, 2026-11-12)
+
+| Requirement | Result | Evidence |
+|---|---|---|
+| Existing requests without the new parameters stay compatible | Yes; no existing parameter, default or response field changed | `test_old_calls_without_the_new_parameters_behave_exactly_as_before`; the shared fixtures still describe every response |
+| Filtering happens before pagination | Yes; filters sit in the `WHERE`, before `ORDER BY` and `LIMIT`; a page of `n` is the first `n` rows of the full filtered order for any `n` | `test_filters_apply_before_the_limit_...`, `test_pages_are_prefixes_of_one_stable_order_...`, the paging browser test |
+| Search is parameterized and wildcard-safe | Yes; bound parameters, `ESCAPE '\\'`, `%`/`_`/`\\` literal | `test_percent_underscore_and_backslash_are_matched_literally`, `test_search_text_cannot_inject_sql` |
+| Validation is strict | `q` ≤ 80 (80 accepted, 81 → 422), `kind` limited to two values, `category_id` ≥ 1 integer; blank `q` is "no filter" | `test_invalid_filter_values_are_rejected_in_words`, `test_a_blank_search_...` |
+| The three endpoints behave consistently and are documented | `q` (note + names shown) on all three; `category_id`/`kind` only where a category exists; a parameter an endpoint does not define is ignored and the client skips ruled-out reads | TLD *Activity filter contract*; `test_each_endpoint_ignores_filters_it_does_not_define_...` |
+| Correct across pagination boundaries | Yes; same-day ties stay in one stable order, `limit + 1` reveals more only when more exist | `test_pages_are_prefixes_...` |
+
+No architectural change was found: no new endpoint, table, column, migration, service, pattern or dependency, so no ADR is required (CLAUDE.md, AGENTS.md, ADR.md and the playbook contain no rule that an optional query parameter on an existing read needs one). If the owner reads this as a new contract anyway, an ADR can be written before the PR is opened; nothing in the code would change.
+
 ## Tests
 
 Backend `backend/tests/test_activity_filters.py` (note, category and account matches; literal `%`, `_` and `\`; kind and category combinations; **filtering before the limit**; payments and transfers; old calls unchanged; invalid values; SQL-injection text). Frontend `tests/activityFilters.test.ts` (rules, request shapes, mock parity, the post-save "hidden" check). Browser `browser-tests/activity.spec.ts` (on the real API it builds a month with 58 rows and finds three matches that are beyond the first page).

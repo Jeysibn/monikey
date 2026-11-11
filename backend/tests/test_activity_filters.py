@@ -136,3 +136,38 @@ def test_search_text_cannot_inject_sql(client: TestClient) -> None:
     create_transaction(client, ids["bank"], ids["food"], "1.00", "2026-10-02", "safe")
     assert get(client, "/api/transactions", q="'; DROP TABLE transactions; --") == []
     assert notes(get(client, "/api/transactions")) == ["safe"]  # still there
+
+
+def test_a_blank_search_is_no_filter_and_the_80_character_limit_is_inclusive(client: TestClient) -> None:
+    ids = seed(client)
+    create_transaction(client, ids["bank"], ids["food"], "1.00", "2026-10-02", "one")
+    create_transaction(client, ids["bank"], ids["food"], "1.00", "2026-10-03", "two")
+    for blank in ("", "   "):
+        assert len(get(client, "/api/transactions", q=blank)) == 2
+    assert get(client, "/api/transactions", q="x" * 80) == []  # exactly 80 is accepted (and matches nothing)
+
+
+def test_pages_are_prefixes_of_one_stable_order_so_load_more_never_skips_or_repeats(client: TestClient) -> None:
+    """The client pages by asking for a larger limit. Every filtered page must be the start of the next one."""
+    ids = seed(client)
+    for index in range(7):  # same-day ties are ordered by creation, newest first
+        create_transaction(client, ids["bank"], ids["food"], "2.00", "2026-10-05", f"tie {index}")
+    create_transaction(client, ids["bank"], ids["bills"], "2.00", "2026-10-05", "other tie")
+    create_transaction(client, ids["bank"], ids["food"], "2.00", "2026-10-01", "older tie")
+    for kind in ({"q": "tie"}, {"category_id": ids["food"]}, {"kind": "expense", "q": "tie", "account_id": ids["bank"]}):
+        full = [row["id"] for row in get(client, "/api/transactions", limit=1001, **kind)]
+        for size in range(1, len(full) + 2):
+            assert [row["id"] for row in get(client, "/api/transactions", limit=size, **kind)] == full[:size], (kind, size)
+    # limit + 1 is how the client learns there is more: 8 matches, a page of 5 plus one probe row
+    assert len(get(client, "/api/transactions", q="tie", limit=6)) == 6
+    assert len(get(client, "/api/transactions", q="tie", limit=9)) == 9
+    assert len(get(client, "/api/transactions", q="tie", limit=10)) == 9  # exactly the matches, so no "more"
+
+
+def test_each_endpoint_ignores_filters_it_does_not_define_exactly_as_before(client: TestClient) -> None:
+    """Payments and transfers have no category or kind: an unknown query parameter is ignored (FastAPI default)."""
+    ids = seed(client)
+    create_payment(client, ids["bank"], ids["card"], "5.00", "2026-10-03", "ignored")
+    transfer(client, ids["bank"], ids["cash"], "4.00", "2026-10-04", "ignored")
+    assert len(get(client, "/api/credit-card-payments", category_id=ids["food"], kind="expense")) == 1
+    assert len(get(client, "/api/account-transfers", category_id=ids["food"], kind="expense")) == 1

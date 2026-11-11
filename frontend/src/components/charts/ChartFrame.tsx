@@ -93,7 +93,11 @@ export function ChartFrame({
               {open ? 'Hide data table' : 'Show data table'}
             </Button>
             <div id={`${id}-table`} className={cn(!open && 'sr-only')}>
-              <div className="max-h-80 overflow-auto rounded-control border border-border">
+              {/* Only a visible table scrolls, and then it is a labelled region a keyboard can reach and scroll. Closed, it is screen-reader-only and has no scroll box. */}
+              <div
+                className={cn('rounded-control border border-border', open && 'max-h-80 overflow-auto')}
+                {...(open ? { tabIndex: 0, role: 'region', 'aria-label': `${table.caption} (scrollable)` } : {})}
+              >
                 <table className="w-full border-collapse text-left text-sm">
                   <caption className="sr-only">{table.caption}</caption>
                   <thead className="sticky top-0 bg-secondary">

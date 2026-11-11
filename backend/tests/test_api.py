@@ -141,7 +141,11 @@ def test_bounded_analytics_uses_only_transactions_and_preserves_archived_categor
     body = report.json()
     assert body["totals"] == {"income": "100.00", "expenses": "35.00", "net_cash_flow": "65.00"}
     assert body["previous_totals"] == {"income": "25.00", "expenses": "0.00", "net_cash_flow": "25.00"}
-    assert body["months"] == [{"month": "2020-10", "income": "100.00", "expenses": "35.00"}]
+    assert body["months"] == [{
+        "month": "2020-10", "income": "100.00", "expenses": "35.00", "surplus": "65.00",
+        "expense_to_income_percent": "35.0", "complete": True,
+    }]
+    assert "daily" not in body and "weekdays" not in body and "insights" not in body  # day-level sections are opt-in
     assert body["categories"] == [
         {"id": food, "name": "Food", "icon_key": None, "color_key": None, "archived": True, "expenses": "25.00"},
         {"id": groceries, "name": "Groceries", "icon_key": None, "color_key": None, "archived": False, "expenses": "10.00"},

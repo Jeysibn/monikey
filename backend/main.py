@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
@@ -1368,10 +1368,20 @@ def get_analytics(
     start_date: CalendarDate,
     end_date: CalendarDate,
     account_id: Annotated[int | None, Query(ge=1)] = None,
+    detail: bool = False,
 ) -> dict[str, object]:
-    """Bounded server-side analytics. Date values are Manila calendar dates, end_date is inclusive."""
+    """Bounded server-side analytics. Date values are Manila calendar dates, end_date is inclusive.
+
+    The base response (totals, monthly series, categories, Kakeibo) is what the monthly reporting view reads.
+    `detail=true` adds the day-level sections for the analysis view: `daily`, `weekdays` and `insights`.
+    A range may not end in the future, so every day in it has already happened: zero-spend days, daily
+    averages and weekday occurrence counts are then well defined.
+    """
     if end_date < start_date:
         raise ApiProblem(422, "invalid_field", "End date must be on or after start date.", "end_date")
+    manila_today = datetime.now(ZoneInfo("Asia/Manila")).date()
+    if end_date > manila_today:
+        raise ApiProblem(422, "invalid_field", "End date cannot be in the future.", "end_date")
     days = (end_date - start_date).days + 1
     if days > 366:
         raise ApiProblem(422, "invalid_field", "Choose a date range of 366 days or fewer.", "end_date")
@@ -1402,7 +1412,6 @@ def get_analytics(
             return {"income": format_money(income), "expenses": format_money(expenses), "net_cash_flow": format_money(income - expenses)}
 
         totals = totals_between(start_date, end_exclusive)
-        manila_today = datetime.now(ZoneInfo("Asia/Manila")).date()
         comparison = None
         if end_date < manila_today:
             try:
@@ -1470,18 +1479,92 @@ def get_analytics(
             parameters,
         ).fetchone()
 
+        daily_rows: list[dict[str, object]] = []
+        expense_transactions = 0
+        if detail:
+            # One row per calendar date, including dates with no spending (generate_series + LEFT JOIN).
+            daily_rows = connection.execute(
+                f"""WITH days AS (
+                      SELECT generate_series(%s::date, %s::date, interval '1 day')::date AS day
+                    ), actuals AS (
+                      SELECT t.transaction_date AS day,
+                        COALESCE(SUM(t.amount), 0) AS expenses,
+                        COALESCE(SUM(t.amount) FILTER (WHERE t.kakeibo_envelope = 'needs'), 0) AS needs,
+                        COALESCE(SUM(t.amount) FILTER (WHERE t.kakeibo_envelope = 'wants'), 0) AS wants,
+                        COALESCE(SUM(t.amount) FILTER (WHERE t.kakeibo_envelope = 'culture'), 0) AS culture,
+                        COALESCE(SUM(t.amount) FILTER (WHERE t.kakeibo_envelope = 'unexpected'), 0) AS unexpected,
+                        COALESCE(SUM(t.amount) FILTER (WHERE t.kakeibo_envelope IS NULL), 0) AS unclassified,
+                        COUNT(*) AS transactions
+                      FROM transactions AS t JOIN categories AS c ON c.id = t.category_id
+                      WHERE c.type = 'expense' AND t.transaction_date >= %s AND t.transaction_date < %s{account_clause}
+                      GROUP BY t.transaction_date
+                    )
+                    SELECT days.day, COALESCE(a.expenses, 0) AS expenses, COALESCE(a.needs, 0) AS needs,
+                      COALESCE(a.wants, 0) AS wants, COALESCE(a.culture, 0) AS culture,
+                      COALESCE(a.unexpected, 0) AS unexpected, COALESCE(a.unclassified, 0) AS unclassified,
+                      COALESCE(a.transactions, 0) AS transactions
+                    FROM days LEFT JOIN actuals AS a ON a.day = days.day ORDER BY days.day""",
+                (start_date, end_date, start_date, end_exclusive, *account_parameter),
+            ).fetchall()
+            expense_transactions = sum(int(row["transactions"]) for row in daily_rows)
+
     envelopes = ("needs", "wants", "culture", "unexpected")
+    cents = Decimal("0.01")
+
+    def month_fields(row: dict[str, object]) -> dict[str, object]:
+        month_first: date = row["month"]  # type: ignore[assignment]
+        next_month = (month_first.replace(day=28) + timedelta(days=4)).replace(day=1)
+        income = Decimal(row["income"])  # type: ignore[arg-type]
+        expenses = Decimal(row["expenses"])  # type: ignore[arg-type]
+        return {
+            "month": month_first.isoformat()[:7],
+            "income": format_money(income),
+            "expenses": format_money(expenses),
+            "surplus": format_money(income - expenses),
+            # Expenses as a share of income, one decimal, half-up. None (not infinity) when there was no income.
+            "expense_to_income_percent": None if income == 0 else str((expenses * 100 / income).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)),
+            # True when the requested range covers every day of this calendar month; otherwise it is month-to-date or partial.
+            "complete": start_date <= month_first and end_date >= next_month - timedelta(days=1),
+        }
+
+    def detail_sections() -> dict[str, object]:
+        if not detail:
+            return {}
+        daily = [{
+            "date": row["day"].isoformat(), "expenses": format_money(row["expenses"]),
+            **{key: format_money(row[key]) for key in (*envelopes, "unclassified")},
+        } for row in daily_rows]
+        days = len(daily)
+        total = sum((Decimal(row["expenses"]) for row in daily_rows), Decimal("0"))
+        # Weekday averages divide by how many times that weekday occurs in the range, zero-spend days included.
+        weekdays = []
+        for iso_day in range(1, 8):
+            matching = [row for row in daily_rows if row["day"].isoweekday() == iso_day]
+            weekday_total = sum((Decimal(row["expenses"]) for row in matching), Decimal("0"))
+            weekdays.append({
+                "weekday": iso_day, "total": format_money(weekday_total), "occurrences": len(matching),
+                "average": format_money((weekday_total / len(matching)).quantize(cents, rounding=ROUND_HALF_UP)) if matching else format_money(Decimal("0")),
+            })
+        highest = max(daily_rows, key=lambda row: (Decimal(row["expenses"]), -row["day"].toordinal()), default=None) if total > 0 else None
+        return {
+            "daily": daily,
+            "weekdays": weekdays,
+            "insights": {
+                "days": days,
+                "average_daily_spending": format_money((total / days).quantize(cents, rounding=ROUND_HALF_UP)) if days else format_money(Decimal("0")),
+                "expense_transactions": expense_transactions,
+                "highest_day": None if highest is None else {"date": highest["day"].isoformat(), "expenses": format_money(highest["expenses"])},
+                "zero_spend_days": sum(1 for row in daily_rows if Decimal(row["expenses"]) == 0),
+            },
+        }
+
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "account_id": account_id,
         "totals": totals,
         "previous_totals": comparison,
-        "months": [{
-            "month": row["month"].isoformat()[:7],
-            "income": format_money(row["income"]),
-            "expenses": format_money(row["expenses"]),
-        } for row in monthly_rows],
+        "months": [month_fields(row) for row in monthly_rows],
         "categories": [{
             "id": row["id"], "name": row["name"], "icon_key": row["icon_key"], "color_key": row["color_key"],
             "archived": row["is_archived"], "expenses": format_money(row["expenses"]),
@@ -1494,6 +1577,7 @@ def get_analytics(
             "actuals": {key: format_money(row[key]) for key in envelopes},
             "unclassified": format_money(row["unclassified"]),
         } for row in envelope_rows],
+        **detail_sections(),
     }
 
 

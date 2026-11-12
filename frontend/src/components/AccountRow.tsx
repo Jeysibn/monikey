@@ -15,7 +15,7 @@ const types: Record<LiquidAccountType, { Icon: LucideIcon; label: string }> = {
   ewallet: { Icon: Smartphone, label: 'E-wallet' },
 }
 
-export function AccountRow({ item, onEdit }: { item: AccountBalance; onEdit: (id: number, from: HTMLElement) => void }) {
+export function AccountRow({ item, onEdit, onDetails }: { item: AccountBalance; onEdit: (id: number, from: HTMLElement) => void; onDetails?: (id: number, from: HTMLElement) => void }) {
   const { account, balance } = item
   const { Icon, label } = types[account.type]
 
@@ -35,6 +35,11 @@ export function AccountRow({ item, onEdit }: { item: AccountBalance; onEdit: (id
         </div>
       </div>
       <MoneyText wrap centavos={balance} className="ml-auto shrink-0 text-lg font-semibold tracking-[-0.01em]" />
+      {onDetails && (
+        <Button type="button" variant="ghost" size="sm" className="min-h-11 md:min-h-9" aria-label={`Details, ${account.name}`} onClick={(event) => onDetails(account.id, event.currentTarget)}>
+          Details
+        </Button>
+      )}
       <Button
         type="button"
         variant="ghost"

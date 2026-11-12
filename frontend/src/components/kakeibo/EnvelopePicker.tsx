@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 
@@ -11,6 +12,8 @@ import type { KakeiboEnvelope } from '@/types'
  * Native radio inputs styled as chips, like the category chips above it (arrow keys move, Tab leaves).
  * The category's default envelope is only a suggestion: when it differs from the choice, a one-line hint
  * offers it with a button, and nothing changes until the person presses that button.
+ * The control is compact: one row shows the current choice with a "Change" button, and the five chips open
+ * below it on request (they open by themselves when the server refused the envelope, so the error is seen).
  * "Pause before buying?" is an optional, closed-by-default disclosure of three questions to think about. It
  * never blocks saving and nothing typed or chosen there is stored.
  */
@@ -39,6 +42,8 @@ export function EnvelopePicker({
   onBlur: () => void
   error?: string // a field the server refused
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const showChips = expanded || !!error
   const offer = suggestion !== null && suggestion !== value
   const helper = value === null
     ? 'Not sure? Leave it. It still counts in your total expenses.'
@@ -47,7 +52,22 @@ export function EnvelopePicker({
   return (
     <fieldset className="m-0 grid min-w-0 gap-1.5 border-0 p-0" aria-describedby={error ? 'qa-envelope-help qa-envelope-error' : 'qa-envelope-help'}>
       <legend className="mb-1.5 text-sm leading-snug font-semibold">Kakeibo envelope</legend>
-      <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        id="qa-envelope-toggle"
+        aria-expanded={showChips}
+        aria-controls="qa-envelope-chips"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-control border border-input bg-card px-3.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-semibold">{value === null ? 'Not sure yet' : envelopeLabel(value)}</span>
+          {value !== null && value === suggestion && categoryName && <span className="text-muted-foreground"> · suggested by {categoryName}</span>}
+        </span>
+        <span className="text-sm font-semibold text-primary">{showChips ? 'Done' : 'Change'}</span>
+        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', showChips && 'rotate-180')} />
+      </button>
+      <div id="qa-envelope-chips" hidden={!showChips} className="flex flex-wrap gap-2">
         {OPTIONS.map((option, i) => {
           const checked = value === option.value
           return (
@@ -81,7 +101,7 @@ export function EnvelopePicker({
         {helper}
       </p>
       {error && <FieldError id="qa-envelope-error" message={error} />}
-      <details className="group rounded-control text-sm text-muted-foreground">
+      {showChips && <details className="group rounded-control text-sm text-muted-foreground">
         <summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 font-semibold text-primary [&::-webkit-details-marker]:hidden">
           Pause before buying?
           <ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
@@ -90,7 +110,7 @@ export function EnvelopePicker({
           {PAUSE_QUESTIONS.map((q) => <li key={q}>{q}</li>)}
         </ul>
         <p>Just something to think about. Nothing here is saved.</p>
-      </details>
+      </details>}
       {offer && (
         <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           <span>

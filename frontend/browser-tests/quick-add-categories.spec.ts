@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { hasRealApi } from './fixtures'
+
+// These specs create, edit and archive real categories, so they need the Compose stack; the mock source cannot persist them.
+test.beforeEach(async ({ request }) => {
+  test.skip(!(await hasRealApi(request)), 'Needs the real API and database (see README: Two environments).')
+})
 
 async function apiJson(page: import('@playwright/test').Page, path: string) {
   const response = await page.request.get(path)
@@ -10,6 +16,15 @@ async function apiJson(page: import('@playwright/test').Page, path: string) {
 const cents = (value: unknown): bigint => {
   const [whole, fraction = ''] = String(value).split('.')
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
+}
+
+async function openCategories(page: import('@playwright/test').Page) {
+  const direct = page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Categories' })
+  if (await direct.count()) await direct.last().click()
+  else {
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Categories', exact: true }).click()
+  }
 }
 
 test('Quick Add preserves category defaults, overrides, history, archive and restore', async ({ page }) => {
@@ -26,8 +41,9 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   expect(accountCreate.status()).toBe(201)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(initialName)
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('expense')
   await page.getByLabel('Default Kakeibo envelope').selectOption('needs')
@@ -35,14 +51,19 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await page.getByLabel('Search categories').fill(initialName)
   await expect(page.getByRole('button', { name: `Edit ${initialName}` })).toBeVisible()
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByLabel('Name', { exact: true }).fill(unusedName)
   await page.getByRole('button', { name: 'Create category' }).click()
   await page.getByLabel('Search categories').fill(unusedName)
   await expect(page.getByRole('button', { name: `Edit ${unusedName}` })).toBeVisible()
-  page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: `Delete ${unusedName}` }).click()
+  // An unused category is deleted from its editor, after a styled confirmation (no window.confirm).
+  await page.getByRole('button', { name: `Edit ${unusedName}` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete category' }).click()
+  await expect(page.getByText('Category deleted.', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: `Edit ${unusedName}` })).toHaveCount(0)
 
+  await page.getByRole('button', { name: 'Add category' }).click()
   await page.getByRole('combobox', { name: 'Type', exact: true }).first().selectOption('income')
   await expect(page.getByLabel('Default Kakeibo envelope')).toHaveCount(0)
   await page.getByLabel('Name', { exact: true }).fill(incomeName)
@@ -53,21 +74,21 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading', { name: 'Add transaction' })).toBeVisible()
   await expect(page.getByLabel('Amount')).toBeFocused()
+  // Field order: Amount, then Date (Today / Yesterday first), then Account, Category and the Kakeibo row.
   await page.keyboard.press('Tab')
-  await expect(page.getByLabel('Account')).toBeFocused()
+  await expect(dialog.getByRole('button', { name: 'Today', exact: true })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   await expect(page.getByLabel('Amount')).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(page.getByLabel('Account')).toBeFocused()
+  const accountField = dialog.getByLabel('Account', { exact: true })
+  await accountField.focus()
   await page.keyboard.press('Tab')
   const firstCategory = page.getByRole('radio', { name: 'Bills', exact: true })
   await expect(firstCategory).toBeFocused()
   await page.keyboard.press('Tab')
-  const firstEnvelope = page.getByRole('radio', { name: 'Not sure yet', exact: true })
-  await expect(firstEnvelope).toBeFocused()
+  await expect(dialog.locator('#qa-envelope-toggle')).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   await page.keyboard.press('Shift+Tab')
-  await expect(page.getByLabel('Account')).toBeFocused()
+  await expect(accountField).toBeFocused()
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     const layout = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth }))
@@ -93,7 +114,8 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await expect(incomeCategory).toBeVisible()
   await expect(dialog.getByRole('group', { name: 'Kakeibo envelope' })).toHaveCount(0)
   await page.getByLabel('Amount').fill('2.00')
-  await page.getByLabel('Deposit to').selectOption({ index: 1 })
+  await dialog.getByLabel('Deposit to', { exact: true }).click()
+  await dialog.getByRole('option').first().click()
   await incomeCategory.focus()
   await page.keyboard.press('Space')
   await expect(incomeCategory).toBeChecked()
@@ -109,15 +131,17 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   await addButton.click()
 
   const amount = page.getByLabel('Amount')
-  const account = page.getByLabel('Account')
+  const account = dialog.getByLabel('Account', { exact: true })
   await amount.fill('12.34')
-  await account.selectOption({ index: 1 })
+  await account.click()
+  await dialog.getByRole('option').first().click()
   const chosenCategory = page.getByRole('radio', { name: initialName, exact: true })
   await chosenCategory.focus()
   await page.keyboard.press('Space')
   await expect(chosenCategory).toBeFocused()
   await expect(chosenCategory).toBeChecked()
-  await expect(page.getByRole('radio', { name: 'Needs', exact: true })).toBeChecked()
+  await expect(dialog.locator('#qa-envelope-toggle')).toContainText('Needs') // the compact row shows the suggestion
+  await dialog.locator('#qa-envelope-toggle').click() // the Kakeibo row opens its five choices on request
   const needsEnvelope = page.getByRole('radio', { name: 'Needs', exact: true })
   await needsEnvelope.focus()
   await page.keyboard.press('ArrowRight')
@@ -144,8 +168,8 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   expect(afterReport.envelopes.needs.actual_spent).toBe(beforeReport.envelopes.needs.actual_spent)
 
   // Category Management is reachable from navigation; rename and change only the default for future entries.
-  await page.getByRole('button', { name: 'Categories' }).click()
-  await page.getByLabel('Filter category type').selectOption('expense')
+  await openCategories(page)
+  await page.getByText(/^Expenses \d+$/).click()
   await page.getByLabel('Search categories').fill(initialName)
   await page.getByRole('button', { name: `Edit ${initialName}` }).click()
   await page.getByLabel('Name', { exact: true }).fill(renamedName)
@@ -156,12 +180,13 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
 
   await page.getByRole('button', { name: 'Add transaction' }).click()
   await page.getByLabel('Amount').fill('3.21')
-  await page.getByLabel('Account').selectOption({ index: 1 })
+  await page.getByRole('dialog').getByLabel('Account', { exact: true }).click()
+  await page.getByRole('dialog').getByRole('option').first().click()
   const renamedCategory = page.getByRole('radio', { name: renamedName, exact: true })
   await renamedCategory.focus()
   await page.keyboard.press('Space')
   await expect(renamedCategory).toBeChecked()
-  await expect(page.getByRole('radio', { name: 'Unexpected', exact: true })).toBeChecked()
+  await expect(page.getByRole('dialog').locator('#qa-envelope-toggle')).toContainText('Unexpected')
   await page.getByLabel('Note (optional)').fill(`QA future ${suffix}`)
   await page.getByRole('button', { name: 'Save expense' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -175,42 +200,52 @@ test('Quick Add preserves category defaults, overrides, history, archive and res
   const beforeArchiveSummary = await apiJson(page, `/api/summary?month=${month}`)
   const beforeArchiveReport = await apiJson(page, `/api/kakeibo/months/${month}/report`)
 
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
+  await page.getByText(/^Expenses \d+$/).click()
   await page.getByLabel('Search categories').fill(renamedName)
-  page.once('dialog', (confirmation) => confirmation.accept())
   await page.getByRole('button', { name: `Archive ${renamedName}` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Archive category' }).click() // styled confirmation, not window.confirm
+  await expect(page.getByText(/Category archived/)).toBeVisible()
   const duringArchiveSummary = await apiJson(page, `/api/summary?month=${month}`)
   const duringArchiveReport = await apiJson(page, `/api/kakeibo/months/${month}/report`)
   expect(duringArchiveSummary.month_expenses).toBe(beforeArchiveSummary.month_expenses)
   expect(duringArchiveReport.envelopes).toEqual(beforeArchiveReport.envelopes)
-  await page.getByLabel('Filter category status').selectOption('archived')
-  const archivedRow = page.getByRole('listitem').filter({ has: page.getByRole('button', { name: `Edit ${renamedName}` }) })
+  await page.getByText(/^Archived \d+$/).click()
+  const archivedRow = page.getByRole('list', { name: 'Categories' }).getByRole('listitem').filter({ has: page.getByRole('button', { name: `Edit ${renamedName}` }) })
   await expect(archivedRow).toBeVisible()
-  page.once('dialog', (confirmation) => confirmation.accept())
-  await archivedRow.getByRole('button', { name: `Delete ${renamedName}` }).click()
-  await expect(page.getByRole('alert')).toContainText('transactions. Archive it instead.')
+  // A category that transactions use cannot be deleted: the editor offers no Delete and says why, and the API refuses too.
+  await archivedRow.getByRole('button', { name: `Edit ${renamedName}` }).click()
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('dialog').getByText(/can’t be deleted/)).toBeVisible()
+  const listed = await apiJson(page, '/api/categories') as unknown as Record<string, any>[]
+  const usedCategory = listed.find((row) => row.name === renamedName)
+  expect(usedCategory?.usage_count).toBeGreaterThanOrEqual(2)
+  expect((await page.request.delete(`/api/categories/${usedCategory?.id}`)).status()).toBe(409)
+  await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Activity' }).click()
-  await expect(page.getByText(renamedName, { exact: false }).first()).toBeVisible()
+  // The category name is shown on the entry's row (the filter's own category choices also contain it, so look in the list).
+  await expect(page.locator('main ul li').getByText(renamedName).filter({ visible: true }).first()).toBeVisible()
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.getByRole('button', { name: new RegExp(`Edit QA purchase ${suffix}`) }).click()
   await expect(page.getByRole('radio', { name: renamedName, exact: true })).toBeChecked()
-  await expect(page.getByRole('radio', { name: 'Wants', exact: true })).toBeChecked()
+  await expect(page.getByRole('dialog').locator('#qa-envelope-toggle')).toContainText('Wants') // an edit keeps its stored envelope
   await page.getByRole('button', { name: 'Save changes' }).click()
   const preservedRows = await page.request.get(`/api/transactions?month=${month}`)
   const preserved = (await preservedRows.json() as Record<string, any>[]).find((row) => row.note === `QA purchase ${suffix}`)
   expect(preserved?.category_id).toBe(created?.category_id)
   expect(preserved?.kakeibo_envelope).toBe('wants')
 
-  await page.getByRole('button', { name: 'Categories' }).click()
+  await openCategories(page)
+  await page.getByText(/^Expenses \d+$/).click()
   await page.getByLabel('Search categories').fill(renamedName)
   await page.getByRole('button', { name: 'Add transaction' }).click()
   await expect(page.getByRole('radio', { name: renamedName, exact: true })).toHaveCount(0)
   await page.keyboard.press('Escape')
-  await page.getByLabel('Filter category status').selectOption('archived')
+  await page.getByText(/^Archived \d+$/).click()
   await page.getByLabel('Search categories').fill(renamedName)
   await page.getByRole('button', { name: `Restore ${renamedName}` }).click()
-  await page.getByLabel('Filter category status').selectOption('active')
+  await page.getByText(/^Expenses \d+$/).click()
   await expect(page.getByRole('button', { name: `Archive ${renamedName}` })).toBeVisible()
   await page.getByRole('button', { name: 'Add transaction' }).click()
   await expect(page.getByRole('radio', { name: renamedName, exact: true })).toBeVisible()

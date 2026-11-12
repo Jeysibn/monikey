@@ -14,7 +14,7 @@ Read the relevant project documents before work:
 - [Frontend setup](architecture/FRONTEND_SETUP.md) and [Obsidian guide](architecture/OBSIDIAN_GUIDE.md) as relevant
 - Root [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md), and approved [DESIGN.md](../DESIGN.md)
 
-The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The approved v1 design remains a constraint, while implementation is verified from current source. As of 2026-11-10, the repository contains React/Vite screens, FastAPI routes, PostgreSQL migrations through 007, Playwright browser tests, CI image publishing, and a gated GitOps release workflow. The latest production rollout is on hold per the owner and its running image/schema are unverified. See [ROADMAP.md](architecture/ROADMAP.md#current-source-and-release-status) and the [learning guide](LEARNING_GUIDE.md).
+The architecture documents originated in `MoniKey_v1_3_Architecture_with_Obsidian.zip` and are maintained in [architecture/README.md](architecture/README.md). The approved v1 design remains a constraint, while implementation is verified from current source. As of 2026-11-10, the repository contains React/Vite screens, FastAPI routes, PostgreSQL migrations through 008, Playwright browser tests, CI image publishing, and a gated GitOps release workflow. The latest production rollout is on hold per the owner and its running image/schema are unverified. See [ROADMAP.md](architecture/ROADMAP.md#current-source-and-release-status) and the [learning guide](LEARNING_GUIDE.md).
 
 ## Agent roles
 

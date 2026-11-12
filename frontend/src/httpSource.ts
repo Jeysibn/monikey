@@ -1,11 +1,13 @@
+import { activitySources, NO_ACTIVITY_FILTERS, normalizeSearch } from './lib/activityFilters.ts'
 import { ApiError, type ActivityQuery, type CategoryValues, type DataSource } from './dataSource.ts'
 import type { AccountValues } from './lib/accountForm.ts'
 import { ACTIVITY_MAX_ROWS } from './lib/finance.ts'
-import type { AccountInfo, ActivityItem, EntryTarget, EntryValues } from './types.ts'
+import type { AccountInfo, ActivityItem, Category, EntryTarget, EntryValues } from './types.ts'
 import { compareTimestamps } from './lib/timestamp.ts'
 import { isMonday } from './lib/kakeibo.ts'
 import {
   fromWireAccounts,
+  fromWireAnalytics,
   fromWireEditableAccount,
   fromWireCategories,
   fromWireField,
@@ -22,7 +24,6 @@ import {
   toWireKakeiboPlan,
   toWireKakeiboReview,
   toWireWeekNotes,
-  type WireCategory,
   type WirePayment,
   type WireTransaction,
   type WireTransfer,
@@ -128,7 +129,7 @@ function mergeActivity(
   payments: WirePayment[],
   transfers: WireTransfer[],
   accounts: AccountInfo[],
-  categories: WireCategory[],
+  categories: Category[],
   limit: number,
 ): { items: ActivityItem[]; hasMore: boolean } {
   const items: ActivityItem[] = [
@@ -186,12 +187,12 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
     },
 
     async createCategory(values: CategoryValues) {
-      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope })
+      await write('/api/categories', 'POST', fetcher, { name: values.name, type: values.type, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey, color_key: values.colorKey })
       categoriesRead = null
     },
 
     async updateCategory(id, values) {
-      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope })
+      await write(`/api/categories/${positiveId(id)}`, 'PATCH', fetcher, { name: values.name, default_kakeibo_envelope: values.defaultEnvelope, icon_key: values.iconKey, color_key: values.colorKey })
       categoriesRead = null
     },
 
@@ -210,7 +211,15 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
       return fromWireSummary(await getJson(urlWithQuery('/api/summary', query), signal, fetcher), month)
     },
 
-    async loadActivity({ month, accountId, limit }: ActivityQuery, signal) {
+    async loadAnalytics({ startDate, endDate, accountId, detail = false }, signal) {
+      const query = new URLSearchParams({ start_date: startDate, end_date: endDate })
+      if (accountId !== null) query.set('account_id', String(positiveId(accountId)))
+      if (detail) query.set('detail', 'true') // the day-level sections for the analysis range
+      const expected = { startDate, endDate, accountId, detail }
+      return fromWireAnalytics(await getJson(urlWithQuery('/api/analytics', query), signal, fetcher), expected)
+    },
+
+    async loadActivity({ month, accountId, limit, filters = NO_ACTIVITY_FILTERS }: ActivityQuery, signal) {
       const requestLimit = Math.min(Math.max(1, limit) + 1, ACTIVITY_MAX_ROWS + 1)
       const transactionQuery = new URLSearchParams({ month, limit: String(requestLimit) })
       const paymentQuery = new URLSearchParams({ month, limit: String(requestLimit) })
@@ -220,10 +229,18 @@ export function createHttpSource(fetcher: Fetcher = globalThis.fetch): DataSourc
         paymentQuery.set('account_id', String(accountId))
         transferQuery.set('account_id', String(accountId))
       }
+      // Search and filters go to the server so they apply to the whole month before its limit. A type or a category
+      // rules some reads out entirely (a payment has no category), so those reads are skipped, not filtered afterwards.
+      const wanted = activitySources(filters)
+      const search = normalizeSearch(filters.search)
+      if (search !== '') for (const query of [transactionQuery, paymentQuery, transferQuery]) query.set('q', search)
+      if (filters.categoryId !== null && wanted.transactions) transactionQuery.set('category_id', String(positiveId(filters.categoryId)))
+      if (wanted.transactionKind !== null) transactionQuery.set('kind', wanted.transactionKind)
+      const none: Promise<unknown> = Promise.resolve([])
       const [transactionRows, paymentRows, transferRows, accountsSnapshot, categories] = await Promise.all([
-        getJson(urlWithQuery('/api/transactions', transactionQuery), signal, fetcher),
-        getJson(urlWithQuery('/api/credit-card-payments', paymentQuery), signal, fetcher),
-        getJson(urlWithQuery('/api/account-transfers', transferQuery), signal, fetcher),
+        wanted.transactions ? getJson(urlWithQuery('/api/transactions', transactionQuery), signal, fetcher) : none,
+        wanted.payments ? getJson(urlWithQuery('/api/credit-card-payments', paymentQuery), signal, fetcher) : none,
+        wanted.transfers ? getJson(urlWithQuery('/api/account-transfers', transferQuery), signal, fetcher) : none,
         accountsRead ?? readAccounts(signal),
         categoriesRead ?? readCategories(signal),
       ])

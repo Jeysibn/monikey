@@ -9,9 +9,9 @@ Related: [`TLD.md`](../architecture/TLD.md) §4–§6 · [`DESIGN_REVIEW.md`](DE
 | Need | Request | Used by | Re-fetch after a write? |
 |---|---|---|---|
 | Accounts with computed figures | `GET /api/accounts` | every screen, every form (balances, owed, available credit) | yes: after any write |
-| Categories (seeded, fixed) | `GET /api/categories` | Quick Add, Edit, Activity rows | no: load once |
+| Categories (install-wide, user-managed) | `GET /api/categories` | Quick Add, Edit, Activity rows, Dashboard | after category create/edit/archive |
 | Month totals | `GET /api/summary?month=YYYY-MM` | Overview; Accounts subtotals | yes |
-| Activity list (expenses and income) | `GET /api/transactions?month=&account_id=&limit=` | Activity, Overview recent | yes: the visible list |
+| Activity list (expenses and income) | `GET /api/transactions?month=&account_id=&category_id=&kind=&q=&limit=` | Activity, Overview recent | yes: the visible list |
 | Activity list (card payments) | `GET /api/credit-card-payments?month=&account_id=&limit=` (**account_id is new: B1**) | Activity, Overview recent | yes: the visible list |
 | Add / change / remove an expense or income | `POST`, `PUT /{id}`, `DELETE /{id}` on `/api/transactions` | Quick Add, Edit, Delete | accounts + summary + list |
 | Add / change / remove a card payment | `POST`, `PUT /{id}`, `DELETE /{id}` on `/api/credit-card-payments` | Pay card, Edit, Delete | accounts + summary + list |
@@ -41,7 +41,11 @@ export interface WireCardAccount {
 }
 export type WireAccount = WireLiquidAccount | WireCardAccount
 
-export interface WireCategory { id: number; name: string; type: 'income' | 'expense' }
+export interface WireCategory {
+  id: number; name: string; type: 'income' | 'expense'
+  default_kakeibo_envelope?: string | null; is_archived?: boolean
+  icon_key?: string | null // absent/unknown values resolve to the default category icon
+}
 export interface WireTransaction {
   id: number; account_id: number; category_id: number
   amount: Money; transaction_date: string /* YYYY-MM-DD */; note: string | null
@@ -160,6 +164,7 @@ These decisions settle the API behavior for frontend planning. The current FastA
 | **B2** | Both activity endpoints use `limit=50` when omitted and accept `1..1001`. The client may show at most 1000 merged rows and requests one extra from each endpoint. `month=YYYY-MM` is required on both endpoints; a valid month with no matches returns `200 []`. |
 | **B3** | Both lists include `created_at` as an ISO 8601/RFC 3339 timestamp with UTC offset (`Z` is the canonical UTC form). Transactions sort by `transaction_date DESC, created_at DESC, id DESC`; payments sort by `payment_date DESC, created_at DESC, id DESC`. The cross-list merge sorts by date, then `created_at`, then transactions before payments, then `id DESC`. |
 | **B4** | Liquid accounts return signed `balance`; it may be negative. Cards return `credit_limit`, signed `outstanding_signed_debt`, `available_credit`, and server-computed non-negative `owed` and `credit`. `available_credit = credit_limit - outstanding_signed_debt`, so it may be negative when over limit and may exceed the limit when the card is overpaid. `owed = max(signed debt, 0)` and `credit = max(-signed debt, 0)` are computed by the API, not the browser. The account list omits `opening_balance` and `opening_debt`; the owner-requested edit flow reads them only from `GET /api/accounts/{id}`. |
+| **B5** | (2026-11-12, owner-approved, additive) Activity search and filters: optional `q` on all three Activity reads, plus `category_id` and `kind` on `GET /api/transactions`. Applied in SQL before ordering and `limit`; `%`/`_`/`\\` matched literally; `q` ≤ 80 characters; invalid values return 422. Calls without them are unchanged. Full contract: TLD *Activity filter contract*; behaviour and the no-ADR determination: `docs/design/ACTIVITY_SEARCH_FILTERS.md`. |
 | **N1** | Use `{ "error": { "code": "…", "message": "…", "field": "…" } }`; omit `field` when it does not apply. Normalize FastAPI validation errors to `422 invalid_field` with a safe, human-readable message and the first relevant field. Use `400 invalid_account_type_combination`, `404 not_found`, `409 duplicate_account_name`, and `500 internal_error` (generic message, no stack details). Reserve `409 account_in_use` for a future operation that can actually encounter it; v1 has no account/category delete endpoint. |
 | **N2** | Summary includes `month`, `liquid_balance`, `outstanding_debt`, `card_credit`, `net_position`, `month_income`, and `month_expenses`, all money as decimal strings. `month` is required and validated as `YYYY-MM`; Accounts passes the currently selected month. The month-specific fields use it, while the account-derived figures remain current totals. |
 | **N3** | Transaction and payment `PUT` requests are full replacements of their editable fields; require the same complete body fields as `POST`, including nullable `note`. Transactions may change account, category (only to a category of the same income/expense type), amount, date, and note. Card-account transactions must remain expenses; income cannot be posted to a card. Payments may change source account and destination card, subject to the normal account-type rules. `POST` returns the stored row with `201`; `PUT` returns it with `200`; both include `created_at`. `DELETE` returns `204` with no body. Account creation returns the created account representation with `201`. |

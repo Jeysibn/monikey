@@ -24,16 +24,35 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
+- Category colors can be a custom hex color as well as one of ten curated colors (ADR-026 amended; migration 009 edited before any release). Dashboard data tables open in a window; the Income-versus-expenses highlight is lighter and clears when the mouse leaves; wallet card faces with real artwork no longer print the account name and type (they are in the details window); the Overview "View analytics" button was removed.
+- Release audit (local): a final integration-readiness report, a responsive/accessibility sweep, end-to-end money-flow tests, and Activity-filter contract documentation and fixtures. ADR-026 is recorded in the ADR log. Nothing is deployed.
+- Activity search and filters: search notes, categories and accounts, filter by type and category (archived categories with history included), with Reset filters and honest counts. Filters are applied by the server to the whole month before paging. Three read endpoints gain optional `q`, `category_id` and `kind` parameters; no migration, and calls without them behave as before (local, unreleased).
+- Overview polish: the welcome panel below the hero in a reserved slot, and a desktop layout whose card edges line up (this month strip, wallets beside credit cards at equal height, recent activity beneath). The quick-action row was removed as redundant with Add transaction (local, unreleased).
+- Accounts redesign: search by name, a type filter and sorts that never rank a card's debt as a balance, remembered Cards/List and filter choices, a clearer net-position summary, and an account details drawer (a bottom sheet on phones) with balance or debt, limit, utilization, available credit labelled not cash, recent activity and quick actions. Original card artwork and card gestures are unchanged. Frontend only; no API or database change (local, unreleased).
+- Dashboard redesign: a Reporting Month (four monthly KPIs, six-month income-versus-expenses columns, Kakeibo plan versus actual) and an independent Analysis range (spending by category, daily spending, weekday averages, daily Kakeibo spending and insights), all native SVG with a data table, keyboard reading and an error boundary. `GET /api/analytics` gains per-month surplus and ratio fields and an opt-in `detail=true`; a range may no longer end in the future. No charting library was added (ADR-025). No migration (local, unreleased).
+- Kakeibo redesign: two tabs (Plan & Progress, Reflections), a plan summary, four accented envelope cards, folded plan details and a direct Classify action. Category defaults are managed in Categories, so the Category Suggestions editor was removed from Kakeibo. No Kakeibo calculation or backend behavior changed (local, unreleased).
+- Redesigned Add/Edit Transaction: Date directly after Amount with Today/Yesterday shortcuts, a searchable account picker, a compact Kakeibo row, and a wider dialog with a near-full-height phone sheet (local, unreleased).
+- Categories page redesign: Expenses/Income/Archived tabs with counts, search, envelope filter and sort, curated category colors and more icons, Add/Edit dialog with live preview, styled Archive and Delete confirmations, and all-time usage counts. Migration `009_category_colors.sql` adds nullable `color_key` and widens the icon allowlist; it is additive and has not been applied to any production database (local, unreleased).
+- Contextual Moki illustrations for first-run guidance, a compact welcome on the populated Overview, empty Accounts and Activity, filtered Activity with no matches, and Kakeibo planning. The first-account thumbs-up was removed; the approved pose remains unused.
 - Kakeibo monthly plans and reports, weekly reflections, and expense classification using the four fixed envelopes (PRs #1–#8).
 - Wallet account presentation and reviewed card artwork, including recovered and regenerated artwork (PRs #10–#17).
 - Backup-gated GitOps release automation and source-run provenance in the dispatch payload (PRs #14 and #19). The workflow skips dispatch when its repository token is absent; configuring it is an owner-controlled prerequisite after initial schema adoption. This entry does not claim a production release.
 - Installation-wide custom income and expense categories with rename, archive, restore, and safe deletion. Expense categories suggest a default envelope; saved transaction envelopes remain independent (PRs #20–#22, migration 007).
+- Optional persistent Lucide icons for income and expense categories, displayed in category management, Quick Add, and Activity (source PR #27, migration 008).
+- A separate, server-aggregated financial Analytics Dashboard with date/account filters, monthly cashflow, category spending, and saved Kakeibo plan comparisons (source PR #28).
 
 ### Fixed
+- The Kakeibo plan button's accessible name now begins with its visible text, as WCAG 2.5.3 requires.
 - Category screen transaction action and income-category envelope selector issues found during feature QA (included in PRs #21–#22).
+- Reorganized narrow-screen navigation into primary destinations and an accessible More sheet so labels and actions remain usable at 320px.
+- Added Dashboard to direct navigation and placed Accounts with Kakeibo and Categories in the phone More menu to retain five clear bottom-bar targets.
+- Added a compact Overview link to Dashboard and clarified empty Categories versus filtered no-results messaging (source PR #29).
+- Moved category create/edit into the shared accessible dialog so the category list stays visible on mobile; verified focus, viewport bounds, and dialog accessibility.
+- Restored keyboard focus to the front wallet card after ArrowLeft/ArrowRight on Overview (the lookup depended on a removed aria-label), kept the Dashboard account filter inside narrow screens when account names are long, and stopped Enter in the category icon search from saving the category.
+- Aligned account-card accessible names with their visible names and balances, while retaining a screen-reader hint for opening details (source PR #29).
 
 ### Database
-- Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules. The source contains these migrations, but the latest production migration state is unverified.
+- Migration 005 adds Kakeibo envelope fields and planning/reflection tables; migration 006 records whether a monthly plan was deliberately saved; migration 007 adds category archive and integrity rules; migration 008 adds the optional, validated `icon_key` column for category icons. The source contains these migrations, but the latest production migration state is unverified. Migration 008 has not been applied to any production database.
 
 ## [1.2.0] - 2026-10-30
 

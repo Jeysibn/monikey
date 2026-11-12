@@ -1,0 +1,60 @@
+import {
+  Banknote,
+  BookOpen,
+  BriefcaseBusiness,
+  Bus,
+  CarFront,
+  Coffee,
+  Dumbbell,
+  Gamepad2,
+  Gift,
+  GraduationCap,
+  HeartPulse,
+  House,
+  Music,
+  PawPrint,
+  PiggyBank,
+  Plane,
+  Receipt,
+  Shirt,
+  ShoppingBag,
+  ShoppingBasket,
+  Smartphone,
+  Utensils,
+  Wallet,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
+
+export const CATEGORY_ICON_OPTIONS = {
+  'shopping-basket': { label: 'Groceries', Icon: ShoppingBasket },
+  utensils: { label: 'Dining', Icon: Utensils },
+  'car-front': { label: 'Car', Icon: CarFront },
+  house: { label: 'Housing', Icon: House },
+  'briefcase-business': { label: 'Work', Icon: BriefcaseBusiness },
+  'graduation-cap': { label: 'Education', Icon: GraduationCap },
+  'heart-pulse': { label: 'Healthcare', Icon: HeartPulse },
+  'gamepad-2': { label: 'Entertainment', Icon: Gamepad2 },
+  'book-open': { label: 'Books', Icon: BookOpen },
+  'shopping-bag': { label: 'Shopping', Icon: ShoppingBag },
+  gift: { label: 'Gifts', Icon: Gift },
+  'piggy-bank': { label: 'Savings', Icon: PiggyBank },
+  coffee: { label: 'Coffee', Icon: Coffee },
+  bus: { label: 'Transit', Icon: Bus },
+  receipt: { label: 'Bills', Icon: Receipt },
+  smartphone: { label: 'Phone', Icon: Smartphone },
+  plane: { label: 'Travel', Icon: Plane },
+  wallet: { label: 'Wallet', Icon: Wallet },
+  banknote: { label: 'Cash', Icon: Banknote },
+  dumbbell: { label: 'Fitness', Icon: Dumbbell },
+  shirt: { label: 'Clothing', Icon: Shirt },
+  'paw-print': { label: 'Pets', Icon: PawPrint },
+  music: { label: 'Music', Icon: Music },
+  wrench: { label: 'Repairs', Icon: Wrench },
+} as const satisfies Record<string, { label: string; Icon: LucideIcon }>
+
+export type CategoryIconKey = keyof typeof CATEGORY_ICON_OPTIONS
+
+export function isCategoryIconKey(value: unknown): value is CategoryIconKey {
+  return typeof value === 'string' && Object.hasOwn(CATEGORY_ICON_OPTIONS, value)
+}

@@ -53,24 +53,60 @@ function DialogOverlay({
   )
 }
 
+/*
+ * Tracks the visual viewport height (what is left above an on-screen keyboard). iOS Safari does not shrink
+ * `dvh` for the keyboard, so a tall sheet would otherwise slide its footer under it. Null when no keyboard is
+ * open or the browser does not support it.
+ */
+function useVisualViewportHeight(enabled: boolean): number | null {
+  const [height, setHeight] = React.useState<number | null>(null)
+  React.useEffect(() => {
+    const viewport = typeof window === "undefined" ? undefined : window.visualViewport
+    if (!enabled || !viewport) return
+    // Only while something (a keyboard) takes a real share of the screen; otherwise the CSS `dvh` limits apply.
+    const update = () => setHeight(viewport.height < window.innerHeight - 120 ? viewport.height : null)
+    update()
+    viewport.addEventListener("resize", update)
+    return () => viewport.removeEventListener("resize", update)
+  }, [enabled])
+  return height
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  size = "default",
+  style,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /**
+   * "wide": a near-full-height phone sheet and a 580px desktop dialog, for long forms such as Add/Edit Transaction.
+   * "drawer": the same near-full-height sheet on phones and a full-height 440px panel on the right from 768px, for
+   * read-and-act details such as an account.
+   */
+  size?: "default" | "wide" | "drawer"
 }) {
+  const wide = size === "wide"
+  const viewportHeight = useVisualViewportHeight(wide)
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-sheet bg-card text-card-foreground shadow-float outline-none",
-          "md:inset-auto md:top-1/2 md:left-1/2 md:w-[500px] md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-sheet",
+          "fixed z-50 flex flex-col overflow-hidden bg-card text-card-foreground shadow-float outline-none",
+          // Position and shape per size (classes are composed, not overridden: there is no class merging here).
+          size === "drawer"
+            ? "inset-x-0 bottom-0 max-h-[95dvh] w-full rounded-t-sheet md:inset-x-auto md:inset-y-0 md:right-0 md:h-dvh md:max-h-none md:w-[440px] md:max-w-full md:rounded-t-none md:rounded-l-sheet"
+            : cn(
+                "inset-x-0 bottom-0 w-full rounded-t-sheet md:inset-auto md:top-1/2 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-sheet",
+                wide ? "max-h-[95dvh] md:max-h-[min(92dvh,900px)] md:w-[580px]" : "max-h-[92dvh] md:w-[500px]",
+              ),
           className
         )}
+        style={wide && viewportHeight ? { maxHeight: `${Math.floor(viewportHeight * 0.95)}px`, ...style } : style}
         {...props}
       >
         {children}

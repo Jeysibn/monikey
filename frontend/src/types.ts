@@ -42,6 +42,12 @@ export interface Category {
    * only: it never changes saved expenses. Absent when the server predates Kakeibo.
    */
   defaultEnvelope?: KakeiboEnvelope | null
+  /** Optional presentation metadata; unknown legacy values resolve to the default icon. */
+  iconKey?: string | null
+  /** Optional curated color key (ADR-026); unknown legacy values resolve to the neutral color. */
+  colorKey?: string | null
+  /** All-time number of transactions that use this category; absent from servers that predate ADR-026. */
+  usageCount?: number
   /** Archived categories remain available for historical transaction labels. */
   archived?: boolean
 }
@@ -89,6 +95,68 @@ export interface FinancialSummary {
   monthExpenses: Centavos // card payments are never included
 }
 
+/** Server-aggregated analytics for a bounded inclusive range of Manila calendar dates. */
+export interface AnalyticsReport {
+  startDate: string
+  endDate: string
+  accountId: number | null
+  totals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos }
+  previousTotals: { income: Centavos; expenses: Centavos; netCashFlow: Centavos } | null
+  months: AnalyticsMonth[]
+  categories: { id: number; name: string; iconKey: string | null; colorKey: string | null; archived: boolean; expenses: Centavos }[]
+  kakeiboTotals: Record<KakeiboEnvelope | 'unclassified', Centavos>
+  kakeibo: {
+    month: string
+    planStatus: KakeiboPlanStatus
+    limits: Record<KakeiboEnvelope, Centavos> | null
+    actuals: Record<KakeiboEnvelope, Centavos>
+    unclassified: Centavos
+  }[]
+  /** Day-level sections, present only when the request asked for `detail` (the Analysis range). */
+  daily?: AnalyticsDay[]
+  weekdays?: AnalyticsWeekday[]
+  insights?: AnalyticsInsights
+}
+
+/** One calendar month of the report. Surplus is income minus expenses and may be negative; it is not account cash flow. */
+export interface AnalyticsMonth {
+  month: string // "YYYY-MM"
+  income: Centavos
+  expenses: Centavos
+  surplus: Centavos
+  /** Expenses as a percentage of income with one decimal, as text ("63.4"); null when the month had no income. */
+  expenseToIncomePercent: string | null
+  /** The requested range covers every day of the month. False means month-to-date or a partial month. */
+  complete: boolean
+}
+
+/** One calendar date of an analysis range, including dates with no spending. Spending only: income is never included. */
+export interface AnalyticsDay {
+  date: string // "YYYY-MM-DD"
+  expenses: Centavos
+  needs: Centavos
+  wants: Centavos
+  culture: Centavos
+  unexpected: Centavos
+  unclassified: Centavos // still part of `expenses`
+}
+
+/** Spending on one weekday (ISO: 1 Monday to 7 Sunday) over the range; the average divides by how often it occurs. */
+export interface AnalyticsWeekday {
+  weekday: number
+  total: Centavos
+  occurrences: number
+  average: Centavos
+}
+
+export interface AnalyticsInsights {
+  days: number
+  averageDailySpending: Centavos
+  expenseTransactions: number // expense entries only, not every ledger row
+  highestDay: { date: string; expenses: Centavos } | null // earliest date wins a tie; null when nothing was spent
+  zeroSpendDays: number
+}
+
 /** A cash, bank or e-wallet account with its current balance (negative when below zero). */
 export type LiquidAccountType = Exclude<AccountType, 'credit_card'>
 
@@ -118,6 +186,8 @@ export interface ActivityItem {
   amount: Centavos
   title: string // note, or the category name when there is no note
   categoryName: string | null // null for payments
+  categoryIconKey?: string | null
+  categoryColorKey?: string | null
   accountName: string // the account used, or the paying account
   accountType: AccountType
   cardName: string | null // payments only: the card that was paid

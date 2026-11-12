@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppShell, type View } from '@/components/AppShell'
 import { AddAccountDialog } from '@/components/AddAccountDialog'
 import { EditAccountDialog } from '@/components/EditAccountDialog'
 import { ClassifyDialog } from '@/components/kakeibo/ClassifyDialog'
 import { KakeiboPlanDialog } from '@/components/kakeibo/KakeiboPlanDialog'
+import { AccountDetailsContext, type AccountDetailsServices } from '@/components/accounts/accountDetailsContext'
 import { ErrorBlock } from '@/components/ErrorBlock'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { QuickAddDialog, type EntrySession } from '@/components/QuickAddDialog'
 import { StatusMessage, type StatusNote } from '@/components/StatusMessage'
 import type { DataSource } from '@/dataSource'
 import { accountSavedMessage, accountUpdatedMessage, type AccountValues } from '@/lib/accountForm'
 import { describeWriteError } from '@/lib/apiErrors'
+import { loadRecentAccountActivity } from '@/lib/accountActivity'
+import { entryMatchesFilters, NO_ACTIVITY_FILTERS, withCategory, withKind, type ActivityFilters } from '@/lib/activityFilters'
 import { accountsFor, type EntryKind, type EntryValues } from '@/lib/entryForm'
 import { deleteSummary, saveMessage, targetOf } from '@/lib/entryText'
 import { ACTIVITY_PAGE_SIZE, monthLabel, monthOf, nextPageSize } from '@/lib/finance'
@@ -30,6 +34,8 @@ import { ActivityView } from '@/views/ActivityView'
 import { KakeiboView } from '@/views/KakeiboView'
 import { OverviewView } from '@/views/OverviewView'
 
+const DashboardView = lazy(() => import('@/views/DashboardView').then((module) => ({ default: module.DashboardView })))
+
 /*
  * App state is deliberately small (TLD section 4): the data source and what it has reported, which view is
  * showing, the month and account filters, the open dialog and one status message. No router, no store
@@ -40,7 +46,8 @@ import { OverviewView } from '@/views/OverviewView'
  * Preview hook for design review and tests: open the app with
  * ?demo=loading | overpaid | negative | no-accounts | over-limit | paid-off | many | huge | no-plan | reviewed
  *       | save-error | invalid | load-error | flaky | offline | slow | partial
- * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, activity, kakeibo,
+ * Use `?demo=no-accounts&behavior=save-error` to combine a first-run ledger with a failed write.
+ * and, with load-error, flaky or offline, &failing=summary (or accounts, categories, analytics, activity, kakeibo,
  * kakeibo-plan, kakeibo-week; comma-separated)
  * to make only those reads fail.
  * to see a loading state, a rare state, a failed save, a refused save, a failed first load, a failed reload,
@@ -48,7 +55,8 @@ import { OverviewView } from '@/views/OverviewView'
  */
 const params = new URLSearchParams(window.location.search)
 const demo = params.get('demo')
-const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, summary, activity)
+const behavior = params.get('behavior') ?? demo
+const failing = params.get('failing')?.split(',') ?? null // with load-error, flaky or offline: only these kinds of read fail (accounts, categories, analytics, summary, activity)
 const scenarios: DemoScenario[] = ['overpaid', 'negative', 'no-accounts', 'over-limit', 'paid-off', 'many', 'huge', 'no-plan', 'reviewed']
 
 /** The mock's behaviour for the demos that are about failing or being slow (not about what the ledger holds). */
@@ -89,15 +97,16 @@ function App() {
   const [source] = useState<DataSource>(() =>
     import.meta.env.VITE_DATA_SOURCE === 'http'
       ? createHttpSource()
-      : createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(demo), readFailureKinds: failing }),
+      : createMockSource({ scenario: scenarios.find((sc) => sc === demo) ?? null, ...demoBehaviour(behavior), readFailureKinds: failing }),
   )
   const [version, setVersion] = useState(0) // bumped after a write so every screen fetches again
   const [view, setView] = useState<View>('overview')
   const [walletPreferences, setWalletPreferences] = useState<WalletPreferencesV1>(() => readWalletPreferences())
   const [month, setMonth] = useState(() => monthOf(source.today))
   const [accountFilter, setAccountFilter] = useState<number | null>(null) // Activity's account filter
+  const [activityFilters, setActivityFilters] = useState<ActivityFilters>(NO_ACTIVITY_FILTERS) // Activity's search, type and category
   // The page size belongs to one combination of filters; a different month or account starts again at one page.
-  const filterKey = `${month}|${accountFilter}`
+  const filterKey = `${month}|${accountFilter}|${JSON.stringify(activityFilters)}`
   const [paged, setPaged] = useState({ key: filterKey, size: ACTIVITY_PAGE_SIZE })
   const pageSize = paged.key === filterKey ? paged.size : ACTIVITY_PAGE_SIZE
   // Forget the old page size as soon as the filters change, so coming back to a month starts at one page again.
@@ -117,21 +126,23 @@ function App() {
   // Remembered for this visit only (spec section 7): the last account used, and the last "pay from" account.
   const lastAccount = useRef<number | null>(null)
   const lastPayFrom = useRef<number | null>(null)
+  // The same two, as state, only so the account picker can list them first (refs must not be read while rendering).
+  const [recentAccounts, setRecentAccounts] = useState<{ account: number | null; payFrom: number | null }>({ account: null, payFrom: null })
   const opener = useRef<HTMLElement | null>(null) // the control that opened the dialog, so focus can go back to it
   const demoLoading = import.meta.env.VITE_DATA_SOURCE !== 'http' && demo === 'loading'
 
   // What the screens read. Each is fetched when its screen needs it and again after a write.
   const accounts = useResource('accounts', (signal) => source.loadAccounts(signal), version)
   const categories = useResource('categories', (signal) => source.loadCategories(signal), categoriesVersion)
-  const summary = useResource(view === 'activity' ? null : `summary:${month}`, (signal) => source.loadSummary(month, signal), version)
+  const summary = useResource(view === 'overview' || view === 'accounts' ? `summary:${month}` : null, (signal) => source.loadSummary(month, signal), version)
   const recent = useResource(
     view === 'overview' ? `recent:${month}` : null,
     (signal) => source.loadActivity({ month, accountId: null, limit: RECENT_COUNT }, signal),
     version,
   )
   const activity = useResource(
-    view === 'activity' ? `activity:${month}:${accountFilter}:${pageSize}` : null,
-    (signal) => source.loadActivity({ month, accountId: accountFilter, limit: pageSize }, signal),
+    view === 'activity' ? `activity:${month}:${accountFilter}:${JSON.stringify(activityFilters)}:${pageSize}` : null,
+    (signal) => source.loadActivity({ month, accountId: accountFilter, limit: pageSize, filters: activityFilters }, signal),
     version,
   )
   const kakeibo = useResource(view === 'kakeibo' ? `kakeibo:${month}` : null, (signal) => source.loadKakeiboMonth(month, signal), version)
@@ -219,6 +230,19 @@ function App() {
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'expense', null, accountId) })
   }
+  /** Account details "Add income": Quick Add on this account, as income. */
+  const openIncomeOn = (accountId: number) => {
+    if (!snapshot) return
+    rememberOpener()
+    setSession({ mode: 'add', values: startEntry(snapshot, 'income', null, accountId) })
+  }
+  /** Account details "View all in Activity": this month's Activity, filtered to the account. */
+  const viewActivityFor = (accountId: number) => {
+    setAccountFilter(accountId)
+    setActivityFilters(NO_ACTIVITY_FILTERS) // a search or type left over from before would hide what was asked for
+    setMonth(monthOf(source.today))
+    setView('activity')
+  }
   const openPay = (cardId: number) => {
     if (!snapshot) return
     rememberOpener()
@@ -250,6 +274,7 @@ function App() {
     if (!target) {
       if (values.kind === 'payment') lastPayFrom.current = values.accountId
       else lastAccount.current = values.accountId
+      setRecentAccounts({ account: lastAccount.current, payFrom: lastPayFrom.current })
     }
     // The write is done. The confirmation is built from the figures fetched again afterwards.
     let text = 'Saved.'
@@ -261,19 +286,22 @@ function App() {
     let again: StatusNote['action']
     const hidden =
       view === 'activity' &&
-      (monthOf(values.date) !== month || (accountFilter !== null && !involvesAccount(values, accountFilter)))
+      (monthOf(values.date) !== month ||
+        (accountFilter !== null && !involvesAccount(values, accountFilter)) ||
+        (snapshot !== undefined && !entryMatchesFilters(values, activityFilters, snapshot)))
     if (hidden) {
       text += " It's hidden by your filters."
       again = {
         label: 'Show it',
         run: () => {
           setAccountFilter(null)
+          setActivityFilters(NO_ACTIVITY_FILTERS)
           setMonth(monthOf(values.date))
         },
       }
     }
     setVersion((v) => v + 1)
-    setStatus({ text, action: again })
+    setStatus({ text, action: again, celebrate: true })
     setSession(null)
   }
 
@@ -291,7 +319,7 @@ function App() {
       return
     }
     setVersion((v) => v + 1)
-    setStatus({ text: done })
+    setStatus({ text: done, celebrate: true })
     setSession(null)
   }
 
@@ -327,7 +355,7 @@ function App() {
     }
     if (accountId !== null && !storesCards) keepCardInBrowser(accountId, values.type, card)
     setVersion((v) => v + 1)
-    setStatus({ text: accountSavedMessage(values) })
+    setStatus({ text: accountSavedMessage(values), celebrate: true })
     setAccountForm(null)
   }
   const editAccount = (id: number, from: HTMLElement) => {
@@ -344,7 +372,7 @@ function App() {
     if (!storesCards) keepCardInBrowser(id, values.type, card)
     else if (card !== undefined) forgetBrowserCard(id)
     setVersion((v) => v + 1)
-    setStatus({ text: accountUpdatedMessage(values) })
+    setStatus({ text: accountUpdatedMessage(values), celebrate: true })
     setEditAccountId(null)
   }
   /** Kakeibo plan (ADR-021): a planning record only, so the ledger and every account stay as they are. */
@@ -359,7 +387,7 @@ function App() {
       throw describeWriteError(err, 'save-plan') // the form keeps what was typed and shows this
     }
     setVersion((v) => v + 1)
-    setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.` })
+    setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.`, celebrate: true })
     setPlanMonth(null)
   }
   /* Reflections and classification (ADR-021, PR D): metadata only, so balances and totals never change. */
@@ -392,19 +420,16 @@ function App() {
     setStatus({ text: `${count} ${noun} ${envelope === null ? 'cleared' : `moved to ${envelopeLabel(envelope)}`}. Balances and totals are unchanged.` })
     setClassifyMonth(null)
   }
-  /** Saves each changed suggestion in turn; resolves with the categories that failed (the dialog keeps them). */
-  const saveSuggestions = async (changes: { id: number; envelope: KakeiboEnvelope | null }[]): Promise<number[]> => {
-    const failed: number[] = []
-    for (const change of changes) {
-      try {
-        await source.setCategoryEnvelope(change.id, change.envelope)
-      } catch {
-        failed.push(change.id)
-      }
-    }
-    if (failed.length < changes.length) setCategoriesVersion((v) => v + 1) // Quick Add reads the new suggestions
-    if (failed.length === 0) setStatus({ text: 'Suggestions saved. Expenses you already saved keep their envelopes.' })
-    return failed
+  // The account details panel (Accounts grid and list, Overview deck) acts through these existing flows.
+  const accountDetails: AccountDetailsServices = {
+    version,
+    loadRecent: (accountId, signal) => loadRecentAccountActivity(source, source.today, accountId, signal),
+    onAddExpense: openExpenseOn,
+    onAddIncome: openIncomeOn,
+    onTransfer: openTransferFrom,
+    onPayCard: openPay,
+    onEdit: editAccount,
+    onViewActivity: viewActivityFor,
   }
   const restoreFocus = (event: Event) => {
     event.preventDefault() // skip Radix's own handler, which looks for a DialogTrigger
@@ -413,7 +438,7 @@ function App() {
   }
 
   return (
-    <>
+    <AccountDetailsContext.Provider value={accountDetails}>
       <AppShell view={view} onNavigate={setView} onAdd={openAdd} addState={addState}>
         <StatusMessage note={status} onDismiss={() => setStatus(null)} />
         {categories.error && view !== 'categories' && (
@@ -449,6 +474,20 @@ function App() {
             }}
           />
         )}
+        {view === 'dashboard' && (
+          <ErrorBoundary what="the Dashboard" resetKey={view}>
+          <Suspense fallback={<div className="space-y-4" role="status" aria-label="Loading Dashboard"><div className="h-8 w-44 animate-pulse rounded bg-secondary motion-reduce:animate-none" /><div className="h-28 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /><div className="h-64 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" /></div>}>
+            <DashboardView
+              today={source.today}
+              source={source}
+              accounts={accounts}
+              version={version}
+              onAdd={openAdd}
+              addState={addState}
+            />
+          </Suspense>
+          </ErrorBoundary>
+        )}
         {view === 'activity' && (
           <ActivityView
             today={source.today}
@@ -456,10 +495,16 @@ function App() {
             page={activity}
             month={month}
             accountId={accountFilter}
+            filters={activityFilters}
+            categories={categories.data ?? []}
             loading={demoLoading}
             addState={addState}
             onMonthChange={setMonth}
             onAccountChange={setAccountFilter}
+            onSearch={(search) => setActivityFilters((current) => ({ ...current, search }))}
+            onKind={(kind) => setActivityFilters((current) => withKind(current, kind, categories.data ?? []))}
+            onCategory={(categoryId) => setActivityFilters((current) => withCategory(current, categoryId, categories.data ?? []))}
+            onReset={() => { setAccountFilter(null); setActivityFilters(NO_ACTIVITY_FILTERS) }}
             onLoadMore={() => setPaged({ key: filterKey, size: nextPageSize(pageSize) })}
             onAdd={openAdd}
             onEdit={(item, from) => openEdit(item, from)}
@@ -497,8 +542,7 @@ function App() {
             onSaveWeek={saveWeek}
             onSaveReview={saveReview}
             onClassify={openClassify}
-            categories={categories.data}
-            onSaveSuggestions={saveSuggestions}
+            onManageCategories={() => setView('categories')}
             onDialogOpen={() => rememberOpener()}
             onDialogClosed={restoreFocus}
           />
@@ -536,6 +580,9 @@ function App() {
             snapshot={snapshot}
             session={session}
             month={month}
+            today={source.today}
+            recentAccountId={recentAccounts.account}
+            recentPayFromId={recentAccounts.payFrom}
             onSubmit={saveEntry}
             onDelete={deleteEntry}
             onOpenChange={(open) => !open && setSession(null)}
@@ -562,7 +609,7 @@ function App() {
           />
         </>
       )}
-    </>
+    </AccountDetailsContext.Provider>
   )
 }
 

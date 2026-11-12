@@ -56,6 +56,12 @@ restart/backup-restore evidence are documented in the
   additive, but a verified backup is required before applying it to an existing
   database. The migration runner still requires authorization from the existing
   backup-gated release flow.
+- `008_category_icons.sql` adds nullable `categories.icon_key` presentation
+  metadata with a database allowlist matching the frontend Lucide registry and
+  API validation. Existing rows remain `NULL`; it preserves category IDs,
+  types, archive state, defaults, transaction references, amounts and saved
+  Kakeibo classifications. Verify a backup before applying it to an existing
+  database. The API does not apply migrations automatically.
 - `seed.sql` inserts the approved income and expense categories. Its unique key
   and `ON CONFLICT DO NOTHING` make repeated runs safe.
 - `tests/accounting.sql` uses fictional records inside a transaction and rolls
@@ -75,14 +81,28 @@ restart/backup-restore evidence are documented in the
   computed account balance remain unchanged. `tests/custom_categories.sql`
   exercises the database constraints and triggers for immutable type and
   fail-closed archive behavior.
+- `009_category_colors.sql` adds nullable `categories.color_key` (one of ten curated names such as `green`, or a custom
+  lower-case `#rrggbb`; never any other CSS, enforced by a CHECK) and widens the
+  icon allowlist to a strict superset of 008's. Existing rows stay `NULL`;
+  nothing is backfilled, and IDs, transactions, amounts, archive state,
+  defaults and saved Kakeibo classifications are unchanged. Additive, but a
+  verified backup is still required, and the existing backup-gated release flow
+  still authorizes it.
+- `tests/category_colors_before.sql` / `tests/category_colors_migration.sql`
+  verify the 008→009 upgrade (history and balances unchanged, no backfill, old
+  icon still valid) and the new color and icon constraints.
+- `tests/category_icons_before.sql` creates a synthetic pre-008 transaction;
+  `tests/category_icons_migration.sql` verifies migration 008 leaves its
+  category ID, amount, envelope and account balance unchanged, allows a
+  registry key, and rejects an arbitrary URL.
 - `test.sh` starts a temporary PostgreSQL container without publishing a port
   or mounting persistent storage, applies the schema, simulates the old baseline
-  constraints, applies migrations 003–007 in order, seeds categories twice,
+  constraints, applies migrations 003–009 in order, seeds categories twice,
   runs migration-preservation and accounting checks, and removes the container
   on exit.
 - `rehearse_recovery.sh` builds an earlier schema with fictional records in a
   disposable PostgreSQL 17.6 container, creates and inspects a custom-format
-  backup, restores it to an independent database, applies migrations 005–007
+  backup, restores it to an independent database, applies migrations 005–009
   to a second restored copy, and calls the API against that copy. It
   compares account positions, financial row counts and totals before and after.
 - `rehearse_http_integration.py` exercises a fresh Compose stack through the

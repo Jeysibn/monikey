@@ -175,7 +175,7 @@ export function MonthlyReviewCard({
           {report.actualsChangedSinceReview && (
             <InlineNotice tone="warning" className="mb-3">
               Your activity for {label} has changed since this reflection was saved. The totals below are from when you saved it;
-              the envelopes above show today&rsquo;s.
+              the envelopes on the Plan &amp; Progress tab show today&rsquo;s.
             </InlineNotice>
           )}
           {review.snapshot && (

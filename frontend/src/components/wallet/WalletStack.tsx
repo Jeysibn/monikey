@@ -87,7 +87,7 @@ export function WalletStack({
   useEffect(() => {
     if (!focusFront.current) return
     focusFront.current = false
-    deckRef.current?.querySelector<HTMLElement>('button[aria-label^="View details for"]')?.focus()
+    deckRef.current?.querySelector<HTMLElement>('ul [data-card-face]')?.focus()
   }, [selectedAccountId])
   const snapshot = accounts.data
   const wallet = snapshot ? buildWalletGalleryModel(snapshot, preferences) : null

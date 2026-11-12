@@ -395,16 +395,16 @@ review PUT refreshes the snapshot only when explicitly saved.
 | DELETE | `/api/categories/{id}` | Permanently delete only when no transaction references the category; otherwise return 409 |
 | GET | `/api/categories?type=expense&status=active\|archived\|all` | Optional type and lifecycle filters; `status=all` is the compatibility default |
 | PATCH | `/api/categories/{id}/default-kakeibo-envelope` | Set or clear a suggested envelope on an expense category only |
-| GET | `/api/transactions?month=2026-10&account_id=1&limit=50` | Filtered expense/income rows, newest first |
+| GET | `/api/transactions?month=2026-10&account_id=1&category_id=4&kind=expense&q=coffee&limit=50` | Expense/income rows for the month, newest first. Optional `account_id`, `category_id`, `kind` (`income`/`expense`) and `q` (note, category or account name; ≤ 80 chars) filter in SQL before `limit` (see *Activity filter contract*) |
 | POST | `/api/transactions` | Create income/expense using `account_id`, `category_id`, decimal amount, date, note, optional nullable `kakeibo_envelope` |
 | PUT | `/api/transactions/{id}` | Replace editable fields; omitted envelope preserves it for old clients, explicit `null` clears it |
 | PATCH | `/api/transactions/{id}/kakeibo-envelope` | Set or clear only an expense transaction's nullable envelope; other financial fields remain unchanged |
 | DELETE | `/api/transactions/{id}` | Delete transaction; 204 on success |
-| GET | `/api/credit-card-payments?month=2026-10&limit=50` | Card payment history |
+| GET | `/api/credit-card-payments?month=2026-10&account_id=1&q=card&limit=50` | Card payment history. `account_id` matches the paying account or the card; `q` matches the note and both account names |
 | POST | `/api/credit-card-payments` | Create payment from liquid account to card |
 | PUT | `/api/credit-card-payments/{id}` | Edit payment |
 | DELETE | `/api/credit-card-payments/{id}` | Delete payment; 204 on success |
-| GET | `/api/account-transfers?month=2026-10&account_id=1&limit=50` | Transfer history; account filter matches either side |
+| GET | `/api/account-transfers?month=2026-10&account_id=1&q=allowance&limit=50` | Transfer history; the account filter matches either side; `q` matches the note and both account names |
 | POST | `/api/account-transfers` | Transfer between two liquid accounts |
 | PUT | `/api/account-transfers/{id}` | Edit a transfer |
 | DELETE | `/api/account-transfers/{id}` | Delete a transfer; 204 on success |
@@ -417,6 +417,22 @@ review PUT refreshes the snapshot only when explicitly saved.
 Transaction create/update shapes include optional nullable `kakeibo_envelope`.
 Old create requests may omit it and save unclassified; old updates that omit it
 preserve the stored value, while explicit `null` clears it. The dedicated
+### Activity filter contract
+
+The three Activity reads accept optional, additive filters. A request without them behaves exactly as before.
+
+| Endpoint | `account_id` | `category_id` | `kind` | `q` |
+|---|---|---|---|---|
+| `GET /api/transactions` | yes | yes (≥ 1) | `income` or `expense` | yes |
+| `GET /api/credit-card-payments` | yes (paying account or card) | not defined | not defined | yes |
+| `GET /api/account-transfers` | yes (either side) | not defined | not defined | yes |
+
+- **Order of work:** month bounds and every filter are applied in SQL, then `ORDER BY date DESC, created_at DESC, id DESC`, then `LIMIT`. A match older than newer non-matching rows is never dropped, and a page of `n` rows is always the first `n` rows of the full filtered order, so the client's "Load more" (a larger `limit`) never skips or repeats a row. The client asks for `limit + 1` to learn whether more exist.
+- **`q`:** trimmed, internal spaces collapsed, blank means no filter, at most 80 characters (422 above that). Case-insensitive `ILIKE`; `%`, `_` and `\` in the text are matched literally. It is always a bound parameter. Rows match on the note, the category name and the account name (a payment or transfer: both account names).
+- **Validation:** `kind` outside `income`/`expense`, `category_id` below 1 or not an integer, and `q` over 80 characters return `422` with the standard error body. An unknown category, or one of the wrong type for `kind`, is an empty list, not an error.
+- **Parameters an endpoint does not define** (`category_id`/`kind` on payments or transfers) are ignored, as for every FastAPI query string; the client simply does not send them and skips reads a filter rules out.
+- No cross-month or date-range search exists; `month` is required on every read.
+
 `PATCH /api/transactions/{id}/kakeibo-envelope` requires the nullable field and
 updates only that transaction column; it validates that the record exists and
 is an expense. Income must always have `NULL`. Category reads include

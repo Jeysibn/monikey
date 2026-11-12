@@ -25,6 +25,8 @@ MIGRATIONS = tuple(MIGRATION_DIR / f"{version:03d}_{name}.sql" for version, name
     (5, "kakeibo"),
     (6, "kakeibo_plan_presence"),
     (7, "custom_categories"),
+    (8, "category_icons"),
+    (9, "category_colors"),
 ))
 LEDGER = "monikey_schema_migrations"
 LOCK_KEY = 741_309_221
@@ -172,6 +174,28 @@ def infer_baseline(connection: psycopg.Connection) -> int:
             raise MigrationError("Migration 007 is present without a complete migration 006 schema.")
         version = 7
 
+    category_008_markers = (
+        "icon_key" in tables["categories"],
+        "categories_icon_key_allowed" in constraints,
+    )
+    if any(category_008_markers) and not all(category_008_markers):
+        raise MigrationError("Migration 008 appears partial; refusing adoption.")
+    if all(category_008_markers):
+        if version < 7:
+            raise MigrationError("Migration 008 is present without a complete migration 007 schema.")
+        version = 8
+
+    category_009_markers = (
+        "color_key" in tables["categories"],
+        "categories_color_key_allowed" in constraints,
+    )
+    if any(category_009_markers) and not all(category_009_markers):
+        raise MigrationError("Migration 009 appears partial; refusing adoption.")
+    if all(category_009_markers):
+        if version < 8:
+            raise MigrationError("Migration 009 is present without a complete migration 008 schema.")
+        version = 9
+
     known_tables = set(core) | {"account_transfers", LEDGER}
     if version >= 5:
         known_tables |= kakeibo_tables
@@ -205,6 +229,10 @@ def infer_baseline(connection: psycopg.Connection) -> int:
         expected_columns["kakeibo_month_plans"].add("plan_presence")
     if version >= 7:
         expected_columns["categories"].add("is_archived")
+    if version >= 8:
+        expected_columns["categories"].add("icon_key")
+    if version >= 9:
+        expected_columns["categories"].add("color_key")
     for table, columns in expected_columns.items():
         if tables.get(table) != columns:
             raise MigrationError(f"Existing table {table} has an unrecognized column set; refusing adoption.")

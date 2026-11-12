@@ -2,7 +2,7 @@ import { ApiError, FAILED_DELETE, FAILED_SAVE, GONE_ON_EDIT, type ActivityQuery,
 import { toAccountAction, entryExists, ledgerReducer, toAction, toDeleteAction, toUpdateAction } from './lib/ledger.ts'
 import { parseAccountMoney, validateAccount, type AccountValues } from './lib/accountForm.ts'
 import { amountText } from './lib/money.ts'
-import { activityPage, buildSnapshot, kakeiboMonth, kakeiboMonthSnapshot, kakeiboWeek, summarize, liquidBalance, cardStatus } from './lib/finance.ts'
+import { activityPage, buildSnapshot, kakeiboMonth, kakeiboMonthSnapshot, kakeiboWeek, summarize, liquidBalance, cardStatus, mockAnalytics } from './lib/finance.ts'
 import { isMonday, parsePlanAmount, parseSavedDeclared, validatePlan, validateReview, validateWeekNotes } from './lib/kakeibo.ts'
 import { getMockData, type DemoScenario } from './mockData.ts'
 import type {
@@ -40,7 +40,7 @@ export interface MockOptions {
   failNextWrite?: boolean // the first save, delete or new account fails once (?demo=save-error)
   invalidNextWrite?: boolean // the first save or new account is refused with a 422 and a field (?demo=invalid)
   readFailures?: ReadFailures | null // ?demo=load-error (once), ?demo=flaky (second), ?demo=offline (always)
-  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, summary, activity, kakeibo, kakeibo-plan); all if omitted (?failing=summary)
+  readFailureKinds?: string[] | null // only these kinds of read fail (accounts, categories, analytics, summary, activity, kakeibo, kakeibo-plan); all if omitted (?failing=summary)
   writeFailures?: 'always' | null // ?demo=offline: no write goes through
   readDelayMs?: number // ?demo=slow: every read takes this long
   writeDelayMs?: number // ?demo=slow: every write takes this long (long enough to show the "taking longer" notice)
@@ -116,7 +116,12 @@ export function createMockSource({
         return { accounts, liquid, cards }
       }),
 
-    loadCategories: (signal): Promise<Category[]> => read('categories', 'categories', signal, () => data.categories),
+    // Like the API, each category carries its all-time transaction count (one pass over the transactions, no per-row lookups).
+    loadCategories: (signal): Promise<Category[]> => read('categories', 'categories', signal, () => {
+      const used = new Map<number, number>()
+      for (const t of data.transactions) used.set(t.categoryId, (used.get(t.categoryId) ?? 0) + 1)
+      return data.categories.map((c) => ({ ...c, usageCount: used.get(c.id) ?? 0 }))
+    }),
 
     createCategory: async (values: CategoryValues): Promise<void> => {
       await beginWrite(FAILED_SAVE, 'name')
@@ -125,7 +130,7 @@ export function createMockSource({
       if (data.categories.some((c) => c.type === values.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
       if (values.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
       const id = Math.max(0, ...data.categories.map((c) => c.id)) + 1
-      data = { ...data, categories: [...data.categories, { id, name, type: values.type, defaultEnvelope: values.defaultEnvelope, archived: false }] }
+      data = { ...data, categories: [...data.categories, { id, name, type: values.type, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey, colorKey: values.colorKey, archived: false }] }
     },
 
     updateCategory: async (id, values): Promise<void> => {
@@ -136,7 +141,7 @@ export function createMockSource({
       if (!name) throw new ApiError(422, 'invalid_field', 'Category name cannot be empty.', 'name')
       if (data.categories.some((c) => c.id !== id && c.type === current.type && c.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, 'duplicate_category_name', 'A category with this name and type already exists.', 'name')
       if (current.type === 'income' && values.defaultEnvelope) throw new ApiError(422, 'invalid_field', 'Only expense categories can have a Kakeibo default.', 'defaultEnvelope')
-      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, name, defaultEnvelope: values.defaultEnvelope } : c) }
+      data = { ...data, categories: data.categories.map((c) => c.id === id ? { ...c, name, defaultEnvelope: values.defaultEnvelope, iconKey: values.iconKey === undefined ? c.iconKey : values.iconKey, colorKey: values.colorKey === undefined ? c.colorKey : values.colorKey } : c) }
     },
 
     setCategoryArchived: async (id, archived): Promise<void> => {
@@ -154,8 +159,10 @@ export function createMockSource({
 
     loadSummary: (month: string, signal): Promise<FinancialSummary> => read('summary', `summary:${month}`, signal, () => summarize(data, month)),
 
-    loadActivity: ({ month, accountId, limit }: ActivityQuery, signal): Promise<ActivityPage> =>
-      read('activity', `activity:${month}:${accountId}:${limit}`, signal, () => activityPage(data, month, accountId, limit)),
+    loadAnalytics: (query, signal) => read('analytics', `analytics:${query.startDate}:${query.endDate}:${query.accountId}`, signal, () => mockAnalytics(data, query)),
+
+    loadActivity: ({ month, accountId, limit, filters }: ActivityQuery, signal): Promise<ActivityPage> =>
+      read('activity', `activity:${month}:${accountId}:${limit}:${JSON.stringify(filters ?? null)}`, signal, () => activityPage(data, month, accountId, limit, filters)),
 
     loadAccountForEdit: async (id: number, signal: AbortSignal): Promise<AccountValues> =>
       read('account-edit', `account-edit:${id}`, signal, () => {

@@ -19,7 +19,7 @@ MoniKey is a calm, honest notebook for everyday money. It should feel like a fri
 | Is | Is not |
 |---|---|
 | Calm, clear, plain-spoken | Flashy, gamified, motivational |
-| Friendly through wording and generous space | Friendly through mascots, emoji or confetti |
+| Friendly through wording and generous space, with Moki the monkey in empty, first-use and error states and in dismissible tips (owner decision; rules in `docs/design/MOKI_ASSET_GUIDE.md`) | Friendly through emoji or confetti, or a mascot on money figures and controls |
 | Precise with numbers | Approximate or decorative with numbers |
 | Quick on a phone with one thumb | A desktop dashboard shrunk down |
 
@@ -203,15 +203,15 @@ These ratios were computed during design. Rendered text and field contrast were 
 
 Desktop arithmetic at 1280px: sidebar 224 + canvas 1056 − 2×24 margins = **1008 content**; 12 columns → column 62, gap 24; span-6 = 492, span-3 = 234; `492 + 234 + 234 + 2×24 = 1008` ✓. Content never exceeds 1440 (centred beyond that). *(Raised from 1032 on 2026-11-02 at the owner's request, so wide desktops use their space and wallet cards are not cramped.)*
 
-### Navigation (four views, no router)
+### Navigation (five current views, no router)
 
 | Viewport | Navigation | Add transaction |
 |---|---|---|
-| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · Kakeibo · **Add** (the filled item, rightmost for thumb reach). Five equal columns (≥57px each at 320px), icon over a 12px label on every item, Add included. | Bottom-bar item |
-| 768–1023 | **Left rail**, 80px: icon over label, four items; the active item's icon sits in a soft-blue pill. | Page-header button |
-| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then four labelled items. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
+| <768 | **Bottom bar**, 68px + safe-area inset: Overview · Activity · Accounts · More · **Add**. More opens a dialog with Kakeibo and Categories, keeping labels and touch targets usable on narrow phones. | Bottom-bar item |
+| 768–1023 | **Left rail**, 80px: icon over label, all five current views; the active item's icon sits in a soft-blue pill. | Page-header button |
+| ≥1024 | **Compact sidebar**, 224px: mark + wordmark, then all five labelled views. Active item = soft-blue pill (`primary-soft`) with `primary-ink` text and icon (no coloured bar). | Page-header button |
 
-The four destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1.
+Destinations are semantic `<button>`s inside `<nav aria-label="Main">`; the active one has `aria-current="page"`. Selecting one swaps the view and moves focus to that view's h1. On phones, the More dialog groups less frequent destinations and restores focus when dismissed.
 
 ---
 
@@ -222,7 +222,7 @@ Full details in [`COMPONENT_INVENTORY.md`](docs/design/COMPONENT_INVENTORY.md). 
 - **shadcn/ui source (only the five approved):** `Button`, `Card`, `Input`, `Label`, `Dialog`.
 - **Native HTML:** `<select>` (account, category, month, filters), `<input type="date">`, radio inputs for the type switcher.
 - **Small custom components (15):** `AppShell` (with private `SideNav` and `BottomNav`), `PageHeader`, `SummaryCard`, `AccountRow` (the account list row), `CreditCardSummary`, `TransactionItem`, `TransactionForm`, `AccountForm`, `SegmentedControl`, `FormField`, `MoneyText`, `EmptyState`, `InlineNotice`, `ConfirmDeleteDialog`, `SkeletonValue`.
-- **Not added:** Select, Toast/Sonner, Sheet, Tabs, Tooltip, Skeleton (shadcn), Form libraries, charts, animation libraries.
+- **Not added:** Select, Toast/Sonner, Sheet, Tabs, Tooltip, Skeleton (shadcn), Form libraries, charting libraries (the Dashboard draws native SVG, ADR-025), animation libraries.
 
 ### Icons
 
@@ -267,7 +267,7 @@ Studied for **patterns only** — no branding, screenshots, copy or assets were 
 
 ## Out of scope for v1 design
 
-Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or billing cycles, investments, bank sync, charts and analytics, multi-currency, authentication, dark mode, account deletion, category management, export.
+Goals beyond Kakeibo's monthly plan (ADR-021), recurring bills, due dates or billing cycles, investments, bank sync, charting libraries (Dashboard analytics are in scope as native SVG, ADR-024 and ADR-025), multi-currency, authentication, dark mode, account deletion, category management, export.
 
 ---
 

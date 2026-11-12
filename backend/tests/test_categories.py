@@ -38,6 +38,7 @@ def test_category_create_normalizes_names_and_rejects_ambiguous_duplicates():
     assert response.json()["name"] == "Dining Out"
     assert response.json()["default_kakeibo_envelope"] == "wants"
     assert response.json()["is_archived"] is False
+    assert response.json()["icon_key"] is None
 
     duplicate = client.post("/api/categories", json={"name": "dining out", "type": "expense"})
     assert duplicate.status_code == 409
@@ -45,6 +46,56 @@ def test_category_create_normalizes_names_and_rejects_ambiguous_duplicates():
 
     same_name_income = client.post("/api/categories", json={"name": "Dining Out", "type": "income"})
     assert same_name_income.status_code == 201
+
+
+def test_category_icon_is_optional_validated_editable_and_presentation_only():
+    no_icon = client.post("/api/categories", json={"name": "No icon", "type": "expense"})
+    assert no_icon.status_code == 201
+    assert no_icon.json()["icon_key"] is None
+
+    created = client.post(
+        "/api/categories",
+        json={"name": "Icon category", "type": "expense", "icon_key": "shopping-basket"},
+    )
+    assert created.status_code == 201, created.text
+    category = created.json()
+    assert category["icon_key"] == "shopping-basket"
+    account = create_cash_account()
+    transaction = client.post(
+        "/api/transactions",
+        json={"account_id": account, "category_id": category["id"], "amount": "19.75", "transaction_date": "2026-10-02", "kakeibo_envelope": "needs"},
+    )
+    assert transaction.status_code == 201
+
+    invalid = client.patch(f"/api/categories/{category['id']}", json={"icon_key": "https://example.invalid/icon.svg"})
+    assert invalid.status_code == 422
+    unsupported = client.post("/api/categories", json={"name": "Unknown icon", "type": "income", "icon_key": "script-alert"})
+    assert unsupported.status_code == 422
+
+    changed = client.patch(f"/api/categories/{category['id']}", json={"icon_key": "gift"})
+    assert changed.status_code == 200
+    assert changed.json()["icon_key"] == "gift"
+    renamed = client.patch(f"/api/categories/{category['id']}", json={"name": "Icon category renamed"})
+    assert renamed.status_code == 200
+    assert renamed.json()["icon_key"] == "gift"
+    assert client.get("/api/categories/{category_id}".format(category_id=category["id"])).json()["icon_key"] == "gift"
+    archived = client.patch(f"/api/categories/{category['id']}/archive", json={"is_archived": True})
+    assert archived.status_code == 200
+    assert archived.json()["icon_key"] == "gift"
+    restored = client.patch(f"/api/categories/{category['id']}/archive", json={"is_archived": False})
+    assert restored.json()["icon_key"] == "gift"
+
+    with open_connection() as connection:
+        row = connection.execute(
+            "SELECT id, category_id, amount, kakeibo_envelope FROM transactions WHERE id = %s",
+            (transaction.json()["id"],),
+        ).fetchone()
+    assert row == {"id": transaction.json()["id"], "category_id": category["id"], "amount": Decimal("19.75"), "kakeibo_envelope": "needs"}
+
+    cleared = client.patch(f"/api/categories/{category['id']}", json={"icon_key": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["icon_key"] is None
+    assert client.get("/api/categories").json()
 
 
 def test_category_names_and_envelope_type_are_validated():

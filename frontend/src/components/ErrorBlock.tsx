@@ -2,6 +2,7 @@ import { CircleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from 'cn'
 
+import { Moki } from '@/components/Moki'
 import { Button } from '@/components/ui/button'
 import { loadFailureText } from '@/lib/apiErrors'
 import { moveFocusTo } from '@/lib/focus'
@@ -22,6 +23,7 @@ export function ErrorBlock({
   onRetry,
   focusAfter = 'main h1',
   live = true,
+  mascot = false,
   className,
 }: {
   what: string
@@ -29,28 +31,33 @@ export function ErrorBlock({
   onRetry: () => void
   focusAfter?: string
   live?: boolean
+  /** A whole page or large section that failed gets Moki; small inline blocks stay plain. */
+  mascot?: boolean
   className?: string
 }) {
   return (
     <div
       role={live ? 'alert' : undefined}
-      className={cn('rounded-control border-[1.5px] border-dashed border-input p-[18px] text-center text-muted-foreground', className)}
+      className={cn('rounded-control border-[1.5px] border-dashed border-input p-[18px] text-center text-muted-foreground', mascot && 'sm:flex sm:items-center sm:justify-center sm:gap-5 sm:text-left', className)}
     >
-      <p className="flex items-start justify-center gap-2">
-        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-        <span>{loadFailureText(what, updatedAt)}</span>
-      </p>
-      <div className="mt-3">
-        <Button
-          variant="secondary"
-          aria-label={`Retry loading ${what}`}
-          onClick={() => {
-            moveFocusTo(focusAfter)
-            onRetry()
-          }}
-        >
-          Retry
-        </Button>
+      {mascot && <div className="mb-2 flex justify-center sm:mb-0 sm:shrink-0"><Moki pose="serverError" size="medium" /></div>}
+      <div className="min-w-0">
+        <p className={cn('flex items-start justify-center gap-2', mascot && 'sm:justify-start')}>
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>{loadFailureText(what, updatedAt)}</span>
+        </p>
+        <div className="mt-3">
+          <Button
+            variant="secondary"
+            aria-label={`Retry loading ${what}`}
+            onClick={() => {
+              moveFocusTo(focusAfter)
+              onRetry()
+            }}
+          >
+            Retry
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ import {
   buildActivity,
   cardStatus,
   cardStatuses,
+  coversFullCalendarMonth,
   dayHeading,
   groupByDate,
   liquidAccounts,
@@ -286,6 +287,10 @@ describe('months', () => {
     assert.deepEqual(options[0], { value: '2026-10', label: 'October 2026' })
     assert.deepEqual(options[11], { value: '2025-11', label: 'November 2025' }) // wraps over the year
     assert.deepEqual(monthOptions('2026-02-10', 3).map((o) => o.value), ['2026-02', '2026-01', '2025-12'])
+    assert.equal(coversFullCalendarMonth('2026-10', '2026-10-01', '2026-10-31'), true)
+    assert.equal(coversFullCalendarMonth('2026-10', '2026-10-01', '2026-10-25'), false)
+    assert.equal(coversFullCalendarMonth('2026-10', '2026-10-15', '2026-10-31'), false)
+    assert.equal(coversFullCalendarMonth('2024-02', '2024-02-01', '2024-02-29'), true)
   })
 })
 

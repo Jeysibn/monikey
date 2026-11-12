@@ -16,12 +16,14 @@ export function CreditCardSummary({
   status,
   onPay,
   onEdit,
+  onDetails,
   className,
   fullWidthPay = false,
 }: {
   status: CardStatus
   onPay: (cardId: number) => void
   onEdit?: (cardId: number, from: HTMLElement) => void
+  onDetails?: (cardId: number, from: HTMLElement) => void
   className?: string
   /** Pay card fills the row below `lg` (Accounts view); Overview keeps the auto-width button. */
   fullWidthPay?: boolean
@@ -85,6 +87,11 @@ export function CreditCardSummary({
           </div>
         </div>
         <div className="flex gap-2">
+          {onDetails && (
+            <Button type="button" variant="ghost" size="sm" className={fullWidthPay ? 'flex-1 lg:flex-none' : undefined} onClick={(event) => onDetails(account.id, event.currentTarget)} aria-label={`Details, ${account.name}`}>
+              Details
+            </Button>
+          )}
           {onEdit && (
             <Button
               type="button"

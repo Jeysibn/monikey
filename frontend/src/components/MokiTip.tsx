@@ -16,8 +16,8 @@ export function MokiTip({ id, pose, title, children, className }: { id: MokiTipI
   if (hidden) return null
   const headingId = `moki-tip-${id}`
   return (
-    <aside aria-labelledby={headingId} data-moki-tip={id} className={`mb-4 flex items-center gap-2.5 rounded-card border border-border bg-card py-2.5 pr-1 pl-3 sm:gap-3 md:p-4 ${className ?? ''}`}>
-      <Moki pose={pose} size="tip" className="max-[359px]:hidden" />
+    <aside aria-labelledby={headingId} data-moki-tip={id} className={`mb-4 flex items-center gap-2.5 rounded-card border border-primary/25 bg-primary/10 py-2.5 pr-1 pl-3 sm:gap-4 md:p-4 ${className ?? ''}`}>
+      <Moki pose={pose} size="tip" className="max-[359px]:hidden drop-shadow-sm" />
       <div className="min-w-0 flex-1">
         <p id={headingId} className="text-[0.9375rem] leading-snug font-semibold">{title}</p>
         <p className="text-[0.8125rem] leading-snug text-muted-foreground sm:text-sm">{children}</p>

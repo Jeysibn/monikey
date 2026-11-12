@@ -7,10 +7,10 @@ export type { MokiPose }
 export type MokiSize = 'tip' | 'small' | 'medium' | 'large'
 
 const SIZE_CLASSES: Record<MokiSize, string> = {
-  tip: 'size-14 sm:size-20', // compact on phones so a tip never pushes the page far down
-  small: 'size-20',
-  medium: 'size-28',
-  large: 'size-36',
+  tip: 'size-20 sm:size-28', // compact on phones so a tip never pushes the page far down
+  small: 'size-28 sm:size-32',
+  medium: 'size-36 sm:size-44',
+  large: 'size-44 sm:size-56',
 }
 
 const POSE_DESCRIPTIONS: Record<MokiPose, string> = {

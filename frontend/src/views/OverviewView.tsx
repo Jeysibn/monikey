@@ -120,7 +120,7 @@ export function OverviewView({
     </div>
   ) : !hasAccounts && !positionLoading ? (
     <Card key="position" className="lg:col-span-12">
-      <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[112px_minmax(0,1fr)] sm:text-left">
+      <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[176px_minmax(0,1fr)] sm:text-left">
         <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" float />
         <div>
           <p className="text-lg font-semibold">
@@ -345,7 +345,7 @@ export function OverviewView({
   // panel is showing or briefly hidden while data refreshes), so nothing below it jumps. It only exists when the
   // person has accounts (or might: until the accounts load we assume they do, so the space is held from the start).
   const welcomeSlot = hasAccounts ? (
-    <div key="welcome" className="min-h-[6.5rem] max-[359px]:min-h-[7.75rem] md:min-h-[6.625rem] min-w-0 lg:col-span-12" data-welcome-slot="">
+    <div key="welcome" className="min-h-[8.5rem] max-[359px]:min-h-[9.5rem] md:min-h-[8.75rem] min-w-0 lg:col-span-12" data-welcome-slot="">
       {showWelcome && (
         <Card className="flex h-full items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 md:!py-3">
           <Moki pose="welcome" size="small" loading="eager" />

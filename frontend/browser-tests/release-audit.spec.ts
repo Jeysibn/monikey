@@ -77,11 +77,11 @@ for (const name of PAGES) {
 }
 
 /** Dialogs reached from a page. `submit` is the primary action that must stay reachable. */
-const DIALOGS: { name: string; page: (typeof PAGES)[number]; trigger: (p: Page) => Locator; dialog: string | RegExp; submit?: RegExp }[] = [
+const DIALOGS: { name: string; page: (typeof PAGES)[number]; trigger: (p: Page) => Locator; dialog: string | RegExp; submit?: RegExp; type?: string }[] = [
   { name: 'Add transaction', page: 'Overview', trigger: (p) => p.getByRole('button', { name: 'Add transaction' }).first(), dialog: /Add (expense|income|transaction)/, submit: /Save (expense|income)/ },
-  { name: 'Add income', page: 'Overview', trigger: (p) => p.getByRole('region', { name: 'Quick actions' }).getByRole('button', { name: 'Add income' }), dialog: /Add transaction/, submit: /Save income/ },
-  { name: 'Transfer', page: 'Overview', trigger: (p) => p.getByRole('region', { name: 'Quick actions' }).getByRole('button', { name: 'Transfer' }), dialog: /Transfer/, submit: /Save transfer|Transfer money|Transfer/ },
-  { name: 'Pay credit card', page: 'Overview', trigger: (p) => p.getByRole('region', { name: 'Quick actions' }).getByRole('button', { name: 'Pay card' }), dialog: /Pay credit card/, submit: /Save payment|Pay card|Pay/ },
+  { name: 'Add income', page: 'Overview', trigger: (p) => p.getByRole('button', { name: 'Add transaction' }).first(), dialog: /Add transaction/, submit: /Save income/, type: 'Income' },
+  { name: 'Transfer', page: 'Overview', trigger: (p) => p.getByRole('button', { name: 'Add transaction' }).first(), dialog: /Transfer money/, submit: /Save transfer/, type: 'Transfer' },
+  { name: 'Pay credit card', page: 'Overview', trigger: (p) => p.getByRole('button', { name: 'Add transaction' }).first(), dialog: /Pay credit card/, submit: /Pay credit card/, type: 'Pay card' },
   { name: 'Add account', page: 'Accounts', trigger: (p) => p.getByRole('button', { name: 'Add account' }).first(), dialog: 'Add account' },
   { name: 'Add category', page: 'Categories', trigger: (p) => p.getByRole('button', { name: 'Add category' }).first(), dialog: /category/i },
   { name: 'Monthly plan', page: 'Kakeibo', trigger: (p) => p.getByRole('button', { name: /Create plan|Edit plan|Confirm plan/ }).first(), dialog: /plan/i },
@@ -100,6 +100,7 @@ for (const d of DIALOGS) {
       await trigger.click()
       const dialog = page.getByRole('dialog').last()
       await expect(dialog).toBeVisible()
+      if (d.type) await dialog.getByRole('radio', { name: d.type, exact: true }).locator('xpath=ancestor::label[1]').click()
       await expect(dialog.getByRole('heading', { name: d.dialog }).first()).toBeVisible()
       const label = `${d.name} @${width}`
       await noSideways(page, label)

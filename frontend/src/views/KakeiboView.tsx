@@ -207,6 +207,9 @@ export function KakeiboView({
                   <EnvelopeCard key={envelope} envelope={envelope} report={report.envelopes[envelope]} />
                 ))}
               </div>
+              <div className="mt-4 md:mt-6">
+                <Unclassified report={report} onClassify={onClassify} />
+              </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 Each category suggests an envelope for new expenses.{' '}
                 <Button variant="link" className="h-auto min-h-11 p-0 align-baseline font-semibold" onClick={onManageCategories}>
@@ -215,7 +218,6 @@ export function KakeiboView({
               </p>
             </section>
             <div className="grid min-w-0 gap-4 md:gap-6 lg:col-span-5">
-              <Unclassified report={report} onClassify={onClassify} />
               {(hasPlan || confirmLegacyPlan) && <PlanDetails report={report} onEditPlan={onEditPlan} />}
             </div>
           </div>

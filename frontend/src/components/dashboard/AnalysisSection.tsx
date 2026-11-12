@@ -101,7 +101,7 @@ export function AnalysisSection({ today, source, version, accounts }: { today: s
       ) : (
         <>
           {report.stale && <p role="status" className="text-sm text-muted-foreground">Updating the analysis…</p>}
-          <div className="grid gap-4 md:gap-5 lg:grid-cols-2 lg:items-start">
+          <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
             <ChartFrame
               title="Spending by category"
               description="Where your expenses went in this range. Archived categories are included."

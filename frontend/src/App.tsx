@@ -230,12 +230,6 @@ function App() {
     rememberOpener()
     setSession({ mode: 'add', values: startEntry(snapshot, 'expense', null, accountId) })
   }
-  /** Overview quick action "Add income": Quick Add as income, on the account used last. */
-  const openIncome = () => {
-    if (!snapshot) return
-    rememberOpener()
-    setSession({ mode: 'add', values: startEntry(snapshot, 'income', null) })
-  }
   /** Account details "Add income": Quick Add on this account, as income. */
   const openIncomeOn = (accountId: number) => {
     if (!snapshot) return
@@ -471,8 +465,6 @@ function App() {
             onPayCard={openPay}
             onEditAccount={editAccount}
             onTransfer={openTransferFrom}
-            onQuickTransfer={openTransfer}
-            onAddIncome={openIncome}
             onAddExpense={openExpenseOn}
             onOpenAccounts={() => setView('accounts')}
             walletPreferences={walletPreferences}

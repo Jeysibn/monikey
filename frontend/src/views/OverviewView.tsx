@@ -10,7 +10,6 @@ import { MoneyText } from '@/components/MoneyText'
 import { MonthSelect } from '@/components/MonthSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
-import { QuickActions } from '@/components/overview/QuickActions'
 import { WalletStack } from '@/components/wallet/WalletStack'
 import { addBlocked, addLabel } from '@/components/addState'
 import { Button } from '@/components/ui/button'
@@ -25,7 +24,7 @@ import type { WalletPreferencesV1 } from '@/wallet/walletPreferences'
 /*
  * Overview (docs/design/UI_UX_SPEC.md section 4). Question it answers: "After what I owe, how much do I
  * really have?" Phone order: position, this month, credit cards, account wallet, recent activity. From 1024px,
- * the position spans the top, wallet and recent activity share the next row, then month and credit cards.
+ * the position spans the top, then this month as a strip, wallets beside credit cards, then recent activity.
  * All totals come from lib/finance.ts, which stands in for the API during this milestone.
  */
 
@@ -58,12 +57,10 @@ export function OverviewView({
   addState,
   onMonthChange,
   onAdd,
-  onAddIncome,
   onAddAccount,
   onPayCard,
   onEditAccount,
   onTransfer,
-  onQuickTransfer,
   onAddExpense,
   onOpenAccounts,
   walletPreferences,
@@ -79,12 +76,10 @@ export function OverviewView({
   addState: AddState
   onMonthChange: (month: string) => void
   onAdd: () => void // Add expense
-  onAddIncome: () => void
   onAddAccount: () => void
   onPayCard: (cardId: number) => void
   onEditAccount: (accountId: number, from: HTMLElement) => void
   onTransfer: (fromAccountId: number) => void // the wallet's Transfer, from the selected account
-  onQuickTransfer: () => void // the quick action: a transfer with no account chosen yet
   onAddExpense: (accountId: number) => void
   onOpenAccounts: () => void
   walletPreferences: WalletPreferencesV1
@@ -222,7 +217,7 @@ export function OverviewView({
   )
 
   const walletSection = (
-    <div key="wallet" className="min-w-0">
+    <div key="wallet" className="h-full min-w-0 [&>[data-slot=card]]:h-full">
       <WalletStack
         accounts={accountsRes}
         loading={forcedLoading}
@@ -237,7 +232,7 @@ export function OverviewView({
   )
 
   const recentActivitySection = (
-    <div key="recent" className="min-w-0">
+    <div key="recent" className="h-full min-w-0 [&>[data-slot=card]]:h-full">
       <Card aria-labelledby="recent-activity-title" role="region">
         <CardHeader>
           <CardTitle id="recent-activity-title" tabIndex={-1}>Recent activity</CardTitle>
@@ -286,21 +281,21 @@ export function OverviewView({
   )
 
   const monthSection = (
-    <Card key="month" role="region" aria-labelledby="this-month-title" className="min-w-0">
+    <Card key="month" role="region" aria-labelledby="this-month-title" className="min-w-0 lg:col-span-12">
       {/* This month. Income and expenses of the selected month; card payments are not counted. */}
       <CardTitle id="this-month-title">This month</CardTitle>
       <CardDescription>{label} · card payments aren&rsquo;t counted as expenses</CardDescription>
       {summaryRes.error ? (
         <p className="text-muted-foreground">Not available until your summary loads.</p>
       ) : (
-        <dl>
+        <dl className="lg:grid lg:grid-cols-2 lg:gap-x-10">
           <div className="flex items-baseline justify-between gap-3 pt-1.5 pb-3">
             <dt className="text-[0.9375rem] font-medium text-muted-foreground">Income</dt>
             <dd className="min-w-0 text-right">
               {summaryWaiting ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthIncome} kind="income" className="text-2xl font-semibold tracking-[-0.015em]" />}
             </dd>
           </div>
-          <div className="flex items-baseline justify-between gap-3 border-t border-rule py-3">
+          <div className="flex items-baseline justify-between gap-3 border-t border-rule py-3 lg:border-t-0 lg:pt-1.5 lg:pb-3">
             <dt className="text-[0.9375rem] font-medium text-muted-foreground">Expenses</dt>
             <dd className="min-w-0 text-right">
               {summaryWaiting ? <Bar className="h-6 w-32 bg-secondary" /> : <MoneyText wrap centavos={summary.monthExpenses} className="text-2xl font-semibold tracking-[-0.015em]" />}
@@ -348,23 +343,6 @@ export function OverviewView({
     </Card>
   )
 
-  // The card that owes the most: what the Pay card quick action opens (the form lets the person pick another).
-  const payTarget = cards.reduce<(typeof cards)[number] | null>((best, card) => (card.owed > 0 && (best === null || card.owed > best.owed) ? card : best), null)
-  const actionsBlocked = addBlocked(addState)
-
-  const quickActions = !hasAccounts ? null : (
-    <div key="actions" className="min-w-0 lg:col-span-12">
-      <QuickActions
-        disabled={actionsBlocked}
-        canPay={payTarget !== null}
-        onExpense={onAdd}
-        onIncome={onAddIncome}
-        onTransfer={onQuickTransfer}
-        onPayCard={() => payTarget && onPayCard(payTarget.account.id)}
-      />
-    </div>
-  )
-
   // The welcome sits BELOW the net position so it never displaces it. Its slot is reserved (same height whether the
   // panel is showing or briefly hidden while data refreshes), so nothing below it jumps. It only exists when the
   // person has accounts (or might: until the accounts load we assume they do, so the space is held from the start).
@@ -384,18 +362,20 @@ export function OverviewView({
     </div>
   ) : null
 
-  // From 1024px two balanced columns (wallets and this month; recent activity and credit cards), so neither leaves a
-  // gap under a shorter card. Below that, one column in the order the spec reads: this month and credit context
+  // From 1024px: this month as a full-width strip, wallets beside credit cards at equal height, then recent activity. Below that, one column in the order the spec reads: this month and credit context
   // first, then wallets and recent activity.
   const layoutSections = desktopLayout
     ? [
         positionSection,
-        quickActions,
         welcomeSlot,
-        <div key="left" className="grid min-w-0 content-start gap-4 md:gap-6 lg:col-span-7">{walletSection}{monthSection}</div>,
-        <div key="right" className="grid min-w-0 content-start gap-4 md:gap-6 lg:col-span-5">{recentActivitySection}{creditCardsSection}</div>,
+        // This month is a full-width strip; wallets and credit cards share the next row at equal height so their edges
+        // line up; recent activity runs full width beneath.
+        monthSection,
+        <div key="row-left" className="flex min-w-0 lg:col-span-6 xl:col-span-7 [&>*]:min-w-0 [&>*]:flex-1">{walletSection}</div>,
+        <div key="row-right" className="flex min-w-0 lg:col-span-6 xl:col-span-5 [&>*]:min-w-0 [&>*]:flex-1">{creditCardsSection}</div>,
+        <div key="recent-row" className="min-w-0 lg:col-span-12">{recentActivitySection}</div>,
       ]
-    : [positionSection, quickActions, welcomeSlot, monthSection, creditCardsSection, walletSection, recentActivitySection]
+    : [positionSection, welcomeSlot, monthSection, creditCardsSection, walletSection, recentActivitySection]
 
   return (
     <div aria-busy={anyLoading}>
@@ -411,7 +391,7 @@ export function OverviewView({
         <MonthSelect value={month} options={monthOptions(today)} onChange={onMonthChange} />
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-stretch">
         {layoutSections}
       </div>
     </div>

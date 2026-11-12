@@ -5,7 +5,9 @@ import { ChartFrame, type LegendItem } from '@/components/charts/ChartFrame'
 import { ColumnChart } from '@/components/charts/ColumnChart'
 import { Donut } from '@/components/charts/Donut'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBlock } from '@/components/ErrorBlock'
+import { Moki } from '@/components/Moki'
 import type { DataSource } from '@/dataSource'
 import { categoryMarkColor, envelopeColor, EXPENSE_COLOR, UNCLASSIFIED_COLOR } from '@/lib/chartColors'
 import { formatShare } from '@/lib/chartMath'
@@ -93,7 +95,7 @@ export function AnalysisSection({ today, source, version, accounts }: { today: s
       </div>
 
       {problem ? null : report.error && !data ? (
-        <ErrorBlock what="the spending analysis" updatedAt={report.updatedAt} onRetry={report.retry} focusAfter="#dashboard-analysis-title" />
+        <ErrorBlock mascot what="the spending analysis" updatedAt={report.updatedAt} onRetry={report.retry} focusAfter="#dashboard-analysis-title" />
       ) : !data || !data.daily || !data.weekdays || !data.insights ? (
         <div role="status" aria-label="Loading the spending analysis" className="grid gap-3 lg:grid-cols-2">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-64 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" />)}
@@ -101,6 +103,12 @@ export function AnalysisSection({ today, source, version, accounts }: { today: s
       ) : (
         <>
           {report.stale && <p role="status" className="text-sm text-muted-foreground">Updating the analysis…</p>}
+          {totalSpent === 0 ? (
+            <EmptyState
+              message="No spending recorded in this date range. Pick a longer range, or add an expense."
+              illustration={<Moki pose="presenting" size="medium" />}
+            />
+          ) : (
           <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
             <ChartFrame
               title="Spending by category"
@@ -185,6 +193,7 @@ export function AnalysisSection({ today, source, version, accounts }: { today: s
               />
             </ChartFrame>
           </div>
+          )}
 
           <section aria-labelledby="dashboard-insights-title" className="grid gap-3">
             <h3 id="dashboard-insights-title" className="text-base font-semibold">More insights</h3>

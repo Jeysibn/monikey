@@ -43,7 +43,7 @@ All 23 files are 8-bit RGBA PNGs with transparency. The poses were visually chec
 
 ## Production variants
 
-The app serves only six optimized, transparent WebP files from `frontend/public/moki/`. Each was resized to 480 pixels on its longest edge and encoded in Chromium at WebP quality 0.92. The selected source PNGs remain unchanged. The canonical `full-default.png` is retained for future visual comparisons and is not imported or copied to the production bundle.
+The app serves only eight optimized, transparent WebP files from `frontend/public/moki/`. Each was resized to 480 pixels on its longest edge and encoded in Chromium at WebP quality 0.92. The selected source PNGs remain unchanged. The canonical `full-default.png` is retained for future visual comparisons and is not imported or copied to the production bundle.
 
 | Pose | Source PNG bytes | App WebP | WebP bytes | Placement |
 |---|---:|---|---:|---|
@@ -53,6 +53,8 @@ The app serves only six optimized, transparent WebP files from `frontend/public/
 | Searching | 1,057,524 | `moki-search.webp` | 47,316 | Activity filter returns no matches |
 | Planning | 978,193 | `moki-checklist-thinking.webp` | 44,176 | Kakeibo month has no plan |
 | Thumbs-up | 1,007,750 | `moki-thumbs-up.webp` | 42,382 | Currently unused; kept as an approved pose |
+| Server error | 1,165,686 | `moki-server-error.webp` | 50,008 | A whole page or large section that could not load (`ErrorBlock` with `mascot`) |
+| Presenting | 1,030,431 | `moki-presenting.webp` | 43,078 | Dashboard tips; Dashboard analysis range with no spending; Categories tip |
 
 The six variants total 261,750 bytes, 95.6% smaller than their 5,931,802 source bytes. WebP preserves alpha. `width` and `height` are set to 480 in the shared component to reserve a square before loading. The images load lazily by default; the first-use Overview pose uses eager loading because it is in the initial viewport. Browser coverage confirms a populated screen requests no Moki image and the no-account Overview-to-Accounts sequence requests only the welcome and empty-wallet poses. The thumbs-up is currently unused and is never requested. There is no preload for other poses and no runtime image dependency.
 
@@ -79,3 +81,24 @@ Before selecting a pose, confirm the UI condition is real and resolved (not load
 3. Keep the highest-quality source under `frontend/src/assets/mascot/source/` and create a transparent production variant under `frontend/public/moki/` at a size appropriate for its rendered dimensions and high-density screens.
 4. Update the typed registry, source inventory, optimized-size table, and this pose guidance. Do not import unused artwork into the frontend or add image-processing dependencies to the runtime.
 5. Check the state on narrow and desktop viewports, verify the whole character is visible, and ensure adjacent text and controls work without the image.
+
+
+## Where Moki appears (revision after the owner's review, 2026-11-12)
+
+Moki is present in **empty, first-use and error states and in short dismissible tips**, and stays off money figures and controls. Concretely:
+
+| Moment | Component | Pose |
+|---|---|---|
+| First use, no accounts (Overview) | `Moki` with `float` (a slow 4 px bob; off under reduced motion) | welcome |
+| A whole page or large section failed to load (Activity, Accounts, Categories, Kakeibo, Dashboard sections) | `ErrorBlock mascot` | server error |
+| Empty collections: Accounts, Activity, Categories (and archived) | `EmptyState` with an illustration, Moki beside the words from 640 px | empty wallet, resting |
+| A search or filter with no results (Activity, Accounts, Categories) | `EmptyState` | searching |
+| Kakeibo month with no plan | `NoPlanCard` | planning |
+| Dashboard analysis range with no spending | `EmptyState` | presenting |
+| Tips: Dashboard (two date scopes), Activity (search and filters), Categories (icon and color) | `MokiTip` | presenting, searching |
+
+Rules: small inline blocks that fail (credit cards, recent activity, a weekly summary) stay plain text with Retry; Overview and Accounts carry **no tips**; a tip is a labelled `<aside>`, dismissed with a 44 px button, remembered in this browser only (`lib/mokiTips.ts`, a closed list of ids, tolerant of blocked storage), and moves focus to the page heading when dismissed. Moki is decorative: the words and the Retry or action always carry the meaning. Never place Moki over a figure, a control or the net-position hero. The first-account success mascot stays removed.
+
+## New poses
+
+New artwork is generated from `full-default.png` as the required reference; the prompts for the next poses are in [`MOKI_CODEX_PROMPTS.md`](MOKI_CODEX_PROMPTS.md). Follow *Adding or changing artwork* above, then add the pose to `frontend/src/lib/mokiAssets.ts`.

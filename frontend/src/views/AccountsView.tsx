@@ -203,7 +203,7 @@ export function AccountsView({
             <h2 id="all-accounts-title" className="sr-only">All accounts</h2>
             {accountsFailed ? (
               <Card>
-                <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#net-position-title" />
+                <ErrorBlock mascot what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#net-position-title" />
               </Card>
             ) : rowsLoading ? (
               <ul aria-hidden="true" className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,19rem),1fr))] gap-4">
@@ -241,7 +241,7 @@ export function AccountsView({
           {accountsFailed ? (
             <Card>
               <CardTitle id="money-you-have-title" tabIndex={-1}>Money you have</CardTitle>
-              <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
+              <ErrorBlock mascot what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-have-title" className="mt-3" />
             </Card>
           ) : (
             <Card>
@@ -259,7 +259,7 @@ export function AccountsView({
                   ))}
                 </ul>
               ) : rows.length > 0 && shownRows.length === 0 ? (
-                <p className="py-4 text-sm text-muted-foreground">No cash, bank or e-wallet accounts match your search or filter.</p>
+                <EmptyState message="No cash, bank or e-wallet accounts match your search or filter." illustration={<Moki pose="searching" size="small" />} />
               ) : rows.length === 0 ? (
                 <EmptyState
                   message="Add your first cash, bank or e-wallet account."
@@ -283,7 +283,7 @@ export function AccountsView({
             <Card>
               <CardTitle id="money-you-owe-title" tabIndex={-1}>Money you owe</CardTitle>
               {/* The same failure as in the other section: only one of the two is announced. */}
-              <ErrorBlock what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-owe-title" live={false} className="mt-3" />
+              <ErrorBlock mascot what="accounts" updatedAt={accountsRes.updatedAt} onRetry={accountsRes.retry} focusAfter="#money-you-owe-title" live={false} className="mt-3" />
             </Card>
           </section>
         ) : (

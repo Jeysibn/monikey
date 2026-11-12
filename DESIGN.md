@@ -19,7 +19,7 @@ MoniKey is a calm, honest notebook for everyday money. It should feel like a fri
 | Is | Is not |
 |---|---|
 | Calm, clear, plain-spoken | Flashy, gamified, motivational |
-| Friendly through wording and generous space | Friendly through mascots, emoji or confetti |
+| Friendly through wording and generous space, with Moki the monkey in empty, first-use and error states and in dismissible tips (owner decision; rules in `docs/design/MOKI_ASSET_GUIDE.md`) | Friendly through emoji or confetti, or a mascot on money figures and controls |
 | Precise with numbers | Approximate or decorative with numbers |
 | Quick on a phone with one thumb | A desktop dashboard shrunk down |
 

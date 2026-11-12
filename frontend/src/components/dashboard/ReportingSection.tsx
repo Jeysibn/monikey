@@ -52,7 +52,7 @@ export function ReportingSection({ today, source, version }: { today: string; so
       </div>
 
       {report.error && !data ? (
-        <ErrorBlock what="the monthly summary" updatedAt={report.updatedAt} onRetry={report.retry} focusAfter="#dashboard-reporting-title" />
+        <ErrorBlock mascot what="the monthly summary" updatedAt={report.updatedAt} onRetry={report.retry} focusAfter="#dashboard-reporting-title" />
       ) : !data || !row ? (
         <div role="status" aria-label="Loading the monthly summary" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-card bg-secondary motion-reduce:animate-none" />)}

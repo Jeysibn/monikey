@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { Moki } from '@/components/Moki'
 import { ErrorBlock, UpdatingStamp } from '@/components/ErrorBlock'
 import { MonthSelect } from '@/components/MonthSelect'
+import { MokiTip } from '@/components/MokiTip'
 import { PageHeader } from '@/components/PageHeader'
 import { TransactionItem } from '@/components/TransactionItem'
 import { addBlocked, addLabel } from '@/components/addState'
@@ -114,6 +115,9 @@ export function ActivityView({
   return (
     <div aria-busy={loading}>
       <PageHeader title="Activity" onAdd={onAdd} addState={addState} />
+      <MokiTip id="activity-search" pose="presenting" title="Find anything fast">
+        Search notes, categories and accounts, or narrow by type and category. Filters look through every entry, not just the ones on screen.
+      </MokiTip>
       <p role="status" className="sr-only">
         {loading ? 'Loading activity' : ''}
       </p>
@@ -212,7 +216,7 @@ export function ActivityView({
         </div>
       )}
       {pageRes.error ? (
-        <ErrorBlock what="activity" updatedAt={pageRes.updatedAt} onRetry={pageRes.retry} focusAfter="main h1" />
+        <ErrorBlock mascot what="activity" updatedAt={pageRes.updatedAt} onRetry={pageRes.retry} focusAfter="main h1" />
       ) : loading ? (
         <ul aria-hidden="true">
           {[0, 1, 2, 3, 4, 5].map((i) => (

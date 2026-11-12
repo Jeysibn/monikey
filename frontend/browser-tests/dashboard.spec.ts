@@ -109,13 +109,13 @@ test('monthly KPIs show the reporting month and are never changed by the analysi
     await expect(page.getByText('Spending analysis')).toBeVisible()
   }
   await page.getByLabel('Analysis date range').selectOption('custom')
-  await page.getByLabel('Analysis start date').fill('2026-10-18')
+  await page.getByLabel('Analysis start date').fill('2026-10-02')
   await page.getByLabel('Analysis end date').fill('2026-10-22')
   await page.getByLabel('Filter the analysis by account').selectOption('2')
   await expect(page.getByText(/Main Savings only/)).toBeVisible() // the analysis says it is filtered ...
   await expect(kpis.locator('[data-scope="all-accounts"]')).toHaveText('All accounts') // ... the monthly section does not change
   await page.getByLabel('Sort categories by').selectOption('az')
-  await expect(page.getByText('Thu, Oct 1, 2026')).toHaveCount(0) // the analysis really did move to 5 days
+  await expect(page.getByText('Thu, Oct 1, 2026')).toHaveCount(0) // the analysis really did move to a 21-day range
   expect(await kpis.innerText()).toBe(before)
 
   // And the other way round: a different reporting month leaves the analysis description alone.

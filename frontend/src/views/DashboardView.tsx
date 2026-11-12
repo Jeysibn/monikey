@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import { AnalysisSection } from '@/components/dashboard/AnalysisSection'
 import { ReportingSection } from '@/components/dashboard/ReportingSection'
+import { MokiTip } from '@/components/MokiTip'
 import { PageHeader } from '@/components/PageHeader'
 import type { DataSource } from '@/dataSource'
 import type { AccountsSnapshot, AddState } from '@/types'
@@ -30,6 +31,9 @@ export function DashboardView({ today, source, accounts, version, onAdd, addStat
       <PageHeader title="Dashboard" onAdd={onAdd} addState={addState}>
         <p className="w-full text-sm text-muted-foreground md:w-auto md:max-w-80">Understand where your money went, from your recorded transactions.</p>
       </PageHeader>
+      <MokiTip id="dashboard-scopes" pose="presenting" title="Two views, two date scopes">
+        The monthly summary follows the month you pick. The charts below have their own date range and account filter, and never change the monthly figures.
+      </MokiTip>
       <ReportingSection today={today} source={source} version={version} />
       <AnalysisSection today={today} source={source} version={version} accounts={accounts} />
     </div>

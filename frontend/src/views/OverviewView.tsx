@@ -121,7 +121,7 @@ export function OverviewView({
   ) : !hasAccounts && !positionLoading ? (
     <Card key="position" className="lg:col-span-12">
       <div className="mx-auto grid max-w-2xl items-center gap-3 text-center sm:grid-cols-[112px_minmax(0,1fr)] sm:text-left">
-        <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" />
+        <Moki pose="welcome" size="medium" className="mx-auto" loading="eager" float />
         <div>
           <p className="text-lg font-semibold">
             Start by adding a cash, bank or <span className="whitespace-nowrap">e-wallet</span> account.

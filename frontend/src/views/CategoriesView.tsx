@@ -4,7 +4,10 @@ import { useMemo, useRef, useState } from 'react'
 import { CategoryFormDialog, type CategoryFormValues } from '@/components/categories/CategoryFormDialog'
 import { CategoryRow } from '@/components/categories/CategoryRow'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBlock } from '@/components/ErrorBlock'
+import { Moki } from '@/components/Moki'
+import { MokiTip } from '@/components/MokiTip'
 import { PageHeader } from '@/components/PageHeader'
 import { SegmentedControl } from '@/components/SegmentedControl'
 import { Button } from '@/components/ui/button'
@@ -139,6 +142,9 @@ export function CategoriesView({
           Add category
         </Button>
       </PageHeader>
+      <MokiTip id="categories-look" pose="presenting" title="Make categories easy to spot">
+        Give a category an icon and a color, or pick your own color. They show up in Activity and on the Dashboard charts, and never change any amount.
+      </MokiTip>
       <p className="mb-4 text-sm text-muted-foreground">
         Organize income and expenses. An expense category’s default suggests a Kakeibo envelope for new transactions; expenses you already saved keep their own.
       </p>
@@ -212,11 +218,13 @@ export function CategoriesView({
               Loading categories…
             </p>
           ) : resource.error ? (
-            <ErrorBlock what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} />
+            <ErrorBlock mascot what="categories" updatedAt={resource.updatedAt} onRetry={resource.retry} />
           ) : rows.length === 0 ? (
-            <p className="py-6 text-center text-muted-foreground">
-              {filtering || all.length > 0 ? (tab === 'archived' && !filtering ? 'No archived categories.' : categoryEmptyMessage(true)) : categoryEmptyMessage(false)}
-            </p>
+            <EmptyState
+              className="my-3"
+              message={filtering || all.length > 0 ? (tab === 'archived' && !filtering ? 'No archived categories.' : categoryEmptyMessage(true)) : categoryEmptyMessage(false)}
+              illustration={<Moki pose={filtering ? 'searching' : 'resting'} size="small" />}
+            />
           ) : (
             <ul className="m-0 list-none divide-y divide-border p-0" aria-label="Categories">
               {visibleRows.map((category) => (

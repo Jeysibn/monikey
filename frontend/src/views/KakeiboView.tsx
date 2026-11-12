@@ -184,7 +184,7 @@ export function KakeiboView({
         {unavailable ? (
           <EmptyState message="Kakeibo needs a newer version of the MoniKey server. Your accounts and activity are not affected." />
         ) : kakeibo.error ? (
-          <ErrorBlock what="your Kakeibo plan" updatedAt={kakeibo.updatedAt} onRetry={kakeibo.retry} focusAfter="main h1" />
+          <ErrorBlock mascot what="your Kakeibo plan" updatedAt={kakeibo.updatedAt} onRetry={kakeibo.retry} focusAfter="main h1" />
         ) : waiting || !report ? (
           <Skeleton />
         ) : (
@@ -252,7 +252,7 @@ export function KakeiboView({
         ) : unavailable ? (
           <EmptyState message="Kakeibo needs a newer version of the MoniKey server. Your accounts and activity are not affected." />
         ) : kakeibo.error ? (
-          <ErrorBlock what="your Kakeibo plan" updatedAt={kakeibo.updatedAt} onRetry={kakeibo.retry} focusAfter="main h1" />
+          <ErrorBlock mascot what="your Kakeibo plan" updatedAt={kakeibo.updatedAt} onRetry={kakeibo.retry} focusAfter="main h1" />
         ) : (
           <Skeleton />
         )}

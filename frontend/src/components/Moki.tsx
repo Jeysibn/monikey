@@ -1,19 +1,13 @@
 import { useState } from 'react'
 import { cn } from 'cn'
 
-export type MokiPose = 'welcome' | 'emptyWallet' | 'resting' | 'searching' | 'planning' | 'thumbsUp'
-export type MokiSize = 'small' | 'medium' | 'large'
+import { MOKI_ASSETS as ASSETS, type MokiPose } from '@/lib/mokiAssets'
 
-const ASSETS: Record<MokiPose, string> = {
-  welcome: '/moki/moki-wave.webp',
-  emptyWallet: '/moki/moki-empty-wallet.webp',
-  resting: '/moki/moki-sleeping.webp',
-  searching: '/moki/moki-search.webp',
-  planning: '/moki/moki-checklist-thinking.webp',
-  thumbsUp: '/moki/moki-thumbs-up.webp',
-}
+export type { MokiPose }
+export type MokiSize = 'tip' | 'small' | 'medium' | 'large'
 
 const SIZE_CLASSES: Record<MokiSize, string> = {
+  tip: 'size-14 sm:size-20', // compact on phones so a tip never pushes the page far down
   small: 'size-20',
   medium: 'size-28',
   large: 'size-36',
@@ -26,6 +20,8 @@ const POSE_DESCRIPTIONS: Record<MokiPose, string> = {
   searching: 'Moki looking through a magnifying glass',
   planning: 'Moki thinking while holding a checklist',
   thumbsUp: 'Moki giving a thumbs-up',
+  serverError: 'Moki holding a laptop that shows a cloud with an error',
+  presenting: 'Moki presenting with an open hand',
 }
 
 export function Moki({
@@ -35,6 +31,7 @@ export function Moki({
   alt,
   loading = 'lazy',
   fetchPriority = 'auto',
+  float = false,
   className,
 }: {
   pose: MokiPose
@@ -43,6 +40,8 @@ export function Moki({
   alt?: string
   loading?: 'eager' | 'lazy'
   fetchPriority?: 'high' | 'low' | 'auto'
+  /** A slow, small bob for a first-use welcome only; never animates for people who ask for less motion. */
+  float?: boolean
   className?: string
 }) {
   const src = ASSETS[pose]
@@ -61,7 +60,7 @@ export function Moki({
       fetchPriority={fetchPriority}
       decoding="async"
       onError={() => setFailedSource(src)}
-      className={cn('block shrink-0 object-contain', SIZE_CLASSES[size], className)}
+      className={cn('block shrink-0 object-contain', SIZE_CLASSES[size], float && 'moki-float', className)}
     />
   )
 }

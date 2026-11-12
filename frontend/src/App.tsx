@@ -301,7 +301,7 @@ function App() {
       }
     }
     setVersion((v) => v + 1)
-    setStatus({ text, action: again })
+    setStatus({ text, action: again, celebrate: true })
     setSession(null)
   }
 
@@ -319,7 +319,7 @@ function App() {
       return
     }
     setVersion((v) => v + 1)
-    setStatus({ text: done })
+    setStatus({ text: done, celebrate: true })
     setSession(null)
   }
 
@@ -355,7 +355,7 @@ function App() {
     }
     if (accountId !== null && !storesCards) keepCardInBrowser(accountId, values.type, card)
     setVersion((v) => v + 1)
-    setStatus({ text: accountSavedMessage(values) })
+    setStatus({ text: accountSavedMessage(values), celebrate: true })
     setAccountForm(null)
   }
   const editAccount = (id: number, from: HTMLElement) => {
@@ -372,7 +372,7 @@ function App() {
     if (!storesCards) keepCardInBrowser(id, values.type, card)
     else if (card !== undefined) forgetBrowserCard(id)
     setVersion((v) => v + 1)
-    setStatus({ text: accountUpdatedMessage(values) })
+    setStatus({ text: accountUpdatedMessage(values), celebrate: true })
     setEditAccountId(null)
   }
   /** Kakeibo plan (ADR-021): a planning record only, so the ledger and every account stay as they are. */
@@ -387,7 +387,7 @@ function App() {
       throw describeWriteError(err, 'save-plan') // the form keeps what was typed and shows this
     }
     setVersion((v) => v + 1)
-    setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.` })
+    setStatus({ text: `${existed ? 'Plan updated' : 'Plan saved'} for ${monthLabel(planFor)}. Your accounts and activity are unchanged.`, celebrate: true })
     setPlanMonth(null)
   }
   /* Reflections and classification (ADR-021, PR D): metadata only, so balances and totals never change. */

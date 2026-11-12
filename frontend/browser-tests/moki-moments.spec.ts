@@ -72,3 +72,29 @@ test('the first-use welcome bobs gently, and holds still for reduced motion', as
   await page.emulateMedia({ reducedMotion: 'reduce' })
   expect(await moki.evaluate((el) => getComputedStyle(el).animationName)).toBe('none')
 })
+
+test('page headers: Moki beside Dashboard, Activity and Categories titles only, never on Overview, Accounts or Kakeibo', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  for (const name of ['Dashboard', 'Activity', 'Categories']) {
+    await open(page, name)
+    const header = page.locator('main h1').locator('xpath=..')
+    await expect(header.locator('img')).toBeVisible()
+  }
+  for (const name of ['Overview', 'Accounts', 'Kakeibo']) {
+    await open(page, name)
+    await expect(page.locator('main h1').locator('xpath=..').locator('img')).toHaveCount(0)
+  }
+})
+
+test('Kakeibo shows a calm Moki line under the plan: thumbs-up within limits, no alarm wording when over', async ({ page }) => {
+  test.skip(await hasRealApi(page.request), 'Uses mock scenarios.')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  for (const url of ['/', '/?demo=over-limit']) {
+    await open(page, 'Kakeibo', url)
+    const mood = page.locator('[data-plan-mood]')
+    if (await mood.count()) {
+      await expect(mood.locator('img')).toBeVisible()
+      await expect(mood).not.toContainText(/warning|danger|failed|overspent/i)
+    }
+  }
+})

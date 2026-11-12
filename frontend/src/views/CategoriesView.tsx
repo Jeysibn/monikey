@@ -136,7 +136,7 @@ export function CategoriesView({
 
   return (
     <div>
-      <PageHeader title="Categories" onAdd={onAdd}>
+      <PageHeader title="Categories" mascot="resting" onAdd={onAdd}>
         <Button ref={addRef} variant="secondary" onClick={(e) => openEditor(null, e.currentTarget)}>
           <Plus aria-hidden="true" />
           Add category

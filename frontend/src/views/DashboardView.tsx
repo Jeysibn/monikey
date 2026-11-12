@@ -28,7 +28,7 @@ export function DashboardView({ today, source, accounts, version, onAdd, addStat
 
   return (
     <div className="grid gap-8 md:gap-10">
-      <PageHeader title="Dashboard" onAdd={onAdd} addState={addState}>
+      <PageHeader title="Dashboard" mascot="presenting" onAdd={onAdd} addState={addState}>
         <p className="w-full text-sm text-muted-foreground md:w-auto md:max-w-80">Understand where your money went, from your recorded transactions.</p>
       </PageHeader>
       <MokiTip id="dashboard-scopes" pose="presenting" title="Two views, two date scopes">

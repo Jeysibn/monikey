@@ -1,5 +1,6 @@
 import { TriangleAlert } from 'lucide-react'
 
+import { Moki } from '@/components/Moki'
 import { MoneyText } from '@/components/MoneyText'
 import { monthLabel } from '@/lib/finance'
 import { planProgress } from '@/lib/kakeibo'
@@ -67,5 +68,25 @@ export function PlanHero({ report }: { report: KakeiboMonth }) {
         expenses of {formatPeso(report.totalExpenses)}.
       </p>
     </section>
+  )
+}
+
+/*
+ * A calm line under the plan summary, outside the figures: Moki gives a thumbs-up while every envelope is within
+ * its limit, and a plain presenting pose, with no alarm wording, when some are over. Nothing when nothing is spent yet.
+ */
+export function PlanMood({ report }: { report: KakeiboMonth }) {
+  const progress = planProgress(report)
+  if (!progress || progress.classifiedSpent === 0) return null
+  const over = progress.overCount > 0
+  return (
+    <p data-plan-mood={over ? 'over' : 'within'} className="mt-3 flex items-center gap-3 rounded-card border border-border bg-card px-3 py-2 text-[0.9375rem]">
+      <Moki pose={over ? 'presenting' : 'thumbsUp'} size="toast" />
+      <span className="min-w-0">
+        {over
+          ? 'Some envelopes are over their limit. Nothing is lost: the figures above show where, and you can adjust the plan any time.'
+          : 'Every envelope is within its limit so far. Nice and steady.'}
+      </span>
+    </p>
   )
 }

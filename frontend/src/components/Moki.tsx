@@ -4,9 +4,11 @@ import { cn } from 'cn'
 import { MOKI_ASSETS as ASSETS, type MokiPose } from '@/lib/mokiAssets'
 
 export type { MokiPose }
-export type MokiSize = 'tip' | 'small' | 'medium' | 'large'
+export type MokiSize = 'toast' | 'header' | 'tip' | 'small' | 'medium' | 'large'
 
 const SIZE_CLASSES: Record<MokiSize, string> = {
+  toast: 'size-12 sm:size-14',
+  header: 'size-16 sm:size-24', // beside a page title
   tip: 'size-20 sm:size-28', // compact on phones so a tip never pushes the page far down
   small: 'size-28 sm:size-32',
   medium: 'size-36 sm:size-44',

@@ -10,7 +10,7 @@ import { EnvelopeCard } from '@/components/kakeibo/EnvelopeCard'
 import { MonthlyReviewCard } from '@/components/kakeibo/MonthlyReview'
 import { WeeklyReviewCard } from '@/components/kakeibo/WeeklyReview'
 import { NoPlanCard, PlanDetails } from '@/components/kakeibo/PlanDetails'
-import { PlanHero } from '@/components/kakeibo/PlanHero'
+import { PlanHero, PlanMood } from '@/components/kakeibo/PlanHero'
 import { Tabs } from '@/components/Tabs'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
@@ -191,7 +191,7 @@ export function KakeiboView({
           // Phone order: summary (or the no-plan card), envelopes, then unclassified and the plan details.
           // From 1024px the envelopes take the left 7 columns and unclassified + details the right 5.
           <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-12 lg:items-start">
-            <div className="min-w-0 lg:col-span-12">{hasPlan || confirmLegacyPlan ? <PlanHero report={report} /> : <NoPlanCard report={report} onEditPlan={onEditPlan} />}</div>
+            <div className="min-w-0 lg:col-span-12">{hasPlan || confirmLegacyPlan ? <><PlanHero report={report} /><PlanMood report={report} /></> : <NoPlanCard report={report} onEditPlan={onEditPlan} />}</div>
             <section aria-labelledby="kakeibo-envelopes-title" className="min-w-0 lg:col-span-7">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3">
                 <h2 id="kakeibo-envelopes-title" className="text-lg leading-[1.3] font-semibold tracking-[-0.01em] md:text-xl">

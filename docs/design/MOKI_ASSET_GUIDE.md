@@ -102,3 +102,9 @@ Rules: small inline blocks that fail (credit cards, recent activity, a weekly su
 ## New poses
 
 New artwork is generated from `full-default.png` as the required reference; the prompts for the next poses are in [`MOKI_CODEX_PROMPTS.md`](MOKI_CODEX_PROMPTS.md). Follow *Adding or changing artwork* above, then add the pose to `frontend/src/lib/mokiAssets.ts`.
+
+## Added placements
+
+- **Page headers:** a decorative Moki beside the title on Dashboard (presenting), Activity (planning) and Categories (resting). Never on Overview, Accounts or Kakeibo.
+- **Saves:** a small thumbs-up beside the status message after a save that worked (not for "already gone" notices).
+- **Kakeibo plan:** a calm line under the plan summary: thumbs-up while every envelope is within its limit, presenting pose with plain wording when some are over. Outside the figures; hidden until something is spent.

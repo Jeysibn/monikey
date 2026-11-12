@@ -78,7 +78,7 @@ test('populated welcome waits for Overview data and stays hidden during refreshe
   await expect(page.getByRole('alert').first()).toContainText(/Couldn’t load|Couldn't load/)
 })
 
-test('first-account saves keep normal status feedback without a setup-dependent mascot', async ({ page }) => {
+test('a first-account save shows the normal status message with a small thumbs-up beside it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?demo=no-accounts')
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
@@ -89,7 +89,7 @@ test('first-account saves keep normal status feedback without a setup-dependent 
   await expect(page.getByText('Account added: QA Cash Account.')).toBeVisible()
   await expect(page.locator('img[src="/moki/moki-wave.webp"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Net position' })).toBeVisible()
-  await expect(page.locator('img[src="/moki/moki-thumbs-up.webp"]')).toHaveCount(0)
+  await expect(page.getByRole('status').locator('img[src="/moki/moki-thumbs-up.webp"]')).toBeVisible()
 })
 
 test('Activity separates an empty history from filtered no-results', async ({ page }) => {

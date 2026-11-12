@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { Moki } from '@/components/Moki'
 import { Button } from '@/components/ui/button'
 
 /*
@@ -11,6 +12,8 @@ import { Button } from '@/components/ui/button'
 export interface StatusNote {
   text: string
   action?: { label: string; run: () => void }
+  /** A small thumbs-up beside a save that worked. Not for notices about something that went missing. */
+  celebrate?: boolean
 }
 
 export function StatusMessage({ note, onDismiss }: { note: StatusNote | null; onDismiss: () => void }): ReactNode {
@@ -18,6 +21,7 @@ export function StatusMessage({ note, onDismiss }: { note: StatusNote | null; on
     <div role="status" aria-live="polite">
       {note && (
         <div className="mb-[18px] flex items-center gap-2 rounded-control bg-success-soft py-2 pr-1.5 pl-3 text-[0.9375rem] text-income-ink">
+          {note.celebrate && <Moki pose="thumbsUp" size="toast" />}
           <p className="min-w-0 flex-1 py-1.5">
             {note.text}
             {note.action && (

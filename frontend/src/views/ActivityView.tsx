@@ -114,7 +114,7 @@ export function ActivityView({
 
   return (
     <div aria-busy={loading}>
-      <PageHeader title="Activity" onAdd={onAdd} addState={addState} />
+      <PageHeader title="Activity" mascot="planning" onAdd={onAdd} addState={addState} />
       <MokiTip id="activity-search" pose="presenting" title="Find anything fast">
         Search notes, categories and accounts, or narrow by type and category. Filters look through every entry, not just the ones on screen.
       </MokiTip>

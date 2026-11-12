@@ -175,9 +175,30 @@ test('Dashboard charts have equivalent accessible data tables', async ({ page })
     expect(await table.locator('tbody tr').count(), `chart ${i + 1} table has rows`).toBeGreaterThan(0)
   }
   const first = charts.first()
+  const card = await first.boundingBox()
   await first.getByRole('button', { name: 'Show data table' }).click()
-  await expect(first.locator('table')).toBeVisible()
-  await expect(first.getByRole('button', { name: 'Hide data table' })).toHaveAttribute('aria-expanded', 'true')
+  const popup = page.getByRole('dialog')
+  await expect(popup.getByRole('table')).toBeVisible() // a window, so the card itself neither grows nor moves
+  expect((await first.boundingBox())!.height).toBe(card!.height)
+  await page.keyboard.press('Escape')
+  await expect(popup).toHaveCount(0)
+})
+
+test('a chart column is highlighted lightly while the mouse is on it, and the highlight goes when the mouse leaves', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, 'Dashboard')
+  await page.waitForLoadState('networkidle')
+  const chart = page.getByRole('group', { name: /Income and expenses for each of the/ }).first()
+  await chart.scrollIntoViewIfNeeded()
+  const box = (await chart.boundingBox())!
+  const highlight = chart.locator('rect[fill="var(--primary-soft)"]')
+  await expect(highlight).toHaveCount(0)
+  await page.mouse.move(box.x + box.width - 60, box.y + box.height / 2)
+  await expect(highlight).toHaveCount(1)
+  expect(Number(await highlight.getAttribute('opacity')), 'a light tint').toBeLessThanOrEqual(0.3)
+  await page.mouse.click(box.x + box.width - 60, box.y + box.height / 2) // a click focuses the chart but must not pin the highlight
+  await page.mouse.move(5, 5)
+  await expect(highlight).toHaveCount(0)
 })
 
 test.describe('states on the mock source', () => {

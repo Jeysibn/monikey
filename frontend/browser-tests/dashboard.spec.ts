@@ -141,15 +141,19 @@ test('analysis figures cover every day: zero-spend days, weekday occurrences, hi
 
   // The daily table has one row per date, zero days included; the weekday table counts occurrences.
   const daily = page.getByRole('region', { name: 'Daily spending' })
-  await daily.getByRole('button', { name: 'Show data table' }).click()
-  await expect(daily.getByRole('table').getByRole('row')).toHaveCount(26) // header + 25 days
-  await expect(daily.getByRole('row', { name: /Thu, Oct 1, 2026.*₱0\.00/ })).toBeVisible()
+  const popup = page.getByRole('dialog')
+  await daily.getByRole('button', { name: 'Show data table' }).click() // the table opens in its own window, not inside the card
+  await expect(popup.getByRole('table').getByRole('row')).toHaveCount(26) // header + 25 days
+  await expect(popup.getByRole('row', { name: /Thu, Oct 1, 2026.*₱0\.00/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(popup).toHaveCount(0)
   const weekday = page.getByRole('region', { name: 'Spending by weekday' })
   await weekday.getByRole('button', { name: 'Show data table' }).click()
-  const rows = await weekday.getByRole('table').getByRole('row').allInnerTexts()
+  const rows = await popup.getByRole('table').getByRole('row').allInnerTexts()
   expect(rows).toHaveLength(8)
   const occurrences = rows.slice(1).map((row) => Number(row.trim().split(/\s+/).at(-1)))
   expect(occurrences).toEqual([3, 3, 3, 4, 4, 4, 4]) // Mon..Sun in Oct 1-25, 2026 (starts on a Thursday)
+  await page.keyboard.press('Escape')
   expect(occurrences.reduce((a, b) => a + b, 0)).toBe(25)
 })
 
@@ -175,7 +179,8 @@ test('category sorting, the Kakeibo plan versus actual and the daily envelope ta
 
   const kakeiboDaily = page.getByRole('region', { name: 'Daily Kakeibo spending' })
   await kakeiboDaily.getByRole('button', { name: 'Show data table' }).click()
-  await expect(kakeiboDaily.getByRole('columnheader')).toHaveText(['Date', 'Needs', 'Wants', 'Culture', 'Unexpected', 'Not classified', 'Total'])
+  await expect(page.getByRole('dialog').getByRole('columnheader')).toHaveText(['Date', 'Needs', 'Wants', 'Culture', 'Unexpected', 'Not classified', 'Total'])
+  await page.keyboard.press('Escape')
   await expect(kakeiboDaily).toContainText('This is spending, not a daily budget')
 })
 
@@ -256,8 +261,18 @@ test('Dashboard has no automated WCAG A/AA violations, tables open or closed, at
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     for (const open of [false, true]) {
-      const closed = page.getByRole('button', { name: 'Show data table' })
-      if (open) while ((await closed.count()) > 0) await closed.first().click() // each click renames its button, so always take the first one left
+      const toggles = page.getByRole('button', { name: 'Show data table' })
+      if (open) {
+        // Each table opens in its own window: scan every one, then close it.
+        for (let i = 0, n = await toggles.count(); i < n; i++) {
+          await toggles.nth(i).scrollIntoViewIfNeeded()
+          await toggles.nth(i).click()
+          const win = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+          expect(win.violations.map(({ id, impact }) => ({ id, impact })), `axe in table window ${i + 1} at ${width}px`).toEqual([])
+          await page.keyboard.press('Escape')
+          await expect(page.getByRole('dialog')).toHaveCount(0)
+        }
+      }
       const results = await new AxeBuilder({ page }).include('main').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
       expect(results.violations.map(({ id, impact, description, nodes }) => ({ id, impact, description, where: nodes.map((n) => n.target.join(' ')).slice(0, 2) })), `axe at ${width}px, tables ${open ? 'open' : 'closed'}`).toEqual([])
     }

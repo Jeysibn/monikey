@@ -94,7 +94,7 @@ export function AccountDetailsContent({
     <DialogContent size="drawer" aria-describedby="account-details-description" data-account-details="" onCloseAutoFocus={onClosed}>
       <DialogHeader>
         <DialogTitle>{item.accountName}</DialogTitle>
-        <DialogDescription id="account-details-description">{TYPE_LABEL[item.accountType]} · Account details</DialogDescription>
+        <DialogDescription id="account-details-description">{TYPE_LABEL[item.accountType]}{item.productLabel && item.productLabel !== item.accountName ? ` · ${item.productLabel}` : ''} · Account details</DialogDescription>
       </DialogHeader>
       <DialogBody className="grid auto-rows-max content-start gap-5">
         <div className="mx-auto w-full max-w-[22rem] overflow-hidden rounded-card border border-border bg-background">

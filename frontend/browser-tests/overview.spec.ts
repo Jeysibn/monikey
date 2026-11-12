@@ -85,10 +85,10 @@ test('desktop layout: this month is a strip, wallets and credit cards line up ed
   }
 })
 
-test('Overview links lead to Dashboard, Activity, Accounts and the account details', async ({ page }) => {
+test('Overview and the navigation lead to Dashboard, Activity, Accounts and the account details', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'View analytics' }).click()
+  await page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Dashboard' }).first().click()
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
   await page.locator('nav[aria-label="Main"] button:visible').filter({ hasText: 'Overview' }).first().click()
   await page.getByRole('button', { name: 'View all', exact: true }).click() // recent activity

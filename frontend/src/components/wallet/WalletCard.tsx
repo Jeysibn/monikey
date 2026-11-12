@@ -181,12 +181,17 @@ export function WalletCard({
                 className="absolute inset-0 z-10 cursor-pointer rounded-[18px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => onSelect?.(item.accountId)}
               >
-                <span className="absolute top-[29%] left-[11.75%] z-10 grid max-w-[77%] gap-[0.4cqw] text-[#0f1b2d]">
-                  <span className="truncate text-[max(0.875rem,4.4cqw)] font-semibold">{item.accountName}</span>
-                  {!onLightArt && item.productLabel && (
-                    <span className="truncate text-[max(0.625rem,2.8cqw)] font-medium">{item.productLabel}</span>
-                  )}
-                </span>
+                {/* Real card artwork already carries the issuer's look, so the face shows no name or type; they are in the details window. A generic MoniKey card has no identity of its own, so its name stays visible. */}
+                {onLightArt ? (
+                  <span className="absolute top-[29%] left-[11.75%] z-10 grid max-w-[77%] gap-[0.4cqw] text-[#0f1b2d]">
+                    <span className="truncate text-[max(0.875rem,4.4cqw)] font-semibold">{item.accountName}</span>
+                  </span>
+                ) : (
+                  <span className="sr-only">
+                    {item.accountName}
+                    {item.productLabel ? `, ${item.productLabel}` : ''}
+                  </span>
+                )}
                 <CardFace item={item} onLightArt={onLightArt} />
                 <span className="sr-only">View details</span>
                 {fallbackNote && <span className="sr-only">{fallbackNote}</span>}

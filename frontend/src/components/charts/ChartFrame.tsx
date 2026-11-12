@@ -4,6 +4,7 @@ import { cn } from 'cn'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 /*
  * The shared frame around every Dashboard chart (ADR-025): a visible title and one-line description, optional
@@ -85,42 +86,55 @@ export function ChartFrame({
               variant="ghost"
               size="sm"
               className="-ml-2 min-h-11 px-2 text-primary"
-              aria-expanded={open}
-              aria-controls={`${id}-table`}
-              onClick={() => setOpen((o) => !o)}
+              aria-haspopup="dialog"
+              onClick={() => setOpen(true)}
             >
               <Table2 aria-hidden="true" />
-              {open ? 'Hide data table' : 'Show data table'}
+              Show data table
             </Button>
-            <div id={`${id}-table`} className={cn(!open && 'sr-only')}>
-              {/* Only a visible table scrolls, and then it is a labelled region a keyboard can reach and scroll. Closed, it is screen-reader-only and has no scroll box. */}
-              <div
-                className={cn('rounded-control border border-border', open && 'max-h-80 overflow-auto')}
-                {...(open ? { tabIndex: 0, role: 'region', 'aria-label': `${table.caption} (scrollable)` } : {})}
-              >
-                <table className="w-full border-collapse text-left text-sm">
-                  <caption className="sr-only">{table.caption}</caption>
-                  <thead className="sticky top-0 bg-secondary">
-                    <tr>
-                      {table.columns.map((column, i) => (
-                        <th key={column} scope="col" className={cn('px-3 py-2 font-semibold', i > 0 && 'text-right')}>{column}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {table.rows.map((row) => (
-                      <tr key={row[0]} className="border-t border-border">
-                        {row.map((cell, i) => (i === 0 ? <th key={i} scope="row" className="px-3 py-2 font-medium">{cell}</th> : <td key={i} className="px-3 py-2 text-right tabular-nums">{cell}</td>))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* The same numbers stay in the page for screen readers; the window below is the visual copy, so opening it never stretches or moves the card. */}
+            <div className="sr-only">
+              <DataTable table={table} />
             </div>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{title}</DialogTitle>
+                  <DialogDescription>{table.caption}</DialogDescription>
+                </DialogHeader>
+                <DialogBody>
+                  <div tabIndex={0} role="region" aria-label={`${table.caption} (scrollable)`} className="max-h-[60dvh] overflow-auto rounded-control border border-border outline-none focus-visible:outline-2 focus-visible:outline-ring">
+                    <DataTable table={table} sticky />
+                  </div>
+                </DialogBody>
+              </DialogContent>
+            </Dialog>
           </div>
         </>
       )}
     </Card>
+  )
+}
+
+function DataTable({ table, sticky = false }: { table: ChartTable; sticky?: boolean }) {
+  return (
+    <table className="w-full border-collapse text-left text-sm">
+      <caption className="sr-only">{table.caption}</caption>
+      <thead className={cn(sticky && 'sticky top-0', 'bg-secondary')}>
+        <tr>
+          {table.columns.map((column, i) => (
+            <th key={column} scope="col" className={cn('px-3 py-2 font-semibold', i > 0 && 'text-right')}>{column}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {table.rows.map((row) => (
+          <tr key={row[0]} className="border-t border-border">
+            {row.map((cell, i) => (i === 0 ? <th key={i} scope="row" className="px-3 py-2 font-medium">{cell}</th> : <td key={i} className="px-3 py-2 text-right tabular-nums">{cell}</td>))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 

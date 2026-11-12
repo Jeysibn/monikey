@@ -56,10 +56,11 @@ export function ColumnChart({
   const barWidth = stacked ? groupWidth : Math.max(1, groupWidth / series.length - (series.length > 1 && groupWidth > 20 ? 2 : 0))
   const shown = new Set(thinLabels(count, Math.max(2, Math.floor(plotWidth / 54))))
 
-  const pick = (clientX: number, element: Element) => {
+  const pick = (clientX: number, element: Element, clearOutside = false) => {
     const rect = element.getBoundingClientRect()
     const index = Math.floor(((clientX - rect.left - left) / plotWidth) * count)
     if (index >= 0 && index < count) setActive(index)
+    else if (clearOutside) setActive(null) // a mouse over the axis labels or margin is not on a column
   }
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const last = count - 1
@@ -87,7 +88,9 @@ export function ColumnChart({
         onFocus={() => active === null && setActive(count - 1)}
         onBlur={() => setActive(null)}
         onPointerDown={(e: PointerEvent<HTMLDivElement>) => pick(e.clientX, e.currentTarget)}
-        onPointerMove={(e: PointerEvent<HTMLDivElement>) => e.pointerType === 'mouse' && pick(e.clientX, e.currentTarget)}
+        onPointerMove={(e: PointerEvent<HTMLDivElement>) => e.pointerType === 'mouse' && pick(e.clientX, e.currentTarget, true)}
+        // The highlight follows the mouse and goes when it leaves. A keyboard reader keeps theirs while the chart has focus, and a touch reading stays until the next tap.
+        onPointerLeave={(e: PointerEvent<HTMLDivElement>) => e.pointerType === 'mouse' && !e.currentTarget.matches(':focus-visible') && setActive(null)}
         className="rounded-control outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         style={{ touchAction: 'pan-y' }}
       >
@@ -112,7 +115,7 @@ export function ColumnChart({
             let stackTop = top + plotHeight
             return (
               <g key={i}>
-                {isActive && <rect x={left + i * slot} y={top} width={slot} height={plotHeight} fill="var(--primary-soft)" opacity={0.55} />}
+                {isActive && <rect x={left + i * slot} y={top} width={slot} height={plotHeight} fill="var(--primary-soft)" opacity={0.28} />}
                 {series.map((s, si) => {
                   const value = Math.max(0, s.values[i] ?? 0)
                   const h = barHeight(value, axis.max, plotHeight)

@@ -4,6 +4,8 @@
 - **Date:** 2026-11-12 · **Extends:** ADR-022 (category lifecycle) and ADR-023 (optional `icon_key`, only on PR #25's branch).
 - **Why an ADR:** it adds a database column, widens a database CHECK, and adds a derived API field. ADR-023 set the precedent that category appearance gets an ADR and a backup-gated migration.
 
+> **Amendment 2026-11-12:** at the owner's request a category color may also be a custom lower-case `#rrggbb` (database `CHECK`, API pattern and frontend all enforce exactly that shape). The "keys, not hex" text and the "free hex colors rejected" alternative below describe the original proposal; the accepted text is in `ADR.md`.
+
 ## Decision
 
 1. **Migration `009_category_colors.sql`** (additive; follows 008 from PR #25, so PR #25 must land first or be the base):

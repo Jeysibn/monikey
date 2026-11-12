@@ -31,8 +31,17 @@ CategoryIconKey = Literal[
     "coffee", "bus", "receipt", "smartphone", "plane", "wallet",
     "banknote", "dumbbell", "shirt", "paw-print", "music", "wrench",
 ]
-# Curated keys, never raw CSS or hex: the frontend owns the contrast-checked colors (ADR-026).
-CategoryColorKey = Literal["blue", "green", "teal", "amber", "orange", "red", "pink", "purple", "indigo", "slate"]
+# A category color is one of ten curated names, or a custom "#rrggbb" value (ADR-026, amended 2026-11-12). Never CSS:
+# the pattern admits nothing else, input is lower-cased first, and the database enforces the same shape.
+CURATED_COLOR_KEYS = ("blue", "green", "teal", "amber", "orange", "red", "pink", "purple", "indigo", "slate")
+CategoryColorPattern = re.compile(r"^(?:" + "|".join(CURATED_COLOR_KEYS) + r"|#[0-9a-f]{6})$")
+
+
+def _lower_hex(value: object) -> object:
+    return value.lower() if isinstance(value, str) and value.startswith("#") else value
+
+
+CategoryColorKey = Annotated[str, BeforeValidator(_lower_hex), StringConstraints(pattern=CategoryColorPattern.pattern)]
 MoneyPattern = re.compile(r"^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$")
 DatePattern = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 MonthPattern = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")

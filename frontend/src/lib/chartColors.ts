@@ -1,4 +1,4 @@
-import { CATEGORY_COLOR_OPTIONS, isCategoryColorKey } from './categoryColors.ts'
+import { CATEGORY_COLOR_OPTIONS, colorFor, isCategoryColorKey } from './categoryColors.ts'
 import { ENVELOPE_ACCENT } from './kakeibo.ts'
 import type { KakeiboEnvelope } from '../types.ts'
 
@@ -19,5 +19,5 @@ const PALETTE = Object.values(CATEGORY_COLOR_OPTIONS).map((c) => c.solid)
  * donut of categories that were never given a color still has distinguishable slices. (The name is always listed.)
  */
 export function categoryMarkColor(colorKey: string | null | undefined, index: number): string {
-  return isCategoryColorKey(colorKey) ? CATEGORY_COLOR_OPTIONS[colorKey].solid : PALETTE[index % PALETTE.length]!
+  return isCategoryColorKey(colorKey) ? colorFor(colorKey).solid : PALETTE[index % PALETTE.length]!
 }

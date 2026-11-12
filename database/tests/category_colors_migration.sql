@@ -31,14 +31,28 @@ BEGIN
     RAISE EXCEPTION 'Migration 009 changed the ledger amount or account balance';
   END IF;
 
-  -- A curated color persists; arbitrary CSS and hex are rejected.
+  -- A curated name and a custom #rrggbb persist; every other value (CSS, short or upper-case hex) is rejected.
   UPDATE categories SET color_key = 'green' WHERE id = saved_category_id;
   IF (SELECT color_key FROM categories WHERE id = saved_category_id) <> 'green' THEN
     RAISE EXCEPTION 'Valid color key was not persisted';
   END IF;
+  UPDATE categories SET color_key = '#3a7bd5' WHERE id = saved_category_id;
+  IF (SELECT color_key FROM categories WHERE id = saved_category_id) <> '#3a7bd5' THEN
+    RAISE EXCEPTION 'A custom hex color was not persisted';
+  END IF;
   BEGIN
-    UPDATE categories SET color_key = '#ff0000' WHERE id = saved_category_id;
-    RAISE EXCEPTION 'A hex color was accepted';
+    UPDATE categories SET color_key = '#FF0000' WHERE id = saved_category_id;
+    RAISE EXCEPTION 'An upper-case hex color was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE categories SET color_key = '#f00' WHERE id = saved_category_id;
+    RAISE EXCEPTION 'A short hex color was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE categories SET color_key = '#ff0000; x' WHERE id = saved_category_id;
+    RAISE EXCEPTION 'A hex color with trailing CSS was accepted';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
   BEGIN

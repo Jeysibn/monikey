@@ -49,9 +49,10 @@ test('summary and categories are strictly mapped', () => {
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 'shopping-basket' }]), [{ ...categories[0], iconKey: 'shopping-basket' }])
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 'unrecognized-old-key' }]), [{ ...categories[0], iconKey: null }])
   assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'expense', icon_key: 12 }]), ApiError)
-  // ADR-026: color is a curated key; unknown keys fall back, wrong types and bad counts are contract errors.
+  // ADR-026: color is a curated key or a custom #rrggbb; anything else fall back, wrong types and bad counts are contract errors.
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: 'green', usage_count: 3 }]), [{ ...categories[0], colorKey: 'green', usageCount: 3 }])
-  assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: '#ff0000' }]), [{ ...categories[0], colorKey: null }])
+  assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: '#ff0000' }]), [{ ...categories[0], colorKey: '#ff0000' }]) // a custom color
+  for (const bad of ['#FF0000', '#f00', '#ff0000;x', 'unknown-key']) assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: bad }]), [{ ...categories[0], colorKey: null }], bad)
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: null }]), [{ ...categories[0], colorKey: null }])
   assert.deepEqual(fromWireCategories([{ id: 4, name: 'Food', type: 'expense' }]), [categories[0]]) // an older server sends neither field
   assert.throws(() => fromWireCategories([{ id: 4, name: 'Food', type: 'expense', color_key: 5 }]), ApiError)

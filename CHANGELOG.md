@@ -24,6 +24,7 @@ version. GitHub Release objects are separate metadata; none existed at the
 ## [Unreleased]
 
 ### Added
+- Category colors can be a custom hex color as well as one of ten curated colors (ADR-026 amended; migration 009 edited before any release). Dashboard data tables open in a window; the Income-versus-expenses highlight is lighter and clears when the mouse leaves; wallet card faces with real artwork no longer print the account name and type (they are in the details window); the Overview "View analytics" button was removed.
 - Release audit (local): a final integration-readiness report, a responsive/accessibility sweep, end-to-end money-flow tests, and Activity-filter contract documentation and fixtures. ADR-026 is recorded in the ADR log. Nothing is deployed.
 - Activity search and filters: search notes, categories and accounts, filter by type and category (archived categories with history included), with Reset filters and honest counts. Filters are applied by the server to the whole month before paging. Three read endpoints gain optional `q`, `category_id` and `kind` parameters; no migration, and calls without them behave as before (local, unreleased).
 - Overview polish: the welcome panel below the hero in a reserved slot, and a desktop layout whose card edges line up (this month strip, wallets beside credit cards at equal height, recent activity beneath). The quick-action row was removed as redundant with Add transaction (local, unreleased).

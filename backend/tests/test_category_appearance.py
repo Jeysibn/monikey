@@ -63,8 +63,14 @@ def test_every_curated_color_key_is_accepted(color: str):
     assert make_category(color_key=color)["color_key"] == color
 
 
-@pytest.mark.parametrize("bad", ["#ff0000", "red; background:url(x)", "RED", "magenta", "", "rgb(0,0,0)"])
-def test_arbitrary_css_hex_and_unknown_colors_are_rejected(bad: str):
+@pytest.mark.parametrize("custom", ["#3a7bd5", "#000000", "#ffffff"])
+def test_a_custom_hex_color_is_accepted_and_stored_lower_case(custom: str):
+    assert make_category(color_key=custom)["color_key"] == custom
+    assert make_category(color_key=custom.upper().replace("#", "#"))["color_key"] == custom  # normalized, never stored in capitals
+
+
+@pytest.mark.parametrize("bad", ["#fff", "#ff00", "#ff00000", "ff0000", "#gg0000", "#ff0000; x", "red; background:url(x)", "RED", "magenta", "", "rgb(0,0,0)", "url(x)", "#ff0000 "])
+def test_anything_but_a_curated_name_or_six_digit_hex_is_rejected(bad: str):
     created = client.post("/api/categories", json={"name": unique("Bad color"), "type": "expense", "color_key": bad})
     assert created.status_code == 422
     category = make_category()
@@ -162,5 +168,6 @@ def test_python_allowlists_match_migration_009():
     sql = (Path(__file__).parents[2] / "database" / "009_category_colors.sql").read_text()
     icons = re.search(r"categories_icon_key_allowed CHECK \((.*?)\n  \);", sql, re.S).group(1)
     colors = re.search(r"categories_color_key_allowed CHECK \((.*?)\n  \)", sql, re.S).group(1)
+    assert "color_key ~ '^#[0-9a-f]{6}$'" in colors  # the custom-hex form is enforced by the database too
     assert set(re.findall(r"'([a-z0-9-]+)'", icons)) == set(get_args(main.CategoryIconKey))
-    assert set(re.findall(r"'([a-z0-9-]+)'", colors)) == set(get_args(main.CategoryColorKey))
+    assert set(re.findall(r"'([a-z0-9-]+)'", colors)) == set(main.CURATED_COLOR_KEYS)

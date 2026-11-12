@@ -4,6 +4,8 @@
 
 > **What this document is not.** It is **not** a deployment record. Everything below is *source implementation* and *automated-test verification* on disposable infrastructure with synthetic data. **Nothing has been pushed, opened as a PR, merged, deployed or migrated on a real database.** What production is running, and its schema version, is unknown (see `AUTOMATED_DEPLOYMENT.md`). Real-device iOS Safari and Android Chrome checks are **pending**.
 
+> **Addendum (after owner review of the running build).** The audit table below was measured before these owner-requested changes: Overview quick-action row and "View analytics" button removed; card edges aligned on Overview, Dashboard and Kakeibo; real-artwork wallet faces no longer print name and type; Dashboard data tables open in a window; lighter, self-clearing chart highlight; and category colors that may be a custom `#rrggbb` (ADR-026 amended, migration 009 edited in place because it has never been applied anywhere). Re-run counts after these changes are in the commit log and the summary given with them (unit 399, mock-mode and real-API Playwright re-run, backend 116); treat the numbers in section 2 as the pre-change baseline.
+
 Three levels are kept apart throughout:
 
 | Level | Meaning | Status |

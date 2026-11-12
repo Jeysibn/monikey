@@ -81,8 +81,8 @@ restart/backup-restore evidence are documented in the
   computed account balance remain unchanged. `tests/custom_categories.sql`
   exercises the database constraints and triggers for immutable type and
   fail-closed archive behavior.
-- `009_category_colors.sql` adds nullable `categories.color_key` (a curated key
-  such as `green`, never raw CSS or hex, enforced by a CHECK) and widens the
+- `009_category_colors.sql` adds nullable `categories.color_key` (one of ten curated names such as `green`, or a custom
+  lower-case `#rrggbb`; never any other CSS, enforced by a CHECK) and widens the
   icon allowlist to a strict superset of 008's. Existing rows stay `NULL`;
   nothing is backfilled, and IDs, transactions, amounts, archive state,
   defaults and saved Kakeibo classifications are unchanged. Additive, but a

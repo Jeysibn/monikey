@@ -1,5 +1,6 @@
--- Category color is optional presentation metadata (ADR-026). It stores a curated key, never raw CSS or hex,
--- so the frontend owns the contrast-checked color pair for each key. This migration also widens the icon
+-- Category color is optional presentation metadata (ADR-026). It stores one of ten curated names, or a custom
+-- lower-case "#rrggbb" value; never any other CSS. The frontend derives the contrast-checked tint and ink for
+-- both forms. This migration also widens the icon
 -- allowlist to a strict superset of migration 008's, so no existing icon value becomes invalid.
 -- It does not alter category identity, transaction references, amounts, archive state, Kakeibo defaults or
 -- saved Kakeibo classifications, and it backfills nothing: existing rows keep color_key NULL.
@@ -9,9 +10,9 @@ BEGIN;
 ALTER TABLE categories
   ADD COLUMN color_key TEXT,
   ADD CONSTRAINT categories_color_key_allowed CHECK (
-    color_key IS NULL OR color_key IN (
-      'blue', 'green', 'teal', 'amber', 'orange', 'red', 'pink', 'purple', 'indigo', 'slate'
-    )
+    color_key IS NULL
+    OR color_key IN ('blue', 'green', 'teal', 'amber', 'orange', 'red', 'pink', 'purple', 'indigo', 'slate')
+    OR color_key ~ '^#[0-9a-f]{6}$'
   );
 
 ALTER TABLE categories DROP CONSTRAINT categories_icon_key_allowed;
